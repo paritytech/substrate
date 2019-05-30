@@ -23,7 +23,7 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use substrate_primitives::subtrie::{SubTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
+use substrate_primitives::child_trie::{ChildTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use hash_db::Hasher;
@@ -155,8 +155,8 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 	has_right_prefix
 }
 
-/// Determine the default child trie root.
-/// TODO EMCH constify that
+/// This function returns the default child trie root.
+/// see issue TODO LINK_ISSUE_3, this is not efficient.
 pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
@@ -173,7 +173,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
-	subtrie: SubTrieReadRef,
+	child_trie: ChildTrieReadRef,
 	db: &mut DB,
 	default_root: &Vec<u8>,
 	delta: I
@@ -183,14 +183,14 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = if let Some(root) = subtrie.root.as_ref() {
-		subtrie_root_as_hash::<H,_>(root)
+	let mut root = if let Some(root) = child_trie.root.as_ref() {
+		child_trie_root_as_hash::<H,_>(root)
 	} else {
-		// TODO EMCH the no content case could benefit from using a inline iter_build (need ordering).
-		subtrie_root_as_hash::<H,_>(default_root)
+		// see TODO LINK_ISSUE_3, default root is constant value
+		child_trie_root_as_hash::<H,_>(default_root)
 	};
 	{
-		let mut db = KeySpacedDBMut::new(&mut *db, subtrie.keyspace);
+		let mut db = KeySpacedDBMut::new(&mut *db, child_trie.keyspace);
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
@@ -206,15 +206,15 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
-	subtrie: SubTrieReadRef,
+	child_trie: ChildTrieReadRef,
 	db: &DB,
 	mut f: F
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = subtrie.root {
-		let root = subtrie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+	if let Some(root) = child_trie.root {
+		let root = child_trie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
 
 		let trie = TrieDB::<H>::new(&db, &root)?;
 		let iter = trie.iter()?;
@@ -253,15 +253,15 @@ pub fn record_all_keys<H: Hasher, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher, DB>(
-	subtrie: SubTrieReadRef,
+	child_trie: ChildTrieReadRef,
 	db: &DB,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = subtrie.root {
-		let root = subtrie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+	if let Some(root) = child_trie.root {
+		let root = child_trie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
 		Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -270,16 +270,16 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
-	subtrie: SubTrieReadRef,
+	child_trie: ChildTrieReadRef,
 	db: &DB,
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = subtrie.root {
-		let root = subtrie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+	if let Some(root) = child_trie.root {
+		let root = child_trie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
 		Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -302,7 +302,7 @@ const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;
 const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
 const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
 
-pub fn subtrie_root_as_hash<H: Hasher, R: AsRef<[u8]>> (root: R) -> H::Out {
+pub fn child_trie_root_as_hash<H: Hasher, R: AsRef<[u8]>> (root: R) -> H::Out {
 	let mut res = H::Out::default();
 	let max = rstd::cmp::min(res.as_ref().len(), root.as_ref().len());
 	res.as_mut()[..max].copy_from_slice(&root.as_ref()[..max]);
@@ -345,11 +345,12 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
-// TODO EMCH issue to add default value to HashDB trait: avoiding this costy calculation here
-// returning &'a or &'static is tricky in this one (maybe the compiler can accept both).
-// Maybe a const in Hasher trait is right (there is already a const).
-// Otherwhise store it in keyspacedb
+// see TODO LINK_ISSUE_3, third field should be remove and is therefore not documented
+/// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
+/// prefix of every key value.
 pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a KeySpace, H::Out);
+/// `HashDBMut` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
+/// prefix of every key value.
 pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a KeySpace, H::Out);
 // TODO rem in favor of using underlying Memorydb values
 const NULL_NODE: &[u8] = &[0];
@@ -358,7 +359,7 @@ impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
-		// TODO remove that it is already defined and probably stored in underlying db
+		// see TODO LINK_ISSUE_3 for removal of this calculation
 		let null_node_data = H::hash(NULL_NODE);
 		KeySpacedDB(db, ks, null_node_data)
 	}
@@ -368,7 +369,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
-		// TODO remove that it is already defined and probably stored in underlying db
+		// see TODO LINK_ISSUE_3 for removal of this calculation
 		let null_node_data = H::hash(&[0]);
 		KeySpacedDBMut(db, ks, null_node_data)
 	}

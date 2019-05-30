@@ -17,7 +17,7 @@
 use futures::prelude::*;
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
-use primitives::subtrie::SubTrieRead;
+use primitives::child_trie::ChildTrieRead;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use runtime_primitives::traits::{
@@ -195,7 +195,7 @@ impl<'a, 'b, B: BlockT> OnDemandNetwork<B> for &'a mut &'b mut dyn NetworkOut<B>
 		who: &PeerId,
 		id: RequestId,
 		block: <B as BlockT>::Hash,
-		child_trie: SubTrieRead, 
+		child_trie: ChildTrieRead,
 		key: Vec<u8>
 	) {
 		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {

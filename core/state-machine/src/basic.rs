@@ -21,8 +21,8 @@ use std::iter::FromIterator;
 use hash_db::Hasher;
 use trie::trie_root;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrie;
+use primitives::child_trie::ChildTrieReadRef;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 use log::warn;
@@ -116,11 +116,11 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, _subtrie: SubTrieReadRef, _key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, _child_trie: ChildTrieReadRef, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!("basic not used for child trie");
 	}
 
-	fn child_trie(&self, _storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, _storage_key: &[u8]) -> Option<ChildTrie> {
 		unreachable!("basic not used for child trie");
 	}
 
@@ -137,11 +137,11 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		}
 	}
 
-	fn place_child_storage(&mut self, _subtrie: &SubTrie, _key: Vec<u8>, _value: Option<Vec<u8>>) {
+	fn place_child_storage(&mut self, _child_trie: &ChildTrie, _key: Vec<u8>, _value: Option<Vec<u8>>) {
 		unreachable!("basic not used for child trie");
 	}
 
-	fn kill_child_storage(&mut self, _subtrie: &SubTrie) {
+	fn kill_child_storage(&mut self, _child_trie: &ChildTrie) {
 		unreachable!("basic not used for child trie");
 	}
 
@@ -156,7 +156,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
-	fn child_storage_root(&mut self, _subtrie: &SubTrie) -> Vec<u8> {
+	fn child_storage_root(&mut self, _child_trie: &ChildTrie) -> Vec<u8> {
 		unreachable!("basic not used for child trie");
 	}
 

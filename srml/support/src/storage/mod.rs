@@ -18,8 +18,8 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
-use substrate_primitives::subtrie::SubTrie;
-use substrate_primitives::subtrie::SubTrieReadRef;
+use substrate_primitives::child_trie::ChildTrie;
+use substrate_primitives::child_trie::ChildTrieReadRef;
 use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
@@ -45,14 +45,14 @@ impl<'a> Input for IncrementalInput<'a> {
 }
 
 struct IncrementalChildInput<'a> {
-	subtrie: SubTrieReadRef<'a>,
+	child_trie: ChildTrieReadRef<'a>,
 	key: &'a [u8],
 	pos: usize,
 }
 
 impl<'a> Input for IncrementalChildInput<'a> {
 	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_child_storage(self.subtrie.clone(), self.key, into, self.pos)
+		let len = runtime_io::read_child_storage(self.child_trie.clone(), self.key, into, self.pos)
 			.unwrap_or(0);
 		let read = crate::rstd::cmp::min(len, into.len());
 		self.pos += read;
@@ -514,17 +514,17 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, SubTrie, SubTrieReadRef};
+	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, ChildTrie, ChildTrieReadRef};
 
-	pub fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+	pub fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
 		runtime_io::child_trie(storage_key)
 	}
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-	pub fn get<T: Codec + Sized>(subtrie: SubTrieReadRef, key: &[u8]) -> Option<T> {
-		runtime_io::read_child_storage(subtrie.clone(), key, &mut [0; 0][..], 0).map(|_| {
+	pub fn get<T: Codec + Sized>(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<T> {
+		runtime_io::read_child_storage(child_trie.clone(), key, &mut [0; 0][..], 0).map(|_| {
 			let mut input = IncrementalChildInput {
-				subtrie,
+				child_trie,
 				key,
 				pos: 0,
 			};
@@ -534,77 +534,77 @@ pub mod child {
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
 	/// explicit entry.
-	pub fn get_or_default<T: Codec + Sized + Default>(subtrie: SubTrieReadRef, key: &[u8]) -> T {
-		get(subtrie, key).unwrap_or_else(Default::default)
+	pub fn get_or_default<T: Codec + Sized + Default>(child_trie: ChildTrieReadRef, key: &[u8]) -> T {
+		get(child_trie, key).unwrap_or_else(Default::default)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value` if there is no
 	/// explicit entry.
-	pub fn get_or<T: Codec + Sized>(subtrie: SubTrieReadRef, key: &[u8], default_value: T) -> T {
-		get(subtrie, key).unwrap_or(default_value)
+	pub fn get_or<T: Codec + Sized>(child_trie: ChildTrieReadRef, key: &[u8], default_value: T) -> T {
+		get(child_trie, key).unwrap_or(default_value)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry.
-	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(subtrie: SubTrieReadRef, key: &[u8], default_value: F) -> T {
-		get(subtrie, key).unwrap_or_else(default_value)
+	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(child_trie: ChildTrieReadRef, key: &[u8], default_value: F) -> T {
+		get(child_trie, key).unwrap_or_else(default_value)
 	}
 
 	/// Put `value` in storage under `key`.
-	pub fn put<T: Codec>(subtrie: &SubTrie, key: &[u8], value: &T) {
-		value.using_encoded(|slice| runtime_io::set_child_storage(subtrie, key, slice));
+	pub fn put<T: Codec>(child_trie: &ChildTrie, key: &[u8], value: &T) {
+		value.using_encoded(|slice| runtime_io::set_child_storage(child_trie, key, slice));
 	}
 
 	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-	pub fn take<T: Codec + Sized>(subtrie: &SubTrie, key: &[u8]) -> Option<T> {
-		let r = get(subtrie.node_ref(), key);
+	pub fn take<T: Codec + Sized>(child_trie: &ChildTrie, key: &[u8]) -> Option<T> {
+		let r = get(child_trie.node_ref(), key);
 		if r.is_some() {
-			kill(subtrie, key);
+			kill(child_trie, key);
 		}
 		r
 	}
 
 	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 	/// the default for its type.
-	pub fn take_or_default<T: Codec + Sized + Default>(subtrie: &SubTrie, key: &[u8]) -> T {
-		take(subtrie, key).unwrap_or_else(Default::default)
+	pub fn take_or_default<T: Codec + Sized + Default>(child_trie: &ChildTrie, key: &[u8]) -> T {
+		take(child_trie, key).unwrap_or_else(Default::default)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value` if there is no
 	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or<T: Codec + Sized>(subtrie: &SubTrie,key: &[u8], default_value: T) -> T {
-		take(subtrie, key).unwrap_or(default_value)
+	pub fn take_or<T: Codec + Sized>(child_trie: &ChildTrie,key: &[u8], default_value: T) -> T {
+		take(child_trie, key).unwrap_or(default_value)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(subtrie: &SubTrie, key: &[u8], default_value: F) -> T {
-		take(subtrie, key).unwrap_or_else(default_value)
+	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(child_trie: &ChildTrie, key: &[u8], default_value: F) -> T {
+		take(child_trie, key).unwrap_or_else(default_value)
 	}
 
 	/// Check to see if `key` has an explicit entry in storage.
-	pub fn exists(subtrie: SubTrieReadRef, key: &[u8]) -> bool {
-		runtime_io::read_child_storage(subtrie, key, &mut [0;0][..], 0).is_some()
+	pub fn exists(child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
+		runtime_io::read_child_storage(child_trie, key, &mut [0;0][..], 0).is_some()
 	}
 
-	/// Remove all `subtrie` key/values
-	pub fn kill_storage(subtrie: &SubTrie) {
-		runtime_io::kill_child_storage(subtrie)
+	/// Remove all `child_trie` key/values
+	pub fn kill_storage(child_trie: &ChildTrie) {
+		runtime_io::kill_child_storage(child_trie)
 	}
 
 	/// Ensure `key` has no explicit entry in storage.
-	pub fn kill(subtrie: &SubTrie, key: &[u8]) {
-		runtime_io::clear_child_storage(subtrie, key);
+	pub fn kill(child_trie: &ChildTrie, key: &[u8]) {
+		runtime_io::clear_child_storage(child_trie, key);
 	}
 
 	/// Get a Vec of bytes from storage.
-	pub fn get_raw(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
-		runtime_io::child_storage(subtrie, key)
+	pub fn get_raw(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+		runtime_io::child_storage(child_trie, key)
 	}
 
 	/// Put a raw byte slice into storage.
-	pub fn put_raw(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
-		runtime_io::set_child_storage(subtrie, key, value)
+	pub fn put_raw(child_trie: &ChildTrie, key: &[u8], value: &[u8]) {
+		runtime_io::set_child_storage(child_trie, key, value)
 	}
 
 	pub use super::unhashed::StorageVec;

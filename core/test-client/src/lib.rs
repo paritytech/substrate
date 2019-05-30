@@ -34,8 +34,7 @@ pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;
 use primitives::Blake2Hasher;
-use primitives::subtrie::{SubTrie, TestKeySpaceGenerator};
-use primitives::storage::well_known_keys;
+use primitives::child_trie::{ChildTrie, TestKeySpaceGenerator};
 use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
@@ -284,11 +283,11 @@ fn genesis_storage(
 	storage.extend(additional_storage_with_genesis(&block));
 
 	let mut child_storage = ChildrenStorageOverlay::default();
-	// warning no prefix probably next subtrie creation will go in same keyspace
-	let subtrie = SubTrie::new(&mut TestKeySpaceGenerator::new(), &b"test"[..]);
+	// warning: no prefix, next child trie creation will go in same keyspace
+	let child_trie = ChildTrie::new(&mut TestKeySpaceGenerator::new(), &b"test"[..]);
 	child_storage.insert(
-		subtrie.keyspace().clone(),
-		(vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect(), subtrie)
+		child_trie.keyspace().clone(),
+		(vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect(), child_trie)
 	);
 
 	(storage, child_storage)

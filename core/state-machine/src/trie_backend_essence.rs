@@ -23,7 +23,7 @@ use log::{debug, warn};
 use hash_db::{self, Hasher};
 use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
 	read_trie_value, read_child_trie_value, for_keys_in_child_trie};
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrieReadRef;
 use crate::backend::Consolidate;
 
 /// Patricia trie-based storage trait.
@@ -76,7 +76,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Get the value of child storage at given key.
-	pub fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -85,18 +85,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value(subtrie, &eph, key).map_err(map_e)
+		read_child_trie_value(child_trie, &eph, key).map_err(map_e)
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
+	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
 		};
 
-		if let Err(e) = for_keys_in_child_trie::<H, _, Ephemeral<S, H>>(subtrie, &eph, f) {
+		if let Err(e) = for_keys_in_child_trie::<H, _, Ephemeral<S, H>>(child_trie, &eph, f) {
 			debug!(target: "trie", "Error while iterating child storage: {}", e);
 		}
 	}

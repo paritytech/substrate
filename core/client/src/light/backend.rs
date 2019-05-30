@@ -23,8 +23,8 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrie;
+use primitives::child_trie::ChildTrieReadRef;
 use state_machine::{Backend as StateBackend, TrieBackend};
 use state_machine::backend::{InMemory as InMemoryState, MapTransaction};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -282,13 +282,13 @@ where
 		let mut storage: MapTransaction = HashMap::new();
 		storage.insert(None, (top, None));
 		// create a list of children keys to re-compute roots for
-		let child_delta : Vec<(SubTrie, _)> = children.iter()
-			.map(|(_, (_, subtrie))| (subtrie.clone(), None))
+		let child_delta : Vec<(ChildTrie, _)> = children.iter()
+			.map(|(_, (_, child_trie))| (child_trie.clone(), None))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (child_key, (child_storage, subtrie)) in children {
-			storage.insert(Some(child_key), (child_storage, Some(subtrie)));
+		for (child_key, (child_storage, child_trie)) in children {
+			storage.insert(Some(child_key), (child_storage, Some(child_trie)));
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();
@@ -352,7 +352,7 @@ where
 			.into_future().wait()
 	}
 
-	fn child_storage(&self, _subtrie: SubTrieReadRef, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, _child_trie: ChildTrieReadRef, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
@@ -360,7 +360,7 @@ where
 		// whole state is not available on light node
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _subtrie: SubTrieReadRef, _action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _child_trie: ChildTrieReadRef, _action: A) {
 		// whole state is not available on light node
 	}
 
@@ -371,7 +371,7 @@ where
 		(H::Out::default(), ())
 	}
 
-	fn child_storage_root<I>(&self, _subtrie: &SubTrie, _delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, _child_trie: &ChildTrie, _delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -414,12 +414,12 @@ where
 		}
 	}
 
-	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::child_storage(state, subtrie, key),
+				StateBackend::<H>::child_storage(state, child_trie, key),
 			OnDemandOrGenesisState::Genesis(ref state) =>
-				Ok(state.child_storage(subtrie, key).expect(IN_MEMORY_EXPECT_PROOF)),
+				Ok(state.child_storage(child_trie, key).expect(IN_MEMORY_EXPECT_PROOF)),
 		}
 	}
 
@@ -431,11 +431,11 @@ where
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, action: A) {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::for_keys_in_child_storage(state, subtrie, action),
-			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(subtrie, action),
+				StateBackend::<H>::for_keys_in_child_storage(state, child_trie, action),
+			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(child_trie, action),
 		}
 	}
 
@@ -453,15 +453,15 @@ where
 		}
 	}
 
-	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, child_trie: &ChildTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::child_storage_root(state, subtrie, delta),
+				StateBackend::<H>::child_storage_root(state, child_trie, delta),
 			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(subtrie, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_trie, delta);
 				(root, is_equal, ())
 			},
 		}

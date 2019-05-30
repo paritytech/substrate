@@ -24,8 +24,8 @@ use hash_db::Hasher;
 use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
-use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrie;
+use primitives::child_trie::ChildTrieReadRef;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -359,24 +359,24 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(hash)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(subtrie, key)
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.child_storage(child_trie, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
 
-	fn exists_child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(subtrie, key)
+	fn exists_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(child_trie, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
-		self.state.for_keys_in_child_storage(subtrie, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
+		self.state.for_keys_in_child_storage(child_trie, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -387,12 +387,12 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, child_trie: &ChildTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.child_storage_root(subtrie, delta)
+		self.state.child_storage_root(child_trie, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -403,8 +403,8 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.keys(prefix)
 	}
 
-	fn child_keys(&self, subtrie: SubTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(subtrie, prefix)
+	fn child_keys(&self, child_trie: ChildTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.state.child_keys(child_trie, prefix)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {

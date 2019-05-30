@@ -24,7 +24,7 @@ use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
-use primitives::subtrie::{SubTrie, SubTrieReadRef};
+use primitives::child_trie::{ChildTrie, ChildTrieReadRef};
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -367,12 +367,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(StorageData))
 	}
 
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	/// Given a `BlockId`, a key prefix, and a child storage key,
+	/// return the matching child storage keys.
 	pub fn child_trie(
 		&self,
 		id: &BlockId<Block>,
 		child_key: &StorageKey
-	) -> error::Result<Option<SubTrie>> {
+	) -> error::Result<Option<ChildTrie>> {
 		self.state_at(id)?
 			.child_trie(&child_key.0[..])
 			.map_err(|e| error::Error::from_state(Box::new(e)))
@@ -382,11 +383,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
-		subtrie: SubTrieReadRef,
+		child_trie: ChildTrieReadRef,
 		key_prefix: &StorageKey
 	) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?
-			.child_keys(subtrie, &key_prefix.0)
+			.child_keys(child_trie, &key_prefix.0)
 			.into_iter()
 			.map(StorageKey)
 			.collect();
@@ -397,11 +398,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		subtrie: SubTrieReadRef,
+		child_trie: ChildTrieReadRef,
 		key: &StorageKey
 	) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
-			.child_storage(subtrie, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.child_storage(child_trie, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
 
@@ -435,11 +436,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_child_proof(
 		&self,
 		id: &BlockId<Block>,
-		subtrie: SubTrieReadRef,
+		child_trie: ChildTrieReadRef,
 		key: &[u8]
 	) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, subtrie, key)
+			.and_then(|state| prove_child_read(state, child_trie, key)
 				.map(|(_, proof)| proof)
 				.map_err(Into::into))
 	}

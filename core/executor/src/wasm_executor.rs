@@ -31,7 +31,7 @@ use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieReadRef}};
+use primitives::{H256, Blake2Hasher, child_trie::{ChildTrie, ChildTrieReadRef}};
 use trie::ordered_trie_root;
 use crate::sandbox;
 use crate::allocator;
@@ -67,14 +67,11 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 		})
 	}
 
-	// TODO EMCH this function is a huge design issue: namely not calling child fn with subtrie
-	// (yet), so when wasm call a child function it got its runtime subtrie mem then call with
-	// its storage_key and native will fetch through this function: need either to ref native subtrie
-	// or pass by value the Subtrie.
-	fn with_subtrie<R>(
+	// see TODO LINK_ISSUE_1 (api using `storage_key` at this level creates unwanted requests).
+	fn with_child_trie<R>(
 		&mut self,
 		storage_key: &[u8],
-		f: impl FnOnce(&mut Self, SubTrie) -> R
+		f: impl FnOnce(&mut Self, ChildTrie) -> R
 	) -> std::result::Result<R, UserError> {
 		self.ext.child_trie(storage_key).map(|s| f(self,s))
 			.ok_or(UserError("No child trie at given address."))
@@ -200,8 +197,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
-		this.with_subtrie(&storage_key[..], move |this, subtrie|
-			this.ext.set_child_storage(&subtrie, key, value)
+		this.with_child_trie(&storage_key[..], move |this, child_trie|
+			this.ext.set_child_storage(&child_trie, key, value)
 		)?;
 		Ok(())
 	},
@@ -222,8 +219,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			} else {
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			}, HexDisplay::from(&key));
-			this.with_subtrie(&storage_key[..], |this, subtrie|
-				this.ext.clear_child_storage(&subtrie, &key)
+			this.with_child_trie(&storage_key[..], |this, child_trie|
+				this.ext.clear_child_storage(&child_trie, &key)
 			)?;
 
 		Ok(())
@@ -263,8 +260,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef { keyspace, root };
-		Ok(if this.ext.exists_child_storage(subtrie, &key) { 1 } else { 0 })
+		let child_trie = ChildTrieReadRef { keyspace, root };
+		Ok(if this.ext.exists_child_storage(child_trie, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize)
@@ -275,7 +272,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
-		this.with_subtrie(&storage_key[..], |this, subtrie| this.ext.kill_child_storage(&subtrie))?;
+		this.with_child_trie(&storage_key[..], |this, child_trie| this.ext.kill_child_storage(&child_trie))?;
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
@@ -331,8 +328,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef { keyspace, root };
-		let maybe_value = this.ext.child_storage(subtrie, &key);
+		let child_trie = ChildTrieReadRef { keyspace, root };
+		let maybe_value = this.ext.child_storage(child_trie, &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -413,9 +410,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef { keyspace, root };
+		let child_trie = ChildTrieReadRef { keyspace, root };
 
-		let maybe_value = this.ext.child_storage(subtrie, &key);
+		let maybe_value = this.ext.child_storage(child_trie, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -450,8 +447,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
-		let value = this.with_subtrie(&storage_key[..], |this, subtrie|
-			this.ext.child_storage_root(&subtrie)
+		let value = this.with_child_trie(&storage_key[..], |this, child_trie|
+			this.ext.child_storage_root(&child_trie)
 		)?;
 
 		let offset = this.heap.allocate(value.len() as u32)? as u32;

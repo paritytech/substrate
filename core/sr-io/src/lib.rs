@@ -33,7 +33,7 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-pub use primitives::subtrie::{SubTrie, SubTrieReadRef};
+pub use primitives::child_trie::{ChildTrie, ChildTrieReadRef};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -94,7 +94,7 @@ export_api! {
 		fn storage(key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
-		fn child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>>;
+		fn child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
@@ -102,15 +102,15 @@ export_api! {
 		/// number of bytes is not equal to the number of bytes written to the `value_out`.
 		fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
-		/// get child trie at storage key location
-		fn child_trie(storage_key: &[u8]) -> Option<SubTrie>;
+		/// Get child trie for a given `storage_key` location, or `None` if undefined.
+		fn child_trie(storage_key: &[u8]) -> Option<ChildTrie>;
 
 		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
 		/// number of bytes is not equal to the number of bytes written to the `value_out`.
 		fn read_child_storage(
-			subtrie: SubTrieReadRef,
+			child_trie: ChildTrieReadRef,
 			key: &[u8],
 			value_out: &mut [u8],
 			value_offset: usize
@@ -120,22 +120,22 @@ export_api! {
 		fn set_storage(key: &[u8], value: &[u8]);
 
 		/// Set the child storage of some particular key to Some value.
-		fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]);
+		fn set_child_storage(child_trie: &ChildTrie, key: &[u8], value: &[u8]);
 
 		/// Clear the storage of a key.
 		fn clear_storage(key: &[u8]);
 
 		/// Clear the storage of a key.
-		fn clear_child_storage(subtrie: &SubTrie, key: &[u8]);
+		fn clear_child_storage(child_trie: &ChildTrie, key: &[u8]);
 
 		/// Clear an entire child storage.
-		fn kill_child_storage(subtrie: &SubTrie);
+		fn kill_child_storage(child_trie: &ChildTrie);
 
 		/// Check whether a given `key` exists in storage.
 		fn exists_storage(key: &[u8]) -> bool;
 
 		/// Check whether a given `key` exists in storage.
-		fn exists_child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> bool;
+		fn exists_child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> bool;
 
 		/// Clear the storage entries with a key that starts with the given prefix.
 		fn clear_prefix(prefix: &[u8]);
@@ -144,7 +144,7 @@ export_api! {
 		fn storage_root() -> [u8; 32];
 
 		/// "Commit" all existing operations and compute the resultant child storage root.
-		fn child_storage_root(subtrie: &SubTrie) -> Vec<u8>;
+		fn child_storage_root(child_trie: &ChildTrie) -> Vec<u8>;
 
 		/// "Commit" all existing operations and get the resultant storage change root.
 		fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]>;

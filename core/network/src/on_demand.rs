@@ -30,7 +30,7 @@ use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use network_libp2p::PeerId;
 use crate::config::Roles;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use primitives::subtrie::SubTrieRead;
+use primitives::child_trie::ChildTrieRead;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -59,7 +59,7 @@ pub trait OnDemandNetwork<B: BlockT> {
 		who: &PeerId,
 		id: RequestId,
 		block: <B as BlockT>::Hash,
-		subtrie: SubTrieRead,
+		child_trie: ChildTrieRead,
 		key: Vec<u8>
 	);
 
@@ -638,7 +638,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
-	use primitives::subtrie::SubTrieRead;
+	use primitives::child_trie::ChildTrieRead;
 	use runtime_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
@@ -755,7 +755,7 @@ pub mod tests {
 		}
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
 		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>) {}
-		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: SubTrieRead,
+		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: ChildTrieRead,
 			_: Vec<u8>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
@@ -1003,7 +1003,7 @@ pub mod tests {
 		on_demand.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			child_trie: SubTrieRead {
+			child_trie: ChildTrieRead {
 				keyspace: b"keyspace".to_vec(),
 				// dummy : this should be queried
 				root: b"root".to_vec(),

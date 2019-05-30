@@ -27,7 +27,7 @@ use trie::{
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use primitives::subtrie::{SubTrie, SubTrieReadRef};
+use primitives::child_trie::{ChildTrie, ChildTrieReadRef};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -53,7 +53,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		read_trie_value_with::<H, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
-	pub fn child_storage(&mut self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(&mut self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
@@ -62,7 +62,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with(subtrie, &eph, key, &mut *self.proof_recorder).map_err(map_e)
+		read_child_trie_value_with(child_trie, &eph, key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
 	pub fn record_all_keys(&mut self) {
@@ -140,16 +140,16 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		}.storage(key)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
 			backend: self.backend.essence(),
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
-		}.child_storage(subtrie, key)
+		}.child_storage(child_trie, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
-		self.backend.for_keys_in_child_storage(subtrie, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
+		self.backend.for_keys_in_child_storage(child_trie, f)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -164,8 +164,8 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.keys(prefix)
 	}
 
-	fn child_keys(&self, subtrie: SubTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.backend.child_keys(subtrie, prefix)
+	fn child_keys(&self, child_trie: ChildTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.backend.child_keys(child_trie, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -174,12 +174,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, child_trie: &ChildTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.backend.child_storage_root(subtrie, delta)
+		self.backend.child_storage_root(child_trie, delta)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
@@ -223,7 +223,7 @@ mod tests {
 	use crate::backend::{InMemory};
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::subtrie::{TestKeySpaceGenerator};
+	use primitives::child_trie::{TestKeySpaceGenerator};
 	use primitives::{Blake2Hasher};
 
 	fn test_proving<'a>(trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
@@ -288,28 +288,28 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let subtrie1 = SubTrie::new(&mut ks_gen, b"sub1");
-		let subtrie2 = SubTrie::new(&mut ks_gen, b"sub2");
+		let child_trie1 = ChildTrie::new(&mut ks_gen, b"sub1");
+		let child_trie2 = ChildTrie::new(&mut ks_gen, b"sub2");
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
-			.chain((28..65).map(|i| (Some(subtrie1.clone()), vec![i], Some(vec![i]))))
-			.chain((10..15).map(|i| (Some(subtrie2.clone()), vec![i], Some(vec![i]))))
+			.chain((28..65).map(|i| (Some(child_trie1.clone()), vec![i], Some(vec![i]))))
+			.chain((10..15).map(|i| (Some(child_trie2.clone()), vec![i], Some(vec![i]))))
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _, _>(
-			::std::iter::empty(),
-			in_memory.child_storage_subtrie().map(|k|(k, Vec::new()))
+    let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _, _>(
+      ::std::iter::empty(),
+			in_memory.child_storage_child_trie().map(|k|(k, Vec::new()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(28..65).for_each(|i| assert_eq!(
-			in_memory.child_storage(subtrie1.node_ref(), &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_trie1.node_ref(), &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(10..15).for_each(|i| assert_eq!(
-			in_memory.child_storage(subtrie2.node_ref(), &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_trie2.node_ref(), &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 
@@ -337,17 +337,17 @@ mod tests {
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
 		let proving = ProvingBackend::new(&trie);
-		let subtrie1 = proving.child_trie(b"sub1").unwrap().unwrap();
-		assert_eq!(proving.child_storage(subtrie1.node_ref(), &[64]), Ok(Some(vec![64])));
+		let child_trie1 = proving.child_trie(b"sub1").unwrap().unwrap();
+		assert_eq!(proving.child_storage(child_trie1.node_ref(), &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
 		let proof_check = create_proof_check_backend::<Blake2Hasher>(
 			in_memory_root.into(),
 			proof
 		).unwrap();
-		let subtrie1 = proof_check.child_trie(b"sub1").unwrap().unwrap();
+		let child_trie1 = proof_check.child_trie(b"sub1").unwrap().unwrap();
 		assert_eq!(
-			proof_check.child_storage(subtrie1.node_ref(), &[64]).unwrap().unwrap(),
+			proof_check.child_storage(child_trie1.node_ref(), &[64]).unwrap().unwrap(),
 			vec![64]
 		);
 	}

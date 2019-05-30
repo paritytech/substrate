@@ -26,7 +26,7 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{Bounded, Zero};
-use substrate_primitives::subtrie::SubTrie;
+use substrate_primitives::child_trie::ChildTrie;
 use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;
@@ -77,11 +77,10 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
-		// EMCH TODO create an issue for a following pr to avoid this query on child trie at every
-		// call
+		// see issue TODO LINK_ISSUE_5 to stop querying child trie
 		trie_id.and_then(|id| {
 			child::child_trie(&prefixed_child_trie(&id)[..])
-				.and_then(|subtrie|	child::get_raw(subtrie.node_ref(), &blake2_256(location))
+				.and_then(|child_trie|	child::get_raw(child_trie.node_ref(), &blake2_256(location))
 		)})
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -144,16 +143,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				if let Some(code_hash) = changed.code_hash {
 					new_info.code_hash = code_hash;
 				}
-				// TODO put in cache (there is also a scheme change to do to avoid indirection)
-				// TODO also switch to using address instead of trie_id that way no need to store
-				// trie_id (subtrie field at address).
 				let p_key = prefixed_child_trie(&new_info.trie_id);
-				let subtrie = child::child_trie(&p_key).unwrap_or_else(|| {
-					// TODO EMCH this is utterly wrong, we got to merge child and contract info to use
-					// directly KeySpaceGenerator
-					SubTrie::new(
+				let child_trie = child::child_trie(&p_key).unwrap_or_else(|| {
+					// see issue TODO LINK_ISSUE_5 to only use keyspace generator
+					// and remove trie_id field (replaces parameter by 
+					// `TrieIdFromParentCounter(&address),`).
+					ChildTrie::new(
 						&mut TempKeyspaceGen(&new_info.trie_id[..]),
-						//TrieIdFromParentCounter(&address),
 						&p_key[..]
 					)
 				});
@@ -163,14 +159,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get_raw(subtrie.node_ref(), &blake2_256(&k)) {
+					if let Some(value) = child::get_raw(child_trie.node_ref(), &blake2_256(&k)) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-						child::put_raw(&subtrie, &blake2_256(&k), &value[..]);
+						child::put_raw(&child_trie, &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&subtrie, &blake2_256(&k));
+						child::kill(&child_trie, &blake2_256(&k));
 					}
 				}
 

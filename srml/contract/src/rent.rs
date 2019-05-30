@@ -20,7 +20,7 @@ use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Ze
 	SaturatedConversion};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
-use substrate_primitives::subtrie::SubTrie;
+use substrate_primitives::child_trie::ChildTrie;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -162,8 +162,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			// The contract has funds above subsistence deposit and that means it can afford to
 			// leave tombstone.
 			let p_key = prefixed_child_trie(&contract.trie_id);
-			let subtrie = runtime_io::child_trie(&p_key[..]).unwrap_or_else(|| {
-				SubTrie::new(
+			let child_trie = runtime_io::child_trie(&p_key[..]).unwrap_or_else(|| {
+				ChildTrie::new(
 					&mut TempKeyspaceGen(&contract.trie_id[..]),
 					&p_key[..]
 				)
@@ -171,14 +171,14 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 
 			// Note: this operation is heavy.
-			let child_storage_root = runtime_io::child_storage_root(&subtrie);
+			let child_storage_root = runtime_io::child_storage_root(&child_trie);
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				&child_storage_root[..],
 				contract.code_hash,
 			);
 			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
-			runtime_io::kill_child_storage(&subtrie);
+			runtime_io::kill_child_storage(&child_trie);
 		}
 
 		RentOutcome::Evicted

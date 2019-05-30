@@ -37,7 +37,7 @@ use srml_support::{
 	traits::Currency, StorageMap, StorageValue
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
-use substrate_primitives::subtrie::SubTrie;
+use substrate_primitives::child_trie::ChildTrie;
 use substrate_primitives::storage::well_known_keys;
 use substrate_primitives::Blake2Hasher;
 use system::{self, EventRecord, Phase};

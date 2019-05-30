@@ -23,8 +23,8 @@ use crate::changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_ro
 use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrie;
+use primitives::child_trie::ChildTrieReadRef;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -195,16 +195,16 @@ where
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_trie(storage_key).or_else(||
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
-	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.child_storage(subtrie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		self.overlay.child_storage(child_trie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
@@ -215,11 +215,11 @@ where
 		}
 	}
 
-	fn exists_child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> bool {
+	fn exists_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
-		match self.overlay.child_storage(subtrie.clone(), key) {
+		match self.overlay.child_storage(child_trie.clone(), key) {
 			Some(x) => x.is_some(),
-			_ => self.backend.exists_child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			_ => self.backend.exists_child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		}
 	}
 
@@ -230,20 +230,20 @@ where
 		self.overlay.set_storage(key, value);
 	}
 
-	fn place_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, value: Option<Vec<u8>>) {
+	fn place_child_storage(&mut self, child_trie: &ChildTrie, key: Vec<u8>, value: Option<Vec<u8>>) {
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		self.mark_dirty();
-		self.overlay.set_child_storage(subtrie, key, value);
+		self.overlay.set_child_storage(child_trie, key, value);
 	}
 
-	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
+	fn kill_child_storage(&mut self, child_trie: &ChildTrie) {
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		self.mark_dirty();
-		self.overlay.clear_child_storage(subtrie);
-		self.backend.for_keys_in_child_storage(subtrie.node_ref(), |key| {
-			self.overlay.set_child_storage(subtrie, key.to_vec(), None);
+		self.overlay.clear_child_storage(child_trie);
+		self.backend.for_keys_in_child_storage(child_trie.node_ref(), |key| {
+			self.overlay.set_child_storage(child_trie, key.to_vec(), None);
 		});
 	}
 
@@ -294,25 +294,28 @@ where
 		root
 	}
 
-	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_trie: &ChildTrie) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		if self.storage_transaction.is_some() {
-			self.child_trie(subtrie.parent_key())
-				.and_then(|subtrie|subtrie.root_initial_value().clone())
+			self.child_trie(child_trie.parent_slice())
+				.and_then(|child_trie| child_trie.root_initial_value().clone())
 				.unwrap_or(default_child_trie_root::<H>())
 		} else {
 
-			let delta = self.overlay.committed.children.get(subtrie.keyspace())
+			let delta = self.overlay.committed.children.get(child_trie.keyspace())
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(subtrie.keyspace())
+				.chain(self.overlay.prospective.children.get(child_trie.keyspace())
 						.into_iter()
 						.flat_map(|map| map.1.clone().into_iter()));
 
-			let root = self.backend.child_storage_root(subtrie, delta).0;
+			let root = self.backend.child_storage_root(child_trie, delta).0;
 
-			self.overlay.set_storage(subtrie.raw_parent_key().clone(), Some(subtrie.encoded_with_root(&root[..])));
+			self.overlay.set_storage(
+				child_trie.raw_parent_key().clone(),
+				Some(child_trie.encoded_with_root(&root[..]))
+			);
 
 			root
 

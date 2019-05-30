@@ -26,8 +26,8 @@ use crate::changes_trie::{
 	BlockNumber as ChangesTrieBlockNumber,
 };
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::child_trie::ChildTrie;
+use primitives::child_trie::ChildTrieReadRef;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
@@ -141,13 +141,13 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.child_storage(subtrie.clone(), key)
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.child_storage(child_trie.clone(), key)
 			.map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-				self.backend.child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
-	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
 		self.overlay.child_trie(storage_key).or_else(||
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
@@ -162,20 +162,20 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn place_child_storage(
 		&mut self,
-		subtrie: &SubTrie,
+		child_trie: &ChildTrie,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>
 	) {
-		self.overlay.set_child_storage(subtrie, key, value);
+		self.overlay.set_child_storage(child_trie, key, value);
 	}
 
-	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
+	fn kill_child_storage(&mut self, child_trie: &ChildTrie) {
 		let backend = &self.backend;
 		let overlay = &mut self.overlay;
 
-		overlay.clear_child_storage(subtrie);
-		backend.for_keys_in_child_storage(subtrie.node_ref(), |key| {
-			overlay.set_child_storage(subtrie, key.to_vec(), None);
+		overlay.clear_child_storage(child_trie);
+		backend.for_keys_in_child_storage(child_trie.node_ref(), |key| {
+			overlay.set_child_storage(child_trie, key.to_vec(), None);
 		});
 	}
 
@@ -203,19 +203,19 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		self.backend.storage_root(delta).0
 	}
 
-	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_trie: &ChildTrie) -> Vec<u8> {
 		let (root, _, _) = {
-			let delta = self.overlay.committed.children.get(subtrie.keyspace())
+			let delta = self.overlay.committed.children.get(child_trie.keyspace())
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(subtrie.keyspace())
+				.chain(self.overlay.prospective.children.get(child_trie.keyspace())
 						.into_iter()
 						.flat_map(|map| map.1.clone().into_iter()));
 
-			self.backend.child_storage_root(subtrie, delta)
+			self.backend.child_storage_root(child_trie, delta)
 		};
 
-		self.overlay.set_storage(subtrie.raw_parent_key().clone(), Some(subtrie.encoded_with_root(&root[..])));
+		self.overlay.set_storage(child_trie.raw_parent_key().clone(), Some(child_trie.encoded_with_root(&root[..])));
 
 		root
 	}

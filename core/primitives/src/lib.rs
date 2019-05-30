@@ -60,7 +60,7 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod changes_trie;
-pub mod subtrie;
+pub mod child_trie;
 
 #[cfg(test)]
 mod tests;

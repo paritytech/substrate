@@ -17,7 +17,7 @@
 // re-export hashing functions.
 pub use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher,
-	sr25519, Pair, subtrie::{SubTrie, SubTrieReadRef, KeySpace},
+	sr25519, Pair, child_trie::{ChildTrie, ChildTrieReadRef, KeySpace},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -67,14 +67,14 @@ impl StorageApi for () {
 		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
 		ext::with(|ext| ext.child_trie(storage_key))
 			.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		ext::with(|ext| {
-			ext.child_storage(subtrie, key).map(|s| s.to_vec())
+			ext.child_storage(child_trie, key).map(|s| s.to_vec())
 		})
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
@@ -86,13 +86,13 @@ impl StorageApi for () {
 	}
 
 	fn read_child_storage(
-		subtrie: SubTrieReadRef,
+		child_trie: ChildTrieReadRef,
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: usize,
 	) -> Option<usize> {
 		ext::with(|ext| {
-			ext.child_storage(subtrie, key)
+			ext.child_storage(child_trie, key)
 				.map(|value| {
 					let value = &value[value_offset..];
 					let written = std::cmp::min(value.len(), value_out.len());
@@ -103,9 +103,9 @@ impl StorageApi for () {
 		.expect("read_child_storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
+	fn set_child_storage(child_trie: &ChildTrie, key: &[u8], value: &[u8]) {
 		ext::with(|ext| {
-			ext.set_child_storage(subtrie, key.to_vec(), value.to_vec())
+			ext.set_child_storage(child_trie, key.to_vec(), value.to_vec())
 		});
 	}
 
@@ -115,15 +115,15 @@ impl StorageApi for () {
 		);
 	}
 
-	fn clear_child_storage(subtrie: &SubTrie, key: &[u8]) {
+	fn clear_child_storage(child_trie: &ChildTrie, key: &[u8]) {
 		ext::with(|ext| {
-			ext.clear_child_storage(subtrie, key)
+			ext.clear_child_storage(child_trie, key)
 		});
 	}
 
-	fn kill_child_storage(subtrie: &SubTrie) {
+	fn kill_child_storage(child_trie: &ChildTrie) {
 		ext::with(|ext| {
-			ext.kill_child_storage(subtrie)
+			ext.kill_child_storage(child_trie)
 		});
 	}
 
@@ -133,9 +133,9 @@ impl StorageApi for () {
 		).unwrap_or(false)
 	}
 
-	fn exists_child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> bool {
+	fn exists_child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
 		ext::with(|ext| {
-			ext.exists_child_storage(subtrie, key)
+			ext.exists_child_storage(child_trie, key)
 		}).unwrap_or(false)
 	}
 
@@ -151,9 +151,9 @@ impl StorageApi for () {
 		).unwrap_or(H256::zero()).into()
 	}
 
-	fn child_storage_root(subtrie: &SubTrie) -> Vec<u8> {
+	fn child_storage_root(child_trie: &ChildTrie) -> Vec<u8> {
 		ext::with(|ext| {
-			ext.child_storage_root(subtrie)
+			ext.child_storage_root(child_trie)
 		}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -272,7 +272,7 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Has
 pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 
 /// A set of key value pairs for children storage;
-pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, SubTrie)>;
+pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, ChildTrie)>;
 
 /// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage`. Forwards the value that the closure returns.

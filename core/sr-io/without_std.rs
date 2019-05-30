@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
-use primitives::{Blake2Hasher, subtrie::{SubTrie, SubTrieReadRef}};
+use primitives::{Blake2Hasher, child_trie::{ChildTrie, ChildTrieReadRef}};
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -392,22 +392,22 @@ impl StorageApi for () {
 		}
 	}
 
-	/// get child trie at storage key location
-	fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
-		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
-		let prefixed_key_cat = SubTrie::parent_key_slice(&prefixed_key);
+	/// Get child trie at storage key location.
+	fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
+		let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
+		let prefixed_key_cat = ChildTrie::parent_key_slice(&prefixed_key);
 		storage(prefixed_key_cat)
-			.and_then(|enc_node| SubTrie::decode_node_with_parent(&enc_node, prefixed_key))
+			.and_then(|enc_node| ChildTrie::decode_node_with_parent(&enc_node, prefixed_key))
 	}
 
-	fn child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		let empty_byte: [u8;0] = [];
-		let root = subtrie.root.unwrap_or(&empty_byte[..]);
+		let root = child_trie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			let ptr = ext_get_allocated_child_storage.get()(
-				subtrie.keyspace.as_ptr(),
-				subtrie.keyspace.len() as u32,
+				child_trie.keyspace.as_ptr(),
+				child_trie.keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(),
@@ -426,17 +426,17 @@ impl StorageApi for () {
 	}
 
 	fn read_child_storage(
-		subtrie: SubTrieReadRef,
+		child_trie: ChildTrieReadRef,
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: usize
 	) -> Option<usize> {
 		let empty_byte: [u8;0] = [];
-		let root = subtrie.root.unwrap_or(&empty_byte[..]);
+		let root = child_trie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			match ext_get_child_storage_into.get()(
-				subtrie.keyspace.as_ptr(),
-				subtrie.keyspace.len() as u32,
+				child_trie.keyspace.as_ptr(),
+				child_trie.keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(), key.len() as u32,
@@ -458,8 +458,8 @@ impl StorageApi for () {
 		}
 	}
 
-	fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
-		let storage_key = subtrie.parent_slice();
+	fn set_child_storage(child_trie: &ChildTrie, key: &[u8], value: &[u8]) {
+		let storage_key = child_trie.parent_slice();
 		unsafe {
 			ext_set_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
@@ -477,8 +477,8 @@ impl StorageApi for () {
 		}
 	}
 
-	fn clear_child_storage(subtrie: &SubTrie, key: &[u8]) {
-		let storage_key = subtrie.parent_slice();
+	fn clear_child_storage(child_trie: &ChildTrie, key: &[u8]) {
+		let storage_key = child_trie.parent_slice();
 		unsafe {
 			ext_clear_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
@@ -495,13 +495,13 @@ impl StorageApi for () {
 		}
 	}
 
-	fn exists_child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> bool {
+	fn exists_child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
 		let empty_byte: [u8;0] = [];
-		let root = subtrie.root.unwrap_or(&empty_byte[..]);
+		let root = child_trie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			ext_exists_child_storage.get()(
-				subtrie.keyspace.as_ptr(),
-				subtrie.keyspace.len() as u32,
+				child_trie.keyspace.as_ptr(),
+				child_trie.keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(), key.len() as u32
@@ -518,8 +518,8 @@ impl StorageApi for () {
 		}
 	}
 
-	fn kill_child_storage(subtrie: &SubTrie) {
-		let storage_key = subtrie.parent_slice();
+	fn kill_child_storage(child_trie: &ChildTrie) {
+		let storage_key = child_trie.parent_slice();
 		unsafe {
 			ext_kill_child_storage.get()(
 				storage_key.as_ptr(),
@@ -536,8 +536,8 @@ impl StorageApi for () {
 		result
 	}
 
-	fn child_storage_root(subtrie: &SubTrie) -> Vec<u8> {
-		let storage_key = subtrie.parent_slice();
+	fn child_storage_root(child_trie: &ChildTrie) -> Vec<u8> {
+		let storage_key = child_trie.parent_slice();
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_child_storage_root.get()(

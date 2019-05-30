@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use primitives::subtrie::{KeySpace, SubTrie, SubTrieReadRef};
+use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -56,9 +56,9 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, SubTrie)>,
+	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, ChildTrie)>,
 	/// association from parent storage location to keyspace,
-	/// for freshly added subtrie
+	/// for freshly added child_trie
 	pub pending_child: HashMap<Vec<u8>, KeySpace>,
 }
 
@@ -121,14 +121,14 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.prospective.children.get(subtrie.keyspace) {
+	pub fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Option<&[u8]>> {
+		if let Some(map) = self.prospective.children.get(child_trie.keyspace) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
 		}
 
-		if let Some(map) = self.committed.children.get(subtrie.keyspace) {
+		if let Some(map) = self.committed.children.get(child_trie.keyspace) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
@@ -138,11 +138,11 @@ impl OverlayedChanges {
 	}
 
 	/// returns a child trie if present
-	pub fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	pub fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
 		
-		let prefixed_storage_key = SubTrie::prefix_parent_key(storage_key);
+		let prefixed_storage_key = ChildTrie::prefix_parent_key(storage_key);
 		if let Some(keyspace) = self.prospective.pending_child.get(
-			SubTrie::parent_key_slice(&prefixed_storage_key)
+			ChildTrie::parent_key_slice(&prefixed_storage_key)
 		) {
 			if let Some(map) = self.prospective.children.get(keyspace) {
 				 return Some(map.2.clone());
@@ -150,7 +150,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some(keyspace) = self.committed.pending_child.get(
-			SubTrie::parent_key_slice(&prefixed_storage_key)
+			ChildTrie::parent_key_slice(&prefixed_storage_key)
 		) {
 			if let Some(map) = self.committed.children.get(keyspace) {
 				 return Some(map.2.clone());
@@ -179,14 +179,14 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective child change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, val: Option<Vec<u8>>) {
+	pub(crate) fn set_child_storage(&mut self, child_trie: &ChildTrie, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
 		let p = &mut self.prospective.children;
 		let pc = &mut self.prospective.pending_child;
-		let map_entry = p.entry(subtrie.keyspace().clone())
+		let map_entry = p.entry(child_trie.keyspace().clone())
 			.or_insert_with(||{
-				pc.insert(subtrie.parent_slice().to_vec(), subtrie.keyspace().clone());
-				(Default::default(), Default::default(), subtrie.clone())
+				pc.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+				(Default::default(), Default::default(), child_trie.clone())
 			});
 		map_entry.1.insert(key, val);
 
@@ -202,10 +202,10 @@ impl OverlayedChanges {
 	/// change set, and still can be reverted by [`discard_prospective`].
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
-	pub(crate) fn clear_child_storage(&mut self, subtrie: &SubTrie) {
+	pub(crate) fn clear_child_storage(&mut self, child_trie: &ChildTrie) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(subtrie.keyspace().clone())
-			.or_insert_with(||(Default::default(), Default::default(), subtrie.clone()));
+		let map_entry = self.prospective.children.entry(child_trie.keyspace().clone())
+			.or_insert_with(||(Default::default(), Default::default(), child_trie.clone()));
 
 		if let Some(extrinsic) = extrinsic_index {
 			map_entry.0.get_or_insert_with(Default::default)
@@ -214,7 +214,7 @@ impl OverlayedChanges {
 
 		map_entry.1.values_mut().for_each(|e| *e = None);
 
-		if let Some((_, committed_map, _o_subtrie)) = self.committed.children.get(subtrie.keyspace()) {
+		if let Some((_, committed_map, _o_child_trie)) = self.committed.children.get(child_trie.keyspace()) {
 			for (key, _) in committed_map.iter() {
 				map_entry.1.insert(key.clone(), None);
 			}

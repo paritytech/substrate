@@ -24,7 +24,7 @@ use futures::IntoFuture;
 use hash_db::{HashDB, Hasher};
 use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use primitives::subtrie::SubTrieRead;
+use primitives::child_trie::ChildTrieRead;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion,
@@ -84,8 +84,8 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub block: Header::Hash,
 	/// Header of block at which read is performed.
 	pub header: Header,
-	/// Child trie
-	pub child_trie: SubTrieRead,
+	/// Child trie to query.
+	pub child_trie: ChildTrieRead,
 	/// Child storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.

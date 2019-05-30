@@ -19,7 +19,6 @@ use self::error::Error;
 
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
-use primitives::storage::well_known_keys;
 use sr_io::blake2_256;
 use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor};
 use substrate_executor::NativeExecutionDispatch;
