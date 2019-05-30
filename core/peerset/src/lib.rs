@@ -39,6 +39,8 @@ enum Action {
 	SetReservedOnly(bool),
 	ReportPeer(PeerId, i32),
 	SetPriorityGroup(String, HashSet<PeerId>),
+	AddToPriorityGroup(String, PeerId),
+	RemoveFromPriorityGroup(String, PeerId),
 }
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
@@ -76,9 +78,19 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
-	/// Modify a priority group
+	/// Modify a priority group.
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<PeerId>) {
 		let _ = self.tx.unbounded_send(Action::SetPriorityGroup(group_id, peers));
+	}
+
+	/// Add a peer to a priority group.
+	pub fn add_to_priority_group(&self, group_id: String, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::AddToPriorityGroup(group_id, peer_id));
+	}
+
+	/// Remove a peer from a priority group.
+	pub fn remove_from_priority_group(&self, group_id: String, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
 	}
 }
 
@@ -225,6 +237,16 @@ impl Peerset {
 
 	fn on_set_priority_group(&mut self, group_id: &str, peers: HashSet<PeerId>) {
 		self.data.set_priority_group(group_id, peers);
+		self.alloc_slots();
+	}
+
+	fn on_add_to_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
+		self.data.add_to_priority_group(group_id, peer_id);
+		self.alloc_slots();
+	}
+
+	fn on_remove_from_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
+		self.data.remove_from_priority_group(group_id, &peer_id);
 		self.alloc_slots();
 	}
 
@@ -426,6 +448,11 @@ impl Peerset {
 			"message_queue": self.message_queue.len(),
 		})
 	}
+
+	/// Returns priority group by id.
+	pub fn get_priority_group(&self, group_id: &str) -> HashSet<PeerId> {
+		self.data.get_priority_group(group_id)
+	}
 }
 
 impl Stream for Peerset {
@@ -445,6 +472,8 @@ impl Stream for Peerset {
 					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
 					Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
 					Action::SetPriorityGroup(group_id, peers) => self.on_set_priority_group(&group_id, peers),
+					Action::AddToPriorityGroup(group_id, peer_id) => self.on_add_to_priority_group(&group_id, peer_id),
+					Action::RemoveFromPriorityGroup(group_id, peer_id) => self.on_remove_from_priority_group(&group_id, peer_id),
 				}
 			}
 		}

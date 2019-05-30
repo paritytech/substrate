@@ -297,6 +297,20 @@ impl PeersState {
 		self.priority_nodes.insert(group_id.into(), peers);
 	}
 
+	/// Add a peer to a priority group.
+	pub fn add_to_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
+		let mut peers = self.priority_nodes.get(group_id).cloned().unwrap_or_default();
+		peers.insert(peer_id);
+		self.set_priority_group(group_id, peers);
+	}
+
+	/// Remove a peer from a priority group.
+	pub fn remove_from_priority_group(&mut self, group_id: &str, peer_id: &PeerId) {
+		let mut peers = self.priority_nodes.get(group_id).cloned().unwrap_or_default();
+		peers.remove(&peer_id);
+		self.set_priority_group(group_id, peers);
+	}
+
 	/// Get priority group content.
 	pub fn get_priority_group(&self, group_id: &str) -> HashSet<PeerId> {
 		self.priority_nodes.get(group_id).cloned().unwrap_or_default()
