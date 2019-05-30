@@ -121,6 +121,16 @@ impl Conviction {
 	}
 }
 
+impl Bounded for Conviction {
+	fn min_value() -> Self {
+		Conviction::Unlocked
+	}
+
+	fn max_value() -> Self {
+		Conviction::Locked5x
+	}
+}
+
 const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
@@ -700,7 +710,7 @@ mod tests {
 	};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
+	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
 	use primitives::testing::{Digest, DigestItem, Header};
 	use balances::BalanceLock;
 
@@ -744,10 +754,10 @@ mod tests {
 		type DustRemoval = ();
 	}
 	parameter_types! {
-		const LaunchPeriod: u64 = 1;
-		const VotingPeriod: u64 = 1;
-		const MinimumDeposit: u64 = 1;
-		const EnactmentPeriod: u64 = 0;
+		pub const LaunchPeriod: u64 = 1;
+		pub const VotingPeriod: u64 = 1;
+		pub const MinimumDeposit: u64 = 1;
+		pub const EnactmentPeriod: u64 = 1;
 	}
 	impl Trait for Test {
 		type Proposal = Call;
@@ -770,7 +780,7 @@ mod tests {
 			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{}.build_storage().unwrap().0);
+		t.extend(GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 
@@ -787,43 +797,6 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn vote_should_work() {
-		assert_eq!(Vote::new(true, 0).periods(), 1);
-		assert_eq!(Vote::new(true, 1).periods(), 1);
-		assert_eq!(Vote::new(true, 2).periods(), 2);
-		assert_eq!(Vote::new(true, 0).is_aye(), true);
-		assert_eq!(Vote::new(true, 1).is_aye(), true);
-		assert_eq!(Vote::new(true, 2).is_aye(), true);
-		assert_eq!(Vote::new(false, 0).periods(), 1);
-		assert_eq!(Vote::new(false, 1).periods(), 1);
-		assert_eq!(Vote::new(false, 2).periods(), 2);
-		assert_eq!(Vote::new(false, 0).is_aye(), false);
-		assert_eq!(Vote::new(false, 1).is_aye(), false);
-		assert_eq!(Vote::new(false, 2).is_aye(), false);
-	}
-
-	#[test]
-	fn invalid_vote_strength_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
-			System::set_block_number(1);
-			let r = Democracy::inject_referendum(
-				1,
-				set_balance_proposal(2),
-				VoteThreshold::SuperMajorityApprove,
-				0
-			).unwrap();
-			assert_noop!(
-				Democracy::vote(Origin::signed(1), r, Vote::new(true, 7)),
-				"vote has too great a strength"
-			);
-			assert_noop!(
-				Democracy::vote(Origin::signed(1), r, Vote::new(false, 7)),
-				"vote has too great a strength"
-			);
-		});
-	}
-
 	fn set_balance_proposal(value: u64) -> Call {
 		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
 	}
@@ -833,6 +806,11 @@ mod tests {
 			Origin::signed(who),
 			Box::new(set_balance_proposal(value)), locked.into()
 		)
+	}
+
+	fn next_block() {
+		assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+		System::set_block_number(System::block_number() + 1);
 	}
 
 	#[test]
@@ -862,9 +840,10 @@ mod tests {
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (10, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 10));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
@@ -914,9 +893,10 @@ mod tests {
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (10, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 10));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
@@ -928,12 +908,11 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			System::set_block_number(2);
+			next_block();
 			let r = 0;
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::max_value()));
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -942,9 +921,10 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is counted.
-			assert_eq!(Democracy::tally(r), (30, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 30));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -957,14 +937,13 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			System::set_block_number(2);
+			next_block();
 			let r = 0;
 
 			// Check behavior with cycle.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
-			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 100));
-			assert_ok!(Democracy::delegate(Origin::signed(1), 3, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::max_value()));
+			assert_ok!(Democracy::delegate(Origin::signed(3), 2, Conviction::max_value()));
+			assert_ok!(Democracy::delegate(Origin::signed(1), 3, Conviction::max_value()));
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -972,8 +951,9 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 
 			// Delegated vote is counted.
-			assert_eq!(Democracy::tally(r), (60, 0, 60));
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			assert_eq!(Democracy::tally(r), (6, 0, 60));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -987,8 +967,7 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			System::set_block_number(2);
+			next_block();
 			let r = 0;
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
@@ -997,16 +976,17 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::max_value()));
 
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1, 2]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (30, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 30));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1020,11 +1000,10 @@ mod tests {
 			assert_ok!(propose_set_balance(1, 2, 1));
 
 			// Delegate and undelegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::max_value()));
 			assert_ok!(Democracy::undelegate(Origin::signed(2)));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			System::set_block_number(2);
+			next_block();
 			let r = 0;
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -1033,9 +1012,10 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (10, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 10));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1049,14 +1029,13 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			System::set_block_number(2);
+			next_block();
 			let r = 0;
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::max_value()));
 
 			// Vote.
 			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
@@ -1066,9 +1045,10 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (30, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 30));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1137,21 +1117,12 @@ mod tests {
 			assert_ok!(propose_set_balance(1, 2, 2));
 			assert_ok!(propose_set_balance(1, 4, 4));
 			assert_ok!(propose_set_balance(1, 3, 3));
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-
-			System::set_block_number(1);
+			next_block();
 			assert_ok!(Democracy::vote(Origin::signed(1), 0, AYE));
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Balances::free_balance(&42), 4);
-
-			System::set_block_number(2);
+			next_block();
 			assert_ok!(Democracy::vote(Origin::signed(1), 1, AYE));
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Balances::free_balance(&42), 3);
-
-			System::set_block_number(3);
+			next_block();
 			assert_ok!(Democracy::vote(Origin::signed(1), 2, AYE));
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 		});
 	}
 
@@ -1169,9 +1140,10 @@ mod tests {
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (10, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 10));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1190,7 +1162,8 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 			assert_ok!(Democracy::cancel_referendum(r.into()));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 0);
 		});
@@ -1210,9 +1183,10 @@ mod tests {
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), NAY);
-			assert_eq!(Democracy::tally(r), (0, 10, 10));
+			assert_eq!(Democracy::tally(r), (0, 1, 10));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 0);
 		});
@@ -1235,9 +1209,10 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
 
-			assert_eq!(Democracy::tally(r), (110, 100, 210));
+			assert_eq!(Democracy::tally(r), (11, 10, 210));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1260,13 +1235,12 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(5), r, AYE));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
 
-			assert_eq!(Democracy::tally(r), (210, 0, 210));
+			assert_eq!(Democracy::tally(r), (21, 0, 210));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
 			assert_eq!(Balances::free_balance(&42), 0);
 
-			System::set_block_number(2);
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1285,9 +1259,10 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
 
-			assert_eq!(Democracy::tally(r), (60, 50, 110));
+			assert_eq!(Democracy::tally(r), (6, 5, 110));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 0);
 		});
@@ -1310,9 +1285,10 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
 
-			assert_eq!(Democracy::tally(r), (100, 50, 150));
+			assert_eq!(Democracy::tally(r), (10, 5, 150));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1349,15 +1325,15 @@ mod tests {
 				conviction: Conviction::Locked1x
 			}));
 
-			assert_eq!(Democracy::tally(r), (250, 100, 270));
+			assert_eq!(Democracy::tally(r), (250, 100, 150));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
 
 			assert_eq!(Balances::locks(1), vec![]);
 			assert_eq!(Balances::locks(2), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: 6,
+				until: 9,
 				reasons: WithdrawReason::Transfer.into()
 			}]);
 			assert_eq!(Balances::locks(3), vec![BalanceLock {
@@ -1369,19 +1345,12 @@ mod tests {
 			assert_eq!(Balances::locks(4), vec![BalanceLock {
 				id: DEMOCRACY_ID,
 				amount: u64::max_value(),
-				until: 4,
-				reasons: WithdrawReason::Transfer.into()
-			}]);
-			assert_eq!(Balances::locks(5), vec![BalanceLock {
-				id: DEMOCRACY_ID,
-				amount: u64::max_value(),
 				until: 3,
 				reasons: WithdrawReason::Transfer.into()
 			}]);
-			assert_eq!(Balances::locks(6), vec![]);
+			assert_eq!(Balances::locks(5), vec![]);
 
-			System::set_block_number(2);
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
@@ -1415,12 +1384,10 @@ mod tests {
 				conviction: Conviction::Locked1x
 			}));
 
-			assert_eq!(Democracy::tally(r), (250, 100, 270));
+			assert_eq!(Democracy::tally(r), (250, 100, 150));
 
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-
-			System::set_block_number(2);
-			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			next_block();
+			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
