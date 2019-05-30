@@ -54,7 +54,7 @@ pub use consensus;
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{self, As, Zero, ValidateUnsigned, MaybeSerializeDebug};
+use primitives::traits::{self, As, Zero, ValidateUnsigned, MaybeSerializeDebug, Verify, Header, Digest};
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -63,7 +63,7 @@ use parity_codec::{Encode, Decode, Input, Output};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem};
+use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem, slot_author};
 use system::ensure_signed;
 use consensus::EquivocationProof;
 use core::fmt::Debug;
@@ -178,6 +178,32 @@ decl_module! {
 	}
 }
 
+fn verify_header<'a, T>(header: &T::H, authorities: &'a [<<T as Trait>::Signature as Verify>::Signer])
+	-> Option<&'a <T::Signature as Verify>::Signer>
+where 
+	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as traits::Verify>::Signer>>,
+	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	let digest_item = match header.digest().logs().last() {
+		Some(x) => x,
+		None => return None,
+	};
+	if let Some((slot_num, sig)) = digest_item.as_aura_seal() {
+		let author = match slot_author::<T::Signature>(slot_num, authorities) {
+			None => return None,
+			Some(author) => author,
+		};
+		let pre_hash = header.hash();
+		let to_sign = (slot_num, pre_hash).encode();
+		if sig.verify(&to_sign[..], author) {
+			return Some(author)
+		}
+	};
+	None
+}
+
+
 impl<T> ValidateUnsigned for Module<T> 
 where
 	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
@@ -193,7 +219,13 @@ where
 				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H, T::Signature>> = Decode::decode(&mut proof.as_slice());
 				if let Some(equivocation_proof) = maybe_equivocation_proof {
 					let authorities = <consensus::Module<T>>::authorities();
-					if equivocation_proof.is_valid(authorities.as_slice()) {
+					let fst_author = verify_header::<T>(equivocation_proof.first_header(), &authorities);
+					let snd_author = verify_header::<T>(equivocation_proof.second_header(), &authorities);
+				
+					let proof_is_valid = fst_author.is_some() && snd_author.is_some()
+						&& fst_author.unwrap() == snd_author.unwrap();
+
+					if  proof_is_valid {
 						return TransactionValidity::Valid {
 							priority: 0,
 							requires: vec![],
