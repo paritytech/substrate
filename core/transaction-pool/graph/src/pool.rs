@@ -129,7 +129,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 
 				match self.api.validate_transaction(at, xt.clone())? {
-					TransactionValidity::Valid { priority, requires, provides, longevity } => {
+					TransactionValidity::Valid { priority, requires, provides, longevity, propagate } => {
 						Ok(base::Transaction {
 							data: xt,
 							bytes,
@@ -137,6 +137,7 @@ impl<B: ChainApi> Pool<B> {
 							priority,
 							requires,
 							provides,
+							propagate,
 							valid_till: block_number
 								.saturated_into::<u64>()
 								.saturating_add(longevity),
@@ -491,6 +492,7 @@ mod tests {
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: vec![vec![nonce as u8]],
 					longevity: 3,
+					propagate: true,
 				})
 			}
 		}

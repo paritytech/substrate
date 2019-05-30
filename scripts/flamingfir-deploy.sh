@@ -13,12 +13,12 @@ JOB_ID=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}" --header "Conte
 echo "Launched job: $JOB_ID"
 
 
-while [ ${RETRY_ATTEMPT} -le ${RETRY_COUNT} ] ; do 
+while [ ${RETRY_ATTEMPT} -le ${RETRY_COUNT} ] ; do
 	export RETRY_RESULT=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/ | jq .status)
 	RETRY_ATTEMPT=$(( $RETRY_ATTEMPT +1 ))
-	sleep $SLEEP_TIME 
+	sleep $SLEEP_TIME
 	if [ $(echo $RETRY_RESULT | egrep  -e successful -e failed) ] ; then
-            break 
+            break
         fi
 done
 

@@ -708,7 +708,7 @@ pub(crate) mod tests {
 			let mut prev_hash = insert_final_block(&db, HashMap::new(), || header_producer(&Default::default(), 0));
 
 			// insert SIZE blocks && ensure that nothing is pruned
-			
+
 			for number in 0..cht::size() {
 				prev_hash = insert_block(&db, HashMap::new(), || header_producer(&prev_hash, 1 + number));
 			}

@@ -10,7 +10,6 @@ edition = "2018"
 client = { package = "substrate-client", path = "../../core/client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 futures = "0.1.25"
-inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 parity-codec = { version = "3.3", features = ["derive"] }
