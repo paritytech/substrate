@@ -49,7 +49,7 @@ pub type ReferendumIndex = u32;
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
-	Unlocked,
+	None,
 	/// 1x votes, locked for an enactment period following a successful vote.
 	Locked1x,
 	/// 2x votes, locked for 2x enactment periods following a successful vote.
@@ -64,14 +64,14 @@ pub enum Conviction {
 
 impl Default for Conviction {
 	fn default() -> Self {
-		Conviction::Unlocked
+		Conviction::None
 	}
 }
 
 impl From<Conviction> for u8 {
 	fn from(c: Conviction) -> u8 {
 		match c {
-			Conviction::Unlocked => 0,
+			Conviction::None => 0,
 			Conviction::Locked1x => 1,
 			Conviction::Locked2x => 2,
 			Conviction::Locked3x => 3,
@@ -85,7 +85,7 @@ impl TryFrom<u8> for Conviction {
 	type Error = ();
 	fn try_from(i: u8) -> result::Result<Conviction, ()> {
 		Ok(match i {
-			0 => Conviction::Unlocked,
+			0 => Conviction::None,
 			1 => Conviction::Locked1x,
 			2 => Conviction::Locked2x,
 			3 => Conviction::Locked3x,
@@ -101,7 +101,7 @@ impl Conviction {
 	/// balance should be locked for.
 	fn lock_periods(self) -> u32 {
 		match self {
-			Conviction::Unlocked => 0,
+			Conviction::None => 0,
 			Conviction::Locked1x => 1,
 			Conviction::Locked2x => 2,
 			Conviction::Locked3x => 4,
@@ -111,19 +111,25 @@ impl Conviction {
 	}
 
 	/// The votes of a voter of the given `balance` with our conviction.
-	fn votes<B: From<u8> + Zero + CheckedMul + CheckedDiv + Bounded>(self, balance: B) -> B {
+	fn votes<
+		B: From<u8> + Zero + Copy + CheckedMul + CheckedDiv + Bounded
+	>(self, balance: B) -> (B, B) {
 		match self {
-			Conviction::Unlocked =>
-				balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero),
-			x =>
+			Conviction::None => {
+				let r = balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero);
+				(r, r)
+			}
+			x => (
 				balance.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
+				balance,
+			)
 		}
 	}
 }
 
 impl Bounded for Conviction {
 	fn min_value() -> Self {
-		Conviction::Unlocked
+		Conviction::None
 	}
 
 	fn max_value() -> Self {
@@ -455,13 +461,14 @@ impl<T: Trait> Module<T> {
 				.map(|voter| (
 					T::Currency::total_balance(voter), Self::vote_of((ref_index, voter.clone()))
 				))
-				.map(|(bal, Vote { aye, conviction })|
+				.map(|(balance, Vote { aye, conviction })| {
+					let (votes, turnout) = conviction.votes(balance);
 					if aye {
-						(conviction.votes(bal), Zero::zero(), bal)
+						(votes, Zero::zero(), turnout)
 					} else {
-						(Zero::zero(), conviction.votes(bal), bal)
+						(Zero::zero(), votes, turnout)
 					}
-				).fold(
+				}).fold(
 					(Zero::zero(), Zero::zero(), Zero::zero()),
 					|(a, b, c), (d, e, f)| (a + d, b + e, c + f)
 				);
@@ -473,30 +480,29 @@ impl<T: Trait> Module<T> {
 	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is
 	/// done.
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		Self::voters_for(ref_index).iter()
-			.fold(
-				(Zero::zero(), Zero::zero(), Zero::zero()),
-				|(approve_acc, against_acc, capital_acc), voter| {
-					let Vote { aye, conviction } = Self::vote_of((ref_index, voter.clone()));
-					let (votes, balance) = Self::delegated_votes(
-						ref_index,
-						voter.clone(),
-						conviction,
-						MAX_RECURSION_LIMIT
-					);
-					if aye {
-						(approve_acc + votes, against_acc, capital_acc + balance)
-					} else {
-						(approve_acc, against_acc + votes, capital_acc + balance)
-					}
+		Self::voters_for(ref_index).iter().fold(
+			(Zero::zero(), Zero::zero(), Zero::zero()),
+			|(approve_acc, against_acc, turnout_acc), voter| {
+				let Vote { aye, conviction } = Self::vote_of((ref_index, voter.clone()));
+				let (votes, turnout) = Self::delegated_votes(
+					ref_index,
+					voter.clone(),
+					conviction,
+					MAX_RECURSION_LIMIT
+				);
+				if aye {
+					(approve_acc + votes, against_acc, turnout_acc + turnout)
+				} else {
+					(approve_acc, against_acc + votes, turnout_acc + turnout)
 				}
-			)
+			}
+		)
 	}
 
 	fn delegated_votes(
 		ref_index: ReferendumIndex,
 		to: T::AccountId,
-		min_conviction: Conviction,
+		parent_conviction: Conviction,
 		recursion_limit: u32,
 	) -> (BalanceOf<T>, BalanceOf<T>) {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
@@ -505,17 +511,17 @@ impl<T: Trait> Module<T> {
 				*delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone()))
 			).fold(
 				(Zero::zero(), Zero::zero()),
-				|(votes_acc, balance_acc), (delegator, (_delegate, max_conviction))| {
-					let conviction = Conviction::min(min_conviction, max_conviction);
+				|(votes_acc, turnout_acc), (delegator, (_delegate, max_conviction))| {
+					let conviction = Conviction::min(parent_conviction, max_conviction);
 					let balance = T::Currency::total_balance(&delegator);
-					let votes = conviction.votes(balance);
-					let (del_votes, del_balance) = Self::delegated_votes(
+					let (votes, turnout) = conviction.votes(balance);
+					let (del_votes, del_turnout) = Self::delegated_votes(
 						ref_index,
 						delegator,
 						conviction,
 						recursion_limit - 1
 					);
-					(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
+					(votes_acc + votes + del_votes, turnout_acc + turnout + del_turnout)
 				}
 			)
 	}
@@ -714,8 +720,10 @@ mod tests {
 	use primitives::testing::{Digest, DigestItem, Header};
 	use balances::BalanceLock;
 
-	const AYE: Vote = Vote{ aye: true, conviction: Conviction::Unlocked };
-	const NAY: Vote = Vote{ aye: false, conviction: Conviction::Unlocked };
+	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
+	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
+	const BIG_AYE: Vote = Vote{ aye: true, conviction: Conviction::Locked1x };
+	const BIG_NAY: Vote = Vote{ aye: false, conviction: Conviction::Locked1x };
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -840,7 +848,7 @@ mod tests {
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (1, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 1));
 
 			next_block();
 			next_block();
@@ -893,7 +901,7 @@ mod tests {
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (1, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 1));
 
 			next_block();
 			next_block();
@@ -921,7 +929,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is counted.
-			assert_eq!(Democracy::tally(r), (3, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 3));
 
 			next_block();
 			next_block();
@@ -951,7 +959,7 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 
 			// Delegated vote is counted.
-			assert_eq!(Democracy::tally(r), (6, 0, 60));
+			assert_eq!(Democracy::tally(r), (6, 0, 6));
 			next_block();
 			next_block();
 
@@ -983,7 +991,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (3, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 3));
 
 			next_block();
 			next_block();
@@ -1012,7 +1020,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (1, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 1));
 
 			next_block();
 			next_block();
@@ -1045,7 +1053,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
-			assert_eq!(Democracy::tally(r), (3, 0, 30));
+			assert_eq!(Democracy::tally(r), (3, 0, 3));
 
 			next_block();
 			next_block();
@@ -1140,7 +1148,7 @@ mod tests {
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
-			assert_eq!(Democracy::tally(r), (1, 0, 10));
+			assert_eq!(Democracy::tally(r), (1, 0, 1));
 
 			next_block();
 			next_block();
@@ -1183,7 +1191,7 @@ mod tests {
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), NAY);
-			assert_eq!(Democracy::tally(r), (0, 1, 10));
+			assert_eq!(Democracy::tally(r), (0, 1, 1));
 
 			next_block();
 			next_block();
@@ -1202,14 +1210,14 @@ mod tests {
 				VoteThreshold::SuperMajorityApprove,
 				0
 			).unwrap();
-			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
-			assert_ok!(Democracy::vote(Origin::signed(2), r, NAY));
-			assert_ok!(Democracy::vote(Origin::signed(3), r, NAY));
-			assert_ok!(Democracy::vote(Origin::signed(4), r, AYE));
-			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
-			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
+			assert_ok!(Democracy::vote(Origin::signed(1), r, BIG_AYE));
+			assert_ok!(Democracy::vote(Origin::signed(2), r, BIG_NAY));
+			assert_ok!(Democracy::vote(Origin::signed(3), r, BIG_NAY));
+			assert_ok!(Democracy::vote(Origin::signed(4), r, BIG_AYE));
+			assert_ok!(Democracy::vote(Origin::signed(5), r, BIG_NAY));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, BIG_AYE));
 
-			assert_eq!(Democracy::tally(r), (11, 10, 210));
+			assert_eq!(Democracy::tally(r), (110, 100, 210));
 
 			next_block();
 			next_block();
@@ -1235,7 +1243,7 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(5), r, AYE));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
 
-			assert_eq!(Democracy::tally(r), (21, 0, 210));
+			assert_eq!(Democracy::tally(r), (21, 0, 21));
 
 			next_block();
 			assert_eq!(Balances::free_balance(&42), 0);
@@ -1256,10 +1264,10 @@ mod tests {
 				VoteThreshold::SuperMajorityApprove,
 				0
 			).unwrap();
-			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
-			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
+			assert_ok!(Democracy::vote(Origin::signed(5), r, BIG_NAY));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, BIG_AYE));
 
-			assert_eq!(Democracy::tally(r), (6, 5, 110));
+			assert_eq!(Democracy::tally(r), (60, 50, 110));
 
 			next_block();
 			next_block();
@@ -1281,11 +1289,11 @@ mod tests {
 				VoteThreshold::SuperMajorityApprove,
 				0
 			).unwrap();
-			assert_ok!(Democracy::vote(Origin::signed(4), r, AYE));
-			assert_ok!(Democracy::vote(Origin::signed(5), r, NAY));
-			assert_ok!(Democracy::vote(Origin::signed(6), r, AYE));
+			assert_ok!(Democracy::vote(Origin::signed(4), r, BIG_AYE));
+			assert_ok!(Democracy::vote(Origin::signed(5), r, BIG_NAY));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, BIG_AYE));
 
-			assert_eq!(Democracy::tally(r), (10, 5, 150));
+			assert_eq!(Democracy::tally(r), (100, 50, 150));
 
 			next_block();
 			next_block();
