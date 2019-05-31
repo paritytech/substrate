@@ -476,7 +476,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap();
 				}
 			}
 
@@ -628,7 +628,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
 
