@@ -203,7 +203,7 @@ impl Peerset {
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let mut reserved = self.data.get_priority_group(RESERVED_NODES);
-		reserved.insert(peer_id.clone());
+		reserved.remove(peer_id.clone());
 		self.data.set_priority_group(RESERVED_NODES, reserved);
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(peer) => {
