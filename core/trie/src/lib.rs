@@ -156,7 +156,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 }
 
 /// This function returns the default child trie root.
-/// see issue TODO LINK_ISSUE_3, this is not efficient.
+/// see issue FIXME #2741, this is not efficient.
 pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
@@ -186,7 +186,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	let mut root = if let Some(root) = child_trie.root.as_ref() {
 		child_trie_root_as_hash::<H,_>(root)
 	} else {
-		// see TODO LINK_ISSUE_3, default root is constant value
+		// see FIXME #2741, default root is constant value
 		child_trie_root_as_hash::<H,_>(default_root)
 	};
 	{
@@ -345,7 +345,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
-// see TODO LINK_ISSUE_3, third field should be remove and is therefore not documented
+// see FIXME #2741, third field should be remove and is therefore not documented
 /// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
 pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a KeySpace, H::Out);
@@ -359,7 +359,7 @@ impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
-		// see TODO LINK_ISSUE_3 for removal of this calculation
+		// see FIXME #2741 for removal of this calculation
 		let null_node_data = H::hash(NULL_NODE);
 		KeySpacedDB(db, ks, null_node_data)
 	}
@@ -369,7 +369,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
-		// see TODO LINK_ISSUE_3 for removal of this calculation
+		// see FIXME #2741 for removal of this calculation
 		let null_node_data = H::hash(&[0]);
 		KeySpacedDBMut(db, ks, null_node_data)
 	}

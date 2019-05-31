@@ -110,7 +110,7 @@ use system::{ensure_signed, RawOrigin};
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
-// see TODO LINK_ISSUE_5 (should result in removing this type)
+// see FIXME #2744 (should result in removing this type)
 pub type TrieId = Vec<u8>;
 
 /// contract uses this prefix
@@ -231,7 +231,7 @@ where
 	}
 }
 
-// see TODO LINK_ISSUE_5 (should result in removing this trait
+// see FIXME #2744 (should result in removing this trait
 // in favor of `KeySpaceGenerator`)
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
 /// Note that it is different than encode because trie id should be collision resistant
@@ -250,11 +250,11 @@ pub trait TrieIdGenerator<AccountId> {
 }
 
 /// Get trie id from `account_id`.
-// see TODO LINK_ISSUE_5 (temporar glue)
+// see FIXME #2744 (temporar glue)
 pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
 
 /// Get trie id from `account_id`.
-// see TODO LINK_ISSUE_5 (for using this instead of `TrieIdFromParentCounter`)
+// see FIXME #2744 (for using this instead of `TrieIdFromParentCounter`)
 pub struct TrieIdFromParentCounterNew<'a, T: Trait>(pub &'a T::AccountId);
 
 
@@ -296,7 +296,7 @@ where
 }
 
 /// Temporary hack to use the same value as the TrieIdGenerator
-/// see TODO LINK_ISSUE_5
+/// see FIXME #2744
 struct TempKeyspaceGen<'a>(&'a[u8]);
 
 impl<'a> KeySpaceGenerator for TempKeyspaceGen<'a>

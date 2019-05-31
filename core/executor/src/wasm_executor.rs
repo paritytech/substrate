@@ -67,7 +67,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 		})
 	}
 
-	// see TODO LINK_ISSUE_1 (api using `storage_key` at this level creates unwanted requests).
+	// see FIXME #2739 (api using `storage_key` at this level creates unwanted requests).
 	fn with_child_trie<R>(
 		&mut self,
 		storage_key: &[u8],

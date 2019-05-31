@@ -28,12 +28,12 @@ use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_chi
 	KeySpacedDBMut};
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 
-// see TODO LINK_ISSUE_2 related to performance.
+// see FIXME #2740 related to performance.
 /// Type alias over a in memory change cache, with support for child trie.
 /// This need to allow efficient access to value based on keys.
 pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<ChildTrie>)>;
 
-// see TODO LINK_ISSUE_2 related to performance.
+// see FIXME #2740 related to performance.
 /// Type alias over a list of memory change cache, with support for child trie.
 /// This only need to contain an iterable set of values.
 pub type VecTransaction = Vec<(Option<ChildTrie>, Vec<u8>, Option<Vec<u8>>)>;
