@@ -542,6 +542,10 @@ impl<Block: BlockT> Inner<Block> {
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
 		let outgoing_tally = outgoing_tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
 
+		// We reject all messages of a given kind for a given voter,
+		// once we're received more than two messages of that kind.
+		// We report peers who send us a third or more of message of a given kind,
+		// only when we've already sent out two messages of that kind for that voter.
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
 				if tally.handled_primary_proposals > 1 {
@@ -934,7 +938,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							},
 						}
 					}
-					// The local-view of the peer allowed this message, and we're not sending it too often.
+					// The local-view of the peer allowed this message,
+					// and we're not sending it too often in the current context.
 					return true
 				}
 			}
