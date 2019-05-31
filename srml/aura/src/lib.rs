@@ -56,23 +56,24 @@ use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{
 	Zero, One, ValidateUnsigned, SaturatedConversion, Saturating,
-	MaybeSerializeDebug, Verify, Header, Digest
+	MaybeSerializeDebug, Verify, Header, Digest, DigestItem, AuthIdForHeader
 };
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode, Input, Output};
+use parity_codec::{Encode, Decode};
 use inherents::{
 	RuntimeString, InherentIdentifier, InherentData, ProvideInherent,
 	MakeFatalError
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use aura_primitives::{AuraEquivocationProof, digest::CompatibleDigestItem, slot_author};
+use aura_primitives::{
+	AuraEquivocationProof, CompatibleDigestItem, slot_author, find_pre_digest
+};
 use system::ensure_signed;
 use consensus::EquivocationProof;
-use core::fmt::Debug;
 
 mod mock;
 mod tests;
@@ -161,11 +162,10 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
-	type Signature: traits::Verify;
-	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature> + traits::DigestItem<Hash = Self::Hash>;
-	type D: traits::Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
-	type H: traits::Header<Digest = Self::D, Hash = Self::Hash>;
-	// type SessionKey: Into<<<Self as Trait>::Signature as traits::Verify>::Signer>;
+	type Signature: Verify + Decode;
+	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature> + DigestItem<Hash = Self::Hash>;
+	type D: Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
+	type H: Header<Digest = Self::D, Hash = Self::Hash>;
 }
 
 decl_storage! {
@@ -186,18 +186,22 @@ decl_module! {
 
 fn verify_header<'a, T>(
 	header: &T::H,
-	authorities: &'a [<<T as Trait>::Signature as Verify>::Signer]
-) -> Option<&'a <T::Signature as Verify>::Signer>
+	authorities: &'a [<<T as Trait>::Signature as Verify>::Signer],
+) -> Option<&'a <<T as Trait>::Signature as Verify>::Signer>
 where 
 	T: Trait,
-	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+	<<<T as Trait>::H as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
+	<<T as Trait>::Signature as Verify>::Signer: Encode + Decode + Clone,
 {
 	let digest_item = match header.digest().logs().last() {
 		Some(x) => x,
 		None => return None,
 	};
-	if let Some((slot_num, sig)) = digest_item.as_aura_seal() {
-		let author = match slot_author::<T::Signature>(slot_num, authorities) {
+	if let (Some(sig), Ok(slot_num)) = (
+		digest_item.as_aura_seal(),
+		find_pre_digest::<T::H, T::Signature>(&header),
+	) {
+		let author = match slot_author::<<T::Signature as Verify>::Signer>(slot_num, authorities) {
 			None => return None,
 			Some(author) => author,
 		};
@@ -206,15 +210,15 @@ where
 		if sig.verify(&to_sign[..], author) {
 			return Some(author)
 		}
-	};
+	}
 	None
 }
 
 impl<T> ValidateUnsigned for Module<T> 
 where
-	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
-	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as traits::Verify>::Signer>>,
-	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
+	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
 	type Call = Call<T>;
 
@@ -237,6 +241,7 @@ where
 							requires: vec![],
 							provides: vec![],
 							longevity: 1000,
+							propagate: true,
 						}
 					}
 				}

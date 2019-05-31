@@ -49,11 +49,11 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, E, V>(
-	backend: &Arc<C>,
+	backend: &C,
 	slot_now: u64,
 	slot: u64,
 	header: H,
-	signer: V::Signer,
+	signer: &V::Signer,
 ) -> ClientResult<Option<E>>
 	where
 		H: Header,

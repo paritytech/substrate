@@ -692,6 +692,8 @@ pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
 /// Extract the authority ID type for a block.
 pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
+pub type AuthIdForHeader<H> = <<<H as Header>::Digest as Digest>::Item as DigestItem>::AuthorityId;
+
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 /// Implement for pieces of information that require some additional context `Context` in order to be

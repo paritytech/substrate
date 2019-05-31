@@ -20,7 +20,7 @@
 
 use substrate_client::decl_runtime_apis;
 use runtime_primitives::{
-	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify},
+	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify, AuthIdForHeader},
 	MultiSignature, MultiSigner,
 };
 use parity_codec::{Encode, Decode};
@@ -29,7 +29,7 @@ use consensus::EquivocationProof;
 use rstd::marker::PhantomData;
 
 mod digest;
-pub use digest::CompatibleDigestItem;
+pub use digest::{CompatibleDigestItem, find_pre_digest};
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
@@ -127,9 +127,9 @@ where
 }
 
 /// Get slot author for given block along with authorities.
-pub fn slot_author<V>(slot_num: u64, authorities: &[V::Signer]) -> Option<&V::Signer> 
+pub fn slot_author<S>(slot_num: u64, authorities: &[S]) -> Option<&S> 
 where
-	V: Verify,
+	S: Encode + Decode + Clone,
 {
 	if authorities.is_empty() { return None }
 

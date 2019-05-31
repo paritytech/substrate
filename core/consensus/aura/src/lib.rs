@@ -126,7 +126,7 @@ impl SlotCompatible for AuraSlotCompatible {
 /// Start the aura worker. The returned future should be run in a tokio runtime.
 pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	slot_duration: SlotDuration,
-	local_key: Arc<ed25519::Pair>,
+	local_key: Arc<P>,
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: Arc<I>,
@@ -145,8 +145,9 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Member + Encode + Decode,
-	P::Signature: Hash + Member + Encode + Decode,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	P::Signature: Hash + Member + Encode + Decode + Verify,
+	<<P as Pair>::Signature as Verify>::Signer: PartialEq<<P as Pair>::Public> + Encode + Decode + Clone,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	H: Header<
 		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
 		Hash=B::Hash,
@@ -176,11 +177,11 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	)
 }
 
-struct AuraWorker<C, E, I, SO> {
+struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<I>,
 	env: Arc<E>,
-	local_key: Arc<ed25519::Pair>,
+	local_key: Arc<P>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
@@ -200,9 +201,10 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P::Signature: Member + Encode + Decode + Hash + Debug + Verify,
+	<<P as Pair>::Signature as Verify>::Signer: PartialEq<<P as Pair>::Public> + Encode + Decode +,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -250,7 +252,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			);
 			return Box::new(future::ok(()));
 		}
-		let maybe_author = slot_author::<ed25519::Signature>(slot_num, &authorities);
+		let maybe_author = slot_author(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
 			Some(author) => if author == &public_key {
@@ -283,7 +285,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 						slot_info.inherent_data,
 						generic::Digest {
 							logs: vec![
-								<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_num),
+								<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot_num),
 							],
 						},
 						remaining_duration,
@@ -311,7 +313,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header);
+			let pre_digest: Result<u64, String> = find_pre_digest::<H, P::Signature>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -326,7 +328,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -369,24 +371,6 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
-{
-	let mut pre_digest: Option<u64> = None;
-	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
-		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))?,
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
-		}
-	}
-	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
-}
-
-
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
@@ -401,10 +385,10 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
-	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P::Signature: Decode,
-	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
+	P::Signature: Decode + Verify,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -415,7 +399,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let slot_num = find_pre_digest::<B, _>(&header)?;
+	let slot_num = find_pre_digest::<B::Header, _>(&header)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -423,7 +407,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author::<ed25519::Signature>(slot_num, &authorities) {
+		let expected_author = match slot_author(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author,
 		};
@@ -488,16 +472,18 @@ pub fn submit_report_call<H, A, B: Block, C>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E, A: txpool::ChainApi> {
+pub struct AuraVerifier<C, E, P, A: txpool::ChainApi> {
 	client: Arc<C>,
 	transaction_queue: Arc<TransactionPool<A>>,
 	extra: E,
+	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
-impl<C, E, A> AuraVerifier<C, E, A>
+impl<C, E, P, A> AuraVerifier<C, E, P, A>
 where
 	A: txpool::ChainApi,
+	P: Send + Sync + 'static,
 {
 	fn check_inherents<B: Block>(
 		&self,
@@ -505,8 +491,10 @@ where
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), String>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+	) -> Result<(), String> 
+	where
+		C: ProvideRuntimeApi,
+		C::Api: BlockBuilderApi<B>,
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -561,11 +549,14 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 #[forbid(deprecated)]
-impl<B: Block, C, E, A> Verifier<B> for AuraVerifier<C, E, A> where
+impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 	A: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Signature: Encode + Decode + Verify,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
 	Self: Authorities<B>,
 {
@@ -575,7 +566,7 @@ impl<B: Block, C, E, A> Verifier<B> for AuraVerifier<C, E, A> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId<ed25519::Pair>>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId<P>>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data()
 			.map_err(String::from)?;
 		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
@@ -593,7 +584,7 @@ impl<B: Block, C, E, A> Verifier<B> for AuraVerifier<C, E, A> where
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers.
-		let checked_header = check_header::<C, B, A>(
+		let checked_header = check_header::<C, B, P, A>(
 			&self.client,
 			&self.transaction_queue,
 			slot_now + 1,
@@ -667,7 +658,7 @@ impl<B: Block, C, E, A> Verifier<B> for AuraVerifier<C, E, A> where
 	}
 }
 
-impl<B, C, E, A> Authorities<B> for AuraVerifier<C, E, A> where
+impl<B, C, E, P, A> Authorities<B> for AuraVerifier<C, E, P, A> where
 	B: Block,
 	A: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -723,7 +714,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
+			if client.runtime_api().has_api::<AuthorityIdFor<B>>(at).unwrap_or(false) {
 				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				CoreApi::authorities(&*client.runtime_api(), at).ok()
@@ -750,7 +741,7 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<A, B, C, E>(
+pub fn import_queue<A, B, C, E, P>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -765,7 +756,10 @@ pub fn import_queue<A, B, C, E>(
 	A: txpool::ChainApi<Block=B> + 'static,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Signature: Encode + Decode + Verify,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;

@@ -19,8 +19,9 @@
 //! This implements the digests for AuRa, to allow the private
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
-
-use runtime_primitives::{generic::DigestItem, traits::Verify};
+use runtime_primitives::{
+	generic::DigestItem, traits::{Block, Verify, DigestItemFor, Header, Digest}
+};
 use parity_codec::{Encode, Decode};
 use crate::AURA_ENGINE_ID;
 
@@ -64,4 +65,22 @@ where
 			_ => None,
 		}
 	}
+}
+
+pub fn find_pre_digest<H, S>(header: &H) -> Result<u64, &str>
+where
+	H: Header,
+	S: Verify + Decode,
+	<<H as Header>::Digest as Digest>::Item: CompatibleDigestItem<S>,
+	<S as Verify>::Signer: Encode + Decode + PartialEq + Clone,
+{
+	let mut pre_digest: Option<u64> = None;
+	for log in header.digest().logs() {
+		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err("Multiple AuRa pre-runtime headers, rejecting!")?,
+			(None, _) => {},
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| "No AuRa pre-runtime digest found")
 }
