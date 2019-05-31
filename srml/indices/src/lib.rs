@@ -168,7 +168,7 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	/// of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
 	/// function provide a `who` argument that reclaims a dead account.
 	///
-	/// At the time of this writing, only the balances module calls this function upon creation
+	/// At the time of this writing, only the Balances module calls this function upon creation
 	/// of new accounts.
 	/// # </weight>
 	fn on_new_account(who: &T::AccountId) {
