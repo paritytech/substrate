@@ -43,8 +43,24 @@ pub trait Trait: CouncilTrait {
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Origin {
-	/// It has been condoned by a given number of council members.
-	Members(u32),
+	/// It has been condoned by a given number of council members from a given total.
+	Members(u32, u32),
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as CouncilMotions {
+		/// The (hashes of) the active proposals.
+		pub Proposals get(proposals): Vec<T::Hash>;
+		/// Actual proposal for a given hash, if it's current.
+		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
+		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
+		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>)>;
+		/// Proposals so far.
+		pub ProposalCount get(proposal_count): u32;
+	}
+	add_extra_genesis {
+		build(|_, _, _| {});
+	}
 }
 
 decl_event!(
@@ -76,7 +92,8 @@ decl_module! {
 			ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
 
 			if threshold < 2 {
-				let ok = proposal.dispatch(Origin::Members(1).into()).is_ok();
+				let seats = <Council<T>>::active_council().len() as u32;
+				let ok = proposal.dispatch(Origin::Members(1, seats).into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
 				let index = Self::proposal_count();
@@ -125,16 +142,16 @@ decl_module! {
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
 			let threshold = voting.1;
-			let potential_votes = <Council<T>>::active_council().len() as u32;
+			let seats = <Council<T>>::active_council().len() as u32;
 			let approved = yes_votes >= threshold;
-			let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
+			let disapproved = seats.saturating_sub(no_votes) < threshold;
 			if approved || disapproved {
 				if approved {
 					Self::deposit_event(RawEvent::Approved(proposal));
 
 					// execute motion, assuming it exists.
 					if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-						let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
+						let ok = p.dispatch(Origin::Members(threshold, seats).into()).is_ok();
 						Self::deposit_event(RawEvent::Executed(proposal, ok));
 					}
 				} else {
@@ -153,22 +170,6 @@ decl_module! {
 	}
 }
 
-decl_storage! {
-	trait Store for Module<T: Trait> as CouncilMotions {
-		/// The (hashes of) the active proposals.
-		pub Proposals get(proposals): Vec<T::Hash>;
-		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
-		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>)>;
-		/// Proposals so far.
-		pub ProposalCount get(proposal_count): u32;
-	}
-	add_extra_genesis {
-		build(|_, _, _| {});
-	}
-}
-
 impl<T: Trait> Module<T> {
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
@@ -182,7 +183,7 @@ pub fn ensure_council_members<OuterOrigin>(o: OuterOrigin, n: u32) -> result::Re
 	where OuterOrigin: Into<Option<Origin>>
 {
 	match o.into() {
-		Some(Origin::Members(x)) if x >= n => Ok(n),
+		Some(Origin::Members(x, _)) if x >= n => Ok(n),
 		_ => Err("bad origin: expected to be a threshold number of council members"),
 	}
 }

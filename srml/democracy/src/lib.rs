@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv};
+use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin};
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
@@ -31,7 +31,7 @@ use srml_support::{
 	}
 };
 use srml_support::dispatch::Result;
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -188,6 +188,12 @@ pub trait Trait: system::Trait + Sized {
 
 	/// The minimum amount to be used as a deposit for a public referendum proposal.
 	type MinimumDeposit: Get<BalanceOf<Self>>;
+
+	/// Origin from which the next tabled referendum may be forced.
+	type TableOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Origin from which emergency referenda may be scheduled.
+	type EmergencyOrigin: EnsureOrigin<Self::Origin>;
 }
 
 /// Info regarding an ongoing referendum.
@@ -252,6 +258,13 @@ decl_storage! {
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, Conviction);
+
+		/// True if the last referendum tabled was a public proposal. False if it was submitted
+		/// externally.
+		pub LastTabledWasPublic: bool;
+
+		/// The referendum to be tabled next. May only be `Some` if `LastTabledWasPublic` is `true`.
+		pub NextTabled: Option<(T::Proposal, VoteThreshold)>
 	}
 }
 
@@ -274,8 +287,7 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Propose a sensitive action to be taken.
-		fn propose(
-			origin,
+		fn propose(origin,
 			proposal: Box<T::Proposal>,
 			#[compact] value: BalanceOf<T>
 		) {
@@ -327,18 +339,42 @@ decl_module! {
 			Self::do_vote(who, ref_index, vote)
 		}
 
-		/// Start a referendum.
-		fn start_referendum(
+		/// Schedule an emergency referendum.
+		///
+		/// This will create a new referendum for the `proposal`, approved as long as counted votes
+		/// exceed `threshold` and, if approved, enacted after the given `delay`.
+		///
+		/// It may be called from either the Root or the Emergency origin.
+		fn emergency_referendum(origin,
 			proposal: Box<T::Proposal>,
 			threshold: VoteThreshold,
 			delay: T::BlockNumber
-		) -> Result {
+		) {
+			T::EmergencyOrigin::ensure_origin(origin)
+				.or_else(|_| ensure_root(origin))?;
 			Self::inject_referendum(
 				<system::Module<T>>::block_number() + T::VotingPeriod::get(),
 				*proposal,
 				threshold,
 				delay,
 			).map(|_| ())
+		}
+
+		/// Schedule a referendum to be tabled next. This will fail if the last tabled referendum
+		/// happened through this call.
+		fn table_referendum(origin,
+			proposal: Box<T::Proposal>,
+			majority_carries: bool
+		) {
+			T::TableOrigin::ensure_origin(origin)?;
+			<NextTabled<T>>::put((
+				*proposal,
+				if majority_carries {
+					VoteThreshold::SimpleMajority
+				} else {
+					VoteThreshold::SuperMajorityApprove
+				}
+			));
 		}
 
 		/// Remove a referendum.
@@ -604,6 +640,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn launch_next(now: T::BlockNumber) -> Result {
+		if <LastTabledWasPublic<T>>::take()
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
 			.enumerate()
