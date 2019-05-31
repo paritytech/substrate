@@ -50,6 +50,8 @@ use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
 
+pub mod testing;
+
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
