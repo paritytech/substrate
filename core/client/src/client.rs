@@ -367,7 +367,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(StorageData))
 	}
 
-	/// Given a `BlockId`, a key prefix, and a child storage key,
+	/// Given a `BlockId` and a child storage key,
 	/// return the matching child storage keys.
 	pub fn child_trie(
 		&self,
@@ -394,7 +394,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(keys)
 	}
 
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	/// Given a `BlockId`, a key and a child trie reference,
+	/// return the value under the key in that block.
 	pub fn child_storage(
 		&self,
 		id: &BlockId<Block>,
@@ -431,7 +432,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.map_err(Into::into))
 	}
 
-	/// Reads child storage value at a given block + storage_key + key, returning
+	/// Reads child storage value at a given block + child trie reference + key, returning
 	/// read proof.
 	pub fn read_child_proof(
 		&self,
