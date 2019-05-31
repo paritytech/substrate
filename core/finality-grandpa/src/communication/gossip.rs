@@ -856,8 +856,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					match inner.read().peers.peer(who) {
 						None => return false,
 						Some(peer) => {
-							let allowed = peer.view.consider_vote(round, set_id) == Consider::Accept;
-							if !allowed {
+							if !peer.view.consider_vote(round, set_id) == Consider::Accept {
 								return false
 							}
 						},
@@ -870,7 +869,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							Some(tally_for_round) => tally_for_round,
 							None => return false
 						};
-						let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
+						let mut tally = tally_for_round
+							.entry(msg.message.id.clone())
+							.or_insert(Default::default());
 						// Tally what we send out,
 						// and check that we don't send each message more than twice for a given voter.
 						match &msg.message.message {
