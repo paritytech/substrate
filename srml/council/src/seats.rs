@@ -103,6 +103,12 @@ decl_module! {
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two extra DB entries, one DB change.
+		/// - Argument `votes` is limited in length to number of candidates.
+		/// # </weight>
 		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index)
@@ -110,6 +116,10 @@ decl_module! {
 
 		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
+		///
+		/// # <weight>
+		/// - Same as `set_approvals` with one additional storage read.
+		/// # </weight>
 		fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
 			let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index)
@@ -120,6 +130,11 @@ decl_module! {
 		/// the voter gave their last approval set.
 		///
 		/// May be called by anyone. Returns the voter deposit to `signed`.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two fewer DB entries, one DB change.
+		/// # </weight>
 		fn reap_inactive_voter(
 			origin,
 			#[compact] reporter_index: u32,
@@ -169,6 +184,11 @@ decl_module! {
 		}
 
 		/// Remove a voter. All votes are cancelled and the voter deposit is returned.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two fewer DB entries, one DB change.
+		/// # </weight>
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -186,6 +206,11 @@ decl_module! {
 		/// Submit oneself for candidacy.
 		///
 		/// Account must have enough transferrable funds in it to pay the bond.
+		///
+		/// # <weight>
+		/// - Independent of input.
+		/// - Three DB changes. 
+		/// # </weight>
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -216,6 +241,11 @@ decl_module! {
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
 		/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()``
 		/// `signed` should have at least
+		///
+		/// # <weight>
+		/// - O(voters) compute.
+		/// - One DB change.
+		/// # </weight>
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,

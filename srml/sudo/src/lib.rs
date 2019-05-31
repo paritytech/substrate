@@ -112,8 +112,9 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - Very little overhead on the supplied dispatch.
-		/// - Safe if the supplied dispatch is safe.
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - No DB writes.
 		/// # </weight>
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -136,7 +137,9 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - No significant complexity.
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
 		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.

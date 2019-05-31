@@ -220,13 +220,6 @@ decl_module! {
 		/// The timestamp should be greater than the previous one by the amount specified by `minimum_period`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		///
-		/// # <weight>
-		/// - Accepts only a `Moment` (`u64`).
-		/// - Number of storage reads and writes is constrained.
-		/// - Performs minimum validation and stores.
-		/// - Safe.
-		/// # </weight>
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");

@@ -104,8 +104,9 @@ decl_module! {
 		/// proposal is awarded.
 		///
 		/// # <weight>
-		/// - Input value may have bearing on complexity.
-		/// - Bounded complexity.
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change, one extra DB entry.
 		/// # </weight>
 		fn propose_spend(
 			origin,
@@ -127,24 +128,12 @@ decl_module! {
 		}
 
 		/// Set the balance of funds available to spend.
-		///
-		/// # <weight>
-		/// - Input is an integer.
-		/// - Only makes a storage call.
-		/// - Safe.
-		/// # </weight>
 		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
 			// Put the new value into storage.
 			<Pot<T>>::put(new_pot);
 		}
 
 		/// (Re-)configure this module.
-		///
-		/// # <weight>
-		/// - Constant storage writes.
-		/// - Not exploitable to user input.
-		/// - Safe.
-		/// # </weight>
 		fn configure(
 			#[compact] proposal_bond: Permill,
 			#[compact] proposal_bond_minimum: BalanceOf<T>,
@@ -160,8 +149,9 @@ decl_module! {
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
-		/// - `proposal_id` is a `u32`.
-		/// - Low complexity.
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB clear.
 		/// # </weight>
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
@@ -176,8 +166,9 @@ decl_module! {
 		/// and the original deposit will be returned.
 		///
 		/// # <weight>
-		/// - Simply mutates storage by appending to a vector.
-		/// - Low complexity.
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
 		/// # </weight>
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;

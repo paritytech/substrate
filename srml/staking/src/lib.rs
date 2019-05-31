@@ -155,7 +155,7 @@
 //!
 //! The term [`SlotStake`](./struct.Module.html#method.slot_stake) will be used throughout this section. It refers
 //! to a value calculated at the end of each era, containing the _minimum value at stake among all validators._
-//! Note that a validator's value at stake might be a combination of The validator's own stake
+//! Note that a validator's value at stake might be a combination of the validator's own stake
 //! and the votes it received. See [`Exposure`](./struct.Exposure.html) for more details.
 //!
 //! ### Reward Calculation
@@ -226,7 +226,7 @@
 //!
 //! The election algorithm, aside from electing the validators with the most stake value and votes, tries to divide
 //! the nominator votes among candidates in an equal manner. To further assure this, an optional post-processing
-//! can be applied that iteractively normalizes the nominator staked values until the total difference among
+//! can be applied that iteratively normalizes the nominator staked values until the total difference among
 //! votes of a particular nominator are less than a threshold.
 //!
 //! ## GenesisConfig
@@ -559,10 +559,10 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
-		/// # <weight> FLAG
+		/// # <weight>
 		/// - Independent of the arguments. Moderate complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `origin` and the provided `controller`.
+		/// - O(1).
+		/// - Three extra DB entries.
 		///
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
 		/// the `origin` falls below _existential deposit_ and gets removed as dust.
@@ -603,8 +603,8 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `origin` account key.
+		/// - O(1).
+		/// - One DB entry.
 		/// # </weight>
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
@@ -637,12 +637,13 @@ decl_module! {
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		///
-		/// # <weight> FLAG
+		/// # <weight>
 		/// - Independent of the arguments. Limited but potentially exploitable complexity.
 		/// - Contains a limited number of reads.
 		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
 		///   The only way to clean the aforementioned storage item is also user-controlled via `withdraw_unbonded`.
+		/// - One DB entry.
 		/// </weight>
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -801,28 +802,16 @@ decl_module! {
 		// ----- Root calls.
 
 		/// Set the number of sessions in an era.
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant.
-		/// # </weight>
 		fn set_sessions_per_era(#[compact] new: T::BlockNumber) {
 			<NextSessionsPerEra<T>>::put(new);
 		}
 
 		/// The length of the bonding duration in eras.
-		///
-		/// # <weight>
-		/// - Independent of arguments. Insignificant.
-		/// # </weight>
 		fn set_bonding_duration(#[compact] new: T::BlockNumber) {
 			<BondingDuration<T>>::put(new);
 		}
 
 		/// The ideal number of validators.
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant.
-		/// # </weight>
 		fn set_validator_count(#[compact] new: u32) {
 			<ValidatorCount<T>>::put(new);
 		}
@@ -840,19 +829,11 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant.
-		/// # </weight>
 		fn set_offline_slash_grace(#[compact] new: u32) {
 			<OfflineSlashGrace<T>>::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant.
-		/// # </weight>
 		fn set_invulnerables(validators: Vec<T::AccountId>) {
 			<Invulnerables<T>>::put(validators);
 		}

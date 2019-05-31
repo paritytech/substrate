@@ -34,6 +34,10 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
+		/// # <weight>
+		/// - One DB change, three extra DB entries.
+		/// - O(1).
+		/// # </weight>
 		fn propose(origin, proposal: Box<T::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -55,6 +59,10 @@ decl_module! {
 			<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
 		}
 
+		/// # <weight>
+		/// - O(1).
+		/// - One DB change, one extra DB entry.
+		/// # </weight>
 		fn vote(origin, proposal: T::Hash, approve: bool) {
 			let who = ensure_signed(origin)?;
 
@@ -66,6 +74,11 @@ decl_module! {
 			<CouncilVoteOf<T>>::insert((proposal, who), approve);
 		}
 
+		/// # <weight>
+		/// - O(log existing_vetoers).
+		/// - Two extra DB entries, one DB change.
+		/// - Two + number of councillors DB clears.
+		/// # </weight>
 		fn veto(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 

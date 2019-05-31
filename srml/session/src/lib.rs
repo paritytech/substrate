@@ -168,9 +168,8 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Will always cause one write to storage.
-		/// - Key creation is bounded to account holders.
+		/// - O(1).
+		/// - One extra DB entry.
 		/// # </weight>
 		fn set_key(origin, key: T::SessionKey) {
 			let who = ensure_signed(origin)?;
@@ -181,10 +180,6 @@ decl_module! {
 		/// Set a new session length. Won't kick in until the next session change (at current length).
 		///
 		/// Dispatch origin of this call must be _root_.
-		///
-		/// # <weight>
-		///	- Independent of inputs and insignificant.
-		/// # </weight>
 		fn set_length(#[compact] new: T::BlockNumber) {
 			<NextSessionLength<T>>::put(new);
 		}
@@ -192,11 +187,6 @@ decl_module! {
 		/// Forces a new session.
 		///
 		/// Dispatch origin of this call must be _root_.
-		///
-		/// # <weight>
-		/// - Independent of inputs and insignificant.
-		/// - Will imply more complexity on the next `check_rotate_session` by paying rewards.
-		/// # </weight>
 		fn force_new_session(apply_rewards: bool) -> Result {
 			Self::apply_force_new_session(apply_rewards)
 		}

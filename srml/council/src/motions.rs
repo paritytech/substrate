@@ -66,6 +66,11 @@ decl_event!(
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
+
+		/// # <weight>
+		/// - Bounded storage reads and writes.
+		/// - Argument `threshold` has bearing on weight.
+		/// # </weight>
 		fn propose(origin, #[compact] threshold: u32, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -89,6 +94,10 @@ decl_module! {
 			}
 		}
 
+		/// # <weight>
+		/// - Bounded storage read and writes.
+		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
+		/// # </weight>
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 
