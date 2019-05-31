@@ -939,20 +939,19 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				}
 			}
 
-			// global message.
-			let (our_best_commit, peer_best_commit) = {
-				let inner = inner.read();
-				let peer_best_commit = match inner.peers.peer(who) {
-					None => return false,
-					Some(peer) => peer.view.last_commit,
-				};
-				let our_best_commit = inner.local_view.last_commit;
-				(our_best_commit, peer_best_commit)
-			};
-
 			match message {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
+					// global message.
+					let (our_best_commit, peer_best_commit) = {
+						let inner = inner.read();
+						let peer_best_commit = match inner.peers.peer(who) {
+							None => return false,
+							Some(peer) => peer.view.last_commit,
+						};
+						let our_best_commit = inner.local_view.last_commit;
+						(our_best_commit, peer_best_commit)
+					};
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
 					Some(full.message.target_number) == our_best_commit
