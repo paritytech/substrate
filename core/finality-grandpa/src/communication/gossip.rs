@@ -817,7 +817,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
 		let (inner, do_rebroadcast) = {
-
 			let inner = Arc::clone(&self.inner);
 			let now = Instant::now();
 			let do_rebroadcast = if now >= inner.read().next_rebroadcast {
