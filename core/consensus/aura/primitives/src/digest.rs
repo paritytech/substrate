@@ -72,7 +72,7 @@ where
 	H: Header,
 	S: Verify + Decode,
 	<<H as Header>::Digest as Digest>::Item: CompatibleDigestItem<S>,
-	<S as Verify>::Signer: Encode + Decode + PartialEq + Clone,
+	<S as Verify>::Signer: Encode + Decode + PartialEq,
 {
 	let mut pre_digest: Option<u64> = None;
 	for log in header.digest().logs() {

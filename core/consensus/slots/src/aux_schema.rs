@@ -52,7 +52,7 @@ pub fn check_equivocation<C, H, E, V>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
-	header: H,
+	header: &H,
 	signer: &V::Signer,
 ) -> ClientResult<Option<E>>
 	where

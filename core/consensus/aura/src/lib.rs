@@ -51,7 +51,7 @@ use aura_primitives::{AURA_ENGINE_ID, slot_author};
 use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
-	AuthorityIdFor, Zero, Member, Verify
+	AuthorityIdFor, Zero, Member, Verify, MaybeHash, RuntimeApiInfo
 };
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -146,7 +146,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode + Verify,
-	<<P as Pair>::Signature as Verify>::Signer: PartialEq<<P as Pair>::Public> + Encode + Decode + Clone,
+	<<P as Pair>::Signature as Verify>::Signer: PartialEq + Encode + Decode + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	H: Header<
 		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
@@ -202,7 +202,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	P: Pair + Send + Sync + 'static,
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug + Verify,
-	<<P as Pair>::Signature as Verify>::Signer: PartialEq<<P as Pair>::Public> + Encode + Decode +,
+	<<P as Pair>::Signature as Verify>::Signer: PartialEq + Encode + Decode + Clone,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -230,7 +230,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
+		let authorities = match authorities::<B, C>(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
 				warn!(
@@ -313,7 +313,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<u64, String> = find_pre_digest::<H, P::Signature>(&header);
+			let pre_digest: Result<u64, &str> = find_pre_digest::<H, P::Signature>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -385,10 +385,11 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
-	P::Signature: Decode + Verify,
+	P::Signature: Decode + Verify<Signer = P::Public>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<Hash=B::Hash>,
 	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
+	<<P as Pair>::Signature as Verify>::Signer: Encode + Decode + Clone + AsRef<<P as Pair>::Public> + PartialEq + Send + Sync,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -407,7 +408,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author(slot_num, &authorities) {
+		let expected_author = match slot_author(slot_num, authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author,
 		};
@@ -415,7 +416,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if let Some(equivocation_proof) = check_equivocation(
+			if let Some(equivocation_proof) = check_equivocation::<_, _, AuraEquivocationProof<B::Header>, P::Signature>(
 				client,
 				slot_now,
 				slot_num,
@@ -425,8 +426,8 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header().hash(),
+					equivocation_proof.second_header().hash(),
 				);
 			} else {
 				submit_report_call(
@@ -451,7 +452,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 /// TODO: Ask how to do submit an unsigned in the proper way
 /// and move the function to a better place so it can be used for Babe and Grandpa.
 pub fn submit_report_call<H, A, B: Block, C>(
-	client: &Arc<C>,
+	client: &C,
 	transaction_pool: &Arc<TransactionPool<A>>,
 	aura_proof: AuraEquivocationProof<H>,
 ) where
@@ -555,7 +556,8 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 	C::Api: BlockBuilderApi<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
-	P::Signature: Encode + Decode + Verify,
+	P::Signature: Encode + Decode + Verify<Signer = P::Public>,
+	<<P as Pair>::Signature as Verify>::Signer: Encode + Decode + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
 	Self: Authorities<B>,
@@ -714,7 +716,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<AuthorityIdFor<B>>(at).unwrap_or(false) {
+			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
 				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				CoreApi::authorities(&*client.runtime_api(), at).ok()
@@ -758,7 +760,7 @@ pub fn import_queue<A, B, C, E, P>(
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
-	P::Signature: Encode + Decode + Verify,
+	P::Signature: Encode + Decode + Verify<Signer = P::Public>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
 {
@@ -766,7 +768,7 @@ pub fn import_queue<A, B, C, E, P>(
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = Arc::new(
-		AuraVerifier {
+		AuraVerifier::<_, _, P, _> {
 			client: client.clone(),
 			transaction_queue: transaction_queue.unwrap().clone(), // TODO: remove unwrap.
 			extra,

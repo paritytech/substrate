@@ -49,7 +49,7 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
-	type Signer: PartialEq;
+	type Signer;
 	/// Verify a signature. Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }

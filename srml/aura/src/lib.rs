@@ -62,7 +62,7 @@ use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 use inherents::{
 	RuntimeString, InherentIdentifier, InherentData, ProvideInherent,
 	MakeFatalError
@@ -159,12 +159,14 @@ impl HandleReport for () {
 	fn handle_report(_report: AuraReport) { }
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait
+{
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
-	type Signature: Verify + Decode;
-	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature> + DigestItem<Hash = Self::Hash>;
-	type D: Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
+	type Signature: Verify + Encode + Decode + Clone;
+	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature>
+	+ DigestItem<Hash = Self::Hash>;
+	type D: Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Codec;
 	type H: Header<Digest = Self::D, Hash = Self::Hash>;
 }
 
@@ -184,14 +186,17 @@ decl_module! {
 	}
 }
 
-fn verify_header<'a, T>(
-	header: &T::H,
-	authorities: &'a [<<T as Trait>::Signature as Verify>::Signer],
-) -> Option<&'a <<T as Trait>::Signature as Verify>::Signer>
+fn verify_header<'a, T, H, P>(
+	header: &H,
+	authorities: &'a [P],
+) -> Option<&'a P>
 where 
+	H: Header,
 	T: Trait,
-	<<<T as Trait>::H as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
-	<<T as Trait>::Signature as Verify>::Signer: Encode + Decode + Clone,
+	<T as Trait>::Signature: Verify<Signer = P>,
+	<<T as Trait>::Signature as Verify>::Signer: Encode + Decode + Clone + PartialEq,
+	<<H as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
+	P: Encode + Decode + Clone + PartialEq,
 {
 	let digest_item = match header.digest().logs().last() {
 		Some(x) => x,
@@ -199,9 +204,9 @@ where
 	};
 	if let (Some(sig), Ok(slot_num)) = (
 		digest_item.as_aura_seal(),
-		find_pre_digest::<T::H, T::Signature>(&header),
+		find_pre_digest(header),
 	) {
-		let author = match slot_author::<<T::Signature as Verify>::Signer>(slot_num, authorities) {
+		let author = match slot_author(slot_num, authorities) {
 			None => return None,
 			Some(author) => author,
 		};
@@ -228,8 +233,8 @@ where
 				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H>> = Decode::decode(&mut proof.as_slice());
 				if let Some(equivocation_proof) = maybe_equivocation_proof {
 					let authorities = <consensus::Module<T>>::authorities();
-					let fst_author = verify_header::<T>(equivocation_proof.first_header(), &authorities);
-					let snd_author = verify_header::<T>(equivocation_proof.second_header(), &authorities);
+					let fst_author = verify_header::<T, T::H, _>(equivocation_proof.first_header(), &authorities);
+					let snd_author = verify_header::<T, T::H, _>(equivocation_proof.second_header(), &authorities);
 				
 					let proof_is_valid = fst_author.is_some()
 						&& snd_author.is_some()
