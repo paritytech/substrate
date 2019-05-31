@@ -280,10 +280,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		for (i, overlay) in level.into_iter().enumerate() {
 			if i == index {
 				// that's the one we need to canonicalize
-				commit.data.inserted = overlay.inserted.iter()
-					.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone()))
-					.collect();
-				commit.data.deleted = overlay.deleted.clone();
+				commit.data.inserted.extend(overlay.inserted.iter()
+					.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
+				commit.data.deleted.extend(overlay.deleted.clone());
 			} else {
 				self.discard_journals(self.pending_canonicalizations.len() + 1, &mut discarded_journals, &overlay.hash);
 			}
