@@ -71,6 +71,24 @@ check-line-width:
   allow_failure:                   false
 
 
+cargo-audit:
+  stage:                           test
+  script:
+    - cargo audit
+  allow_failure:                   true # failed cargo audit shouldn't prevent a PR from being merged
+
+
+build-subkey:
+  stage:                           test
+  <<:                              *compiler_info
+  script:
+    - cd subkey
+    - time cargo build --release
+    - sccache -s
+  tags:
+    - linux-docker
+  
+
 test-linux-stable:                 &test
   stage:                           test
   <<:                              *compiler_info
