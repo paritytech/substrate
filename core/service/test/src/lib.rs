@@ -19,7 +19,7 @@
 use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
-use std::time::Duration;
+use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream};
@@ -39,6 +39,9 @@ use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPe
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
+/// Maximum duration of single wait call.
+const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
+
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
 	authority_nodes: Vec<(u32, Arc<F::FullService>, Multiaddr)>,
@@ -51,15 +54,26 @@ struct TestNet<F: ServiceFactory> {
 
 impl<F: ServiceFactory> TestNet<F> {
 	pub fn run_until_all_full<P: Send + Sync + Fn(u32, &F::FullService) -> bool + 'static>(&mut self, predicate: P) {
+		let begin = Instant::now();
 		let full_nodes = self.full_nodes.clone();
 		let interval = Interval::new_interval(Duration::from_millis(100)).map_err(|_| ()).for_each(move |_| {
+			if Instant::now() - begin > MAX_WAIT_TIME {
+				return Err(());
+			}
+
 			if full_nodes.iter().all(|&(ref id, ref service, _)| predicate(*id, service)) {
 				Err(())
 			} else {
 				Ok(())
 			}
 		});
+
 		self.runtime.block_on(interval).ok();
+
+		let wait_time = Instant::now() - begin;
+		if wait_time > MAX_WAIT_TIME {
+			panic!("Waited for too long: {:?}", wait_time);
+		}
 	}
 }
 
