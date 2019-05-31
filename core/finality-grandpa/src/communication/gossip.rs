@@ -861,31 +861,25 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					};
 					if allowed {
 						let mut inner = inner.write();
-						// If we haven't noted this round yet, the message is not allowed.
+						// If we haven't noted this round yet, don't tally.
 						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
 							Some(tally_for_round) => tally_for_round,
-							None => return false
+							None => return allowed
 						};
 						let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
 						match &msg.message.message {
 							PrimaryPropose(_propose) => {
-								if tally.handled_primary_proposals > 1 {
-									return false;
-								} else {
+								if !tally.handled_primary_proposals > 1 {
 									tally.handled_primary_proposals += 1;
 								}
 							},
 							Prevote(_prevote) => {
-								if tally.handled_pre_votes > 1 {
-									return false;
-								} else {
+								if !tally.handled_pre_votes > 1 {
 									tally.handled_pre_votes += 1;
 								}
 							},
 							Precommit(_precommit) => {
-								if tally.handled_pre_commits > 1 {
-									return false;
-								} else {
+								if !tally.handled_pre_commits > 1 {
 									tally.handled_pre_commits += 1;
 								}
 							},
