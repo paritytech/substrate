@@ -980,6 +980,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
+				println!("+++ [Client] block_execution() Now we call into runtime.");
 				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,

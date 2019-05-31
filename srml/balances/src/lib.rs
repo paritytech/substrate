@@ -364,15 +364,15 @@ decl_module! {
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		fn set_balance(
-			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] free: T::Balance,
-			#[compact] reserved: T::Balance
-		) {
-			let who = T::Lookup::lookup(who)?;
-			Self::set_free_balance(&who, free);
-			Self::set_reserved_balance(&who, reserved);
-		}
+		// fn set_balance(
+		// 	who: <T::Lookup as StaticLookup>::Source,
+		// 	#[compact] free: T::Balance,
+		// 	#[compact] reserved: T::Balance
+		// ) {
+		// 	let who = T::Lookup::lookup(who)?;
+		// 	Self::set_free_balance(&who, free);
+		// 	Self::set_reserved_balance(&who, reserved);
+		// }
 	}
 }
 
@@ -1019,6 +1019,7 @@ impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let encoded_len = T::Balance::from(encoded_len as u32);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
+		println!("+++ [BALANCE] {} paying fee of {:?}", transactor, transaction_fee);
 		let imbalance = Self::withdraw(
 			transactor,
 			transaction_fee,

@@ -193,6 +193,8 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		println!("+++ [EXEC] execute_extrinsics_with_book_keeping({}, {})", extrinsics.len(), block_number);
+
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
@@ -251,13 +253,19 @@ where
 			return Err(internal::ApplyError::FullBlock);
 		}
 
+		println!("+++ [EXEC] apply_extrinsic_with_len({}, {}, {})",
+			encoded_len,
+			<system::Module<System>>::all_extrinsics_len(),
+			<system::Module<System>>::extrinsic_count()
+		);
+
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index != &expected_index { return Err(
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
-
+			println!("+++ [EXEC] Paying fees for {:?}. and index is {}", sender, index);
 			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 

@@ -200,8 +200,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// [`OffchainWorker`](../sr_primitives/traits/trait.OffchainWorker.html) trait.
 #[macro_export]
 macro_rules! decl_module {
-	// Macro transformations (to convert invocations with incomplete parameters to the canonical
-	// form)
+	// Entry point #1.
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -221,6 +220,7 @@ macro_rules! decl_module {
 			$($t)*
 		);
 	};
+	// Entry point #2.
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -241,6 +241,7 @@ macro_rules! decl_module {
 		);
 	};
 
+	// Normalization expansions. Fills the defaults.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -402,6 +403,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// This puts the function statement into the [], decreasing `$rest` and moving toward finishing the parse.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -412,6 +414,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -428,6 +431,7 @@ macro_rules! decl_module {
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
+				#[weight = $weight]
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -436,6 +440,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -446,6 +451,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -457,6 +463,7 @@ macro_rules! decl_module {
 			not use the `T::Origin` type.)"
 		)
 	};
+	// Ignore any ident which is `origin` but has a type, regardless of the type token itself.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -467,6 +474,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -478,6 +486,7 @@ macro_rules! decl_module {
 			not use the `T::Origin` type.)"
 		)
 	};
+	// Add root if no origin is defined.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -488,6 +497,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -501,17 +511,53 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			[
-				$($t)*
-				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name(
-					root $( , $(#[$codec_attr])* $param_name : $param )*
-				) $( -> $result )* { $( $impl )* }
-				{ $($instance: $instantiable)? }
-			]
+			[ $($t)* ]
+
+			$(#[doc = $doc_attr])*
+			$(#[weight = $weight])?
+			$fn_vis fn $fn_name(
+				root $( , $(#[$codec_attr])* $param_name : $param )*
+			) $( -> $result )* { $( $impl )* }
+
 			$($rest)*
 		);
 	};
+	// Add #[weight] if no origin is defined.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$fn_vis:vis fn $fn_name:ident(
+			$from:ident $( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
+		) $( -> $result:ty )* { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			[ $($t)* ]
+
+			$(#[doc = $doc_attr])*
+			#[weight = 10]
+			$fn_vis fn $fn_name(
+				$from $( , $(#[$codec_attr])* $param_name : $param )*
+			) $( -> $result )* { $( $impl )* }
+
+			$($rest)*
+		);
+	};
+	// Last normalize step. Triggers `@imp` expansion which is the expansion.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -686,6 +732,7 @@ macro_rules! decl_module {
 		{}
 	};
 
+	// Expansion for root dispatch functions with no specified result type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -700,6 +747,7 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Expansion for root dispatch functions with explicit return types.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -715,6 +763,7 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Expansion for _origin_ dispatch functions with no return type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -733,6 +782,7 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Expansion for _origin_ dispatch functions with explicit return type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -868,6 +918,7 @@ macro_rules! decl_module {
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
+				#[weight = $weight:expr]
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }

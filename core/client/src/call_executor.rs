@@ -189,6 +189,7 @@ where
 		strategy: ExecutionStrategy,
 		side_effects_handler: Option<&mut O>,
 	) -> error::Result<Vec<u8>> {
+		println!("+++ [CallExecutor] call() calling method {}", method);
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
@@ -317,6 +318,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+		println!("+++ [Call_Executor] call_at_state() calling into <<{}>>", method);
 		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),
