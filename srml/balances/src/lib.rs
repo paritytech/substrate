@@ -346,6 +346,7 @@ decl_module! {
 		/// of the transfer, the account will be reaped.
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
+		#[weight = 20]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -364,15 +365,16 @@ decl_module! {
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		// fn set_balance(
-		// 	who: <T::Lookup as StaticLookup>::Source,
-		// 	#[compact] free: T::Balance,
-		// 	#[compact] reserved: T::Balance
-		// ) {
-		// 	let who = T::Lookup::lookup(who)?;
-		// 	Self::set_free_balance(&who, free);
-		// 	Self::set_reserved_balance(&who, reserved);
-		// }
+		// #[weight = 20]
+		fn set_balance(
+			who: <T::Lookup as StaticLookup>::Source,
+			#[compact] free: T::Balance,
+			#[compact] reserved: T::Balance
+		) {
+			let who = T::Lookup::lookup(who)?;
+			Self::set_free_balance(&who, free);
+			Self::set_reserved_balance(&who, reserved);
+		}
 	}
 }
 

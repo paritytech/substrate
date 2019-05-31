@@ -440,6 +440,39 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Add #[weight] if none is defined.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$fn_vis:vis fn $fn_name:ident(
+			($from:ident)? $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+		) $( -> $result:ty )* { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			[ $($t)* ]
+			$(#[doc = $doc_attr])*
+			#[weight = 10]
+			$fn_vis fn $fn_name(
+				($from)? $(, $(#[$codec_attr])* $param_name : $param )*
+			) $( -> $result )* { $( $impl )* }
+			$($rest)*
+		);
+	};
 	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize
 		$(#[$attr:meta])*
@@ -517,41 +550,6 @@ macro_rules! decl_module {
 			$(#[weight = $weight])?
 			$fn_vis fn $fn_name(
 				root $( , $(#[$codec_attr])* $param_name : $param )*
-			) $( -> $result )* { $( $impl )* }
-
-			$($rest)*
-		);
-	};
-	// Add #[weight] if no origin is defined.
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		[ $($t:tt)* ]
-		$(#[doc = $doc_attr:tt])*
-		$fn_vis:vis fn $fn_name:ident(
-			$from:ident $( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
-		) $( -> $result:ty )* { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $deposit_event )* }
-			{ $( $on_initialize )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			[ $($t)* ]
-
-			$(#[doc = $doc_attr])*
-			#[weight = 10]
-			$fn_vis fn $fn_name(
-				$from $( , $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
 
 			$($rest)*
@@ -959,7 +957,6 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$( $offchain )*
 		}
-
 		$crate::decl_module! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
