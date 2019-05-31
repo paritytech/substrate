@@ -137,3 +137,31 @@ fn should_return_pending_extrinsics() {
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
 }
+
+#[test]
+fn should_remove_extrinsics() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let p = Author {
+		client,
+		pool: pool.clone(),
+		subscriptions: Subscriptions::new(runtime.executor()),
+	};
+	let ex1 = uxt(AccountKeyring::Alice, 0);
+	p.submit_extrinsic(ex1.encode().into()).unwrap();
+	let ex2 = uxt(AccountKeyring::Alice, 1);
+	p.submit_extrinsic(ex2.encode().into()).unwrap();
+	let ex3 = uxt(AccountKeyring::Bob, 0);
+	let hash3 = p.submit_extrinsic(ex3.encode().into()).unwrap();
+	assert_eq!(pool.status().ready, 3);
+
+	// now remove all 3
+	let removed = p.remove_extrinsic(vec![
+		hash::ExtrinsicOrHash::Hash(hash3),
+		// Removing this one will also remove ex2
+		hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
+	]).unwrap();
+
+ 	assert_eq!(removed.len(), 3);
+}

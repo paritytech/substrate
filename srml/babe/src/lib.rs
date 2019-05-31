@@ -22,8 +22,8 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::As;
 use timestamp::{OnTimestampSet, Trait};
+use primitives::traits::{SaturatedConversion, Saturating};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::Decode;
@@ -116,10 +116,10 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> u64 {
+	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
+		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
 }
 
@@ -142,10 +142,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			_ => return Ok(()),
 		};
 
-		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
-
+		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
 		let seal_slot = data.babe_inherent_data()?;
-
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {

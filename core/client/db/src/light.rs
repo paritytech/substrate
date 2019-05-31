@@ -17,6 +17,7 @@
 //! RocksDB-based light client blockchain storage.
 
 use std::{sync::Arc, collections::HashMap};
+use std::convert::TryInto;
 use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
@@ -31,12 +32,13 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, As, NumberFor, Digest, DigestItem};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT,
+	Zero, One, NumberFor, Digest, DigestItem,
+};
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
-use crate::utils::{self, meta_keys, Meta, db_err, open_database,
-	read_db, block_id_to_lookup_key, read_meta};
+use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
 use log::{trace, warn, debug};
 
@@ -69,8 +71,19 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = open_database(&config, columns::META, "light")?;
+		Self::new_inner(config)
+	}
 
+	#[cfg(feature = "kvdb-rocksdb")]
+	fn new_inner(config: DatabaseSettings) -> ClientResult<Self> {
+		let db = crate::utils::open_database(&config, columns::META, "light")?;
+		Self::from_kvdb(db as Arc<_>)
+	}
+
+	#[cfg(not(feature = "kvdb-rocksdb"))]
+	fn new_inner(_config: DatabaseSettings) -> ClientResult<Self> {
+		log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
+		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::from_kvdb(db as Arc<_>)
 	}
 
@@ -267,12 +280,18 @@ impl<Block: BlockT> LightStorage<Block> {
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT(s) if required
-		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
-			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
+		if let Some(new_cht_number) = cht::is_build_required(cht::size(), *header.number()) {
+			let new_cht_start: NumberFor<Block> = cht::start_number(cht::size(), new_cht_number);
+
+			let mut current_num = new_cht_start;
+			let cht_range = ::std::iter::from_fn(|| {
+				let old_current_num = current_num;
+				current_num = current_num + One::one();
+				Some(old_current_num)
+			});
 
 			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-				.map(|num| self.hash(As::sa(num)))
+				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
 				columns::CHT,
@@ -282,9 +301,15 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
+				let mut current_num = new_cht_start;
+				let cht_range = ::std::iter::from_fn(|| {
+					let old_current_num = current_num;
+					current_num = current_num + One::one();
+					Some(old_current_num)
+				});
 				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-					.map(|num| self.changes_trie_root(BlockId::Number(As::sa(num))))
+					cht::size(), new_cht_number, cht_range
+						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
 				transaction.put(
 					columns::CHT,
@@ -295,7 +320,7 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			// prune headers that are replaced with CHT
 			let mut prune_block = new_cht_start;
-			let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
+			let new_cht_end = cht::end_number(cht::size(), new_cht_number);
 			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}",
 				new_cht_start, new_cht_end, new_cht_number);
 
@@ -328,7 +353,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	fn read_cht_root(
 		&self,
 		cht_type: u8,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>
 	) -> ClientResult<Block::Hash> {
 		let no_cht_for_block = || ClientError::Backend(format!("CHT for block {} not exists", block));
@@ -480,11 +505,19 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 	}
 
-	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash> {
 		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
 	}
 
-	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash> {
 		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 
@@ -530,7 +563,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 }
 
 /// Build the key for inserting header-CHT at given block.
-fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
+fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> [u8; 5] {
 	let mut key = [cht_type; 5];
 	key[1..].copy_from_slice(&utils::number_index_key(block));
 	key
@@ -668,33 +701,44 @@ pub(crate) mod tests {
 	fn finalized_ancient_headers_are_replaced_with_cht() {
 		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) -> LightStorage<Block> {
 			let db = LightStorage::new_test();
+			let cht_size: u64 = cht::size();
+			let ucht_size: usize = cht_size as _;
 
 			// insert genesis block header (never pruned)
 			let mut prev_hash = insert_final_block(&db, HashMap::new(), || header_producer(&Default::default(), 0));
 
 			// insert SIZE blocks && ensure that nothing is pruned
-			for number in 0..cht::SIZE {
+
+			for number in 0..cht::size() {
 				prev_hash = insert_block(&db, HashMap::new(), || header_producer(&prev_hash, 1 + number));
 			}
-			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::HEADER).count(), 1 + ucht_size);
 			assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 			// insert next SIZE blocks && ensure that nothing is pruned
-			for number in 0..cht::SIZE {
-				prev_hash = insert_block(&db, HashMap::new(), || header_producer(&prev_hash, 1 + cht::SIZE + number));
+			for number in 0..(cht_size as _) {
+				prev_hash = insert_block(
+					&db,
+					HashMap::new(),
+					|| header_producer(&prev_hash, 1 + cht_size + number),
+				);
 			}
-			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::HEADER).count(), 1 + ucht_size + ucht_size);
 			assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
-			// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
+			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of this CHT are pruned
 			// nothing is yet finalized, so nothing is pruned.
-			prev_hash = insert_block(&db, HashMap::new(), || header_producer(&prev_hash, 1 + cht::SIZE + cht::SIZE));
-			assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
+			prev_hash = insert_block(
+				&db,
+				HashMap::new(),
+				|| header_producer(&prev_hash, 1 + cht_size + cht_size),
+			);
+			assert_eq!(db.db.iter(columns::HEADER).count(), 2 + ucht_size + ucht_size);
 			assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 			// now finalize the block.
-			for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
-				db.finalize_header(BlockId::Number(i)).unwrap();
+			for i in (0..(ucht_size + ucht_size)).map(|i| i + 1) {
+				db.finalize_header(BlockId::Number(i as _)).unwrap();
 			}
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 			db
@@ -702,34 +746,36 @@ pub(crate) mod tests {
 
 		// when headers are created without changes tries roots
 		let db = insert_headers(default_header);
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
-		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht::SIZE + 1)) as usize);
+		let cht_size: u64 = cht::size();
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
+		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht_size + 1)) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
-		assert!((0..cht::SIZE).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
-		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
 
 		// when headers are created with changes tries roots
 		let db = insert_headers(header_with_changes_trie);
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 2);
-		assert!((0..cht::SIZE).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
-		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
-		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
-		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
-		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht_size, cht_size / 2).is_ok());
+		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_ok());
+		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_genesis_block() {
-		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, 0).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::size(), 0).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
-		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
+		let cht_size: u64 = cht::size();
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht_size, cht_size / 2).is_err());
 	}
 
 	#[test]
@@ -738,20 +784,22 @@ pub(crate) mod tests {
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
 		let mut prev_hash = insert_final_block(&db, HashMap::new(), || header_with_changes_trie(&Default::default(), 0));
-		for i in 1..1 + cht::SIZE + cht::SIZE + 1 {
+		let cht_size: u64 = cht::size();
+		let ucht_size: usize = cht_size as _;
+		for i in 1..1 + ucht_size + ucht_size + 1 {
 			prev_hash = insert_block(&db, HashMap::new(), || header_with_changes_trie(&prev_hash, i as u64));
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		let cht_root_1 = db.header_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
-		let cht_root_2 = db.header_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
-		let cht_root_3 = db.header_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		let cht_root_1 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
+		let cht_root_2 = db.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
+		let cht_root_3 = db.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 
-		let cht_root_1 = db.changes_trie_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
-		let cht_root_2 = db.changes_trie_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
-		let cht_root_3 = db.changes_trie_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		let cht_root_1 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap();
+		let cht_root_2 = db.changes_trie_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap();
+		let cht_root_3 = db.changes_trie_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}
