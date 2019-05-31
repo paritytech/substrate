@@ -189,11 +189,25 @@ pub trait Trait: system::Trait + Sized {
 	/// The minimum amount to be used as a deposit for a public referendum proposal.
 	type MinimumDeposit: Get<BalanceOf<Self>>;
 
-	/// Origin from which the next tabled referendum may be forced.
+	/// Origin from which the next tabled referendum may be forced. This is a normal
+	/// "super-majority-required" referendum.
 	type TableOrigin: EnsureOrigin<Self::Origin>;
 
+	/// Origin from which the next tabled referendum may be forced; this allows for the tabling of
+	/// a majority-carries referendum.
+	type TableMajorityOrigin: EnsureOrigin<Self::Origin>;
+
 	/// Origin from which emergency referenda may be scheduled.
-	type EmergencyOrigin: EnsureOrigin<Self::Origin>;
+	type EmergencyOrigin: EnsureOrigin<Self::Origin, Success=()>;
+
+	/// Origin from which any referenda may be cancelled in an emergency.
+	type CancellationOrigin: EnsureOrigin<Self::Origin, Success=()>;
+
+	/// Origin for anyone able to veto proposals.
+	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
+
+	/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
+	type CooloffPeriod: Get<Self::BlockNumber>;
 }
 
 /// Info regarding an ongoing referendum.
@@ -259,12 +273,22 @@ decl_storage! {
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, Conviction);
 
-		/// True if the last referendum tabled was a public proposal. False if it was submitted
-		/// externally.
-		pub LastTabledWasPublic: bool;
+		/// True if the last referendum tabled was submitted externally. False if it was a public
+		/// proposal.
+		pub LastTabledWasExternal: bool;
 
-		/// The referendum to be tabled next. May only be `Some` if `LastTabledWasPublic` is `true`.
-		pub NextTabled: Option<(T::Proposal, VoteThreshold)>
+		/// The referendum to be tabled whenever it would be valid to table an external proposal.
+		/// This happens when a referendum needs to be tabled and one of two conditions are met:
+		/// - `LastTabledWasExteranal` is `false`; or
+		/// - `PublicProps` is empty.
+		pub NextExternal: Option<(T::Proposal, VoteThreshold)>
+
+		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
+		/// (until when it may not be resubmitted) and who vetoed it.
+		pub Blacklist get(blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+
+		/// Record of all proposals that have been subject to emergency cancellation.
+		pub Cancellations: map T::Hash => bool;
 	}
 }
 
@@ -272,6 +296,7 @@ decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		Proposed(PropIndex, Balance),
 		Tabled(PropIndex, Balance, Vec<AccountId>),
+		ExternalTabled,
 		Started(ReferendumIndex, VoteThreshold),
 		Passed(ReferendumIndex),
 		NotPassed(ReferendumIndex),
@@ -279,6 +304,7 @@ decl_event!(
 		Executed(ReferendumIndex, bool),
 		Delegated(AccountId, AccountId),
 		Undelegated(AccountId),
+		Vetoed(AccountId, ProposalHash, BlockNumber),
 	}
 );
 
@@ -350,31 +376,75 @@ decl_module! {
 			threshold: VoteThreshold,
 			delay: T::BlockNumber
 		) {
-			T::EmergencyOrigin::ensure_origin(origin)
-				.or_else(|_| ensure_root(origin))?;
+			T::EmergencyOrigin::try_origin(origin)
+				.or_else(|origin| ensure_root(origin))?;
 			Self::inject_referendum(
 				<system::Module<T>>::block_number() + T::VotingPeriod::get(),
 				*proposal,
 				threshold,
 				delay,
-			).map(|_| ())
+			).map(|_| ())?;
 		}
 
-		/// Schedule a referendum to be tabled next. This will fail if the last tabled referendum
-		/// happened through this call.
-		fn table_referendum(origin,
-			proposal: Box<T::Proposal>,
-			majority_carries: bool
-		) {
+		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
+		/// referendum.
+		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
+			T::CancellationOrigin::ensure_origin(origin)?;
+
+			let info = referendum_info(ref_index).ok_or("unknown index")?;
+			let h = T::Hash::hash(&info.proposal);
+			ensure!(!<Cancellations<T>>::exists(h), "cannot cancel the same proposal twice");
+
+			<Cancellations<T>>::insert(h, true);
+			Self::clear_referendum(ref_index);
+		}
+
+		/// Schedule a referendum to be tabled once it is legal to schedule an external
+		/// referendum.
+		fn table_referendum(origin, proposal: Box<T::Proposal>) {
 			T::TableOrigin::ensure_origin(origin)?;
-			<NextTabled<T>>::put((
-				*proposal,
-				if majority_carries {
-					VoteThreshold::SimpleMajority
-				} else {
-					VoteThreshold::SuperMajorityApprove
-				}
-			));
+			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
+			let proposal_hash = T::Hash::hash(&proposal);
+			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
+				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
+			}
+			<NextExternal<T>>::put((*proposal, VoteThreshold::SuperMajorityApprove));
+		}
+
+		/// Schedule a majority-carries referendum to be tabled next once it is legal to schedule
+		/// an external referendum.
+		fn table_majority_referendum(origin, proposal: Box<T::Proposal>) {
+			T::TableMajorityOrigin::ensure_origin(origin)?;
+			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
+			let proposal_hash = T::Hash::hash(&proposal);
+			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
+				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
+			}
+			<NextExternal<T>>::put((*proposal, VoteThreshold::SimpleMajority));
+		}
+
+		/// Veto and blacklist the external proposal hash.
+		fn veto_external(origin, proposal_hash: T::Hash) {
+			let who = T::VetoOrigin::ensure_origin(origin)?;
+
+			if let (proposal, _) = <NextExternal<T>>::get() {
+				ensure!(proposal_hash == T::Hash::hash(&proposal), "unknown proposal");
+			} else {
+				Err("no external proposal")?;
+			}
+
+			let mut existing_vetoers = Self::veto_of(&proposal_hash)
+				.map(|pair| pair.1)
+				.unwrap_or_else(Vec::new);
+			let insert_position = existing_vetoers.binary_search(&who)
+				.err().ok_or("identity may not veto a proposal twice")?;
+
+			existing_vetoers.insert(insert_position, who);
+			let until = <system::Module<T>>::block_number() + T::CooloffPeriod::get();
+			<BlackList<T>>::insert(&proposal_hash, (until, existing_vetoers));
+
+			Self::deposit_event(RawEvent::Vetoed(who, proposal_hash, until));
+			<NextExternal<T>>::kill();
 		}
 
 		/// Remove a referendum.
@@ -639,8 +709,34 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Executed(index, ok));
 	}
 
+	/// Table the next waiting proposal for a vote.
 	fn launch_next(now: T::BlockNumber) -> Result {
-		if <LastTabledWasPublic<T>>::take()
+		if <LastTabledWasExternal<T>>::take() {
+			Self::launch_public(now).or_else(|_| Self::launch_external(now))
+		} else {
+			Self::launch_external(now).or_else(|_| Self::launch_public(now))
+		}.map_err(|_| "No proposals waiting")
+	}
+
+	/// Table the waiting external proposal for a vote, if there is one.
+	fn launch_external(now: T::BlockNumber) -> Result {
+		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
+			<LastTabledWasExternal<T>>::put(true);
+			Self::deposit_event(RawEvent::ExternalTabled);
+			Self::inject_referendum(
+				now + T::VotingPeriod::get(),
+				proposal,
+				threshold,
+				T::EnactmentPeriod::get(),
+			)?;
+			Ok(())
+		} else {
+			Err("No external proposal waiting")
+		}
+	}
+
+	/// Table the waiting public proposal with the highest backing for a vote.
+	fn launch_public(now: T::BlockNumber) -> Result {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
 			.enumerate()
@@ -663,9 +759,11 @@ impl<T: Trait> Module<T> {
 					T::EnactmentPeriod::get(),
 				)?;
 			}
+			Ok(())
+		} else {
+			Err("No public proposals waiting")
 		}
 
-		Ok(())
 	}
 
 	fn bake_referendum(
@@ -719,11 +817,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	// TODO: move to `initialize_block
+	// TODO: move to initialize_block
 	fn end_block(now: T::BlockNumber) -> Result {
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
-			Self::launch_next(now.clone())?;
+			// Errors come from the queue being empty. we don't really care about that, and even if
+			// we did, there is nothing we can do here.
+			let _ = Self::launch_next(now.clone());
 		}
 
 		// tally up votes for any expiring referenda.
@@ -756,6 +856,7 @@ mod tests {
 	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
 	use primitives::testing::{Digest, DigestItem, Header};
 	use balances::BalanceLock;
+	use system::EnsureRoot;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
@@ -803,6 +904,7 @@ mod tests {
 		pub const VotingPeriod: u64 = 1;
 		pub const MinimumDeposit: u64 = 1;
 		pub const EnactmentPeriod: u64 = 1;
+		pub const CooloffPeriod: u64 = 2;
 	}
 	impl Trait for Test {
 		type Proposal = Call;
@@ -812,6 +914,12 @@ mod tests {
 		type LaunchPeriod = LaunchPeriod;
 		type VotingPeriod = VotingPeriod;
 		type MinimumDeposit = MinimumDeposit;
+		type TableOrigin = EnsureRoot<u64>;
+		type TableMajorityOrigin = EnsureRoot<u64>;
+		type EmergencyOrigin = EnsureRoot<u64>;
+		type CancellationOrigin = EnsureRoot<u64>;
+		type VetoOrigin = EnsureRoot<u64>;
+		type CooloffPeriod = CooloffPeriod;
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -892,6 +1000,8 @@ mod tests {
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
+
+	// TODO: test external tabling logic, normal, majority and emergency referendums, cancelations and vetoes.
 
 	#[test]
 	fn proxy_should_work() {

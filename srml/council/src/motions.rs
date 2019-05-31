@@ -30,7 +30,7 @@ pub type ProposalIndex = u32;
 
 pub trait Trait: CouncilTrait {
 	/// The outer origin type.
-	type Origin: From<Origin>;
+	type Origin: From<RawOrigin<Self::AccountId>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
@@ -42,10 +42,15 @@ pub trait Trait: CouncilTrait {
 /// Origin for the council module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum Origin {
+pub enum RawOrigin<AccountId> {
 	/// It has been condoned by a given number of council members from a given total.
 	Members(u32, u32),
+	/// It has been condoned by a single council member.
+	Member(AccountId),
 }
+
+/// Origin for the council module.
+pub type Origin<T> = RawOrigin<<T as system::Trait>::AccountId>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilMotions {
@@ -76,12 +81,27 @@ decl_event!(
 		Disapproved(Hash),
 		/// A motion was executed; `bool` is true if returned without error.
 		Executed(Hash, bool),
+		/// A single councillor did some action; `bool` is true if returned without error.
+		MemberExecuted(Hash, bool),
 	}
 );
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
+
+		/// Dispatch a proposal from a councilor using the `Member` origin.
+		///
+		/// Origin must be a council member.
+		fn execute(origin, proposal: Box<<T as Trait>::Proposal>) {
+			let who = ensure_signed(origin)?;
+			ensure!(Self::is_councillor(&who), "proposer not on council");
+
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+			let ok = proposal.dispatch(RawOrigin::Member(who).into()).is_ok();
+			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
+		}
+
 		fn propose(origin, #[compact] threshold: u32, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -93,7 +113,7 @@ decl_module! {
 
 			if threshold < 2 {
 				let seats = <Council<T>>::active_council().len() as u32;
-				let ok = proposal.dispatch(Origin::Members(1, seats).into()).is_ok();
+				let ok = proposal.dispatch(RawOrigin::Members(1, seats).into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
 				let index = Self::proposal_count();
@@ -151,7 +171,7 @@ decl_module! {
 
 					// execute motion, assuming it exists.
 					if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-						let ok = p.dispatch(Origin::Members(threshold, seats).into()).is_ok();
+						let ok = p.dispatch(RawOrigin::Members(threshold, seats).into()).is_ok();
 						Self::deposit_event(RawEvent::Executed(proposal, ok));
 					}
 				} else {
@@ -179,22 +199,78 @@ impl<T: Trait> Module<T> {
 
 /// Ensure that the origin `o` represents at least `n` council members. Returns
 /// `Ok` or an `Err` otherwise.
-pub fn ensure_council_members<OuterOrigin>(o: OuterOrigin, n: u32) -> result::Result<u32, &'static str>
-	where OuterOrigin: Into<Option<Origin>>
+pub fn ensure_council_members<OuterOrigin, AccountId>(o: OuterOrigin, n: u32)
+	-> result::Result<u32, &'static str>
+	where OuterOrigin: Into<result::Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(Origin::Members(x, _)) if x >= n => Ok(n),
+		Ok(RawOrigin::Members(x, _)) if x >= n => Ok(n),
 		_ => Err("bad origin: expected to be a threshold number of council members"),
 	}
 }
 
-pub struct EnsureMembers<N: U32>(::rstd::marker::PhantomData<N>);
-impl<O, N: U32> EnsureOrigin<O> for EnsureMembers<N>
-	where O: Into<Option<Origin>>
-{
-	type Success = u32;
-	fn ensure_origin(o: O) -> result::Result<Self::Success, &'static str> {
-		ensure_council_members(o, N::VALUE)
+pub struct EnsureMember<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId
+> EnsureOrigin<O> for EnsureMember<AccountId> {
+	type Success = AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Member(id) => Ok(id),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureMembers<N: U32, AccountId>(::rstd::marker::PhantomData<(N, AccountId)>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	N: U32,
+	AccountId,
+> EnsureOrigin<O> for EnsureMembers<N, AccountId> {
+	type Success = (u32, u32);
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId>(
+	::rstd::marker::PhantomData<(N, D, AccountId)>
+);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	N: U32,
+	D: U32,
+	AccountId,
+> EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId> {
+	type Success = ();
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Members(n, m) if n * D::VALUE > N::VALUE * m => Ok(()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId>(
+	::rstd::marker::PhantomData<(N, D, AccountId)>
+);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	N: U32,
+	D: U32,
+	AccountId,
+> EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId> {
+	type Success = ();
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),
+			r => Err(O::from(r)),
+		})
 	}
 }
 

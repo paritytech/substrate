@@ -65,6 +65,7 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
 
+
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
 ///

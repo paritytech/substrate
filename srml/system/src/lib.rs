@@ -131,7 +131,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
-	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
@@ -362,40 +362,46 @@ decl_storage! {
 }
 
 pub struct EnsureRoot<AccountId>(::rstd::marker::PhantomData<AccountId>);
-impl<O: Into<Option<RawOrigin<AccountId>>>, AccountId> EnsureOrigin<O> for EnsureRoot<AccountId> {
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureRoot<AccountId> {
 	type Success = ();
-	fn ensure_origin(o: O) -> Result<Self::Success, &'static str> {
-		ensure_root(o)
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Root => Ok(()),
+			r => Err(O::from(r)),
+		})
 	}
 }
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::Signed(t)) => Ok(t),
+		Ok(RawOrigin::Signed(t)) => Ok(t),
 		_ => Err("bad origin: expected to be a signed origin"),
 	}
 }
 
 /// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::Root) => Ok(()),
+		Ok(RawOrigin::Root) => Ok(()),
 		_ => Err("bad origin: expected to be a root origin"),
 	}
 }
 
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::None) => Ok(()),
+		Ok(RawOrigin::None) => Ok(()),
 		_ => Err("bad origin: expected to be no origin"),
 	}
 }
@@ -737,6 +743,13 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	}
+
+	#[test]
+	fn origin_works() {
+		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
+		let x: Result<RawOrigin<u64>, Origin> = o.into();
+		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
 	}
 
 	#[test]

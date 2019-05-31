@@ -66,34 +66,6 @@ decl_module! {
 			<CouncilVoteOf<T>>::insert((proposal, who), approve);
 		}
 
-		fn veto(origin, proposal_hash: T::Hash) {
-			let who = ensure_signed(origin)?;
-
-			ensure!(Self::is_councillor(&who), "only councillors may veto council proposals");
-			ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
-
-			let mut existing_vetoers = Self::veto_of(&proposal_hash)
-				.map(|pair| pair.1)
-				.unwrap_or_else(Vec::new);
-			let insert_position = existing_vetoers.binary_search(&who)
-				.err().ok_or("a councillor may not veto a proposal twice")?;
-			existing_vetoers.insert(insert_position, who);
-			Self::set_veto_of(
-				&proposal_hash,
-				<system::Module<T>>::block_number() + Self::cooloff_period(),
-				existing_vetoers
-			);
-
-			Self::set_proposals(
-				&Self::proposals().into_iter().filter(|&(_, h)| h != proposal_hash
-			).collect::<Vec<_>>());
-			<ProposalVoters<T>>::remove(proposal_hash);
-			<ProposalOf<T>>::remove(proposal_hash);
-			for (c, _) in <Council<T>>::active_council() {
-				<CouncilVoteOf<T>>::remove((proposal_hash, c));
-			}
-		}
-
 		fn set_cooloff_period(#[compact] blocks: T::BlockNumber) {
 			<CooloffPeriod<T>>::put(blocks);
 		}

@@ -22,7 +22,7 @@
 
 use rstd::prelude::*;
 use support::{construct_runtime, parameter_types};
-use substrate_primitives::u32_trait::{_2, _4};
+use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
@@ -167,6 +167,9 @@ impl democracy::Trait for Runtime {
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
+	type TableOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
+	type TableMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
+	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId>;
 }
 
 impl council::Trait for Runtime {
@@ -187,8 +190,8 @@ impl council::motions::Trait for Runtime {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = council_motions::EnsureMembers<_4>;
-	type RejectOrigin = council_motions::EnsureMembers<_2>;
+	type ApproveOrigin = council_motions::EnsureMembers<_4, AccountId>;
+	type RejectOrigin = council_motions::EnsureMembers<_2, AccountId>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
@@ -237,7 +240,7 @@ construct_runtime!(
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilVoting: council_voting,
-		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
+		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
 		CouncilSeats: council_seats::{Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
