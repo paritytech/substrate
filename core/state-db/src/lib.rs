@@ -210,11 +210,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
 		self.canonicalization_queue.push_back(hash.clone());
 		let mut commit = CommitSet::default();
-		while let Some(hash) = self.canonicalization_queue.pop_front() {
+		while let Some(hash) = self.canonicalization_queue.front().cloned() {
 			if self.pinned.contains_key(&hash) {
 				break;
 			}
-
+			self.canonicalization_queue.pop_front();
 			match self.mode {
 				PruningMode::ArchiveAll => {
 					break;
