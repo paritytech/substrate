@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin};
+use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
@@ -279,9 +279,9 @@ decl_storage! {
 
 		/// The referendum to be tabled whenever it would be valid to table an external proposal.
 		/// This happens when a referendum needs to be tabled and one of two conditions are met:
-		/// - `LastTabledWasExteranal` is `false`; or
+		/// - `LastTabledWasExternal` is `false`; or
 		/// - `PublicProps` is empty.
-		pub NextExternal: Option<(T::Proposal, VoteThreshold)>
+		pub NextExternal: Option<(T::Proposal, VoteThreshold)>;
 
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
@@ -293,7 +293,12 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
+	pub enum Event<T> where
+		Balance = BalanceOf<T>,
+		<T as system::Trait>::AccountId,
+		<T as system::Trait>::Hash,
+		<T as system::Trait>::BlockNumber,
+	{
 		Proposed(PropIndex, Balance),
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		ExternalTabled,
@@ -304,7 +309,7 @@ decl_event!(
 		Executed(ReferendumIndex, bool),
 		Delegated(AccountId, AccountId),
 		Undelegated(AccountId),
-		Vetoed(AccountId, ProposalHash, BlockNumber),
+		Vetoed(AccountId, Hash, BlockNumber),
 	}
 );
 
@@ -391,8 +396,8 @@ decl_module! {
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
-			let info = referendum_info(ref_index).ok_or("unknown index")?;
-			let h = T::Hash::hash(&info.proposal);
+			let info = Self::referendum_info(ref_index).ok_or("unknown index")?;
+			let h = T::Hashing::hash_of(&info.proposal);
 			ensure!(!<Cancellations<T>>::exists(h), "cannot cancel the same proposal twice");
 
 			<Cancellations<T>>::insert(h, true);
@@ -404,7 +409,7 @@ decl_module! {
 		fn table_referendum(origin, proposal: Box<T::Proposal>) {
 			T::TableOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
-			let proposal_hash = T::Hash::hash(&proposal);
+			let proposal_hash = T::Hashing::hash_of(&proposal);
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
 				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
 			}
@@ -416,7 +421,7 @@ decl_module! {
 		fn table_majority_referendum(origin, proposal: Box<T::Proposal>) {
 			T::TableMajorityOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
-			let proposal_hash = T::Hash::hash(&proposal);
+			let proposal_hash = T::Hashing::hash_of(&proposal);
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
 				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
 			}
@@ -427,21 +432,21 @@ decl_module! {
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
-			if let (proposal, _) = <NextExternal<T>>::get() {
-				ensure!(proposal_hash == T::Hash::hash(&proposal), "unknown proposal");
+			if let Some((proposal, _)) = <NextExternal<T>>::get() {
+				ensure!(proposal_hash == T::Hashing::hash_of(&proposal), "unknown proposal");
 			} else {
 				Err("no external proposal")?;
 			}
 
-			let mut existing_vetoers = Self::veto_of(&proposal_hash)
+			let mut existing_vetoers = <Blacklist<T>>::get(&proposal_hash)
 				.map(|pair| pair.1)
 				.unwrap_or_else(Vec::new);
 			let insert_position = existing_vetoers.binary_search(&who)
 				.err().ok_or("identity may not veto a proposal twice")?;
 
-			existing_vetoers.insert(insert_position, who);
+			existing_vetoers.insert(insert_position, who.clone());
 			let until = <system::Module<T>>::block_number() + T::CooloffPeriod::get();
-			<BlackList<T>>::insert(&proposal_hash, (until, existing_vetoers));
+			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
 			Self::deposit_event(RawEvent::Vetoed(who, proposal_hash, until));
 			<NextExternal<T>>::kill();

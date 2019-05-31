@@ -37,7 +37,7 @@ use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
 };
 use version::RuntimeVersion;
-use council::{motions as council_motions, voting as council_voting};
+use council::{motions as council_motions};
 #[cfg(feature = "std")]
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
@@ -158,6 +158,7 @@ parameter_types! {
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const MinimumDeposit: Balance = 100 * BUCKS;
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
+	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
@@ -170,16 +171,15 @@ impl democracy::Trait for Runtime {
 	type TableOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
 	type TableMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
 	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId>;
+	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
+	type VetoOrigin = council_motions::EnsureMember<AccountId>;
+	type CooloffPeriod = CooloffPeriod;
 }
 
 impl council::Trait for Runtime {
 	type Event = Event;
 	type BadPresentation = ();
 	type BadReaper = ();
-}
-
-impl council::voting::Trait for Runtime {
-	type Event = Event;
 }
 
 impl council::motions::Trait for Runtime {
@@ -239,7 +239,6 @@ construct_runtime!(
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
-		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
 		CouncilSeats: council_seats::{Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},

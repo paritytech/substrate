@@ -18,7 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod voting;
 pub mod motions;
 pub mod seats;
 
@@ -35,7 +34,7 @@ mod tests {
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use substrate_primitives::{Blake2Hasher};
-	pub use {seats, motions, voting};
+	pub use {seats, motions};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {
