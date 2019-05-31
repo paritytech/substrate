@@ -85,7 +85,7 @@ test-build-subkey:
   stage:                           test
   <<:                              *compiler_info
   script:
-    - cd subkey
+    - cd ./subkey
     - time cargo build --release
     - sccache -s
   tags:
@@ -96,11 +96,9 @@ test-linux-stable:                 &test
   stage:                           test
   <<:                              *compiler_info
   variables:
-    RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
-    TARGET: native
   tags:
     - linux-docker
   only:
