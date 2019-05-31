@@ -868,6 +868,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 								None => return false
 							};
 							let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
+							// Tally what we send out, and check that we don't send each message more than twice.
 							match &msg.message.message {
 								PrimaryPropose(_propose) => {
 									if tally.handled_primary_proposals > 1 {
@@ -897,14 +898,19 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						};
 						if sent_too_often {
 							let inner = inner.read();
+							// If we haven't noted this round yet, the message is not allowed.
 							let incoming_tally_for_round = match inner.incoming_votes_tally.get(&round) {
 								Some(tally_for_round) => tally_for_round,
 								None => return false
 							};
+							// If we haven't received anything from this peer,
+							// the message is allowed by default
 							let incoming_tally = match incoming_tally_for_round.get(&msg.message.id) {
 								Some(incoming) => incoming,
 								None => return true,
 							};
+							// If we haven't received more than one message of this type,
+							// allow the message despite this being sending it to this voter more than twice.
 							match &msg.message.message {
 								PrimaryPropose(_propose) => {
 									if incoming_tally.handled_primary_proposals > 1 {
