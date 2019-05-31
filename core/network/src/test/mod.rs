@@ -101,7 +101,12 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut SpecializationContext<Block>, _peer_id: PeerId, _status: crate::message::Status<Block>) {
+	fn on_connect(
+		&mut self,
+		_ctx: &mut SpecializationContext<Block>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<Block>
+	) {
 	}
 
 	fn on_disconnect(&mut self, _ctx: &mut SpecializationContext<Block>, _peer_id: PeerId) {

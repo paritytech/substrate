@@ -31,7 +31,12 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: PeerId);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: PeerId, message: &mut Option<crate::message::Message<B>>);
+	fn on_message(
+		&mut self,
+		ctx: &mut Context<B>,
+		who: PeerId,
+		message: &mut Option<crate::message::Message<B>>
+	);
 
 	/// Called on abort.
 	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
