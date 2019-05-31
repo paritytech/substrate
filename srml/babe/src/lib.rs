@@ -24,12 +24,15 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::traits::{SaturatedConversion, Saturating};
+use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::Decode;
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -55,6 +58,15 @@ impl BabeInherentData for InherentData {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
 }
+
+/// Logs in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog {
+	/// BABE pre-runtime digests
+	PreRuntime(ConsensusEngineId, Vec<u8>),
+}
+
 
 /// Provides the slot duration inherent data for BABE.
 #[cfg(feature = "std")]

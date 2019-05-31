@@ -55,12 +55,15 @@ use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
 use timestamp::OnTimestampSet;
+use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 mod mock;
 mod tests;
@@ -87,6 +90,39 @@ impl AuraInherentData for InherentData {
 
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
+	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// A type that cannot be instantiated.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Eq, Clone, Copy, PartialEq, Ord, PartialOrd, Encode, Decode)]
+pub enum Absurd {}
+
+/// Logs in this module.
+///
+/// The incredibly ugly use of an absurd variant is because Rust does not allow
+/// unused type parameters, and the macros used by Substrate runtimes prohibit
+/// changing the `PreRuntime` constructor ☹
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// AuRa inherent digests
+	PreRuntime([u8; 4], Vec<u8>),
+	/// An absurd variant, used only at the type level.
+	Absurd(Absurd, PhantomData<T>)
+}
+
+struct PreRuntime(pub [u8; 4], pub Vec<u8>);
+
+impl<T> From<RawLog<T>> for PreRuntime {
+	fn from(t: RawLog<T>) -> PreRuntime {
+		match t {
+			RawLog::PreRuntime(a, b) => PreRuntime(a, b),
+			RawLog::Absurd(void, PhantomData) => match void {},
+		}
 	}
 }
 

@@ -15,12 +15,13 @@ system = { package = "srml-system", path = "../system", default-features = false
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
+# runtime_io = { package = "sr-io", path = "../../core/sr-io", features = ["wasm-nice-panic-message"] }
 
 [dev-dependencies]
 lazy_static = "1.0"
 parking_lot = "0.7.1"
 substrate-primitives = { path = "../../core/primitives" }
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", features = ["wasm-nice-panic-message"] }
 consensus = { package = "srml-consensus", path = "../consensus" }
 
 [features]

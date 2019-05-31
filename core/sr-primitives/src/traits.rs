@@ -784,7 +784,7 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 
-	/// Returns `Some` if this entry is the `PreRuntime` entry.
+	/// Returns `Some` if this entry is the `Inherent` entry.
 	fn as_pre_runtime(&self) -> Option<(super::ConsensusEngineId, &[u8])>;
 }
 
