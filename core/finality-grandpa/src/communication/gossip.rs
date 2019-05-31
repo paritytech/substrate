@@ -860,29 +860,68 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						}
 					};
 					if allowed {
-						let mut inner = inner.write();
-						// If we haven't noted this round yet, don't tally.
-						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
-							Some(tally_for_round) => tally_for_round,
-							None => return allowed
+						let sent_too_often = {
+							let mut inner = inner.write();
+							// If we haven't noted this round yet, the message is not allowed.
+							let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+								Some(tally_for_round) => tally_for_round,
+								None => return false
+							};
+							let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
+							match &msg.message.message {
+								PrimaryPropose(_propose) => {
+									if tally.handled_primary_proposals > 1 {
+										true
+									} else {
+										tally.handled_primary_proposals += 1;
+										false
+									}
+								},
+								Prevote(_prevote) => {
+									if tally.handled_pre_votes > 1 {
+										true
+									} else {
+										tally.handled_pre_votes += 1;
+										false
+									}
+								},
+								Precommit(_precommit) => {
+									if tally.handled_pre_commits > 1 {
+										true
+									} else {
+										tally.handled_pre_commits += 1;
+										false
+									}
+								},
+							}
 						};
-						let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
-						match &msg.message.message {
-							PrimaryPropose(_propose) => {
-								if !tally.handled_primary_proposals > 1 {
-									tally.handled_primary_proposals += 1;
-								}
-							},
-							Prevote(_prevote) => {
-								if !tally.handled_pre_votes > 1 {
-									tally.handled_pre_votes += 1;
-								}
-							},
-							Precommit(_precommit) => {
-								if !tally.handled_pre_commits > 1 {
-									tally.handled_pre_commits += 1;
-								}
-							},
+						if sent_too_often {
+							let inner = inner.read();
+							let incoming_tally_for_round = match inner.incoming_votes_tally.get(&round) {
+								Some(tally_for_round) => tally_for_round,
+								None => return false
+							};
+							let incoming_tally = match incoming_tally_for_round.get(&msg.message.id) {
+								Some(incoming) => incoming,
+								None => return true,
+							};
+							match &msg.message.message {
+								PrimaryPropose(_propose) => {
+									if incoming_tally.handled_primary_proposals > 1 {
+										return false
+									}
+								},
+								Prevote(_prevote) => {
+									if incoming_tally.handled_pre_votes > 1 {
+										return false
+									}
+								},
+								Precommit(_precommit) => {
+									if incoming_tally.handled_pre_commits > 1 {
+										return false
+									}
+								},
+							}
 						}
 					}
 					return allowed
