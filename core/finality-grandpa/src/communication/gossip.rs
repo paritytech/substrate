@@ -934,6 +934,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							},
 						}
 					}
+					// The local-view of the peer allowed this message, and we're not sending it too often.
 					return true
 				}
 			}
