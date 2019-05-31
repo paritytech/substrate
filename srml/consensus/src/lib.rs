@@ -442,9 +442,6 @@ pub trait EquivocationProof<H>
 	/// Create an equivocation proof.
 	fn new(slot: u64, first_header: H, second_header: H) -> Self;
 
-	/// Get the slot number where the equivocation happened.
-	fn slot(&self) -> u64;
-
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &H;
 

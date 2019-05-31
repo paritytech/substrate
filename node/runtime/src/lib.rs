@@ -36,16 +36,13 @@ use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
 };
-// #[cfg(feature = "std")]
-// use runtime_primitives::traits::ValidateUnsigned;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
-// #[cfg(feature = "std")]
+#[cfg(feature = "std")]
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::{OpaqueMetadata, ed25519};
-use support::inherent::Extrinsic;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -107,9 +104,9 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type Signature = ed25519::Signature;
-	type CompatibleDigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
-	type D = generic::Digest<Self::CompatibleDigestItem>;
-	type H = generic::Header<BlockNumber, BlakeTwo256, Self::CompatibleDigestItem>;
+	type DigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
+	type Digest = generic::Digest<Self::DigestItem>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Self::DigestItem>;
 }
 
 impl indices::Trait for Runtime {
@@ -222,7 +219,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Call, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Inherent(Timestamp), ValidateUnsigned},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,

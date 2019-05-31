@@ -331,6 +331,7 @@ where
 			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
+
 		match (xt.sender(), xt.index()) {
 			(Some(sender), Some(index)) => {
 				// pay any fees

@@ -453,11 +453,6 @@ impl<H> EquivocationProof for BabeEquivocationProof<H>
 where
 	H: Encode + Decode,
 {
-	/// Get the slot number where the equivocation happened.
-	fn slot(&self) -> u64 {
-		self.slot
-	}
-
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &H {
 		self.first_header
@@ -466,11 +461,6 @@ where
 	/// Get the second header involved in the equivocation.
 	fn second_header(&self) -> &H {
 		self.second_header
-	}
-
-	/// Check if the proof is valid.
-	fn is_valid(&self) -> bool {
-		true
 	}
 }
 
@@ -682,7 +672,8 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				telemetry!(
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
-					"pre_header" => ?pre_header);
+					"pre_header" => ?pre_header
+				);
 
 				extra_verification.into_future().wait()?;
 

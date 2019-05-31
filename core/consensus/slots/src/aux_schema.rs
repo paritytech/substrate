@@ -89,7 +89,7 @@ pub fn check_equivocation<C, H, E, V>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof::new(
-					slot,
+					slot, // 3) at the same slot
 					prev_header.clone(),
 					header.clone(),
 				)));

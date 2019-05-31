@@ -56,7 +56,7 @@ use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{
 	Zero, One, ValidateUnsigned, SaturatedConversion, Saturating,
-	MaybeSerializeDebug, Verify, Header, Digest, DigestItem, AuthIdForHeader
+	MaybeSerializeDebug, Verify, Header, Digest, DigestItem,
 };
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
@@ -164,10 +164,10 @@ pub trait Trait: timestamp::Trait
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 	type Signature: Verify + Encode + Decode + Clone;
-	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature>
-	+ DigestItem<Hash = Self::Hash>;
-	type D: Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Codec;
-	type H: Header<Digest = Self::D, Hash = Self::Hash>;
+	type DigestItem: CompatibleDigestItem<Self::Signature>
+								+ DigestItem<Hash = Self::Hash>;
+	type Digest: Digest<Item = Self::DigestItem, Hash = Self::Hash> + Codec;
+	type Header: Header<Digest = <Self as Trait>::Digest, Hash = Self::Hash>;
 }
 
 decl_storage! {
@@ -186,16 +186,14 @@ decl_module! {
 	}
 }
 
-fn verify_header<'a, T, H, P>(
-	header: &H,
-	authorities: &'a [P],
+fn verify_header<'a, T, P>(
+	header: &<T as Trait>::Header, authorities: &'a [P]
 ) -> Option<&'a P>
 where 
-	H: Header,
 	T: Trait,
 	<T as Trait>::Signature: Verify<Signer = P>,
 	<<T as Trait>::Signature as Verify>::Signer: Encode + Decode + Clone + PartialEq,
-	<<H as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
+	<<<T as Trait>::Header as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
 	P: Encode + Decode + Clone + PartialEq,
 {
 	let digest_item = match header.digest().logs().last() {
@@ -219,6 +217,46 @@ where
 	None
 }
 
+fn handle_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
+where
+	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
+	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	let maybe_equivocation_proof: 
+		Option<AuraEquivocationProof::<<T as Trait>::Header>> =
+			Decode::decode(&mut proof.as_slice());
+
+	if let Some(equivocation_proof) = maybe_equivocation_proof {
+		let authorities = <consensus::Module<T>>::authorities();
+
+		let fst_author = verify_header::<T, _>(
+			equivocation_proof.first_header(),
+			&authorities
+		);
+
+		let snd_author = verify_header::<T, _>(
+			equivocation_proof.second_header(),
+			&authorities
+		);
+	
+		let proof_is_valid = fst_author.is_some() && snd_author.is_some()
+			&& fst_author.expect("&& eval ord; qed") == snd_author.expect("&& eval ord; qed");
+
+		if  proof_is_valid {
+			return TransactionValidity::Valid {
+				priority: 0,
+				requires: vec![],
+				provides: vec![],
+				longevity: 1000,
+				propagate: true,
+			}
+		}
+	}
+
+	TransactionValidity::Invalid(0)
+}
+
 impl<T> ValidateUnsigned for Module<T> 
 where
 	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
@@ -229,29 +267,7 @@ where
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
-			Call::report_equivocation(proof) => {
-				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H>> = Decode::decode(&mut proof.as_slice());
-				if let Some(equivocation_proof) = maybe_equivocation_proof {
-					let authorities = <consensus::Module<T>>::authorities();
-					let fst_author = verify_header::<T, T::H, _>(equivocation_proof.first_header(), &authorities);
-					let snd_author = verify_header::<T, T::H, _>(equivocation_proof.second_header(), &authorities);
-				
-					let proof_is_valid = fst_author.is_some()
-						&& snd_author.is_some()
-						&& fst_author.unwrap() == snd_author.unwrap();
-
-					if  proof_is_valid {
-						return TransactionValidity::Valid {
-							priority: 0,
-							requires: vec![],
-							provides: vec![],
-							longevity: 1000,
-							propagate: true,
-						}
-					}
-				}
-				TransactionValidity::Invalid(0)
-			},
+			Call::report_equivocation(proof) => handle_equivocation_proof::<T>(proof),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}

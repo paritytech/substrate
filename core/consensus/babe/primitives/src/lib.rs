@@ -75,7 +75,7 @@ decl_runtime_apis! {
 
 /// Represents an equivocation proof.
 #[derive(Debug, Clone, Encode, Decode, Default)]
-pub struct BabeEquivocationProof<H: Encode + Decode> {
+pub struct BabeEquivocationProof<H> {
 	slot: u64,
 	first_header: H,
 	second_header: H,

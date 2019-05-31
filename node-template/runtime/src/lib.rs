@@ -137,9 +137,9 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type Signature = ed25519::Signature;
-	type CompatibleDigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
-	type D = generic::Digest<Self::CompatibleDigestItem>;
-	type H = generic::Header<BlockNumber, BlakeTwo256, Self::CompatibleDigestItem>;
+	type DigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
+	type Digest = generic::Digest<Self::DigestItem>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Self::DigestItem>;
 }
 
 impl consensus::Trait for Runtime {

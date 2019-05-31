@@ -628,7 +628,7 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 					CONSENSUS_TRACE;
 					"aura.checked_and_importing";
 					"pre_header" => ?pre_header
-					);
+				);
 
 				extra_verification.into_future().wait()?;
 

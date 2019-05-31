@@ -20,7 +20,7 @@
 
 use substrate_client::decl_runtime_apis;
 use runtime_primitives::{
-	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify, AuthIdForHeader},
+	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify},
 	MultiSignature, MultiSigner,
 };
 use parity_codec::{Encode, Decode};
@@ -45,50 +45,6 @@ decl_runtime_apis! {
 	}
 }
 
-
-// /// A digest item which is usable with aura consensus.
-// pub trait CompatibleDigestItem<V: Verify>: Sized {
-// 	/// Construct a digest item which contains a slot number and a signature on the
-// 	/// hash.
-// 	fn aura_seal(slot_num: u64, signature: V) -> Self;
-
-// 	/// If this item is an Aura seal, return the slot number and signature.
-// 	fn as_aura_seal(&self) -> Option<(u64, V)>;
-
-// 	/// Return `true` if this seal type is deprecated.  Otherwise, return
-// 	/// `false`.
-// 	fn is_deprecated(&self) -> bool;
-// }
-
-// impl<Hash, V> CompatibleDigestItem<V> for generic::DigestItem<Hash, Public, V>
-// where
-// 	V: Verify + Encode + Decode + Clone,
-// {
-// 	/// Construct a digest item which is a slot number and a signature on the
-// 	/// hash.
-// 	fn aura_seal(slot_number: u64, signature: V) -> Self {
-// 		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
-// 	}
-
-// 	/// If this item is an Aura seal, return the slot number and signature.
-// 	#[allow(deprecated)]
-// 	fn as_aura_seal(&self) -> Option<(u64, V)> {
-// 		match self {
-// 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-// 			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-// 			_ => None,
-// 		}
-// 	}
-
-// 	#[allow(deprecated)]
-// 	fn is_deprecated(&self) -> bool {
-// 		match self {
-// 			generic::DigestItem::Seal(_, _) => true,
-// 			_ => false,
-// 		}
-// 	}
-// }
-
 /// Represents an equivocation proof.
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct AuraEquivocationProof<H> {
@@ -108,11 +64,6 @@ where
 			first_header,
 			second_header,
 		}
-	}
-
-	/// Get the slot number where the equivocation happened.
-	fn slot(&self) -> u64 {
-		self.slot
 	}
 
 	/// Get the first header involved in the equivocation.
