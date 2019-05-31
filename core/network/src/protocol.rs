@@ -521,8 +521,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			},
 			GenericMessage::BlockAnnounce(announce) => {
-				self.on_block_announce(network_out, who.clone(), announce);
+				let outcome = self.on_block_announce(network_out, who.clone(), announce);
 				self.update_peer_info(&who);
+				return outcome;
 			},
 			GenericMessage::Transactions(m) =>
 				self.on_extrinsics(network_out, transaction_pool, who, m),
@@ -1019,7 +1020,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		announce: message::BlockAnnounce<B::Header>
-	) {
+	) -> CustomMessageOutcome<B>  {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -1028,12 +1029,55 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		self.on_demand_core.on_block_announce(&mut network_out, who.clone(), *header.number());
-		self.sync.on_block_announce(
+		let try_import = self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, network_out),
 			who.clone(),
 			hash,
 			&header,
 		);
+
+		// try_import is only true when we have all data required to import block
+		// in the BlockAnnounce message. This is only when:
+		// 1) we're on light client;
+		// AND
+		// - EITHER 2.1) announced block is stale;
+		// - OR 2.2) announced block is NEW and we normally only want to download this single block (i.e.
+		//           there are no ascendants of this block scheduled for retrieval)
+		if !try_import {
+			return CustomMessageOutcome::None;
+		}
+
+		// to import header from announced block let's construct response to request that normally would have
+		// been sent over network (but it is not in our case)
+		let blocks_to_import = self.sync.on_block_data(
+			&mut ProtocolContext::new(&mut self.context_data, network_out),
+			who.clone(),
+			message::generic::BlockRequest {
+				id: 0,
+				fields: BlockAttributes::HEADER,
+				from: message::FromBlock::Hash(hash),
+				to: None,
+				direction: message::Direction::Ascending,
+				max: Some(1),
+			},
+			message::generic::BlockResponse {
+				id: 0,
+				blocks: vec![
+					message::generic::BlockData {
+						hash: hash,
+						header: Some(header),
+						body: None,
+						receipt: None,
+						message_queue: None,
+						justification: None,
+					},
+				],
+			},
+		);
+		match blocks_to_import {
+			Some((origin, blocks)) => CustomMessageOutcome::BlockImport(origin, blocks),
+			None => CustomMessageOutcome::None,
+		}
 	}
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
