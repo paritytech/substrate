@@ -307,7 +307,7 @@ cargo run --release \-- \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator
 
-Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
+Additional Substrate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
 [[flaming-fir]]
 === Joining the Flaming Fir Testnet
