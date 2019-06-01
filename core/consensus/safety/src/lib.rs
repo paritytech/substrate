@@ -20,14 +20,11 @@
 
 use client;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use node_runtime::{UncheckedExtrinsic, Call, AuraCall};
-use parity_codec::{Encode, Decode, Compact};
+use node_runtime::{UncheckedExtrinsic, Call};
+use parity_codec::{Encode, Decode};
 use std::sync::Arc;
-use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
-	AuthorityIdFor, Zero, Member, Verify, MaybeHash, RuntimeApiInfo
-};
-use runtime_primitives::{generic::{self, BlockId}, Justification};
+use runtime_primitives::traits::Block;
+use runtime_primitives::generic::BlockId;
 
 /// Submit report call to the transaction pool.
 /// TODO: Ask how to do submit an unsigned in the proper way.

@@ -134,7 +134,7 @@ use codec::{Encode, Decode};
 use srml_support::{storage, Parameter, decl_storage, decl_module};
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, Member, Verify};
+use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_none};
 use inherents::{

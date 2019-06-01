@@ -20,7 +20,7 @@
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
 use runtime_primitives::{
-	generic::DigestItem, traits::{Block, Verify, DigestItemFor, Header, Digest}
+	generic::DigestItem, traits::{Verify, Header, Digest}
 };
 use parity_codec::{Encode, Decode};
 use crate::AURA_ENGINE_ID;

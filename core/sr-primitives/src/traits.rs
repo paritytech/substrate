@@ -22,7 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
-use crate::codec::{Codec, Encode, Decode, HasCompact};
+use crate::codec::{Codec, Encode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{

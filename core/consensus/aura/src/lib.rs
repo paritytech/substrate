@@ -31,7 +31,7 @@ use std::{
 	fmt::Debug
 };
 
-use parity_codec::{Encode, Decode, Compact};
+use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 	SelectChain, well_known_cache_keys,
@@ -47,11 +47,11 @@ use client::{
 	error::Result as CResult,
 	backend::AuxStore,
 };
-use aura_primitives::{AURA_ENGINE_ID, slot_author};
+use aura_primitives::slot_author;
 use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
-	AuthorityIdFor, Zero, Member, Verify, MaybeHash, RuntimeApiInfo
+	AuthorityIdFor, Zero, Member, Verify,
 };
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -79,8 +79,7 @@ use slots::{
 	check_equivocation,
 };
 
-use node_runtime::{UncheckedExtrinsic, Call, AuraCall};
-use srml_indices::address::Address;
+use node_runtime::{Call, AuraCall};
 use consensus_safety::submit_report_call;
 
 pub use aura_primitives::*;

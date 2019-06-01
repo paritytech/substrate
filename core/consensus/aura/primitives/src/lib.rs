@@ -19,14 +19,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_client::decl_runtime_apis;
-use runtime_primitives::{
-	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify},
-	MultiSignature, MultiSigner,
-};
+use runtime_primitives::{ConsensusEngineId, traits::Header};
 use parity_codec::{Encode, Decode};
-use primitives::ed25519::{self, Signature, Public};
 use safety_primitives::EquivocationProof;
-use rstd::marker::PhantomData;
 
 mod digest;
 pub use digest::{CompatibleDigestItem, find_pre_digest};

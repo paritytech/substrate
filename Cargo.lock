@@ -3928,7 +3928,6 @@ dependencies = [
  "sr-version 2.0.0",
  "srml-aura 2.0.0",
  "srml-consensus 2.0.0",
- "srml-indices 2.0.0",
  "srml-support 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
