@@ -1,0 +1,13 @@
+[package]
+name = "substrate-consensus-safety"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Common utilities for substrate accountable safety"
+edition = "2018"
+
+[dependencies]
+client = { package = "substrate-client", path = "../../client" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
+node-runtime = { path = "../../../node/runtime" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+parity-codec = "3.5.1"

@@ -435,16 +435,3 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		).map_err(|e| RuntimeString::from(e).into())
 	}
 }
-
-/// Trait for Equivocation proofs.
-pub trait EquivocationProof<H>
-{
-	/// Create an equivocation proof.
-	fn new(slot: u64, first_header: H, second_header: H) -> Self;
-
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H;
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H;
-}

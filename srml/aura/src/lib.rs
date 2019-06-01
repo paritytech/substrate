@@ -73,7 +73,7 @@ use aura_primitives::{
 	AuraEquivocationProof, CompatibleDigestItem, slot_author, find_pre_digest
 };
 use system::ensure_signed;
-use consensus::EquivocationProof;
+use safety_primitives::EquivocationProof;
 
 mod mock;
 mod tests;
@@ -239,9 +239,8 @@ where
 			equivocation_proof.second_header(),
 			&authorities
 		);
-	
-		let proof_is_valid = fst_author.is_some() && snd_author.is_some()
-			&& fst_author.expect("&& eval ord; qed") == snd_author.expect("&& eval ord; qed");
+
+		let proof_is_valid = fst_author.map_or(false, |f| snd_author.map_or(false, |s| f == s));
 
 		if  proof_is_valid {
 			return TransactionValidity::Valid {

@@ -25,7 +25,7 @@ use runtime_primitives::{
 };
 use parity_codec::{Encode, Decode};
 use primitives::ed25519::{self, Signature, Public};
-use consensus::EquivocationProof;
+use safety_primitives::EquivocationProof;
 use rstd::marker::PhantomData;
 
 mod digest;

@@ -18,7 +18,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default-features = false }
-# common = { package = "substrate-consensus-common", path = "../../core/consensus/common", default-features = false }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../../core/consensus/safety/primitives" }
 consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 

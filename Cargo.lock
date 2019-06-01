@@ -3281,6 +3281,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -3933,6 +3934,8 @@ dependencies = [
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-authorities 2.0.0",
  "substrate-consensus-common 2.0.0",
+ "substrate-consensus-safety 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
@@ -3955,6 +3958,7 @@ dependencies = [
  "sr-std 2.0.0",
  "srml-consensus 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4063,6 +4067,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-safety"
+version = "2.0.0"
+dependencies = [
+ "node-runtime 2.0.0",
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-transaction-pool 2.0.0",
+]
+
+[[package]]
+name = "substrate-consensus-safety-primitives"
+version = "2.0.0"
+
+[[package]]
 name = "substrate-consensus-slots"
 version = "2.0.0"
 dependencies = [
@@ -4074,6 +4093,7 @@ dependencies = [
  "srml-consensus 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-common 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-client 2.0.0",

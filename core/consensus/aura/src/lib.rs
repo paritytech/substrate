@@ -81,10 +81,11 @@ use slots::{
 
 use node_runtime::{UncheckedExtrinsic, Call, AuraCall};
 use srml_indices::address::Address;
+use consensus_safety::submit_report_call;
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
-use srml_consensus::EquivocationProof;
+use safety_primitives::EquivocationProof;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -433,11 +434,13 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 				submit_report_call(
 					client,
 					transaction_pool,
-					AuraEquivocationProof::new(
-						slot_now,
-						header.clone(),
-						header.clone(),
-					),
+					Call::Aura(AuraCall::report_equivocation(
+						AuraEquivocationProof::new(
+							slot_now,
+							header.clone(),
+							header.clone(),
+						).encode()
+					)),
 				);
 			}
 
@@ -445,30 +448,6 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
-	}
-}
-
-/// Submit report call.
-/// TODO: Ask how to do submit an unsigned in the proper way
-/// and move the function to a better place so it can be used for Babe and Grandpa.
-pub fn submit_report_call<H, A, B: Block, C>(
-	client: &C,
-	transaction_pool: &Arc<TransactionPool<A>>,
-	aura_proof: AuraEquivocationProof<H>,
-) where
-	A: txpool::ChainApi<Block=B>,
-	C: client::blockchain::HeaderBackend<B>,
-	H: Header + Encode + Decode,
-{
-	println!("SUBMIT_REPORT_CALL");
-	let extrinsic = UncheckedExtrinsic::new_unsigned(
-		Call::Aura(AuraCall::report_equivocation(aura_proof.encode()))
-	);
-	let uxt = Decode::decode(&mut extrinsic.encode().as_slice())
-		.expect("Encoded extrinsic is valid");
-	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
-	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
-		println!("Error importing misbehavior report: {:?}", e);
 	}
 }
 

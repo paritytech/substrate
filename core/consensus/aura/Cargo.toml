@@ -6,7 +6,6 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.5.1"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
@@ -20,15 +19,18 @@ srml-indices = { path = "../../../srml/indices" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
+consensus_safety = { package = "substrate-consensus-safety", path = "../safety" }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../safety/primitives" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
+keyring = { package = "substrate-keyring", path = "../../keyring" }
+node-runtime = { path = "../../../node/runtime" }
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
 log = "0.4"
-keyring = { package = "substrate-keyring", path = "../../keyring" }
-node-runtime = { path = "../../../node/runtime" }
+parity-codec = "3.5.1"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
