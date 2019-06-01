@@ -346,7 +346,7 @@ decl_module! {
 		/// of the transfer, the account will be reaped.
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
-		#[weight = 20]
+		// #[weight = 20]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,

@@ -452,7 +452,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			($from:ident)? $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$from:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -468,7 +468,7 @@ macro_rules! decl_module {
 			$(#[doc = $doc_attr])*
 			#[weight = 10]
 			$fn_vis fn $fn_name(
-				($from)? $(, $(#[$codec_attr])* $param_name : $param )*
+				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
 			$($rest)*
 		);
