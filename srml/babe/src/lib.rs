@@ -17,14 +17,13 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code, warnings)]
+#![forbid(unsafe_code)]
 pub use timestamp;
 
-use rstd::{result, prelude::*};
+use rstd::{result, prelude::*, marker::PhantomData};
 use srml_support::{decl_storage, decl_module};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::traits::{SaturatedConversion, Saturating};
-use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
