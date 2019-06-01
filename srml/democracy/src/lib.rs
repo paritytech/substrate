@@ -1395,6 +1395,28 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (250, 100, 150));
 
 			next_block();
+
+			assert_eq!(Balances::locks(1), vec![]);
+			assert_eq!(Balances::locks(2), vec![BalanceLock {
+				id: DEMOCRACY_ID,
+				amount: u64::max_value(),
+				until: 9,
+				reasons: WithdrawReason::Transfer.into()
+			}]);
+			assert_eq!(Balances::locks(3), vec![BalanceLock {
+				id: DEMOCRACY_ID,
+				amount: u64::max_value(),
+				until: 5,
+				reasons: WithdrawReason::Transfer.into()
+			}]);
+			assert_eq!(Balances::locks(4), vec![BalanceLock {
+				id: DEMOCRACY_ID,
+				amount: u64::max_value(),
+				until: u64::max_value(),
+				reasons: WithdrawReason::Transfer.into()
+			}]);
+			assert_eq!(Balances::locks(5), vec![]);
+
 			next_block();
 
 			assert_eq!(Balances::free_balance(&42), 2);
