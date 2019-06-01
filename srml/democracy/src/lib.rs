@@ -307,7 +307,7 @@ decl_module! {
 			<DepositOf<T>>::insert(proposal, deposit);
 		}
 
-		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
+		/// Vote in a referendum. If vote is aye, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
@@ -317,8 +317,8 @@ decl_module! {
 			Self::do_vote(who, ref_index, vote)
 		}
 
-		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
-		/// the proposal;  otherwise it is a vote to keep the status quo.
+		/// Vote in a referendum on behalf of a stash. If vote is aye, the vote is to enact
+		/// the proposal; otherwise it is a vote to keep the status quo.
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
