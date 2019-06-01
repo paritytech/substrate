@@ -26,9 +26,7 @@ use state_machine::{
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{
-	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
-};
+use primitives::{offchain, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
@@ -48,7 +46,7 @@ where
 	///
 	/// No changes are made.
 	fn call<
-		O: OffchainExt,
+		O: offchain::Externalities,
 	>(
 		&self,
 		id: &BlockId<B>,
@@ -65,7 +63,7 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -96,7 +94,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -181,7 +179,7 @@ where
 {
 	type Error = E::Error;
 
-	fn call<O: OffchainExt>(
+	fn call<O: offchain::Externalities>(
 		&self,
 		id: &BlockId<Block>,
 		method: &str,
@@ -211,7 +209,7 @@ where
 
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -300,7 +298,7 @@ where
 	}
 
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,

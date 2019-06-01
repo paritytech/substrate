@@ -763,7 +763,6 @@ macro_rules! impl_outer_log {
 						.map($name) {
 							s
 						} else {
-							println!("Unhandled digest {:?}", gen);
 							panic!("Unhandled digest in runtime")
 						}
 					}

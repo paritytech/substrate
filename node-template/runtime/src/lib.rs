@@ -155,7 +155,7 @@ impl indices::Trait for Runtime {
 	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
 	/// Determine whether an account is dead.
 	type IsDeadAccount = Balances;
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 }
 
@@ -172,7 +172,7 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 
 	type TransactionPayment = ();
@@ -181,7 +181,7 @@ impl balances::Trait for Runtime {
 }
 
 impl sudo::Trait for Runtime {
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 	type Proposal = Call;
 }
