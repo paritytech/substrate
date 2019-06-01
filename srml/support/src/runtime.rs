@@ -123,7 +123,7 @@ macro_rules! construct_runtime {
 			$(
 				$modules:ident
 					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
-					$( ( $( $modules_args:ident ),* ) )*
+					$( ( $( $modules_args:ident $( ( $($arg_params:tt),* ) )? ),* ) )*
 			),*
 		},
 		$( $rest:tt )*
@@ -136,7 +136,7 @@ macro_rules! construct_runtime {
 					Module, Call, Storage, Event<T>, Config<T>,
 					$(
 						$modules $( <$modules_generic $(, $modules_instance)?> )*
-						$( ( $( $modules_args ),* ) )*
+						$( ( $( $modules_args $( ( $($arg_params),* ) )? ),* ) )*
 					),*
 				},
 			};
@@ -150,7 +150,7 @@ macro_rules! construct_runtime {
 			$(
 				$modules:ident
 					$( <$modules_generic:ident> )*
-					$( ( $( $modules_args:ident ),* ) )*
+					$( ( $( $modules_args:ident $( ( $($arg_params:tt),* ) )? ),* ) )*
 			),*
 		},
 		$( $rest:tt )*
@@ -162,7 +162,7 @@ macro_rules! construct_runtime {
 				$name: $module::{
 					$(
 						$modules $( <$modules_generic> )*
-						$( ( $( $modules_args ),* ) )*
+						$( ( $( $modules_args $( ( $($arg_params),* ) )? ),* ) )*
 					),*
 				},
 			};
@@ -176,7 +176,7 @@ macro_rules! construct_runtime {
 			$(
 				$modules:ident
 					$( <$modules_generic:ident $(, $modules_instance:ident )?> )*
-					$( ( $( $modules_args:ident ),* ) )*
+					$( ( $( $modules_args:ident $( ( $($arg_params:tt),* ) )? ),* ) )*
 			),*
 		},
 		$( $rest:tt )*
@@ -188,7 +188,7 @@ macro_rules! construct_runtime {
 				$name: $module::<$module_instance>::{
 					$(
 						$modules $( <$modules_generic $(, $modules_instance=$module::$module_instance)?> )*
-						$( ( $( $modules_args ),* ) )*
+						$( ( $( $modules_args $( ( $($arg_params),* ) )? ),* ) )*
 					),*
 				},
 			};
@@ -212,7 +212,7 @@ macro_rules! construct_runtime {
 					$(
 						$modules:ident
 							$( <$modules_generic:ident $(, I=$modules_instance:path)?> )*
-							$( ( $( $modules_args:ident ),* ) )*
+							$( ( $( $modules_args:ident $( ( $($arg_params:tt),* ) )? ),* ) )*
 					),*
 				},
 			)*
@@ -269,7 +269,7 @@ macro_rules! construct_runtime {
 			$log_internal < $( $log_genarg ),* >;
 			{};
 			$(
-				$name: $module:: $( < $module_instance >:: )? { $( $modules $( ( $( $modules_args )* ) )* )* }
+				$name: $module:: $( < $module_instance >:: )? { $( $modules $( ( $( $modules_args $( ( $($arg_params),* ) )? )* ) )* )* }
 			)*
 		);
 		$crate::__decl_outer_config!(
@@ -709,14 +709,14 @@ macro_rules! __decl_outer_log {
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		{ $( $parsed:tt )* };
 		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
-			Log ( $( $args:ident )* ) $( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+			Log ( $( $args:ident $( ( $( $log_params:tt  ),* ) )?  )* ) $( $modules:ident $( ( $( $modules_args:ident $( ( $( arg_params:tt  ),* ) )? )* ) )* )*
 		}
 		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_log!(
 			$runtime;
 			$log_internal < $( $log_genarg ),* >;
-			{ $( $parsed )* $module $(<$module_instance>)? ( $( $args )* )};
+			{ $( $parsed )* $module $(<$module_instance>)? ( $( $args $( ( $( $log_params ),* ) )? )* )};
 			$( $rest )*
 		);
 	};
@@ -756,13 +756,13 @@ macro_rules! __decl_outer_log {
 		$runtime:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		{ $(
-			$parsed_modules:ident $(< $parsed_instance:ident >)? ( $( $parsed_args:ident )* )
+			$parsed_modules:ident $(< $parsed_instance:ident >)? ( $( $parsed_args:ident $( ( $( $arg_params:tt ),* ) )? )* )
 		)* };
 	) => {
 		$crate::paste::item! {
 			$crate::runtime_primitives::impl_outer_log!(
 				pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
-					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
+					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args $( ( $( $arg_params ),* ) )? ),* ) ),*
 				}
 			);
 		}

@@ -68,6 +68,8 @@ use serde::Serialize;
 mod mock;
 mod tests;
 
+pub use aura_primitives::AURA_ENGINE_ID;
+
 /// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
@@ -96,34 +98,15 @@ impl AuraInherentData for InherentData {
 /// Logs in this module.
 pub type Log<T> = RawLog<T>;
 
-/// A type that cannot be instantiated.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Eq, Clone, Copy, PartialEq, Ord, PartialOrd, Encode, Decode)]
-pub enum Absurd {}
-
 /// Logs in this module.
 ///
-/// The incredibly ugly use of an absurd variant is because Rust does not allow
-/// unused type parameters, and the macros used by Substrate runtimes prohibit
-/// changing the `PreRuntime` constructor ☹
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<T> {
 	/// AuRa inherent digests
-	PreRuntime([u8; 4], Vec<u8>),
-	/// An absurd variant, used only at the type level.
-	Absurd(Absurd, PhantomData<T>)
-}
-
-struct PreRuntime(pub [u8; 4], pub Vec<u8>);
-
-impl<T> From<RawLog<T>> for PreRuntime {
-	fn from(t: RawLog<T>) -> PreRuntime {
-		match t {
-			RawLog::PreRuntime(a, b) => PreRuntime(a, b),
-			RawLog::Absurd(void, PhantomData) => match void {},
-		}
-	}
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for `Aura`.

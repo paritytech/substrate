@@ -58,7 +58,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 81,
+	spec_version: 91,
 	impl_version: 92,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -206,6 +206,8 @@ impl grandpa::Trait for Runtime {
 impl finality_tracker::Trait for Runtime {
 	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
 }
+
+use aura::AURA_ENGINE_ID;
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where

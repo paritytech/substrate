@@ -26,6 +26,11 @@ pub use parity_codec as codec;
 #[doc(hidden)]
 pub use serde;
 
+#[cfg(not(feature = "std"))]
+pub use core::marker::PhantomData;
+#[cfg(feature = "std")]
+pub use std::marker::PhantomData;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
@@ -615,10 +620,10 @@ macro_rules! impl_outer_config {
 #[doc(hidden)]
 macro_rules! __parse_pattern_2 {
 	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2))
+		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::PhantomData))
 	};
 	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2))
+		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::PhantomData))
 	};
 	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
 		$internal::$module($module::RawLog::$name(ref $v1))
@@ -628,28 +633,28 @@ macro_rules! __parse_pattern_2 {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __parse_pattern {
-	(PreRuntime $module:ident $internal:ident $t:ident) => {
-		$crate::generic::$t::PreRuntime($module, $internal)
+	(PreRuntime $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::PreRuntime($engine_id, $binder)
 	};
-	(Consensus $module:ident $internal:ident $t:ident) => {
-		$crate::generic::$t::Consensus($module, $internal)
+	(Consensus $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::Consensus($engine_id, $binder)
 	};
-	($name:ident $module:ident $internal:ident $t:ident) => {
-		$crate::generic::$t::$name($module)
+	($name:ident $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::$name($binder)
 	};
 }
 
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __parse_expr {
-	(PreRuntime $module:ident $internal:ident) => {
-		$internal::$module($module::RawLog::PreRuntime($module, $internal))
+	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, $crate::PhantomData))
 	};
-	(Consensus $module:ident $internal:ident) => {
-		$internal::$module($module::RawLog::Consensus($module, $internal))
+	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::PhantomData))
 	};
-	($name:ident $module:ident $internal:ident) => {
-		$internal::$module($module::RawLog::$name($module))
+	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::$name($binder))
 	};
 }
 
@@ -687,7 +692,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:tt ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -754,8 +759,8 @@ macro_rules! impl_outer_log {
 			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
 				match gen {
 					$($(
-					$crate::__parse_pattern!($sitem $module $internal DigestItem) =>
-						$name($crate::__parse_expr!($sitem $module $internal)),
+					$crate::__parse_pattern!($sitem b, a) =>
+						$name($crate::__parse_expr!($sitem b, $module $internal a)),
 					)*)*
 					_ => {
 						if let Some(s) = gen.as_other()
