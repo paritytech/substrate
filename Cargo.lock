@@ -4069,6 +4069,7 @@ dependencies = [
 name = "substrate-consensus-safety"
 version = "2.0.0"
 dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-runtime 2.0.0",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
