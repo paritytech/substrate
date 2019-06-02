@@ -57,7 +57,6 @@ use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -163,7 +162,7 @@ decl_module! {
 }
 
 /// A report of skipped authorities in Aura.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
 	// The first skipped slot.
