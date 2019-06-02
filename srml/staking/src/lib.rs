@@ -820,7 +820,7 @@ decl_module! {
 		/// `apply_rewards` should be true for validators to get the session reward.
 		///
 		/// # <weight>
-		/// - Independent on arguments.
+		/// - Independent of the arguments.
 		/// - Triggers the Phragmen election. Expensive but not user-controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
