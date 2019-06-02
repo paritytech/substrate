@@ -15,7 +15,12 @@ system = { package = "srml-system", path = "../system", default-features = false
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
-aura-primitives = { package = "substrate-consensus-aura-primitives", version = "2.0.0", path = "../../core/consensus/aura/primitives", default-features = false }
+
+[dependencies.aura-primitives]
+package = "substrate-consensus-aura-primitives"
+version = "2.0.0"
+path = "../../core/consensus/aura/primitives"
+default-features = false
 
 [dev-dependencies]
 lazy_static = "1.0"
