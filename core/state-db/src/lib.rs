@@ -175,7 +175,7 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
-		trace!("StateDb settings: {:?}", mode);
+		trace!(target: "state-db", "StateDb settings: {:?}", mode);
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
@@ -292,6 +292,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn pin(&mut self, hash: &BlockHash) {
+		trace!(target: "state-db", "Pinned block: {:?}", hash);
 		*self.pinned.entry(hash.clone()).or_default() += 1;
 	}
 
@@ -300,7 +301,10 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Entry::Occupied(mut entry) => {
 				*entry.get_mut() -= 1;
 				if *entry.get() == 0 {
+					trace!(target: "state-db", "Unpinned block: {:?}", hash);
 					entry.remove();
+				} else {
+					trace!(target: "state-db", "Releasing reference for {:?}", hash);
 				}
 			},
 			Entry::Vacant(_) => {},

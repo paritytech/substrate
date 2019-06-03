@@ -1013,6 +1013,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let changes_trie_updates = operation.changes_trie_updates;
 
 			self.changes_tries_storage.commit(&mut transaction, changes_trie_updates);
+			let cache = operation.old_state.release(); // release state reference so that it can be finalized
+
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
@@ -1044,7 +1046,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best))
+			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
 		} else {
 			None
 		};
@@ -1066,7 +1068,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
-		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best)) = imported {
+		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best, mut cache)) = imported {
 			if let Err(e) = write_result {
 				let mut leaves = self.blockchain.leaves.write();
 				let mut undo = leaves.undo();
@@ -1081,7 +1083,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				return Err(e)
 			}
 
-			operation.old_state.sync_cache(
+			cache.sync_cache(
 				&enacted,
 				&retracted,
 				operation.storage_updates,
@@ -1336,10 +1338,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
 	}
 
-	fn destroy_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
-		if let Some(hash) = state.parent_hash.clone() {
+	fn destroy_state(&self, state: Self::State) -> Result<(), client::error::Error> {
+		if let Some(hash) = state.cache.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;
-			state.sync_cache(&[], &[], vec![], None, None, is_best);
+			state.release().sync_cache(&[], &[], vec![], None, None, is_best);
 		}
 		Ok(())
 	}
