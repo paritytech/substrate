@@ -33,7 +33,7 @@
 use std::cmp::max;
 use std::ops::Range;
 use std::collections::{HashMap, VecDeque};
-use log::{debug, trace, warn, info};
+use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
@@ -488,36 +488,41 @@ impl<B: BlockT> ChainSync<B> {
 		_request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) -> Option<(PeerId, B::Hash, NumberFor<B>, Justification)> {
-		if let Some(ref mut peer) = self.peers.get_mut(&who) {
-			if let PeerSyncState::DownloadingJustification(hash) = peer.state {
-				peer.state = PeerSyncState::Available;
+		let peer = if let Some(peer) = self.peers.get_mut(&who) {
+			peer
+		} else {
+			error!(target: "sync", "Called on_block_justification_data with a bad peer ID");
+			return None;
+		};
 
-				// we only request one justification at a time
-				match response.blocks.into_iter().next() {
-					Some(response) => {
-						if hash != response.hash {
-							info!("Invalid block justification provided by {}: requested: {:?} got: {:?}",
-								who, hash, response.hash);
-							protocol.report_peer(who.clone(), i32::min_value());
-							protocol.disconnect_peer(who);
-							return None;
-						}
+		if let PeerSyncState::DownloadingJustification(hash) = peer.state {
+			peer.state = PeerSyncState::Available;
 
-						return self.extra_requests.justifications().on_response(
-							who,
-							response.justification,
-						);
-					},
-					None => {
-						// we might have asked the peer for a justification on a block that we thought it had
-						// (regardless of whether it had a justification for it or not).
-						trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
-							who,
-							hash,
-						);
+			// we only request one justification at a time
+			match response.blocks.into_iter().next() {
+				Some(response) => {
+					if hash != response.hash {
+						info!("Invalid block justification provided by {}: requested: {:?} got: {:?}",
+							who, hash, response.hash);
+						protocol.report_peer(who.clone(), i32::min_value());
+						protocol.disconnect_peer(who);
 						return None;
-					},
-				}
+					}
+
+					return self.extra_requests.justifications().on_response(
+						who,
+						response.justification,
+					);
+				},
+				None => {
+					// we might have asked the peer for a justification on a block that we thought it had
+					// (regardless of whether it had a justification for it or not).
+					trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
+						who,
+						hash,
+					);
+					return None;
+				},
 			}
 		}
 
@@ -532,28 +537,33 @@ impl<B: BlockT> ChainSync<B> {
 		who: PeerId,
 		response: message::FinalityProofResponse<B::Hash>,
 	) -> Option<(PeerId, B::Hash, NumberFor<B>, Vec<u8>)> {
-		if let Some(ref mut peer) = self.peers.get_mut(&who) {
-			if let PeerSyncState::DownloadingFinalityProof(hash) = peer.state {
-				peer.state = PeerSyncState::Available;
+		let peer = if let Some(peer) = self.peers.get_mut(&who) {
+			peer
+		} else {
+			error!(target: "sync", "Called on_block_finality_proof_data with a bad peer ID");
+			return None;
+		};
 
-				// we only request one finality proof at a time
-				if hash != response.block {
-					info!(
-						"Invalid block finality proof provided: requested: {:?} got: {:?}",
-						hash,
-						response.block,
-					);
+		if let PeerSyncState::DownloadingFinalityProof(hash) = peer.state {
+			peer.state = PeerSyncState::Available;
 
-					protocol.report_peer(who.clone(), i32::min_value());
-					protocol.disconnect_peer(who);
-					return None;
-				}
-
-				return self.extra_requests.finality_proofs().on_response(
-					who,
-					response.proof,
+			// we only request one finality proof at a time
+			if hash != response.block {
+				info!(
+					"Invalid block finality proof provided: requested: {:?} got: {:?}",
+					hash,
+					response.block,
 				);
+
+				protocol.report_peer(who.clone(), i32::min_value());
+				protocol.disconnect_peer(who);
+				return None;
 			}
+
+			return self.extra_requests.finality_proofs().on_response(
+				who,
+				response.proof,
+			);
 		}
 
 		self.maintain_sync(protocol);
@@ -717,26 +727,28 @@ impl<B: BlockT> ChainSync<B> {
 		let ancient_parent = parent_status == BlockStatus::InChainPruned;
 
 		let known = self.is_known(protocol, &hash);
-		if let Some(ref mut peer) = self.peers.get_mut(&who) {
-			while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
-				peer.recently_announced.pop_front();
-			}
-			peer.recently_announced.push_back(hash.clone());
-			if number > peer.best_number {
-				// update their best block
-				peer.best_number = number;
-				peer.best_hash = hash;
-			}
-			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
-				return false;
-			}
-			if header.parent_hash() == &self.best_queued_hash || known_parent {
-				peer.common_number = number - One::one();
-			} else if known {
-				peer.common_number = number
-			}
+		let peer = if let Some(peer) = self.peers.get_mut(&who) {
+			peer
 		} else {
+			error!(target: "sync", "Called on_block_announce with a bad peer ID");
 			return false;
+		};
+		while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
+			peer.recently_announced.pop_front();
+		}
+		peer.recently_announced.push_back(hash.clone());
+		if number > peer.best_number {
+			// update their best block
+			peer.best_number = number;
+			peer.best_hash = hash;
+		}
+		if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+			return false;
+		}
+		if header.parent_hash() == &self.best_queued_hash || known_parent {
+			peer.common_number = number - One::one();
+		} else if known {
+			peer.common_number = number
 		}
 
 		// known block case
