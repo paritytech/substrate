@@ -51,7 +51,6 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::Decode;
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
@@ -133,6 +132,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		use parity_codec::Decode;
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
 }
