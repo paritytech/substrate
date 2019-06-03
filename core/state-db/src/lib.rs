@@ -78,6 +78,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
+	/// Canonicalization would discard pinned state.
+	DiscardingPinned,
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
@@ -88,6 +90,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
+			Error::DiscardingPinned => write!(f, "Trying to discard pinned state"),
 		}
 	}
 }
@@ -112,7 +115,7 @@ pub struct CommitSet<H: Hash> {
 }
 
 /// Pruning constraints. If none are specified pruning is
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical states.
 	pub max_blocks: Option<u32>,
@@ -121,7 +124,7 @@ pub struct Constraints {
 }
 
 /// Pruning mode.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
@@ -208,24 +211,26 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
-		self.canonicalization_queue.push_back(hash.clone());
 		let mut commit = CommitSet::default();
+		if self.mode == PruningMode::ArchiveAll {
+			return Ok(commit)
+		}
+		self.canonicalization_queue.push_back(hash.clone());
 		while let Some(hash) = self.canonicalization_queue.front().cloned() {
 			if self.pinned.contains_key(&hash) {
 				break;
 			}
-			self.canonicalization_queue.pop_front();
-			match self.mode {
-				PruningMode::ArchiveAll => {
+			match self.non_canonical.canonicalize(&hash, &self.pinned, &mut commit) {
+				Ok(()) => {
+					self.canonicalization_queue.pop_front();
+					if self.mode == PruningMode::ArchiveCanonical {
+						commit.data.deleted.clear();
+					}
+				}
+				Err(Error::DiscardingPinned) => {
 					break;
-				},
-				PruningMode::ArchiveCanonical => {
-					self.non_canonical.canonicalize(&hash, &mut commit)?;
-					commit.data.deleted.clear();
-				},
-				PruningMode::Constrained(_) => {
-					self.non_canonical.canonicalize(&hash, &mut commit)?
-				},
+				}
+				Err(e) => return Err(e),
 			};
 			if let Some(ref mut pruning) = self.pruning {
 				pruning.note_canonical(&hash, &mut commit);
