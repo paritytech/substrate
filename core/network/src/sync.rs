@@ -265,7 +265,12 @@ impl<B: BlockT> ChainSync<B> {
 			},
 			(Ok(BlockStatus::Unknown), _) if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS => {
 				// when actively syncing the common point moves too fast.
-				debug!(target:"sync", "New peer with unknown best hash {} ({}), assuming common block.", self.best_queued_hash, self.best_queued_number);
+				debug!(
+					target:"sync",
+					"New peer with unknown best hash {} ({}), assuming common block.",
+					self.best_queued_hash,
+					self.best_queued_number
+				);
 				self.peers.insert(who, PeerSync {
 					common_number: self.best_queued_number,
 					best_hash: info.best_hash,
