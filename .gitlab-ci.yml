@@ -86,7 +86,7 @@ test-build-subkey:
   <<:                              *compiler_info
   script:
     - cd ./subkey
-    - time cargo build --release
+    - time cargo build
     - sccache -s
   tags:
     - linux-docker
