@@ -25,11 +25,8 @@ pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
-
-#[cfg(not(feature = "std"))]
-pub use core::marker::PhantomData;
-#[cfg(feature = "std")]
-pub use std::marker::PhantomData;
+#[doc(hidden)]
+pub use rstd;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
@@ -616,14 +613,21 @@ macro_rules! impl_outer_config {
 	}
 }
 
+// NOTE [`PreRuntime` and `Consensus` are special]
+//
+// We MUST treat `PreRuntime` and `Consensus` variants specially, as they:
+//
+// * have more parameters (both in `generic::DigestItem` and in runtimes)
+// * have a `PhantomData` parameter in the runtime, but not in `generic::DigestItem`
+
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __parse_pattern_2 {
 	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::PhantomData))
+		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
 	};
 	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::PhantomData))
+		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
 	};
 	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
 		$internal::$module($module::RawLog::$name(ref $v1))
@@ -648,10 +652,10 @@ macro_rules! __parse_pattern {
 #[doc(hidden)]
 macro_rules! __parse_expr {
 	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, $crate::PhantomData))
+		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, $crate::rstd::marker::PhantomData))
 	};
 	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::PhantomData))
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::rstd::marker::PhantomData))
 	};
 	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
 		$internal::$module($module::RawLog::$name($binder))

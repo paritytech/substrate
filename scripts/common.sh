@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 ROOT=`dirname "$0"`
-unset RUSTC_WRAPPER
 
 # A list of directories which contain wasm projects.
 SRCS=(
