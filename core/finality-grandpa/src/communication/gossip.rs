@@ -109,9 +109,9 @@ enum Consider {
 /// used both to tally incoming votes we receive and outgoing votes we sent out.
 #[derive(Debug, Default)]
 pub(crate) struct VoteTally {
-	handled_pre_commits: usize,
-	handled_pre_votes: usize,
-	handled_primary_proposals: usize,
+	pre_commits: usize,
+	pre_votes: usize,
+	primary_proposals: usize,
 }
 
 /// A view of protocol state.
@@ -548,26 +548,26 @@ impl<Block: BlockT> Inner<Block> {
 		// only when we've already sent out two messages of that kind for that voter.
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
-				if tally.handled_primary_proposals > 1 {
-					(true, outgoing_tally.handled_primary_proposals > 1)
+				if tally.primary_proposals > 1 {
+					(true, outgoing_tally.primary_proposals > 1)
 				} else {
-					tally.handled_primary_proposals += 1;
+					tally.primary_proposals += 1;
 					(false, false)
 				}
 			},
 			Prevote(_prevote) => {
-				if tally.handled_pre_votes > 1 {
-					(true, outgoing_tally.handled_pre_votes > 1)
+				if tally.pre_votes > 1 {
+					(true, outgoing_tally.pre_votes > 1)
 				} else {
-					tally.handled_pre_votes += 1;
+					tally.pre_votes += 1;
 					(false, false)
 				}
 			},
 			Precommit(_precommit) => {
-				if tally.handled_pre_commits > 1 {
-					(true, outgoing_tally.handled_pre_commits > 1)
+				if tally.pre_commits > 1 {
+					(true, outgoing_tally.pre_commits > 1)
 				} else {
-					tally.handled_pre_commits += 1;
+					tally.pre_commits += 1;
 					(false, false)
 				}
 			},
@@ -879,24 +879,24 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					// and check that we don't send each message more than twice for a given voter.
 					match &msg.message.message {
 						PrimaryPropose(_propose) => {
-							if tally.handled_primary_proposals > 1 {
+							if tally.primary_proposals > 1 {
 								return false
 							} else {
-								tally.handled_primary_proposals += 1;
+								tally.primary_proposals += 1;
 							}
 						},
 						Prevote(_prevote) => {
-							if tally.handled_pre_votes > 1 {
+							if tally.pre_votes > 1 {
 								return false
 							} else {
-								tally.handled_pre_votes += 1;
+								tally.pre_votes += 1;
 							}
 						},
 						Precommit(_precommit) => {
-							if tally.handled_pre_commits > 1 {
+							if tally.pre_commits > 1 {
 								return false
 							} else {
-								tally.handled_pre_commits += 1;
+								tally.pre_commits += 1;
 							}
 						},
 					}
