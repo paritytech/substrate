@@ -235,6 +235,7 @@
 //! stored in the Session module's `Validators` at the end of each era.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit="128"]
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;

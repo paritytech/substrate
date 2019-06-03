@@ -23,6 +23,7 @@ pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
+pub use sr_primitives::traits::DummyWeight;
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -999,6 +1000,18 @@ macro_rules! decl_module {
 			)*
 		}
 
+		// Implement weight calculation function for Call
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::DummyWeight
+			for $call_type<$trait_instance $(, $instance)?>
+		{
+			fn weight(&self) -> u32 {
+				match *self {
+					$( $call_type::$fn_name( $( ref $param_name ),* ) => $weight, )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				}
+			}
+		}
+
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
@@ -1120,14 +1133,19 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
+		impl $crate::dispatch::DummyWeight for $call_type {
+			fn weight(&self) -> u32 {
+				match self {
+					$( $call_type::$camelcase(call) => call.weight(), )*
+				}
+			}
+		}
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
 			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result {
 				match self {
-					$(
-						$call_type::$camelcase(call) => call.dispatch(origin),
-					)*
+					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
 				}
 			}
 		}

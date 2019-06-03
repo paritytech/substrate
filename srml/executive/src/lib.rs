@@ -83,6 +83,7 @@ use primitives::traits::{
 	ValidateUnsigned,
 };
 use srml_support::{Dispatchable, traits::MakePayment};
+use srml_support::dispatch::DummyWeight;
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -125,7 +126,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + DummyWeight,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
@@ -145,7 +146,7 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + DummyWeight,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
@@ -249,9 +250,20 @@ where
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the size of the block if that extrinsic is applied.
+		// TODO: this has to change to all extrinsics weight and the weight should be fetched, multiplied by the size etc and added to base weight.
+		// To fetch the weight, I have no clue how to do it. But once that is done, we are good to go.
+		// Probably we can stick it to the call Enum of each dispatch? ehh
+		// YES! we can easily get the .function from a checkedExtrinsic.
+		// This below does not work but maybe we can fix it. If not we can a just call decunstract faster.
+		// Note that we are using Applyable here.
+		// let _ = <xt as checkedExtrinsic>.function;
+		// let's not try this
+		let w = xt.weight();
+		println!("++++++++++++ [EXEC] The weight of this tx is {}", w);
 		if <system::Module<System>>::all_extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
 			return Err(internal::ApplyError::FullBlock);
 		}
+
 
 		println!("+++ [EXEC] apply_extrinsic_with_len({}, {}, {})",
 			encoded_len,
