@@ -417,8 +417,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Returns transaction hash
-	#[cfg(test)]
-	fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
+	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
 		self.api.hash_and_length(xt).0
 	}
 }

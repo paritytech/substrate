@@ -343,7 +343,7 @@ pub struct RunCmd {
 	/// Default is to allow localhost, https://polkadot.js.org and https://substrate-ui.parity.io origins.
 	/// When running in --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = "parse_cors"))]
-	pub rpc_cors: Option<Option<Vec<String>>>,
+	pub rpc_cors: Option<Cors>,
 
 	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
@@ -490,8 +490,29 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Er
 	}
 }
 
+/// CORS setting
+///
+/// The type is introduced to overcome `Option<Option<T>>`
+/// handling of `structopt`.
+#[derive(Clone, Debug)]
+pub enum Cors {
+	/// All hosts allowed
+	All,
+	/// Only hosts on the list are allowed.
+	List(Vec<String>),
+}
+
+impl From<Cors> for Option<Vec<String>> {
+	fn from(cors: Cors) -> Self {
+		match cors {
+			Cors::All => None,
+			Cors::List(list) => Some(list),
+		}
+	}
+}
+
 /// Parse cors origins
-fn parse_cors(s: &str) -> Result<Option<Vec<String>>, Box<std::error::Error>> {
+fn parse_cors(s: &str) -> Result<Cors, Box<std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
@@ -504,7 +525,7 @@ fn parse_cors(s: &str) -> Result<Option<Vec<String>>, Box<std::error::Error>> {
 		}
 	}
 
-	Ok(if is_all { None } else { Some(origins) })
+	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
 impl_augment_clap!(RunCmd);

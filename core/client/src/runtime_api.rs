@@ -31,7 +31,7 @@ pub use runtime_primitives::{
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
 #[doc(hidden)]
-pub use primitives::{ExecutionContext, OffchainExt};
+pub use primitives::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
