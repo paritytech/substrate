@@ -22,7 +22,6 @@
 //! Three kinds of data types are currently supported:
 //!   - values
 //!   - maps
-//!   - lists
 //!
 //! # Examples:
 //!
@@ -39,8 +38,6 @@
 //!     pub Value: b"putd_key" => SessionKey;
 //!     // private map.
 //!     Balances: b"private_map:" => map [AuthorityId => Balance];
-//!     // private list.
-//!     Authorities: b"auth:" => list [AuthorityId];
 //! }
 //!
 //!# fn main() { }
@@ -159,16 +156,6 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 
-
-	// lists
-	($name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() $name: $prefix => list [$ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) $name: $prefix => list [$ty]);
-		storage_items!($($t)*);
-	};
 	() => ()
 }
 
@@ -282,84 +269,6 @@ macro_rules! __storage_items_internal {
 			}
 		}
 	};
-	// generator for lists.
-	(($($vis:tt)*) $name:ident : $prefix:expr => list [$ty:ty]) => {
-		$($vis)* struct $name;
-
-		impl $name {
-			fn clear_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &mut S) {
-				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
-					storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index));
-				}
-			}
-
-			fn set_len<S: $crate::HashedStorage<$crate::Twox128>>(count: u32, storage: &mut S) {
-				(count..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key(), &count);
-			}
-		}
-
-		impl $crate::storage::hashed::generator::StorageList<$ty> for $name {
-			/// Get the prefix key in storage.
-			fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			/// Get the key used to put the length field.
-			fn len_key() -> $crate::rstd::vec::Vec<u8> {
-				let mut key = $prefix.to_vec();
-				key.extend(b"len");
-				key
-			}
-
-			/// Get the storage key used to fetch a value at a given index.
-			fn key_for(index: u32) -> $crate::rstd::vec::Vec<u8> {
-				let mut key = $prefix.to_vec();
-				$crate::codec::Encode::encode_to(&index, &mut key);
-				key
-			}
-
-			/// Read out all the items.
-			fn items<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
-				(0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage))
-					.map(|i| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
-					.collect()
-			}
-
-			/// Set the current set of items.
-			fn set_items<S: $crate::HashedStorage<$crate::Twox128>>(items: &[$ty], storage: &mut S) {
-				$name::set_len(items.len() as u32, storage);
-				items.iter()
-					.enumerate()
-					.for_each(|(i, item)| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
-			}
-
-			fn set_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, item: &$ty, storage: &mut S) {
-				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
-					storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..], item);
-				}
-			}
-
-			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-			fn get<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &S) -> Option<$ty> {
-				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..])
-			}
-
-			/// Load the length of the list.
-			fn len<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> u32 {
-				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
-			}
-
-			/// Clear the list.
-			fn clear<S: $crate::HashedStorage<$crate::Twox128>>(storage: &mut S) {
-				for i in 0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
-					$name::clear_item(i, storage);
-				}
-
-				storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()[..])
-			}
-		}
-	};
 }
 
 #[macro_export]
@@ -391,7 +300,6 @@ mod tests {
 
 	storage_items! {
 		Value: b"a" => u32;
-		List: b"b:" => list [u64];
 		Map: b"c:" => map [u32 => [u8; 32]];
 	}
 
@@ -403,25 +311,6 @@ mod tests {
 		assert_eq!(Value::get(&storage), Some(100_000));
 		Value::kill(&mut storage);
 		assert!(Value::get(&storage).is_none());
-	}
-
-	#[test]
-	fn list() {
-		let mut storage = HashMap::new();
-		assert_eq!(List::len(&storage), 0);
-		assert!(List::items(&storage).is_empty());
-
-		List::set_items(&[0, 2, 4, 6, 8], &mut storage);
-		assert_eq!(List::items(&storage), &[0, 2, 4, 6, 8]);
-		assert_eq!(List::len(&storage), 5);
-
-		List::set_item(2, &10, &mut storage);
-		assert_eq!(List::items(&storage), &[0, 2, 10, 6, 8]);
-		assert_eq!(List::len(&storage), 5);
-
-		List::clear(&mut storage);
-		assert_eq!(List::len(&storage), 0);
-		assert!(List::items(&storage).is_empty());
 	}
 
 	#[test]
@@ -900,3 +789,46 @@ mod test3 {
 		type BlockNumber = u32;
 	}
 }
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod test_map_vec_append {
+	pub trait Trait {
+		type Origin;
+		type BlockNumber;
+	}
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+	crate::decl_storage! {
+		trait Store for Module<T: Trait> as Test {
+			JustVec: Vec<u32>;
+			MapVec: map u32 => Vec<u32>;
+		}
+	}
+
+	struct Test {}
+
+	impl Trait for Test {
+		type Origin = u32;
+		type BlockNumber = u32;
+	}
+
+	#[test]
+	fn append_works() {
+		use crate::storage::{AppendableStorageMap, StorageMap, StorageValue};
+		use runtime_io::{with_externalities, TestExternalities};
+
+		with_externalities(&mut TestExternalities::default(), || {
+			let _ = <MapVec<Test>>::append(1, &[1, 2, 3]);
+			let _ = <MapVec<Test>>::append(1, &[4, 5]);
+			assert_eq!(<MapVec<Test>>::get(1), vec![1, 2, 3, 4, 5]);
+
+			let _ = <JustVec<Test>>::append(&[1, 2, 3]);
+			let _ = <JustVec<Test>>::append(&[4, 5]);
+			assert_eq!(<JustVec<Test>>::get(), vec![1, 2, 3, 4, 5]);
+		});
+	}
+}
+
+

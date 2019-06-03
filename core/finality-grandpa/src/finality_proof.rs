@@ -117,7 +117,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<FetchChecker<B
 			call_data: vec![],
 			retry_count: None,
 		};
-		
+
 		self.check_execution_proof(&request, proof)
 			.and_then(|authorities| {
 				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
@@ -173,6 +173,7 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
+				#[allow(deprecated)]
 				&*self.client.backend().blockchain(),
 				&*self.authority_provider,
 				request.authorities_set_id,

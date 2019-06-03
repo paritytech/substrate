@@ -38,7 +38,8 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
+pub type NetworkService<F> =
+	network::NetworkService<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -634,7 +635,7 @@ mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -646,6 +647,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
+		#[allow(deprecated)]
 		let best = LongestChain::new(client.backend().clone(), client.import_lock())
 			.best_chain().unwrap();
 
@@ -653,7 +655,7 @@ mod tests {
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 
 		// import the block
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());
