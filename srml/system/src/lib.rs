@@ -105,6 +105,16 @@ pub trait OnNewAccount<AccountId> {
 impl<AccountId> OnNewAccount<AccountId> for () {
 	fn on_new_account(_who: &AccountId) {}
 }
+impl<
+	AccountId,
+	X: OnNewAccount<AccountId>,
+	Y: OnNewAccount<AccountId>,
+> OnNewAccount<AccountId> for (X, Y) {
+	fn on_new_account(who: &AccountId) {
+		X::on_new_account(who);
+		Y::on_new_account(who);
+	}
+}
 
 /// Determiner to say whether a given account is unused.
 pub trait IsDeadAccount<AccountId> {
