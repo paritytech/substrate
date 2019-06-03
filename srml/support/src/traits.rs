@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Traits for SRML
+//! Traits for SRML.
+//!
+//! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
@@ -26,39 +28,6 @@ use crate::runtime_primitives::traits::{
 pub trait Get<T> {
 	/// Return a constant value.
 	fn get() -> T;
-}
-
-/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
-/// how you would declare a `const`:
-///
-/// ```no_compile
-/// parameter_types! {
-///   pub const Argument: u64 = 42;
-/// }
-/// trait Config {
-///   type Parameter: Get<u64>;
-/// }
-/// struct Runtime;
-/// impl Config for Runtime {
-///   type Parameter = Argument;
-/// }
-/// ```
-#[macro_export]
-macro_rules! parameter_types {
-	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
-		pub struct $name;
-		$crate::parameter_types!{IMPL $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
-	);
-	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
-		struct $name;
-		$crate::parameter_types!{IMPL $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
-	);
-	() => ();
-	(IMPL $name:ident , $type:ty , $value:expr) => {
-		impl $crate::traits::Get<$type> for $name { fn get() -> $type { $value } }
-	}
 }
 
 /// The account with the given id was killed.
