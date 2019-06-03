@@ -246,7 +246,8 @@ mod tests {
 
 	mod system {
 		pub trait Trait {
-			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+				+ From<RawOrigin<Self::AccountId>>;
 			type AccountId;
 			type BlockNumber;
 		}

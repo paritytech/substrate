@@ -375,6 +375,42 @@ impl<
 	}
 }
 
+pub struct EnsureSigned<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureSigned<AccountId> {
+	type Success = AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(who) => Ok(who),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureNone<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureNone<AccountId> {
+	type Success = ();
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::None => Ok(()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
+impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
+	type Success = T;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		Err(o)
+	}
+}
+
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>

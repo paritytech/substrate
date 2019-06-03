@@ -18,7 +18,7 @@
 
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
-use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
+use node_runtime::{ConsensusConfig, CouncilSeatsConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
@@ -131,11 +131,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 4 * DAYS,
-			voting_period: 1 * DAYS,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
@@ -311,11 +306,6 @@ pub fn testnet_genesis(
 			term_duration: 1000000,
 			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 75,
-			voting_period: 20,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.

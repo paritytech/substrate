@@ -861,7 +861,7 @@ mod tests {
 	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
 	use primitives::testing::{Digest, DigestItem, Header};
 	use balances::BalanceLock;
-	use system::EnsureRoot;
+	use system::{EnsureRoot, EnsureSigned};
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
@@ -911,7 +911,7 @@ mod tests {
 		pub const EnactmentPeriod: u64 = 1;
 		pub const CooloffPeriod: u64 = 2;
 	}
-	impl Trait for Test {
+	impl super::Trait for Test {
 		type Proposal = Call;
 		type Event = ();
 		type Currency = balances::Module<Self>;
@@ -923,7 +923,7 @@ mod tests {
 		type TableMajorityOrigin = EnsureRoot<u64>;
 		type EmergencyOrigin = EnsureRoot<u64>;
 		type CancellationOrigin = EnsureRoot<u64>;
-		type VetoOrigin = EnsureRoot<u64>;
+		type VetoOrigin = EnsureSigned<u64>;
 		type CooloffPeriod = CooloffPeriod;
 	}
 
@@ -1006,7 +1006,11 @@ mod tests {
 		});
 	}
 
-	// TODO: test external tabling logic, normal, majority and emergency referendums, cancelations and vetoes.
+	// TODO: test
+	// - external tabling logic,
+	//   - normal, majority and emergency referendums,
+	// - cancelations,
+	// - vetoes.
 
 	#[test]
 	fn proxy_should_work() {
