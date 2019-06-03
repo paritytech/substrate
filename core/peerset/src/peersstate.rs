@@ -109,9 +109,6 @@ impl PeersState {
 
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
-		// Note: the Rust borrow checker still has some issues. In particular, we can't put this
-		// block as an `else` below (as the obvious solution would be here), or it will complain
-		// that we borrow `self` while it is already borrowed.
 		match self.nodes.get_mut(peer_id) {
 			None => return Peer::Unknown(UnknownPeer {
 				parent: self,
@@ -222,7 +219,7 @@ impl PeersState {
 	}
 
 	/// Sets the peer as connected with an outgoing connection.
-	pub fn try_outgoing(&mut self, peer_id: &PeerId) -> bool {
+	fn try_outgoing(&mut self, peer_id: &PeerId) -> bool {
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		let is_priority = self.is_priority(peer_id);
@@ -246,7 +243,7 @@ impl PeersState {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Note that reserved nodes don't count towards the number of slots.
-	pub fn try_accept_incoming(&mut self, peer_id: &PeerId) -> bool {
+	fn try_accept_incoming(&mut self, peer_id: &PeerId) -> bool {
 		let is_priority = self.is_priority(peer_id);
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
@@ -314,22 +311,22 @@ impl PeersState {
 	}
 
 	/// Get priority group content.
-	pub fn get_priority_group(&self, group_id: &str) -> HashSet<PeerId> {
-		self.priority_nodes.get(group_id).cloned().unwrap_or_default()
+	pub fn get_priority_group(&self, group_id: &str) -> Option<HashSet<PeerId>> {
+		self.priority_nodes.get(group_id).cloned()
 	}
 
 	/// Check that node is any priority group.
-	pub fn is_priority(&self, peer_id: &PeerId) -> bool {
+	fn is_priority(&self, peer_id: &PeerId) -> bool {
 		self.priority_nodes.iter().any(|(_, group)| group.contains(peer_id))
 	}
 
 	/// Returns the reputation value of the node.
-	pub fn reputation(&self, peer_id: &PeerId) -> i32 {
+	fn reputation(&self, peer_id: &PeerId) -> i32 {
 		self.nodes.get(peer_id).map_or(0, |p| p.reputation)
 	}
 
 	/// Sets the reputation of the peer.
-	pub fn set_reputation(&mut self, peer_id: &PeerId, value: i32) {
+	fn set_reputation(&mut self, peer_id: &PeerId, value: i32) {
 		let node = self.nodes
 			.entry(peer_id.clone())
 			.or_default();
@@ -340,7 +337,7 @@ impl PeersState {
 	///
 	/// In case of overflow, the value will be capped.
 	/// If the peer is unknown to us, we insert it and consider that it has a reputation of 0.
-	pub fn add_reputation(&mut self, peer_id: &PeerId, modifier: i32) {
+	fn add_reputation(&mut self, peer_id: &PeerId, modifier: i32) {
 		let node = self.nodes
 			.entry(peer_id.clone())
 			.or_default();

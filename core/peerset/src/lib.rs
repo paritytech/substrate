@@ -195,14 +195,14 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		let mut reserved = self.data.get_priority_group(RESERVED_NODES);
+		let mut reserved = self.data.get_priority_group(RESERVED_NODES).unwrap_or_default();
 		reserved.insert(peer_id);
 		self.data.set_priority_group(RESERVED_NODES, reserved);
 		self.alloc_slots();
 	}
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		let mut reserved = self.data.get_priority_group(RESERVED_NODES);
+		let mut reserved = self.data.get_priority_group(RESERVED_NODES).unwrap_or_default();
 		reserved.remove(&peer_id);
 		self.data.set_priority_group(RESERVED_NODES, reserved);
 		match self.data.peer(&peer_id) {
@@ -221,7 +221,7 @@ impl Peerset {
 		// Disconnect non-reserved nodes.
 		self.reserved_only = reserved_only;
 		if self.reserved_only {
-			let reserved = self.data.get_priority_group(RESERVED_NODES);
+			let reserved = self.data.get_priority_group(RESERVED_NODES).unwrap_or_default();
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
 				let peer = self.data.peer(&peer_id).into_connected()
 					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
@@ -450,7 +450,7 @@ impl Peerset {
 	}
 
 	/// Returns priority group by id.
-	pub fn get_priority_group(&self, group_id: &str) -> HashSet<PeerId> {
+	pub fn get_priority_group(&self, group_id: &str) -> Option<HashSet<PeerId>> {
 		self.data.get_priority_group(group_id)
 	}
 }
