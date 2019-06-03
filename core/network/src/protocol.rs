@@ -1182,10 +1182,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		processed_blocks: Vec<B::Hash>,
 		has_error: bool
 	) {
-		self.sync.blocks_processed(processed_blocks, has_error);
-		let mut context =
-			ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.maintain_sync(&mut context);
+		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
+		self.sync.blocks_processed(&mut context, processed_blocks, has_error);
 	}
 
 	/// Restart the sync process.
