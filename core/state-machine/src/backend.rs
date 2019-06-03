@@ -185,7 +185,6 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-//#[derive(Eq)]
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
