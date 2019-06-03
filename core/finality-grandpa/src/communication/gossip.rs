@@ -452,7 +452,7 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	incoming_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
-	outgoing_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
+	outgoing_votes_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -526,7 +526,7 @@ impl<Block: BlockT> Inner<Block> {
 		}
 	}
 
-	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
+	fn consider_vote(&mut self, who: &PeerId, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
 		let tally_for_round = match self.incoming_votes_tally.get_mut(&round) {
 			  Some(tally_for_round) =>  tally_for_round,
 			  None => {
@@ -540,7 +540,7 @@ impl<Block: BlockT> Inner<Block> {
 		let outgoing_tally_for_round = self.outgoing_votes_tally
 			.get_mut(&round)
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
-		let outgoing_tally = outgoing_tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
+		let outgoing_tally = outgoing_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
 
 		// We reject all messages of a given kind for a given voter,
 		// once we're received more than two messages of that kind.
@@ -600,7 +600,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_round_message(&mut self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		match self.consider_vote(full.round, full.set_id, &full.message) {
+		match self.consider_vote(who, full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectRedundant => return Action::Discard(Misbehavior::Redundant.cost()),
 			Consider::RejectWillfulRedundant => return Action::Discard(Misbehavior::WillfulRedundant.cost()),
@@ -866,77 +866,39 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						},
 					}
 					// If the peer allowed this message, make sure we don't send it too often.
-					let sent_too_often = {
-						let mut inner = inner.write();
-						// If we haven't noted this round yet, the message is not allowed.
-						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
-							Some(tally_for_round) => tally_for_round,
-							None => return false
-						};
-						let mut tally = tally_for_round
-							.entry(msg.message.id.clone())
-							.or_insert(Default::default());
-						// Tally what we send out,
-						// and check that we don't send each message more than twice for a given voter.
-						match &msg.message.message {
-							PrimaryPropose(_propose) => {
-								if tally.handled_primary_proposals > 1 {
-									true
-								} else {
-									tally.handled_primary_proposals += 1;
-									false
-								}
-							},
-							Prevote(_prevote) => {
-								if tally.handled_pre_votes > 1 {
-									true
-								} else {
-									tally.handled_pre_votes += 1;
-									false
-								}
-							},
-							Precommit(_precommit) => {
-								if tally.handled_pre_commits > 1 {
-									true
-								} else {
-									tally.handled_pre_commits += 1;
-									false
-								}
-							},
-						}
+					let mut inner = inner.write();
+					// If we haven't noted this round yet, the message is not allowed.
+					let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+						Some(tally_for_round) => tally_for_round,
+						None => return false
 					};
-					if sent_too_often {
-						let inner = inner.read();
-						// If we haven't noted this round yet, the message is not allowed.
-						let incoming_tally_for_round = match inner.incoming_votes_tally.get(&round) {
-							Some(tally_for_round) => tally_for_round,
-							None => return false
-						};
-						// If we haven't received anything from this voter,
-						// the message is allowed by default
-						let incoming_tally = match incoming_tally_for_round.get(&msg.message.id) {
-							Some(incoming) => incoming,
-							None => return true,
-						};
-						// If we haven't received more than one message of this type for this voter,
-						// allow the message despite this being sending it for this voter more than twice.
-						match &msg.message.message {
-							PrimaryPropose(_propose) => {
-								if incoming_tally.handled_primary_proposals > 1 {
-									return false
-								}
-							},
-							Prevote(_prevote) => {
-								if incoming_tally.handled_pre_votes > 1 {
-									return false
-								}
-							},
-							Precommit(_precommit) => {
-								if incoming_tally.handled_pre_commits > 1 {
-									return false
-								}
-							},
-						}
+					let mut tally = tally_for_round
+						.entry((msg.message.id.clone(), who.clone()))
+						.or_insert(Default::default());
+					// Tally what we send out,
+					// and check that we don't send each message more than twice for a given voter.
+					match &msg.message.message {
+						PrimaryPropose(_propose) => {
+							if tally.handled_primary_proposals > 1 {
+								return false
+							} else {
+								tally.handled_primary_proposals += 1;
+							}
+						},
+						Prevote(_prevote) => {
+							if tally.handled_pre_votes > 1 {
+								return false
+							} else {
+								tally.handled_pre_votes += 1;
+							}
+						},
+						Precommit(_precommit) => {
+							if tally.handled_pre_commits > 1 {
+								return false
+							} else {
+								tally.handled_pre_commits += 1;
+							}
+						},
 					}
 					// The local-view of the peer allowed this message,
 					// and we're not sending it too often in the current context.
