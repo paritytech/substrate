@@ -119,7 +119,7 @@ pub struct ProtocolStatus<B: BlockT> {
 }
 
 /// Peer information
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
@@ -333,10 +333,6 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 
 	fn disconnect_peer(&mut self, who: PeerId) {
 		self.network_out.disconnect_peer(who)
-	}
-
-	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(who).map(|p| p.info.clone())
 	}
 
 	fn client(&self) -> &Client<B> {
@@ -900,9 +896,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			status.version
 		};
 
+		let info = self.context_data.peers.get(&who).expect("We just inserted above; QED").info.clone();
 		self.on_demand_core.on_connect(&mut network_out, who.clone(), status.roles, status.best_number);
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.new_peer(&mut context, who.clone());
+		self.sync.new_peer(&mut context, who.clone(), info);
 		if protocol_version > 2 {
 			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
 		}
@@ -1188,8 +1185,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Restart the sync process.
 	pub fn restart(&mut self, network_out: &mut dyn NetworkOut<B>) {
+		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.restart(&mut context);
+		self.sync.restart(&mut context, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
 	/// Notify about successful import of the given block.
