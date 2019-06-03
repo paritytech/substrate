@@ -768,11 +768,12 @@ macro_rules! impl_outer_log {
 					)*)*
 					_ => {
 						if let Some(s) = gen.as_other()
-						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name) {
+							.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
+							.map($name) {
 							s
 						} else {
-							panic!("Unhandled digest in runtime")
+							panic!("we only reach here if the runtime did not handle a digest; \
+								   runtimes are required to handle all digests they receive; qed")
 						}
 					}
 				}

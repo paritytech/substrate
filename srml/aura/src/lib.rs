@@ -51,6 +51,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
+use parity_codec::{Encode, Decode};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
@@ -66,8 +67,6 @@ use serde::Serialize;
 
 mod mock;
 mod tests;
-
-pub use aura_primitives::AURA_ENGINE_ID;
 
 /// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
