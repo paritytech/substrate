@@ -69,7 +69,7 @@ pub trait OnFreeBalanceZero<AccountId> {
 	fn on_free_balance_zero(who: &AccountId);
 }
 
-macro_rules! impl_free_balance_zero {
+macro_rules! impl_on_free_balance_zero {
 	() => (
 		impl<AccountId> OnFreeBalanceZero<AccountId> for () {
 			fn on_free_balance_zero(_: &AccountId) {}
@@ -85,7 +85,7 @@ macro_rules! impl_free_balance_zero {
 	}
 }
 
-for_each_tuple!(impl_free_balance_zero);
+for_each_tuple!(impl_on_free_balance_zero);
 
 /// Trait for a hook to get called when some balance has been minted, causing dilution.
 pub trait OnDilution<Balance> {
