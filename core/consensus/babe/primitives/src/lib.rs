@@ -20,7 +20,7 @@
 
 use runtime_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
-
+use safety_primitives::EquivocationProof;
 use parity_codec::{Encode, Decode};
 
 /// The `ConsensusEngineId` of BABE.
@@ -73,10 +73,33 @@ decl_runtime_apis! {
 }
 
 
-/// Represents an equivocation proof.
+/// Represents a Babe equivocation proof.
 #[derive(Debug, Clone, Encode, Decode, Default)]
 pub struct BabeEquivocationProof<H> {
 	slot: u64,
 	first_header: H,
 	second_header: H,
+}
+
+
+impl<H> EquivocationProof<H> for BabeEquivocationProof<H>
+{
+	/// Create a new Babe equivocation proof.
+	fn new(slot: u64, first_header: H, second_header: H) -> Self {
+		BabeEquivocationProof {
+			slot,
+			first_header,
+			second_header,
+		}
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
 }

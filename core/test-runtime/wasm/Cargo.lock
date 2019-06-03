@@ -2412,6 +2412,7 @@ dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
 ]
 

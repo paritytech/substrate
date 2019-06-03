@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_client::decl_runtime_apis;
-use runtime_primitives::{ConsensusEngineId, traits::Header};
+use runtime_primitives::ConsensusEngineId;
 use parity_codec::{Encode, Decode};
 use safety_primitives::EquivocationProof;
 
@@ -40,7 +40,7 @@ decl_runtime_apis! {
 	}
 }
 
-/// Represents an equivocation proof.
+/// Represents an AuRa equivocation proof.
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct AuraEquivocationProof<H> {
 	slot: u64,
@@ -49,10 +49,8 @@ pub struct AuraEquivocationProof<H> {
 }
 
 impl<H> EquivocationProof<H> for AuraEquivocationProof<H>
-where
-	H: Header,
 {
-	/// Create a new Aura equivocation proof.
+	/// Create a new AuRa equivocation proof.
 	fn new(slot: u64, first_header: H, second_header: H) -> Self {
 		AuraEquivocationProof {
 			slot,

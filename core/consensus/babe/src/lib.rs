@@ -449,21 +449,6 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
 }
 
-impl<H> EquivocationProof for BabeEquivocationProof<H>
-where
-	H: Encode + Decode,
-{
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		self.first_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		self.second_header
-	}
-}
-
 /// check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
