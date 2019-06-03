@@ -16,6 +16,7 @@
 
 use crate::{
 	behaviour::Behaviour,
+	config::NodeKeyConfig,
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage, RegisteredProtocol};
@@ -79,6 +80,9 @@ where TMessage: CustomMessage + Send + 'static {
 	});
 
 	// Private and public keys configuration.
+	if let NodeKeyConfig::Secp256k1(_) = config.node_key {
+		warn!(target: "sub-libp2p", "Secp256k1 keys are deprecated in favour of ed25519");
+	}
 	let local_identity = config.node_key.clone().into_keypair()?;
 	let local_public = local_identity.public();
 	let local_peer_id = local_public.clone().into_peer_id();
