@@ -270,7 +270,7 @@ decl_storage! {
 		/// vote-transaction-sending account.
 		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
 
-		/// Get the account (and lock periods) to which another account is delegating its vote.
+		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, Conviction);
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
@@ -283,7 +283,7 @@ decl_storage! {
 		/// - `PublicProps` is empty.
 		pub NextExternal: Option<(T::Proposal, VoteThreshold)>;
 
-		/// A record of who vetoed what. Maps proposal hash to a possibly existent block number
+		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
 		pub Blacklist get(blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 

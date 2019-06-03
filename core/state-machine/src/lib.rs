@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain
 };
 
 pub mod backend;
@@ -221,10 +221,8 @@ pub trait Externalities<H: Hasher> {
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> where H::Out: Ord;
 
-	/// Submit extrinsic.
-	///
-	/// Returns an error in case the API is not available.
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+	/// Returns offchain externalities extension if present.
+	fn offchain(&mut self) -> Option<&mut offchain::Externalities>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -237,8 +235,121 @@ impl NeverOffchainExt {
 	}
 }
 
-impl OffchainExt for NeverOffchainExt {
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) { unreachable!() }
+impl offchain::Externalities for NeverOffchainExt {
+	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn new_crypto_key(
+		&mut self,
+		_crypto: offchain::CryptoKind,
+	) -> Result<offchain::CryptoKeyId, ()> {
+		unreachable!()
+	}
+
+	fn encrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn decrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn sign(&mut self, _key: Option<offchain::CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn verify(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_msg: &[u8],
+		_signature: &[u8],
+	) -> Result<bool, ()> {
+		unreachable!()
+	}
+
+	fn timestamp(&mut self) -> offchain::Timestamp {
+		unreachable!()
+	}
+
+	fn sleep_until(&mut self, _deadline: offchain::Timestamp) {
+		unreachable!()
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		unreachable!()
+	}
+
+	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+		unreachable!()
+	}
+
+	fn http_request_start(
+		&mut self,
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> Result<offchain::HttpRequestId, ()> {
+		unreachable!()
+	}
+
+	fn http_request_add_header(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_name: &str,
+		_value: &str
+	) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_chunk: &[u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<(), offchain::HttpError> {
+		unreachable!()
+	}
+
+	fn http_response_wait(
+		&mut self,
+		_ids: &[offchain::HttpRequestId],
+		_deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::HttpRequestStatus> {
+		unreachable!()
+	}
+
+	fn http_response_headers(
+		&mut self,
+		_request_id: offchain::HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unreachable!()
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<usize, offchain::HttpError> {
+		unreachable!()
+	}
 }
 
 /// Code execution engine.
@@ -376,7 +487,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
-	O: OffchainExt,
+	O: offchain::Externalities,
 	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
@@ -415,12 +526,11 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
-		let offchain = self.offchain_ext.as_mut();
 		let mut externalities = ext::Ext::new(
 			self.overlay,
 			self.backend,
 			self.changes_trie_storage,
-			offchain.map(|x| &mut **x),
+			self.offchain_ext.as_mut().map(|x| &mut **x),
 		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,

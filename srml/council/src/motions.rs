@@ -27,6 +27,11 @@ use system::{self, ensure_signed};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
+/// A number of council members.
+///
+/// This also serves as a number of voting members, and since for motions, each council member may
+/// vote exactly once, therefore also the number of votes for any given motion.
+pub type MemberCount = u32;
 
 pub trait Trait: CouncilTrait {
 	/// The outer origin type.
@@ -44,7 +49,7 @@ pub trait Trait: CouncilTrait {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum RawOrigin<AccountId> {
 	/// It has been condoned by a given number of council members from a given total.
-	Members(u32, u32),
+	Members(MemberCount, MemberCount),
 	/// It has been condoned by a single council member.
 	Member(AccountId),
 }
@@ -59,7 +64,7 @@ decl_storage! {
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
 		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>)>;
+		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, MemberCount, Vec<T::AccountId>, Vec<T::AccountId>)>;
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
 	}
@@ -71,10 +76,10 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
-		Proposed(AccountId, ProposalIndex, Hash, u32),
+		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
 		/// A motion (given hash) has been voted on by given account, leaving
-		/// a tally (yes votes and no votes given as u32s respectively).
-		Voted(AccountId, Hash, bool, u32, u32),
+		/// a tally (yes votes and no votes given respectively as `MemberCount`).
+		Voted(AccountId, Hash, bool, MemberCount, MemberCount),
 		/// A motion was approved by the required threshold.
 		Approved(Hash),
 		/// A motion was not approved by the required threshold.
@@ -102,7 +107,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
 		}
 
-		fn propose(origin, #[compact] threshold: u32, proposal: Box<<T as Trait>::Proposal>) {
+		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(Self::is_councillor(&who), "proposer not on council");
@@ -112,7 +117,7 @@ decl_module! {
 			ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
 
 			if threshold < 2 {
-				let seats = <Council<T>>::active_council().len() as u32;
+				let seats = <Council<T>>::active_council().len() as MemberCount;
 				let ok = proposal.dispatch(RawOrigin::Members(1, seats).into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
@@ -157,12 +162,12 @@ decl_module! {
 				}
 			}
 
-			let yes_votes = voting.2.len() as u32;
-			let no_votes = voting.3.len() as u32;
+			let yes_votes = voting.2.len() as MemberCount;
+			let no_votes = voting.3.len() as MemberCount;
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
 			let threshold = voting.1;
-			let seats = <Council<T>>::active_council().len() as u32;
+			let seats = <Council<T>>::active_council().len() as MemberCount;
 			let approved = yes_votes >= threshold;
 			let disapproved = seats.saturating_sub(no_votes) < threshold;
 			if approved || disapproved {
@@ -197,10 +202,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Ensure that the origin `o` represents at least `n` council members. Returns
-/// `Ok` or an `Err` otherwise.
-pub fn ensure_council_members<OuterOrigin, AccountId>(o: OuterOrigin, n: u32)
-	-> result::Result<u32, &'static str>
+/// Ensure that the origin `o` represents at least `n` council members. Returns `Ok` or an `Err`
+/// otherwise.
+pub fn ensure_council_members<OuterOrigin, AccountId>(o: OuterOrigin, n: MemberCount)
+	-> result::Result<MemberCount, &'static str>
 	where OuterOrigin: Into<result::Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
@@ -229,7 +234,7 @@ impl<
 	N: U32,
 	AccountId,
 > EnsureOrigin<O> for EnsureMembers<N, AccountId> {
-	type Success = (u32, u32);
+	type Success = (MemberCount, MemberCount);
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),

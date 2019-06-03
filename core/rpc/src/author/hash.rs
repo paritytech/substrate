@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,28 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use std::borrow;
-pub use std::boxed;
-pub use std::cell;
-pub use std::clone;
-pub use std::cmp;
-pub use std::convert;
-pub use std::default;
-pub use std::fmt;
-pub use std::hash;
-pub use std::iter;
-pub use std::marker;
-pub use std::mem;
-pub use std::num;
-pub use std::ops;
-pub use std::ptr;
-pub use std::rc;
-pub use std::result;
-pub use std::slice;
-pub use std::str;
-pub use std::vec;
+use primitives::Bytes;
+use serde::Deserialize;
 
-pub mod collections {
-	pub use std::collections::btree_map;
-	pub use std::collections::btree_set;
+/// RPC Extrinsic or hash
+///
+/// Allows to refer to extrinsic either by its raw representation or its hash.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtrinsicOrHash<Hash> {
+	/// The hash of the extrinsic.
+	Hash(Hash),
+	/// Raw extrinsic bytes.
+	Extrinsic(Bytes),
 }
