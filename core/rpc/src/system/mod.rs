@@ -17,8 +17,8 @@
 //! Substrate system API.
 
 pub mod error;
+pub mod helpers;
 
-mod helpers;
 #[cfg(test)]
 mod tests;
 

@@ -9,7 +9,8 @@ env_logger = "0.6"
 futures = "0.1.26"
 hyper = "0.12"
 jsonrpc-core = "11.0.0"
-jsonrpc-core-client = "11.0.0"
+#jsonrpc-core-client = { version = "11.0.0", features = ["http", "ws"] }
+jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc", features = ["http", "ws"] }
 log = "0.4"
 node-primitives = { path = "../primitives" }
 substrate-rpc = { path = "../../core/rpc", version = "2.0.0" }

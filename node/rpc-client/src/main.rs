@@ -14,12 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(missing_docs)]
+
+//! Example substrate RPC client code.
+//!
+//! This module shows how you can write a Rust RPC client that connects to a running
+//! substrate node and use staticly typed RPC wrappers.
+
 use futures::Future;
 use hyper::rt;
 use node_primitives::Hash;
-use substrate_rpc::author::AuthorClient;
-
-mod http_client;
+use substrate_rpc::author::{
+	AuthorClient,
+	hash::ExtrinsicOrHash,
+};
+use jsonrpc_core_client::{
+	transports::http,
+	RpcError,
+};
 
 fn main() {
 	env_logger::init();
@@ -27,14 +39,24 @@ fn main() {
 	rt::run(rt::lazy(|| {
 		let uri = "http://localhost:9933";
 
-		http_client::http(uri)
+		http::http(uri)
 			.and_then(|client: AuthorClient<Hash, Hash>| {
-				client.pending_extrinsics()
-					.then(move |pending| {
-						println!("Pending: {:?}", pending);
-						drop(client);
-						Ok(())
-					})
+				remove_all_extrinsics(client)
+			})
+			.map_err(|e| {
+				println!("Error: {:?}", e);
 			})
 	}))
+}
+
+fn remove_all_extrinsics(client: AuthorClient<Hash, Hash>) -> impl Future<Item=(), Error=RpcError> {
+	client.pending_extrinsics()
+		.and_then(move |pending| {
+			client.remove_extrinsic(
+				pending.into_iter().map(|tx| ExtrinsicOrHash::Extrinsic(tx.into())).collect()
+			)
+		})
+		.map(|removed| {
+			println!("Removed extrinsics: {:?}", removed);
+		})
 }

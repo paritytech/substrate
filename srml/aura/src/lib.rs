@@ -60,6 +60,8 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use parity_codec::Decode;
 
 mod mock;
 mod tests;

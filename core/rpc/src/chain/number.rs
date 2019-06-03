@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Chain RPC Block number type.
+
 use serde::{Serialize, Deserialize};
 use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;

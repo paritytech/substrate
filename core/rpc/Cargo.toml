@@ -6,10 +6,14 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.14.0"
-jsonrpc-core = "11.0.0"
-jsonrpc-core-client = "11.0.0"
-jsonrpc-pubsub = "11.0.0"
-jsonrpc-derive = "11.0.0"
+# jsonrpc-core = "11.0.0"
+# jsonrpc-core-client = "11.0.0"
+# jsonrpc-pubsub = "11.0.0"
+# jsonrpc-derive = "11.0.0"
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc" }
 log = "0.4"
 parking_lot = "0.7.1"
 parity-codec = "3.3"

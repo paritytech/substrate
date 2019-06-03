@@ -16,6 +16,12 @@
 
 //! Substrate block-author/full-node API.
 
+pub mod error;
+pub mod hash;
+
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
 use client::{self, Client};
@@ -27,6 +33,7 @@ use log::warn;
 use parity_codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256};
 use runtime_primitives::{generic, traits};
+use self::error::Result;
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -37,14 +44,6 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
-
-pub mod error;
-mod hash;
-
-#[cfg(test)]
-mod tests;
-
-use self::error::Result;
 
 pub use self::gen_client::Client as AuthorClient;
 
