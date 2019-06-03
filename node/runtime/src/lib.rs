@@ -21,7 +21,7 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use support::construct_runtime;
+use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
@@ -58,7 +58,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 89,
+	spec_version: 90,
 	impl_version: 90,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -150,10 +150,23 @@ impl staking::Trait for Runtime {
 	type Reward = ();
 }
 
+const MINUTES: BlockNumber = 6;
+const BUCKS: Balance = 1_000_000_000_000;
+
+parameter_types! {
+	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
+	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
+	pub const MinimumDeposit: Balance = 100 * BUCKS;
+	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
+}
 impl democracy::Trait for Runtime {
-	type Currency = Balances;
 	type Proposal = Call;
 	type Event = Event;
+	type Currency = Balances;
+	type EnactmentPeriod = EnactmentPeriod;
+	type LaunchPeriod = LaunchPeriod;
+	type VotingPeriod = VotingPeriod;
+	type MinimumDeposit = MinimumDeposit;
 }
 
 impl council::Trait for Runtime {

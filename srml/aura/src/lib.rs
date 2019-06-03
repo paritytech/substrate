@@ -57,7 +57,6 @@ use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -133,6 +132,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		use parity_codec::Decode;
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
 }
@@ -163,7 +163,7 @@ decl_module! {
 }
 
 /// A report of skipped authorities in Aura.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
 	// The first skipped slot.
