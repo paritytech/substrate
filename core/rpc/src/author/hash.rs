@@ -19,7 +19,7 @@ use serde::Deserialize;
 
 /// RPC Extrinsic or hash
 ///
-/// Allows to refer to extrinsics either by their raw representation or by it's hash.
+/// Allows to refer to extrinsic either by its raw representation or its hash.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtrinsicOrHash<Hash> {
