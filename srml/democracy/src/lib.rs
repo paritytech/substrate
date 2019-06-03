@@ -270,7 +270,7 @@ decl_storage! {
 		/// vote-transaction-sending account.
 		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
 
-		/// Get the account (and lock periods) to which another account is delegating vote.
+		/// Get the account (and lock periods) to which another account is delegating its vote.
 		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, Conviction);
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
