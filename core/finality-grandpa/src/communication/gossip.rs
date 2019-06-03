@@ -860,7 +860,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					match inner.read().peers.peer(who) {
 						None => return false,
 						Some(peer) => {
-							if !peer.view.consider_vote(round, set_id) == Consider::Accept {
+							if !(peer.view.consider_vote(round, set_id) == Consider::Accept) {
 								return false
 							}
 						},
