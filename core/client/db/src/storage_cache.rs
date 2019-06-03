@@ -483,7 +483,14 @@ mod tests {
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b.clone()));
-		s.cache.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], vec![], Some(h3b.clone()), Some(3), || true);
+		s.cache.sync_cache(
+			&[h1b.clone(), h2b.clone(), h3b.clone()],
+			&[h1a.clone(), h2a.clone(), h3a.clone()],
+			vec![],
+			Some(h3b.clone()),
+			Some(3),
+			|| true
+		);
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
 		assert!(s.storage(&key).unwrap().is_none());
 	}
