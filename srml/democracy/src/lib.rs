@@ -283,7 +283,7 @@ decl_storage! {
 		/// - `PublicProps` is empty.
 		pub NextExternal: Option<(T::Proposal, VoteThreshold)>;
 
-		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
+		/// A record of who vetoed what. Maps proposal hash to a possibly existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
 		pub Blacklist get(blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
