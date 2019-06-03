@@ -545,7 +545,7 @@ impl<Block: BlockT> Inner<Block> {
 		// We reject all messages of a given kind for a given voter,
 		// once we're received more than two messages of that kind.
 		// We report peers who send us a third or more of message of a given kind,
-		// only when we've already sent out two messages of that kind for that voter.
+		// when we've already sent out two messages of that kind for that voter to that peer.
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
 				if tally.primary_proposals > 1 {
@@ -876,7 +876,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						.entry((msg.message.id.clone(), who.clone()))
 						.or_insert(Default::default());
 					// Tally what we send out,
-					// and check that we don't send each message more than twice for a given voter.
+					// and check that we don't send each message more than twice
+					// for a given voter/peer combo.
 					match &msg.message.message {
 						PrimaryPropose(_propose) => {
 							if tally.primary_proposals > 1 {
