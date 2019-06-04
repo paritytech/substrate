@@ -139,6 +139,7 @@ impl session::Trait for Runtime {
 	type ConvertAccountIdToSessionKey = ();
 	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type OnDisable = Staking;
+	type CheckRotateSession = session::AuraCheckRotateSession<Self>;
 	type Event = Event;
 }
 

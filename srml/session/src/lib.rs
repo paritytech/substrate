@@ -170,6 +170,27 @@ macro_rules! impl_disable {
 
 for_each_tuple!(impl_disable);
 
+pub trait CheckRotateSession<BlockNumber> {
+	fn check_rotate_session(block_number: BlockNumber);
+}
+
+pub struct AuraCheckRotateSession<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> CheckRotateSession<T::BlockNumber> for AuraCheckRotateSession<T> {
+	/// Hook to be called after transaction processing.
+	fn check_rotate_session(block_number: T::BlockNumber) {
+		// Do this last, after the staking system has had the chance to switch out the authorities for the
+		// new set.
+		// Check block number and call `rotate_session` if necessary.
+		let is_final_block = ((block_number - <Module<T>>::last_length_change()) % <Module<T>>::length()).is_zero();
+		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
+			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
+		if should_end_session {
+			<Module<T>>::rotate_session(is_final_block, apply_rewards);
+		}
+	}
+}
+
 pub trait Trait: timestamp::Trait + consensus::Trait {
 	/// Create a session key from an account key.
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
@@ -179,6 +200,9 @@ pub trait Trait: timestamp::Trait + consensus::Trait {
 
 	/// Handler when a validator is disabled.
 	type OnDisable: OnDisable<Self::AccountId>;
+
+	/// Hook for rotating sessions.
+	type CheckRotateSession: CheckRotateSession<Self::BlockNumber>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -278,15 +302,7 @@ impl<T: Trait> Module<T> {
 
 	/// Hook to be called after transaction processing.
 	pub fn check_rotate_session(block_number: T::BlockNumber) {
-		// Do this last, after the staking system has had the chance to switch out the authorities for the
-		// new set.
-		// Check block number and call `rotate_session` if necessary.
-		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
-			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
-		if should_end_session {
-			Self::rotate_session(is_final_block, apply_rewards);
-		}
+		T::CheckRotateSession::check_rotate_session(block_number);
 	}
 
 	/// Move on to next session: register the new authority set.
@@ -420,6 +436,7 @@ mod tests {
 		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 		type OnSessionChange = TestOnSessionChange;
 		type OnDisable = TestOnDisable;
+		type CheckRotateSession = AuraCheckRotateSession<Self>;
 		type Event = ();
 	}
 

@@ -77,6 +77,7 @@ impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 	type OnSessionChange = Staking;
 	type OnDisable = Staking;
+	type CheckRotateSession = session::AuraCheckRotateSession<Self>;
 	type Event = ();
 }
 impl timestamp::Trait for Test {
