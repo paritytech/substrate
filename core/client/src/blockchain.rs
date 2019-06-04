@@ -30,7 +30,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<Info<Block>>;
+	fn info(&self) -> Info<Block>;
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
