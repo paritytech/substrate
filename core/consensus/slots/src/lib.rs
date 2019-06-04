@@ -51,7 +51,8 @@ pub trait SlotWorker<B: Block> {
 	type OnSlot: IntoFuture<Item = (), Error = consensus_common::Error>;
 
 	/// Called when the proposer starts.
-	fn on_start(&self, slot_duration: u64) -> Result<(), consensus_common::Error>;
+	#[deprecated(note = "Not called. Please perform any initialization before calling start_slot_worker.")]
+	fn on_start(&self, _slot_duration: u64) -> Result<(), consensus_common::Error> { Ok(()) }
 
 	/// Called when a new slot is triggered.
 	fn on_slot(&self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
@@ -145,8 +146,6 @@ where
 	OnExit: Future<Item = (), Error = ()>,
 	T: SlotData + Clone,
 {
-	worker.on_start(slot_duration.slot_duration())?;
-
 	let make_authorship = move || {
 		let client = client.clone();
 		let worker = worker.clone();

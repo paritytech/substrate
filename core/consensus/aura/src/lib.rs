@@ -65,7 +65,7 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
+use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
@@ -163,10 +163,13 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
+	register_aura_inherent_data_provider(
+		&inherent_data_providers,
+		slot_duration.0.slot_duration()
+	)?;
 	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		select_chain,
@@ -183,7 +186,6 @@ struct AuraWorker<C, E, I, P, SO> {
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 }
 
@@ -207,13 +209,6 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_aura_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
 
 	fn on_slot(
 		&self,

@@ -82,7 +82,7 @@ use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
 
 /// A slot duration. Create with `get_or_compute`.
@@ -207,11 +207,11 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
 	};
+	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
 	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
 		config.0,
 		select_chain,
@@ -228,7 +228,6 @@ struct BabeWorker<C, E, I, SO> {
 	env: Arc<E>,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	threshold: u64,
 }
@@ -252,13 +251,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_babe_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
 
 	fn on_slot(
 		&self,
