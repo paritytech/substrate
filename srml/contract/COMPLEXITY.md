@@ -83,7 +83,24 @@ The size of the arguments and the return value depends on the exact function in 
 `AccountDb` is an abstraction that supports collecting changes to accounts with the ability to efficiently reverting them. Contract
 execution contexts operate on the AccountDb. All changes are flushed into underlying storage only after origin transaction succeeds.
 
-Today `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. Each overlay is represented by a `Map`. On a commit from an overlay to an overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage. On revert, the overlay is just discarded.
+## Relation to the underlying storage
+
+At present, `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. Each overlay is
+represented by a `Map`. On a commit from an overlay to an overlay, maps are merged. On commit from an overlay to the
+bottommost `AccountDb` all changes are flushed to the storage and on revert, the overlay is just discarded.
+
+> ℹ️ The underlying storage has a overlay layer implemented as a `Map`. If the runtime reads a storage location and the
+> respective key doesn't exist in the overlay, then the underlying storage performs a DB access, but the value won't be
+> placed into the overlay. The overlay is only filled with writes.
+>
+> This means that the overlay can be abused in the following ways:
+>
+> - The overlay can be inflated by issuing a lot of writes to unique locations,
+> - Deliberate cache misses can be induced by reading non-modified storage locations,
+
+It also worth noting that the performance degrades with more state stored in the trie. Due to this
+there is not negligible chance that gas schedule will be updated for all operations that involve
+storage access.
 
 ## get_storage, get_code_hash, get_rent_allowance, get_balance, contract_exists
 
@@ -224,9 +241,11 @@ This function receives a `key` as an argument. It consists of the following step
 
 Key is of a constant size. Therefore, the sandbox memory load can be considered to be of constant complexity.
 
-However, a read from the contract's storage can hit the DB, and the size of this read is dynamical.
+Unless the value is cached, a DB read will be performed. The size of the value is not known until the read is
+performed. Moreover, the DB read has to be synchronous and no progress can be made before the value is known.
 
-**complexity**: The memory and computing complexity is proportional to the size of the fetched value.
+**complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
+DB read.
 
 ## ext_call
 
@@ -326,6 +345,8 @@ This function copies slice of data from the input buffer to the sandbox memory. 
 
 ## ext_scratch_size
 
+This function returns the size of the scratch buffer.
+
 **complexity**: This function is of constant complexity.
 
 ## ext_scratch_copy
@@ -356,4 +377,5 @@ It consists of the following steps:
 1. Invoking `get_rent_allowance` AccountDB function.
 2. Serializing the rent allowance of the current contract into the scratch buffer.
 
-**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity.
+**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity. This
+function performs a DB read.
