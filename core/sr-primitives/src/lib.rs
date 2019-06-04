@@ -26,6 +26,11 @@ pub use parity_codec as codec;
 #[doc(hidden)]
 pub use serde;
 
+#[cfg(not(feature = "std"))]
+pub use core::marker::PhantomData;
+#[cfg(feature = "std")]
+pub use std::marker::PhantomData;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
@@ -611,6 +616,62 @@ macro_rules! impl_outer_config {
 	}
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern_2 {
+	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::PhantomData))
+	};
+	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::PhantomData))
+	};
+	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::$name(ref $v1))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern {
+	(PreRuntime $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::PreRuntime($engine_id, $binder)
+	};
+	(Consensus $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::Consensus($engine_id, $binder)
+	};
+	($name:ident $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::$name($binder)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr {
+	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, $crate::PhantomData))
+	};
+	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::PhantomData))
+	};
+	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::$name($binder))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr_2 {
+	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::PreRuntime($v1, $v2)
+	};
+	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::Consensus($v1, $v2)
+	};
+	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::$name($v1)
+	};
+}
+
 /// Generates enum that contains all possible log entries for the runtime.
 /// Every individual module of the runtime that is mentioned, must
 /// expose a `Log` and `RawLog` enums.
@@ -631,7 +692,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:tt ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -650,7 +711,7 @@ macro_rules! impl_outer_log {
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
 			$(
-				$module($module::Log<$trait $(, $instance)? >),
+				$module($module::Log <$trait $(, $instance)?>),
 			)*
 		}
 
@@ -662,8 +723,8 @@ macro_rules! impl_outer_log {
 			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 				match self.0 {
 					$($(
-					$internal::$module($module::RawLog::$sitem(ref v)) =>
-						Some($crate::generic::DigestItemRef::$sitem(v)),
+					$crate::__parse_pattern_2!($sitem $module $internal a b) =>
+						Some($crate::__parse_expr_2!($sitem $module $internal a b)),
 					)*)*
 					_ => None,
 				}
@@ -688,22 +749,28 @@ macro_rules! impl_outer_log {
 		}
 
 		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-			/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
-			/// a system item which is supported by the runtime, it is returned.
-			/// Otherwise we expect a `Other` log item. Trying to convert from anything other
-			/// will lead to panic in runtime, since the runtime does not supports this 'system'
-			/// log item.
+			/// Converts `generic::DigestItem` into `$name`. If
+			/// `generic::DigestItem` represents a system item which is
+			/// supported by the runtime, it is returned. Otherwise we expect a
+			/// `Other`, `PreDigest`, or `Consensus` log item. Trying to convert
+			/// from anything else will lead to panic at runtime, since the
+			/// runtime does not supports this 'system' log item.
 			#[allow(unreachable_patterns)]
 			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
 				match gen {
 					$($(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name($internal::$module($module::RawLog::$sitem(value))),
+					$crate::__parse_pattern!($sitem b, a) =>
+						$name($crate::__parse_expr!($sitem b, $module $internal a)),
 					)*)*
-					_ => gen.as_other()
+					_ => {
+						if let Some(s) = gen.as_other()
 						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name)
-						.expect("not allowed to fail in runtime"),
+						.map($name) {
+							s
+						} else {
+							panic!("Unhandled digest in runtime")
+						}
+					}
 				}
 			}
 		}
@@ -732,16 +799,16 @@ macro_rules! impl_outer_log {
 		}
 
 		$(
-			impl From<$module::Log<$trait $(, $instance)? >> for $name {
+			impl From<$module::Log<$trait $(, $instance)?>> for $name {
 				/// Converts single module log item into `$name`.
 				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					$name(x.into())
 				}
 			}
 
-			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
+			impl From<$module::Log<$trait $(, $instance)?>> for InternalLog {
 				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)?>) -> Self {
 					InternalLog::$module(x)
 				}
 			}

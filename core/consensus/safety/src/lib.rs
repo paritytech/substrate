@@ -38,12 +38,12 @@ pub fn submit_report_call<A, B, C>(
 	A: txpool::ChainApi<Block=B>,
 	C: client::blockchain::HeaderBackend<B>,
 {
-	println!("Submitting report call to tx pool");
+	info!(target: "accountable-safety", "Submitting report call to tx pool");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice())
 		.expect("Encoded extrinsic is valid");
 	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
 	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
-		println!("Error importing misbehavior report: {:?}", e);
+		info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
 	}
 }

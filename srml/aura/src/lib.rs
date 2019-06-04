@@ -60,6 +60,7 @@ use primitives::traits::{
 };
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
+use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode, Codec};
@@ -74,9 +75,13 @@ use aura_primitives::{
 };
 use system::ensure_signed;
 use safety_primitives::EquivocationProof;
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 mod mock;
 mod tests;
+
+pub use aura_primitives::AURA_ENGINE_ID;
 
 /// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
@@ -101,6 +106,20 @@ impl AuraInherentData for InherentData {
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// Logs in this module.
+///
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// AuRa inherent digests
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for `Aura`.
@@ -180,14 +199,15 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Report equivocation in block production.
-		fn report_equivocation(origin, _equivocation_proof: Vec<u8>) {
-			ensure_signed(origin)?;
+		fn report_equivocation(_origin, _equivocation_proof: Vec<u8>) {
 		}
 	}
 }
 
 fn verify_header<'a, T, P>(
-	header: &<T as Trait>::Header, authorities: &'a [P]
+	header: &mut <T as Trait>::Header,
+	signature: <T as Trait>::Signature,
+	authorities: &'a [P],
 ) -> Option<&'a P>
 where 
 	T: Trait,
@@ -196,21 +216,13 @@ where
 	<<<T as Trait>::Header as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
 	P: Encode + Decode + Clone + PartialEq,
 {
-	let digest_item = match header.digest().logs().last() {
-		Some(x) => x,
-		None => return None,
-	};
-	if let (Some(sig), Ok(slot_num)) = (
-		digest_item.as_aura_seal(),
-		find_pre_digest(header),
-	) {
+	if let Ok(slot_num) = find_pre_digest(header) {
 		let author = match slot_author(slot_num, authorities) {
 			None => return None,
 			Some(author) => author,
 		};
 		let pre_hash = header.hash();
-		let to_sign = (slot_num, pre_hash).encode();
-		if sig.verify(&to_sign[..], author) {
+		if signature.verify(pre_hash.as_ref(), author) {
 			return Some(author)
 		}
 	}
@@ -224,19 +236,21 @@ where
 	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
 	let maybe_equivocation_proof: 
-		Option<AuraEquivocationProof::<<T as Trait>::Header>> =
+		Option<AuraEquivocationProof::<<T as Trait>::Header, <T as Trait>::Signature>> =
 			Decode::decode(&mut proof.as_slice());
 
 	if let Some(equivocation_proof) = maybe_equivocation_proof {
 		let authorities = <consensus::Module<T>>::authorities();
 
 		let fst_author = verify_header::<T, _>(
-			equivocation_proof.first_header(),
+			&mut equivocation_proof.first_header(),
+			equivocation_proof.first_signature().clone(),
 			&authorities
 		);
 
 		let snd_author = verify_header::<T, _>(
-			equivocation_proof.second_header(),
+			&mut equivocation_proof.second_header(),
+			equivocation_proof.second_signature().clone(),
 			&authorities
 		);
 

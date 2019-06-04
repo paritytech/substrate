@@ -52,15 +52,16 @@ pub fn check_equivocation<C, H, E, V>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
-	header: &H,
-	signer: &V::Signer,
+	header: H,
+	signature: V,
+	signer: V::Signer,
 ) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
-		V: Verify,
+		V: Verify + Encode + Decode + Clone,
 		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
-		E: EquivocationProof<H>,
+		E: EquivocationProof<H, V>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -72,7 +73,7 @@ pub fn check_equivocation<C, H, E, V>(
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, V::Signer)>>(
+	let mut headers_with_sig = load_decode::<_, Vec<(H, V, V::Signer)>>(
 		backend,
 		&curr_slot_key[..],
 	)?.unwrap_or_else(Vec::new);
@@ -82,16 +83,17 @@ pub fn check_equivocation<C, H, E, V>(
 	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
 		.unwrap_or(slot);
 
-	for (prev_header, prev_signer) in headers_with_sig.iter() {
+	for (prev_header, prev_signature, prev_signer) in headers_with_sig.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
-		if prev_signer == signer {
+		if prev_signer == &signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof::new(
-					slot, // 3) at the same slot
 					prev_header.clone(),
 					header.clone(),
+					prev_signature.clone(),
+					signature.clone(),
 				)));
 			} else {
 				//  We don't need to continue in case of duplicated header,
@@ -116,7 +118,7 @@ pub fn check_equivocation<C, H, E, V>(
 		}
 	}
 
-	headers_with_sig.push((header.clone(), signer.clone()));
+	headers_with_sig.push((header.clone(), signature.clone(), signer.clone()));
 
 	backend.insert_aux(
 		&[

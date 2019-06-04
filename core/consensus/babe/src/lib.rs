@@ -511,7 +511,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(equivocation_proof) = check_equivocation(
+			if let Some(mut equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
 				slot_num,

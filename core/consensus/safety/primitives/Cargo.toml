@@ -4,3 +4,6 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Accountable Safety"
 edition = "2018"
+
+[dependencies]
+runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }

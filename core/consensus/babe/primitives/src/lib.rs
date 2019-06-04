@@ -72,34 +72,50 @@ decl_runtime_apis! {
 	}
 }
 
-
-/// Represents a Babe equivocation proof.
-#[derive(Debug, Clone, Encode, Decode, Default)]
-pub struct BabeEquivocationProof<H> {
-	slot: u64,
+/// Represents an AuRa equivocation proof.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct BabeEquivocationProof<H, S> {
 	first_header: H,
 	second_header: H,
+	first_signature: S,
+	second_signature: S,
 }
 
-
-impl<H> EquivocationProof<H> for BabeEquivocationProof<H>
+impl<H, S> EquivocationProof<H, S> for BabeEquivocationProof<H, S>
+where
+	H: Clone,
+	S: Clone,
 {
-	/// Create a new Babe equivocation proof.
-	fn new(slot: u64, first_header: H, second_header: H) -> Self {
+	/// Create a new AuRa equivocation proof.
+	fn new(
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
 		BabeEquivocationProof {
-			slot,
 			first_header,
 			second_header,
+			first_signature,
+			second_signature,
 		}
 	}
 
 	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
+	fn first_header(&self) -> H {
+		self.first_header.clone()
 	}
 
 	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
+	fn second_header(&self) -> H {
+		self.second_header.clone()
+	}
+
+	fn first_signature(&self) -> S {
+		self.first_signature.clone()
+	}
+
+	fn second_signature(&self) -> S {
+		self.second_signature.clone()
 	}
 }

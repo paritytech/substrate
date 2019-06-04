@@ -19,14 +19,25 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Trait for equivocation proofs.
-pub trait EquivocationProof<H>
+pub trait EquivocationProof<H, S>
 {
-	/// Create an equivocation proof.
-	fn new(slot: u64, first_header: H, second_header: H) -> Self;
+	/// Create an equivocation proof for AuRa or Babe.
+	fn new(
+		first_header: H,
+		second_header: H,
+		first_signature: S, 
+		second_signature: S,
+	) -> Self;
 
 	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H;
+	fn first_header(&self) -> H;
 
 	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H;
+	fn second_header(&self) -> H;
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> S;
+
+	/// Get the signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> S;
 }

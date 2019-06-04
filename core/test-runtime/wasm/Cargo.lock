@@ -2438,6 +2438,9 @@ dependencies = [
 [[package]]
 name = "substrate-consensus-safety-primitives"
 version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+]
 
 [[package]]
 name = "substrate-consensus-slots"

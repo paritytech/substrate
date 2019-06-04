@@ -833,6 +833,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 		let import_result = if has_error {
 			Err(BlockImportError::Error)
 		} else {
+			println!("before import single block");
 			import_single_block(
 				import_handle,
 				blocks_origin.clone(),
@@ -900,7 +901,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 		}
 	};
-
+	println!("before check block");
 	match import_error(import_handle.check_block(hash, parent))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
@@ -913,6 +914,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			} else {
 				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 			}
+			println!("verification failed returning VerificationFailed");
 			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
 
@@ -920,7 +922,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	if let Some(authorities) = new_authorities {
 		cache.insert(crate::well_known_cache_keys::AUTHORITIES, authorities.encode());
 	}
-
+	println!("before import_block");
 	import_error(import_handle.import_block(import_block, cache))
 }
 

@@ -385,7 +385,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
-	P::Signature: Decode + Verify<Signer = P::Public>,
+	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<Hash=B::Hash>,
 	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
@@ -395,7 +395,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-
+		
 	let sig = seal.as_aura_seal().ok_or_else(|| {
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
@@ -403,7 +403,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	let slot_num = find_pre_digest::<B::Header, _>(&header)?;
 
 	if slot_num > slot_now {
-		header.digest_mut().push(seal);
+		header.digest_mut().push(seal.clone());
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else {
 		// check the signature is valid under the expected authority and
@@ -416,12 +416,18 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if let Some(equivocation_proof) = check_equivocation::<_, _, AuraEquivocationProof<B::Header>, P::Signature>(
+			if let Some(equivocation_proof) = check_equivocation::<
+				_,
+				_,
+				AuraEquivocationProof<B::Header, P::Signature>,
+				P::Signature,
+			>(
 				client,
 				slot_now,
 				slot_num,
-				&header,
-				expected_author,
+				header.clone(),
+				sig.clone(),
+				expected_author.clone(),
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
@@ -435,9 +441,10 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 					transaction_pool,
 					Call::Aura(AuraCall::report_equivocation(
 						AuraEquivocationProof::new(
-							slot_now,
 							header.clone(),
 							header.clone(),
+							sig.clone(),
+							sig.clone(),
 						).encode()
 					)),
 				);
@@ -534,7 +541,7 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 	C::Api: BlockBuilderApi<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
-	P::Signature: Encode + Decode + Verify<Signer = P::Public>,
+	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	<<P as Pair>::Signature as Verify>::Signer: Encode + Decode + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
@@ -738,7 +745,7 @@ pub fn import_queue<A, B, C, E, P>(
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
-	P::Signature: Encode + Decode + Verify<Signer = P::Public>,
+	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
 {
