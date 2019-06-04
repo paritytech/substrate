@@ -19,6 +19,7 @@ finality-tracker = { package = "srml-finality-tracker", path = "../finality-trac
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 
 [features]
 default = ["std"]

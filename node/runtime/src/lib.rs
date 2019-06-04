@@ -198,7 +198,8 @@ impl sudo::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type SessionKey = AuthorityId;
+	type LocalSessionKey = AuthorityId;
+	type ConvertLocalSessionKey = ();
 	type Log = Log;
 	type Event = Event;
 }

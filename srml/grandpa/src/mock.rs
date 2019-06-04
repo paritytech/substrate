@@ -39,9 +39,26 @@ impl From<RawLog<u64, u64>> for DigestItem {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
+impl timestamp::Trait for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+}
+impl consensus::Trait for Test {
+	type Log = DigestItem;
+	type SessionKey = substrate_primitives::sr25519::Public;
+	type InherentOfflineReport = ();
+}
+impl session::Trait for Test {
+	type ConvertAccountIdToSessionKey = ();
+	type OnSessionChange = ();
+	type OnDisable = ();
+	type CheckRotateSession = session::AuraCheckRotateSession<Self>;
+	type Event = TestEvent;
+}
 impl Trait for Test {
 	type Log = DigestItem;
-	type SessionKey = u64;
+	type LocalSessionKey = u64;
+	type ConvertLocalSessionKey = ();
 	type Event = TestEvent;
 }
 impl system::Trait for Test {
@@ -65,6 +82,7 @@ mod grandpa {
 impl_outer_event!{
 	pub enum TestEvent for Test {
 		grandpa<T>,
+		session<T>,
 	}
 }
 
