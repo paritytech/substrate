@@ -448,6 +448,7 @@ where
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	A: txpool::ChainApi<Block=Block>,
+	Client<B, E, Block, RA>: HeaderBackend<Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
