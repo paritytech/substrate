@@ -316,7 +316,7 @@ mod tests {
 			let pre_hash = new_header.hash();
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let to_sign = (slot_num * 10 / 2, pre_hash).encode();
+			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
 			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
 				signature,
