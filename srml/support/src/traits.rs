@@ -21,6 +21,7 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
 	MaybeSerializeDebug, SimpleArithmetic, As
 };
+use super::for_each_tuple;
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -28,19 +29,23 @@ pub trait OnFreeBalanceZero<AccountId> {
 	fn on_free_balance_zero(who: &AccountId);
 }
 
-impl<AccountId> OnFreeBalanceZero<AccountId> for () {
-	fn on_free_balance_zero(_who: &AccountId) {}
-}
-impl<
-	AccountId,
-	X: OnFreeBalanceZero<AccountId>,
-	Y: OnFreeBalanceZero<AccountId>,
-> OnFreeBalanceZero<AccountId> for (X, Y) {
-	fn on_free_balance_zero(who: &AccountId) {
-		X::on_free_balance_zero(who);
-		Y::on_free_balance_zero(who);
+macro_rules! impl_on_free_balance_zero {
+	() => (
+		impl<AccountId> OnFreeBalanceZero<AccountId> for () {
+			fn on_free_balance_zero(_: &AccountId) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<AccountId, $($t: OnFreeBalanceZero<AccountId>),*> OnFreeBalanceZero<AccountId> for ($($t,)*) {
+			fn on_free_balance_zero(who: &AccountId) {
+				$($t::on_free_balance_zero(who);)*
+			}
+		}
 	}
 }
+
+for_each_tuple!(impl_on_free_balance_zero);
 
 /// Trait for a hook to get called when some balance has been minted, causing dilution.
 pub trait OnDilution<Balance> {
