@@ -110,7 +110,7 @@ macro_rules! impl_on_new_account {
 	);
 
 	( $($t:ident)* ) => {
-		impl<AccountId: Clone, $($t: OnNewAccount<AccountId>),*> OnNewAccount<AccountId> for ($($t,)*) {
+		impl<AccountId, $($t: OnNewAccount<AccountId>),*> OnNewAccount<AccountId> for ($($t,)*) {
 			fn on_new_account(who: &AccountId) {
 				$($t::on_new_account(who);)*
 			}
