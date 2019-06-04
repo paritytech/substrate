@@ -25,6 +25,7 @@ use srml_support::{
 };
 use democracy;
 use system::{self, ensure_signed};
+use super::OnMembersChanged;
 
 // no polynomial attacks:
 //
@@ -95,6 +96,9 @@ pub trait Trait: democracy::Trait {
 
 	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
 	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// What to do when the members change.
+	type OnMembersChanged: OnMembersChanged<Self::AccountId>;
 }
 
 decl_module! {
@@ -269,15 +273,16 @@ decl_module! {
 		}
 
 		/// Set the desired member count; if lower than the current count, then seats will not be up
-		/// election when they expire. If more, then a new vote will be started if one is not already
-		/// in progress.
+		/// election when they expire. If more, then a new vote will be started if one is not
+		/// already in progress.
 		fn set_desired_seats(#[compact] count: u32) {
 			<DesiredSeats<T>>::put(count);
 		}
 
-		/// Remove a particular member. A tally will happen instantly (if not already in a presentation
+		/// Remove a particular member from the council. This is effective immediately.
+		///
+		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		/// This is effective immediately.
 		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
 			let who = T::Lookup::lookup(who)?;
 			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
@@ -285,6 +290,7 @@ decl_module! {
 				.filter(|i| i.0 != who)
 				.collect();
 			<ActiveCouncil<T>>::put(new_council);
+			T::OnMembersChanged::on_members_changed(&[], &[who]);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will

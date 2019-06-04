@@ -22,7 +22,7 @@ use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
-use super::{Trait as CouncilTrait, Module as Council};
+use super::{Trait as CouncilTrait, Module as Council, OnMembersChanged};
 use system::{self, ensure_signed};
 
 /// Simple index type for proposal counting.
@@ -64,7 +64,8 @@ decl_storage! {
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
 		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, MemberCount, Vec<T::AccountId>, Vec<T::AccountId>)>;
+		pub Voting get(voting): map T::Hash =>
+			Option<(ProposalIndex, MemberCount, Vec<T::AccountId>, Vec<T::AccountId>)>;
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
 	}
@@ -199,6 +200,12 @@ impl<T: Trait> Module<T> {
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
 			.any(|&(ref a, _)| a == who)
+	}
+}
+
+impl<T: Trait> OnMembersChanged<T::AccountId> for Module<T> {
+	fn on_members_changed(_new: &[T::AccountId], old: &[T::AccountId]) {
+		// TODO: remove accounts from all current voting in motions.
 	}
 }
 
