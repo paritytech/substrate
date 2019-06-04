@@ -44,8 +44,8 @@ variables:
     - cargo --version
     - sccache -s
 
-.test-only:
-  only:                            &test-only
+.not-prs:
+  only:                            &not-prs
     - tags
     - master
     - schedules
@@ -58,7 +58,7 @@ check-runtime:
   stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
-  only:                            *test-only
+  only:                            *not-prs
   variables:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
@@ -80,7 +80,7 @@ check-line-width:
 cargo-audit:
   stage:                           test
   <<:                              *compiler_info
-  only:                            *test-only
+  only:                            *not-prs
   script:
     - cargo audit
   allow_failure:                   true
@@ -91,7 +91,7 @@ cargo-audit:
 test-build-subkey:
   stage:                           test
   <<:                              *compiler_info
-  only:                            *test-only
+  only:                            *not-prs
   script:
     - cd ./subkey
     - time cargo build
@@ -100,7 +100,7 @@ test-build-subkey:
     - linux-docker
   
 
-test-linux-stable:                 &test
+test-linux-stable:
   stage:                           test
   <<:                              *compiler_info
   variables:
@@ -109,7 +109,11 @@ test-linux-stable:                 &test
     RUSTFLAGS: -Cdebug-assertions=y
   tags:
     - linux-docker
-  only:                            *test-only
+  only:
+    - tags
+    - master
+    - schedules
+    - web
     - /^[0-9]+$/
   except:
     variables:
