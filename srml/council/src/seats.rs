@@ -156,7 +156,7 @@ decl_module! {
 		/// `hint` argument is interpreted differently based on:
 		/// - if `origin` is setting approvals for the first time: The index will be checked
 		/// for being a valid _hole_ in the voter list.
-		///   - if the hint is correctly pointing to a hole, no fee is not deducted from `origin`.
+		///   - if the hint is correctly pointing to a hole, no fee is deducted from `origin`.
 		///   - Otherwise, the call will succeed but the index is ignored and simply a push to the last chunk
 		///   with free space happens. If the new push causes a new chunk to be created, a fee indicated by
 		///   [`VotingFee`] is deducted.
@@ -587,7 +587,7 @@ impl<T: Trait> Module<T> {
 		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
-		// NOTE: maybe this should be total - fee?
+		// TODO: this should be total - fee?
 		let locked_balance = T::Currency::total_balance(&who);
 		let mut pot_to_set = BalanceOf::<T>::zero();
 		let hint = hint as usize;
