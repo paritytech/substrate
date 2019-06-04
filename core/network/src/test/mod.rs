@@ -163,7 +163,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn info(&self) -> ClientResult<ClientInfo<Block>> {
+	pub fn info(&self) -> ClientInfo<Block> {
 		match *self {
 			PeersClient::Full(ref client) => client.info(),
 			PeersClient::Light(ref client) => client.info(),
@@ -465,7 +465,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 		let header = self
 			.client
 			.header(&BlockId::Hash(info.chain.best_hash))
@@ -538,7 +538,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block import notifications.
 	fn send_import_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut best_hash = self.best_hash.lock();
 		match *best_hash {
@@ -554,7 +554,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block finalization notifications.
 	fn send_finality_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut finalized_hash = self.finalized_hash.lock();
 		match *finalized_hash {
@@ -625,7 +625,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
 	{
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
 	}
 
@@ -674,7 +674,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 

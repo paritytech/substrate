@@ -297,15 +297,15 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info<Block>> {
+	fn info(&self) -> blockchain::Info<Block> {
 		let storage = self.storage.read();
-		Ok(blockchain::Info {
+		blockchain::Info {
 			best_hash: storage.best_hash,
 			best_number: storage.best_number,
 			genesis_hash: storage.genesis_hash,
 			finalized_hash: storage.finalized_hash,
 			finalized_number: storage.finalized_number,
-		})
+		}
 	}
 
 	fn status(&self, id: BlockId<Block>) -> error::Result<BlockStatus> {

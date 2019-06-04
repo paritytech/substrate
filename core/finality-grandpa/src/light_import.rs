@@ -63,7 +63,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
-	let info = client.info()?;
+	let info = client.info();
 	#[allow(deprecated)]
 	let import_data = load_aux_import_data(info.chain.finalized_hash, &**client.backend(), api)?;
 	Ok(GrandpaLightBlockImport {
@@ -145,10 +145,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 	type Error = ConsensusError;
 
 	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
-		let chain_info = match self.client.info() {
-			Ok(info) => info.chain,
-			_ => return,
-		};
+		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
@@ -620,7 +617,7 @@ pub mod tests {
 			origin: BlockOrigin::Own,
 			header: Header {
 				number: 1,
-				parent_hash: client.info().unwrap().chain.best_hash,
+				parent_hash: client.info().chain.best_hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),

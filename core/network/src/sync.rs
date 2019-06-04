@@ -829,18 +829,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.queue_blocks.clear();
 		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
-		match protocol.client().info() {
-			Ok(info) => {
-				self.best_queued_hash = info.best_queued_hash.unwrap_or(info.chain.best_hash);
-				self.best_queued_number = info.best_queued_number.unwrap_or(info.chain.best_number);
-				debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
-			},
-			Err(e) => {
-				debug!(target:"sync", "Error reading blockchain: {:?}", e);
-				self.best_queued_hash = self.genesis_hash;
-				self.best_queued_number = Zero::zero();
-			}
-		}
+		let info = protocol.client().info();
+		self.best_queued_hash = info.best_queued_hash.unwrap_or(info.chain.best_hash);
+		self.best_queued_number = info.best_queued_number.unwrap_or(info.chain.best_number);
+		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let ids: Vec<PeerId> = self.peers.drain().map(|(id, _)| id).collect();
 		for id in ids {
 			self.new_peer(protocol, id);
