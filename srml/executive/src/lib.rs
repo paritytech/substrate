@@ -474,14 +474,16 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
+		#[cfg(not(feature = "legacy-trie"))]
+		let state_root = hex!("ed9a2c7f4bbac160123b8bd60451392ca31eac9aa4235c4bc15ada002e118fc9").into();
+		#[cfg(feature = "legacy-trie")]
+		let state_root = hex!("5ba497e45e379d80a4524f9509d224e9c175d0fa30f3491481e7e44a6a758adf").into();
 		with_externalities(&mut new_test_ext(), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ed9a2c7f4bbac160123b8bd60451392ca31eac9aa4235c4bc15ada002e118fc9").into(),
-          // TODO EMCH compatibility with previous: that is prev root
-					//state_root: hex!("5ba497e45e379d80a4524f9509d224e9c175d0fa30f3491481e7e44a6a758adf").into(),
+					state_root,
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

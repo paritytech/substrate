@@ -20,7 +20,9 @@ srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }
 
 [features]
-default = ["std"]
+default = ["std", "legacy-trie"]
+# use legacy trie implementation (substrate 1.0)
+legacy-trie = []
 std = [
 	"rstd/std",
 	"srml-support/std",

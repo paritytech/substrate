@@ -19,3 +19,8 @@ num-traits = "0.2"
 
 [dev-dependencies]
 hex-literal = "0.2.0"
+
+[features]
+default = ["legacy-trie"]
+# use legacy trie implementation (substrate 1.0)
+legacy-trie = []

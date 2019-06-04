@@ -41,8 +41,11 @@ pub use legacy::node_codec::NodeCodec as LegacyNodeCodec;
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, CError,
 	Query, TrieLayOut, TrieOps, NibbleHalf, Cache16, NibbleOps};
 /// Various re-exports from the `memory-db` crate.
-pub use memory_db::{KeyFunction, prefixed_key};
-
+pub use memory_db::KeyFunction;
+#[cfg(not(feature = "legacy-trie"))]
+pub use memory_db::prefixed_key;
+#[cfg(feature = "legacy-trie")]
+pub use memory_db::legacy_prefixed_key as prefixed_key;
 
 #[derive(Default)]
 /// substrate trie layout
@@ -123,7 +126,10 @@ pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+#[cfg(not(feature = "legacy-trie"))]
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
+#[cfg(feature = "legacy-trie")]
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::LegacyPrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
@@ -141,7 +147,10 @@ pub type TrieHash<L> = <<L as TrieLayOut>::H as Hasher>::Out;
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` is generic in this case.
 pub mod trie_types {
+	#[cfg(not(feature = "legacy-trie"))]
 	pub type LayOut<H> = super::Layout<H>;
+	#[cfg(feature = "legacy-trie")]
+	pub type LayOut<H> = super::LegacyLayout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, LayOut<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
