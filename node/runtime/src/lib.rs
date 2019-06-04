@@ -168,8 +168,8 @@ impl democracy::Trait for Runtime {
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
-	type TableOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
-	type TableMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
+	type ExternalOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
+	type ExternalMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
 	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId>;
 	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
 	type VetoOrigin = council_motions::EnsureMember<AccountId>;

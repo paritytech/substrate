@@ -94,8 +94,8 @@ mod tests {
 		type LaunchPeriod = LaunchPeriod;
 		type VotingPeriod = VotingPeriod;
 		type MinimumDeposit = MinimumDeposit;
-		type TableOrigin = motions::EnsureProportionAtLeast<_1, _2, u64>;
-		type TableMajorityOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
+		type ExternalOrigin = motions::EnsureProportionAtLeast<_1, _2, u64>;
+		type ExternalMajorityOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
 		type EmergencyOrigin = motions::EnsureProportionAtLeast<_1, _1, u64>;
 		type CancellationOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
 		type VetoOrigin = motions::EnsureMember<u64>;

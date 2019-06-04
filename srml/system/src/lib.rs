@@ -78,14 +78,14 @@ use rstd::prelude::*;
 use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
 };
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter,
+	StorageMap, Parameter, traits::Contains
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
@@ -384,6 +384,21 @@ impl<
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(who) => Ok(who),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureSignedBy<Who, AccountId>(::rstd::marker::PhantomData<(Who, AccountId)>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	Who: Contains<AccountId>,
+	AccountId: PartialEq + Clone,
+> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
+	type Success = AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
 			r => Err(O::from(r)),
 		})
 	}

@@ -30,6 +30,20 @@ pub trait Get<T> {
 	fn get() -> T;
 }
 
+/// New trait for querying whether a type can be said to statically "contain" a value. Similar
+/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
+/// enumerate all values that it contains) and work for multiple values rather than just one.
+pub trait Contains<T> {
+	/// Return `true` is this "contains" the given value `t`.
+	fn contains(t: &T) -> bool;
+}
+
+impl<V: PartialEq, T: Get<V>> Contains<V> for T {
+	fn contains(t: &V) -> bool {
+		&Self::get() == t
+	}
+}
+
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
