@@ -718,15 +718,7 @@ where
 		submit_report_call(
 			&self.inner,
 			&self.transaction_pool,
-			Call::Grandpa(GrandpaCall::report_equivocation()
-			// Call::Aura(AuraCall::report_equivocation(
-			// 	AuraEquivocationProof::new(
-			// 		header.clone(),
-			// 		header.clone(),
-			// 		sig.clone(),
-			// 		sig.clone(),
-			// 	).encode()
-			),
+			Call::Grandpa(GrandpaCall::report_equivocation(equivocation.encode())),
 		);
 	}
 
