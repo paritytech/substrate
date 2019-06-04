@@ -628,6 +628,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
 		let client = client.clone();
 		let config = config.clone();
 		let network = network.clone();
+		let transaction_pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
