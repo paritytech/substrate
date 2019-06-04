@@ -15,47 +15,55 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Treasury Module
-//! 
-//! The `treasury` module keeps account of currency in a `pot` and manages the subsequent
-//! deployment of these funds.
-//! 
+//!
+//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
+//! system and a structure for making spending proposals from this pot.
+//!
+//! - [`treasury::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
 //! ## Overview
-//! 
-//! Funds for treasury are raised in two ways:
-//! 1. By minting new tokens, leading to inflation, and
-//! 2. By channeling tokens from transaction fees and slashing.
-//! 
-//! Treasury funds can be used to pay for developers who provide software updates,
-//! any changes decided by referenda, and to generally keep the system running smoothly. 
-//! 
-//! Treasury can be used with other modules, such as to tax validator rewards in the `staking` module.
-//! 
-//! ### Implementations 
-//! 
+//!
+//! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
+//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! inflation, fees) for collecting funds.
+//!
+//! By way of example, the Council could vote to fund the Treasury with a portion of the block
+//! reward and use the funds to pay developers.
+//!
+//! ### Terminology
+//!
+//! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
+//! - **Beneficiary:** An account who will receive the funds from a proposal iff
+//! the proposal is approved.
+//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
+//! deposit will be returned or slashed if the proposal is approved or rejected
+//! respectively.
+//! - **Pot:** Unspent funds accumulated by the treasury module.
+//!
+//! ### Implementations
+//!
 //! The treasury module provides an implementation for the following trait:
-//! - `OnDilution` - Mint extra funds upon dilution; maintain the ratio of `portion` diluted to `total_issuance`.
-//! 
+//!
+//! - `OnDilution` - When new funds are minted to reward the deployment of other existing funds,
+//! a corresponding amount of tokens are minted into the treasury so that the tokens being rewarded
+//! do not represent a higher portion of total supply. For example, in the default substrate node,
+//! when validators are rewarded new tokens for staking, they do not hold a higher portion of total
+//! tokens. Rather, tokens are added to the treasury to keep the portion of tokens staked constant.
+//!
 //! ## Interface
-//! 
+//!
 //! ### Dispatchable Functions
-//! 
-//! - `propose_spend` - Propose a spending proposal and stake a proposal deposit.
+//!
+//! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `set_pot` - Set the spendable balance of funds.
 //! - `configure` - Configure the module's proposal requirements.
-//! - `reject_proposal` - Reject a proposal and slash the deposit.
-//! - `approve_proposal` - Accept the proposal and return the deposit.
-//! 
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
-//! 
-//! ### Public Functions
-//! 
-//! See the [module](./struct.Module.html) for details on publicly available functions.
-//! 
-//! ## Related Modules
-//! 
-//! The treasury module depends on the `system` and `srml_support` modules as well as
-//! Substrate Core libraries and the Rust standard library.
-//! 
+//! - `reject_proposal` - Reject a proposal, slashing the deposit.
+//! - `approve_proposal` - Accept the proposal, returning the deposit.
+//!
+//! ## GenesisConfig
+//!
+//! The Treasury module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -183,8 +191,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		// Config...
 
-		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
-		/// proposal gets these back. A rejected proposal doesn't.
+		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+		/// An accepted proposal gets these back. A rejected proposal does not.
 		ProposalBond get(proposal_bond) config(): Permill;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
