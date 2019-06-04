@@ -98,12 +98,11 @@ where
 			}
 		};
 
-		let slot_worker_future = start_slot_worker::<_, _, _, T, _, SC, _>(
+		let slot_worker_future = start_slot_worker::<_, _, _, T, _, SC>(
 			slot_duration.clone(),
 			select_chain,
 			worker,
 			sync_oracle,
-			on_exit,
 			inherent_data_providers,
 		);
 
@@ -111,7 +110,7 @@ where
 			.send(Ok(()))
 			.expect("Receive is not dropped before receiving a result; qed");
 
-		let _ = runtime.block_on(slot_worker_future);
+		let _ = runtime.block_on(slot_worker_future.select(on_exit).map(|_| ()));
 	});
 
 	result_recv
@@ -120,12 +119,11 @@ where
 }
 
 /// Start a new slot worker.
-pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
+pub fn start_slot_worker<B, C, W, T, SO, SC>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	worker: W,
 	sync_oracle: SO,
-	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 ) -> impl Future<Item = (), Error = ()>
 where
@@ -134,7 +132,6 @@ where
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
 	SC: SlotCompatible,
-	OnExit: Future<Item = (), Error = ()>,
 	T: SlotData + Clone,
 {
 	let SlotDuration(slot_duration) = slot_duration;
@@ -164,7 +161,7 @@ where
 			))
 		});
 
-	let work = future::poll_fn(move ||
+	future::poll_fn(move ||
 		loop {
 			let mut authorship = std::panic::AssertUnwindSafe(&mut authorship);
 			match std::panic::catch_unwind(move || authorship.poll()) {
@@ -181,9 +178,7 @@ where
 				}
 			}
 		}
-	);
-
-	work.select(on_exit).then(|_| Ok(()))
+	)
 }
 
 /// A header which has been checked
