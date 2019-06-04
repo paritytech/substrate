@@ -655,7 +655,7 @@ macro_rules! __parse_expr {
 		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, Default::default()))
 	};
 	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::rstd::marker::PhantomData))
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, Default::default()))
 	};
 	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
 		$internal::$module($module::RawLog::$name($binder))
