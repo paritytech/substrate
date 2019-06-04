@@ -16,36 +16,37 @@
 
 //! Substrate state API.
 
+pub mod error;
+
+#[cfg(test)]
+mod tests;
+
 use std::{
 	collections::{BTreeMap, HashMap},
 	ops::Range,
 	sync::Arc,
 };
 
-use log::{warn, trace};
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{H256, Blake2Hasher, Bytes};
-use primitives::hexdisplay::HexDisplay;
-use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use crate::rpc::Result as RpcResult;
 use crate::rpc::futures::{stream, Future, Sink, Stream};
+use crate::subscriptions::Subscriptions;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use log::{warn, trace};
+use primitives::hexdisplay::HexDisplay;
+use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
+use primitives::{H256, Blake2Hasher, Bytes};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
 	SaturatedConversion
 };
 use runtime_version::RuntimeVersion;
+use self::error::Result;
 use state_machine::{self, ExecutionStrategy};
 
-use crate::subscriptions::Subscriptions;
-
-mod error;
-#[cfg(test)]
-mod tests;
-
-use self::error::Result;
+pub use self::gen_client::Client as StateClient;
 
 /// Substrate state API
 #[rpc]
