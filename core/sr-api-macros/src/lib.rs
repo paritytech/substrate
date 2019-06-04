@@ -84,7 +84,6 @@ mod utils;
 /// #       }
 /// #       fn execute_block(_block: Block) {}
 /// #       fn initialize_block(_header: &Header) {}
-/// #       fn authorities() -> Vec<runtime_primitives::traits::AuthorityIdFor<Block>> { unimplemented!() }
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
