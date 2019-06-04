@@ -23,26 +23,36 @@ use transaction_pool::txpool::{self, Pool as TransactionPool};
 use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
 use std::sync::Arc;
-use runtime_primitives::traits::Block;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use log::{error, warn, debug, info, trace};
+use substrate_primitives::{H256, Blake2Hasher};
+use grandpa::BlockNumberOps;
+use client::{
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	blockchain::HeaderBackend,
+};
+
 
 /// Submit report call to the transaction pool.
 /// TODO: Ask how to do submit an unsigned in the proper way.
-pub fn submit_report_call<A, B, C>(
-	client: &C,
-	transaction_pool: &Arc<TransactionPool<A>>,
+pub fn submit_report_call<A, B, E, Block, RA>(
+	client: &Client<B, E, Block, RA>,
+	transaction_pool: &TransactionPool<A>,
 	report_call: Call,
 ) where
-	B: Block,
-	A: txpool::ChainApi<Block=B>,
-	C: client::blockchain::HeaderBackend<B>,
+	Block: BlockT<Hash=H256> + 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	RA: 'static + Send + Sync,
+	A: txpool::ChainApi<Block=Block>,
+	NumberFor<Block>: BlockNumberOps,
 {
 	info!(target: "accountable-safety", "Submitting report call to tx pool");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice())
 		.expect("Encoded extrinsic is valid");
-	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
+	let block_id = BlockId::<Block>::number(client.info().unwrap().best_queued_number.unwrap());
 	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
 		info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
 	}
