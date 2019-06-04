@@ -343,8 +343,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {
@@ -774,7 +774,8 @@ macro_rules! impl_outer_log {
 							s
 						} else {
 							panic!("we only reach here if the runtime did not handle a digest; \
-								   runtimes are required to handle all digests they receive; qed")
+									runtimes are required to handle all digests they receive; qed"
+									)
 						}
 					}
 				}
