@@ -342,15 +342,6 @@ impl Core<Block> for RuntimeApi {
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
-	fn Core_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<substrate_primitives::sr25519::Public>>> {
-		unimplemented!("Not required for testing!")
-	}
 }
 
 impl ApiExt<Block> for RuntimeApi {
