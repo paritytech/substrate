@@ -192,17 +192,18 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 	}
 
-	fn is_recent(&self, round: &Round) -> bool {
-		self.rounds.contains(&(round.clone(), self.current_set))
-	}
-
-	fn push(&mut self, round: Round, set_id: SetId) {
+    // Adds a round of topic, returns a list of pruned rounds
+	fn push(&mut self, round: Round, set_id: SetId) -> Vec<Round> {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 		self.rounds.push_back((round, set_id));
 
+        let mut pruned_rounds = vec![];
+
 		// the 1 is for the current round.
 		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
-			let _ = self.rounds.pop_front();
+			if let Some((pruned, _)) = self.rounds.pop_front() {
+				pruned_rounds.push(pruned);
+			}
 		}
 
 		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 2);
@@ -216,6 +217,7 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 
 		self.reverse_map = map;
+		pruned_rounds
 	}
 
 	fn topic_info(&self, topic: &B::Hash) -> Option<(Option<Round>, SetId)> {
@@ -452,6 +454,7 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	incoming_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
+    incoming_msg_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
 	outgoing_votes_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
 }
 
@@ -466,6 +469,7 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
 			incoming_votes_tally: Default::default(),
+            incoming_msg_tally: Default::default(),
 			outgoing_votes_tally: Default::default(),
 		}
 	}
@@ -482,23 +486,18 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
 
-		self.live_topics.push(round, set_id);
+		let pruned = self.live_topics.push(round, set_id);
 
-		// Prune the vote tallies
-		let rounds_kept_incoming: Vec<Round> = self.incoming_votes_tally.keys().map(|round| round.clone()).collect();
-		for round in rounds_kept_incoming {
-			if !self.live_topics.is_recent(&round) {
-				self.incoming_votes_tally.remove(&round);
-			}
+		for round in pruned {
+			// Prune the tallies
+			self.incoming_votes_tally.remove(&round);
+			self.incoming_msg_tally.remove(&round);
+			self.outgoing_votes_tally.remove(&round);
 		}
-		let rounds_kept_outgoing: Vec<Round> = self.outgoing_votes_tally.keys().map(|round| round.clone()).collect();
-		for round in rounds_kept_outgoing {
-			if !self.live_topics.is_recent(&round) {
-				self.outgoing_votes_tally.remove(&round);
-			}
-		}
+
 		// Reset the votes-tally for a new round.
 		self.incoming_votes_tally.insert(round, Default::default());
+		self.incoming_msg_tally.insert(round, Default::default());
 		self.outgoing_votes_tally.insert(round, Default::default());
 
 		self.multicast_neighbor_packet()
@@ -527,16 +526,29 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&mut self, who: &PeerId, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
+		// A tally of votes per voter, per round
 		let tally_for_round = match self.incoming_votes_tally.get_mut(&round) {
-			  Some(tally_for_round) =>  tally_for_round,
-			  None => {
-				  // We don't know about this round,
-				  // let the local-view handle it and likely treat it as past or future.
-				  return self.local_view.consider_vote(round, set_id)
-			  }
+			Some(tally_for_round) =>  tally_for_round,
+			None => {
+				// We don't know about this round,
+				// let the local-view handle it and likely treat it as past or future.
+				return self.local_view.consider_vote(round, set_id)
+			}
 		};
-
 		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
+
+		// A tally of messages received per peer, per voter, per round.
+		let peer_tally_for_round = match self.incoming_msg_tally.get_mut(&round) {
+			Some(tally_for_round) =>  tally_for_round,
+			None => {
+				// We don't know about this round,
+				// let the local-view handle it and likely treat it as past or future.
+				return self.local_view.consider_vote(round, set_id)
+			}
+		};
+		let mut per_peer_tally = peer_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
+
+		// A tally of messages we sent out, per peer, per voter, per round
 		let outgoing_tally_for_round = self.outgoing_votes_tally
 			.get_mut(&round)
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
@@ -546,26 +558,37 @@ impl<Block: BlockT> Inner<Block> {
 		// once we're received more than two messages of that kind.
 		// We report peers who send us a third or more of message of a given kind,
 		// when we've already sent out two messages of that kind for that voter to that peer.
+        // We also report peers who send us in excess of two messages of a kind,
+        // regardless of what we've sent them.
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
+				if per_peer_tally.primary_proposals < 3 {
+					per_peer_tally.primary_proposals += 1;
+				}
 				if tally.primary_proposals > 1 {
-					(true, outgoing_tally.primary_proposals > 1)
+					(true, outgoing_tally.primary_proposals > 1 || per_peer_tally.primary_proposals > 2)
 				} else {
 					tally.primary_proposals += 1;
 					(false, false)
 				}
 			},
 			Prevote(_prevote) => {
+				if per_peer_tally.pre_votes < 3 {
+					per_peer_tally.pre_votes += 1;
+				}
 				if tally.pre_votes > 1 {
-					(true, outgoing_tally.pre_votes > 1)
+					(true, outgoing_tally.pre_votes > 1 || per_peer_tally.pre_votes > 2)
 				} else {
 					tally.pre_votes += 1;
 					(false, false)
 				}
 			},
 			Precommit(_precommit) => {
+				if per_peer_tally.pre_commits < 3 {
+					per_peer_tally.pre_commits += 1;
+				}
 				if tally.pre_commits > 1 {
-					(true, outgoing_tally.pre_commits > 1)
+					(true, outgoing_tally.pre_commits > 1 || per_peer_tally.pre_commits > 2)
 				} else {
 					tally.pre_commits += 1;
 					(false, false)
