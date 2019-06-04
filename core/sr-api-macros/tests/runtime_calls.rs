@@ -159,7 +159,7 @@ fn record_proof_works() {
 
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
 	#[allow(deprecated)]
-	let storage_root = LongestChain::new(client.backend().clone(), client.import_lock())
+	let storage_root = LongestChain::new(client.backend().clone())
 		.best_chain().unwrap().state_root().clone();
 
 	let transaction = Transfer {

@@ -121,8 +121,7 @@ impl TestNetFactory for GrandpaTestNet {
 			PeersClient::Full(ref client) => {
 				#[allow(deprecated)]
 				let select_chain = LongestChain::new(
-					client.backend().clone(),
-					client.import_lock().clone()
+					client.backend().clone()
 				);
 				let (import, link) = block_import(
 					client.clone(),

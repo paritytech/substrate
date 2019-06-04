@@ -648,7 +648,7 @@ mod tests {
 			to: Default::default(),
 		}.into_signed_tx();
 		#[allow(deprecated)]
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
+		let best = LongestChain::new(client.backend().clone())
 			.best_chain().unwrap();
 
 		// store the transaction in the pool

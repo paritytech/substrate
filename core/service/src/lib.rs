@@ -627,7 +627,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 				Ok(LongestChain::new(client.backend().clone())
 /// 			}},
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
@@ -767,7 +767,7 @@ mod tests {
 			Default::default(),
 			transaction_pool::ChainApi::new(client.clone())
 		));
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
+		let best = LongestChain::new(client.backend().clone())
 			.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,

@@ -26,6 +26,11 @@ use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
+use parking_lot::Mutex;
+
+lazy_static! {
+    static ref IMPORT_LOCK: Mutex<()> = Mutex::new(());
+}
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,6 +178,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
+	}
+
+	/// Gain access to the import lock around this backend.
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&IMPORT_LOCK
 	}
 }
 
