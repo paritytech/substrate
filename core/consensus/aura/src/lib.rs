@@ -206,7 +206,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
+	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
 
 	fn on_start(
 		&self,
@@ -578,7 +578,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
 						.map_err(|e| format!("{:?}", e))?
 					{
 						self.check_inherents(
@@ -678,8 +678,10 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
 		.or_else(|| AuthoritiesApi::authorities(&*client.runtime_api(), at).ok())
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }

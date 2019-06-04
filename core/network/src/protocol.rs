@@ -346,7 +346,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 		self.context_data.peers.get(who).map(|p| p.info.clone())
 	}
 
-	fn client(&self) -> &Client<B> {
+	fn client(&self) -> &dyn Client<B> {
 		&*self.context_data.chain
 	}
 
@@ -373,7 +373,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
-	pub chain: Arc<Client<B>>,
+	pub chain: Arc<dyn Client<B>>,
 }
 
 /// Configuration for the Substrate-specific part of the networking layer.
@@ -395,7 +395,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<Client<B>>,
+		chain: Arc<dyn Client<B>>,
 		checker: Arc<dyn FetchChecker<B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
@@ -510,7 +510,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
 		message: Message<B>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
@@ -1399,7 +1399,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = finality_proof_provider.as_ref()

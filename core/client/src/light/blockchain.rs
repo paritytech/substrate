@@ -70,7 +70,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
-	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
 }
 
 /// Light client blockchain.
@@ -175,7 +175,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		self.storage.last_finalized()
 	}
 
-	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		self.storage.cache()
 	}
 
@@ -189,7 +189,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 }
 
 impl<S: Storage<Block>, F, Block: BlockT> ProvideCache<Block> for Blockchain<S, F> {
-	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		self.storage.cache()
 	}
 }
@@ -303,7 +303,7 @@ pub mod tests {
 				).into())
 		}
 
-		fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+		fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 			None
 		}
 	}

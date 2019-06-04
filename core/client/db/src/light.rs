@@ -59,7 +59,7 @@ const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 /// Locks order: meta, leaves, cache.
 pub struct LightStorage<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: Arc<DbCacheSync<Block>>,
@@ -96,7 +96,7 @@ impl<Block> LightStorage<Block>
 		Self::from_kvdb(db as Arc<_>).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
+	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		let cache = DbCache::new(
@@ -557,7 +557,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		Some(self.cache.clone())
 	}
 }
@@ -888,7 +888,7 @@ pub(crate) mod tests {
 			map
 		}
 
-		fn get_authorities(cache: &BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
+		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
 			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
 		}
 

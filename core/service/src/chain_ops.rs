@@ -151,7 +151,7 @@ pub fn import_blocks<F, E, R>(
 			let (header, extrinsics) = signed.block.deconstruct();
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
-				hash: hash,
+				hash,
 				justification: signed.justification,
 				header: Some(header),
 				body: Some(extrinsics),
