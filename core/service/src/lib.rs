@@ -156,7 +156,7 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let chain_info = client.info()?.chain;
+		let chain_info = client.info().chain;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -479,12 +479,7 @@ pub struct TransactionPoolAdapter<C: Components> {
 
 impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
+		Some(BlockId::hash(self.client.info().chain.best_hash))
 	}
 }
 

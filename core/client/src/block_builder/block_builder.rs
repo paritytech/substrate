@@ -44,9 +44,7 @@ where
 	/// Create a new instance of builder from the given client, building on the
 	/// latest block.
 	pub fn new(api: &'a A, inherent_digests: DigestFor<Block>) -> error::Result<Self> {
-		api.info().and_then(|i|
-			Self::at_block(&BlockId::Hash(i.best_hash), api, false, inherent_digests)
-		)
+		Self::at_block(&BlockId::Hash(api.info().best_hash), api, false, inherent_digests)
 	}
 
 	/// Create a new instance of builder from the given client using a

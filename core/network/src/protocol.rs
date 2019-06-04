@@ -399,7 +399,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		checker: Arc<dyn FetchChecker<B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
-		let info = chain.info()?;
+		let info = chain.info();
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
 			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
@@ -861,8 +861,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.context_data
 					.chain
 					.info()
-					.ok()
-					.and_then(|info| info.best_queued_number)
+					.best_queued_number
 					.unwrap_or_else(|| Zero::zero());
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
@@ -1008,18 +1007,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Send Status message
 	fn send_status(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId) {
-		if let Ok(info) = self.context_data.chain.info() {
-			let status = message::generic::Status {
-				version: CURRENT_VERSION,
-				min_supported_version: MIN_VERSION,
-				genesis_hash: info.chain.genesis_hash,
-				roles: self.config.roles.into(),
-				best_number: info.chain.best_number,
-				best_hash: info.chain.best_hash,
-				chain_status: self.specialization.status(),
-			};
-			self.send_message(network_out, who, GenericMessage::Status(status))
-		}
+		let info = self.context_data.chain.info();
+		let status = message::generic::Status {
+			version: CURRENT_VERSION,
+			min_supported_version: MIN_VERSION,
+			genesis_hash: info.chain.genesis_hash,
+			roles: self.config.roles.into(),
+			best_number: info.chain.best_number,
+			best_hash: info.chain.best_hash,
+			chain_status: self.specialization.status(),
+		};
+
+		self.send_message(network_out, who, GenericMessage::Status(status))
 	}
 
 	fn on_block_announce(

@@ -110,7 +110,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
-		let best_block_hash = self.client.info()?.chain.best_hash;
+		let best_block_hash = self.client.info().chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.map_err(|e| e.into_pool_error()
@@ -144,7 +144,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info()?.chain.best_hash;
+			let best_block_hash = self.client.info().chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
 				.ok_or(error::Error::BadFormat)?;
 			self.pool

@@ -134,7 +134,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 		}
 	}
 
-	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
+	fn info(&self) -> BlockchainInfo<Block> {
 		self.storage.info()
 	}
 
@@ -223,8 +223,8 @@ pub mod tests {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn info(&self) -> ClientResult<Info<Block>> {
-			Err(ClientError::Backend("Test error".into()))
+		fn info(&self) -> Info<Block> {
+			panic!("Test error")
 		}
 
 		fn status(&self, _id: BlockId<Block>) -> ClientResult<BlockStatus> {
