@@ -398,6 +398,14 @@ impl<T: Trait> Module<T> {
 		<RegisterInfoOf<T>>::exists(who)
 	}
 
+	/// Iff the councillor `who` still have a seat at blocknumber `n` returns `true`.
+	pub fn will_still_be_councillor_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
+		Self::active_council().iter()
+			.find(|&&(ref a, _)| a == who)
+			.map(|&(_, expires)| expires > n)
+			.unwrap_or(false)
+	}
+
 	/// Determine the block that a vote can happen on which is no less than `n`.
 	pub fn next_vote_from(n: T::BlockNumber) -> T::BlockNumber {
 		let voting_period = Self::voting_period();

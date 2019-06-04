@@ -21,7 +21,9 @@ use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
-use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{
+	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure, traits::Get
+};
 use super::{Trait as CouncilTrait, Module as Council, OnMembersChanged};
 use system::{self, ensure_signed};
 
@@ -205,7 +207,18 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnMembersChanged<T::AccountId> for Module<T> {
 	fn on_members_changed(_new: &[T::AccountId], old: &[T::AccountId]) {
-		// TODO: remove accounts from all current voting in motions.
+		// remove accounts from all current voting in motions.
+		for h in Self::proposals().into_iter() {
+			let mut old = old.to_vec();
+			old.sort_unstable();
+			<Voting<T>>::mutate(h, |v|
+				if let Some((index, count, ayes, nays)) = v.take() {
+					let ayes = ayes.into_iter().filter(|i| old.binary_search(i).is_err()).collect();
+					let nays = nays.into_iter().filter(|i| old.binary_search(i).is_err()).collect();
+					*v = Some((index, count, ayes, nays));
+				}
+			);
+		}
 	}
 }
 
@@ -292,12 +305,13 @@ mod tests {
 	use super::RawEvent;
 	use crate::tests::*;
 	use crate::tests::{Call, Origin, Event as OuterEvent};
+	use primitives::traits::BlakeTwo256;
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 
 	#[test]
-	fn motions_basic_environment_works() {
+	fn basic_environment_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			assert_eq!(Balances::free_balance(&42), 0);
@@ -310,7 +324,29 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_propose_works() {
+	fn removal_of_old_voters_votes_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1, 2], vec![])));
+			CouncilMotions::on_members_changed(&[], &[1]);
+			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![2], vec![])));
+
+			let proposal = set_balance_proposal(69);
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(CouncilMotions::propose(Origin::signed(2), 2, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(3), hash.clone(), 1, false));
+			assert_eq!(CouncilMotions::voting(&hash), Some((1, 2, vec![2], vec![3])));
+			CouncilMotions::on_members_changed(&[], &[3]);
+			assert_eq!(CouncilMotions::voting(&hash), Some((1, 2, vec![2], vec![])));
+		});
+	}
+
+	#[test]
+	fn propose_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
@@ -331,7 +367,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_ignoring_non_council_proposals_works() {
+	fn ignoring_non_council_proposals_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
@@ -340,7 +376,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_ignoring_non_council_votes_works() {
+	fn ignoring_non_council_votes_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
@@ -351,7 +387,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_ignoring_bad_index_council_vote_works() {
+	fn ignoring_bad_index_council_vote_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(3);
 			let proposal = set_balance_proposal(42);
@@ -362,7 +398,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_revoting_works() {
+	fn revoting_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
@@ -390,7 +426,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_disapproval_works() {
+	fn disapproval_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
@@ -419,7 +455,7 @@ mod tests {
 	}
 
 	#[test]
-	fn motions_approval_works() {
+	fn approval_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
