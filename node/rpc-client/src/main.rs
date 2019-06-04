@@ -39,7 +39,7 @@ fn main() {
 	rt::run(rt::lazy(|| {
 		let uri = "http://localhost:9933";
 
-		http::http(uri)
+		http::connect(uri)
 			.and_then(|client: AuthorClient<Hash, Hash>| {
 				remove_all_extrinsics(client)
 			})
@@ -49,6 +49,14 @@ fn main() {
 	}))
 }
 
+/// Remove all pending extrinsics from the node.
+///
+/// The example code takes `AuthorClient` and first:
+/// 1. Calls the `pending_extrinsics` method to get all extrinsics in the pool.
+/// 2. Then calls `remove_extrinsic` passing the obtained raw extrinsics.
+///
+/// As the resul of running the code the entire content of the transaction pool is going
+/// to be removed and the extrinsics are going to be temporarily banned.
 fn remove_all_extrinsics(client: AuthorClient<Hash, Hash>) -> impl Future<Item=(), Error=RpcError> {
 	client.pending_extrinsics()
 		.and_then(move |pending| {
