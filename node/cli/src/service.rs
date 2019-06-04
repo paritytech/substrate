@@ -230,7 +230,7 @@ mod tests {
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic,
 	};
-	use sr_primitives::{generic::{BlockId, Era}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::{Block, Digest as DigestT}, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
@@ -303,9 +303,14 @@ mod tests {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			});
+			let mut digest = Digest::<DigestItem>::default();
+			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
 			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
-			let new_block = proposer.propose(inherent_data, Default::default(), ::std::time::Duration::from_secs(1))
-				.expect("Error making test block");
+			let new_block = proposer.propose(
+				inherent_data,
+				digest,
+				::std::time::Duration::from_secs(1),
+			).expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
 			let pre_hash = new_header.hash();
@@ -314,7 +319,6 @@ mod tests {
 			let to_sign = (slot_num * 10 / 2, pre_hash).encode();
 			let signature = alice.sign(&to_sign[..]);
 			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
-				//slot_num * 10 / 2,
 				signature,
 			);
 			slot_num += 1;
