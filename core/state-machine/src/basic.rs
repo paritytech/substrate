@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
 use trie::trie_root;
+use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -155,9 +156,9 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		Ok(None)
 	}
 
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
-		warn!("Call to submit_extrinsic without offchain externalities set.");
-		Err(())
+	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
+		warn!("Call to non-existent out offchain externalities set.");
+		None
 	}
 }
 
