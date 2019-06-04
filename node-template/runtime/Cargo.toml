@@ -21,6 +21,7 @@ indices = { package = "srml-indices", path = "../../srml/indices", default_featu
 system = { package = "srml-system", path = "../../srml/system", default_features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default_features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
+grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
 runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
