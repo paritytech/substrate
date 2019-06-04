@@ -668,8 +668,8 @@ pub mod tests {
 			test_client::LocalExecutor::new(None)
 		);
 		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -764,8 +764,8 @@ pub mod tests {
 			test_client::LocalExecutor::new(None)
 		);
 		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();

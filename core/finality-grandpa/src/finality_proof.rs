@@ -268,7 +268,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	let begin_number = blockchain.expect_block_number_from_id(&begin_id)?;
 
 	// early-return if we sure that there are no blocks finalized AFTER begin block
-	let info = blockchain.info()?;
+	let info = blockchain.info();
 	if info.finalized_number <= begin_number {
 		trace!(
 			target: "finality",

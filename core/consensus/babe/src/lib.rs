@@ -1058,7 +1058,7 @@ mod tests {
 		drop(env_logger::try_init());
 		let client = test_client::new();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),

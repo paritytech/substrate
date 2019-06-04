@@ -271,15 +271,15 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
-	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
+	fn info(&self) -> client::blockchain::Info<Block> {
 		let meta = self.meta.read();
-		Ok(client::blockchain::Info {
+		client::blockchain::Info {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
-		})
+		}
 	}
 
 	fn status(&self, id: BlockId<Block>) -> Result<client::blockchain::BlockStatus, client::error::Error> {
@@ -742,7 +742,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		}
 
 		// insert all other headers + bodies + justifications
-		let info = self.blockchain.info().unwrap();
+		let info = self.blockchain.info();
 		for (number, hash, header) in headers {
 			let id = BlockId::Hash(hash);
 			let justification = self.blockchain.justification(id).unwrap();
@@ -1258,8 +1258,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
-		let mut best = self.blockchain.info()?.best_number;
-		let finalized = self.blockchain.info()?.finalized_number;
+		let mut best = self.blockchain.info().best_number;
+		let finalized = self.blockchain.info().finalized_number;
 		let revertible = best - finalized;
 		let n = if revertible < n { revertible } else { n };
 
@@ -1463,7 +1463,7 @@ mod tests {
 		};
 
 		let backend = Backend::<Block>::from_kvdb(backing, PruningMode::keep_blocks(1), 0, 16777216).unwrap();
-		assert_eq!(backend.blockchain().info().unwrap().best_number, 9);
+		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
 		}
