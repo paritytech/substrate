@@ -81,7 +81,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -104,7 +104,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 5 * MINUTES,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), (x.1.clone(), x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -270,7 +270,7 @@ pub fn testnet_genesis(
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect(),
 		}),
 		system: None,
 		indices: Some(IndicesConfig {
@@ -288,7 +288,7 @@ pub fn testnet_genesis(
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 10,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), (x.1.clone(), x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,

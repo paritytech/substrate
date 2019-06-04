@@ -86,6 +86,8 @@ impl Convert<u128, u128> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u128 { x * Self::factor() }
 }
 
+pub type SessionKey = (AccountId, AuthorityId);
+
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = Index;
@@ -123,11 +125,18 @@ impl balances::Trait for Runtime {
 
 impl consensus::Trait for Runtime {
 	type Log = Log;
-	type SessionKey = AuthorityId;
+	type SessionKey = SessionKey;
 
 	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
+}
+
+pub struct ConvertSessionKeyToAuthorityId;
+impl Convert<SessionKey, AuthorityId> for ConvertSessionKeyToAuthorityId {
+  fn convert(session_key: SessionKey) -> AuthorityId {
+    session_key.1
+  }
 }
 
 impl timestamp::Trait for Runtime {
@@ -199,7 +208,7 @@ impl sudo::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type LocalSessionKey = AuthorityId;
-	type ConvertLocalSessionKey = ();
+	type ConvertLocalSessionKey = ConvertSessionKeyToAuthorityId;
 	type Log = Log;
 	type Event = Event;
 }
@@ -209,7 +218,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey, AuthoritySignature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
