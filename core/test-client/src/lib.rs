@@ -112,6 +112,7 @@ pub struct TestClientBuilder<E, B> {
 	_phantom: std::marker::PhantomData<E>,
 }
 
+#[cfg(feature = "include-wasm-blob")]
 impl<B> TestClientBuilder<LocalExecutor, B> where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
@@ -127,7 +128,38 @@ impl<B> TestClientBuilder<LocalExecutor, B> where
 	}
 }
 
+#[cfg(feature = "include-wasm-blob")]
 impl TestClientBuilder<LocalExecutor, Backend> {
+	/// Create a new instance of the test client builder.
+	pub fn new() -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
+			_phantom: Default::default(),
+		}
+	}
+}
+
+#[cfg(not(feature = "include-wasm-blob"))]
+impl<E, B> TestClientBuilder<E, B> where
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+{
+	/// Create a new instance of the test client builder using the given backend.
+	pub fn new_with_backend(backend: Arc<B>) -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+			backend,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+#[cfg(not(feature = "include-wasm-blob"))]
+impl<E> TestClientBuilder<E, Backend> {
 	/// Create a new instance of the test client builder.
 	pub fn new() -> Self {
 		TestClientBuilder {
