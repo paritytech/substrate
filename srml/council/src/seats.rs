@@ -398,7 +398,7 @@ impl<T: Trait> Module<T> {
 		<RegisterInfoOf<T>>::exists(who)
 	}
 
-	/// Iff the councillor `who` still have a seat at blocknumber `n` returns `true`.
+	/// Iff the councillor `who` still has a seat at blocknumber `n` returns `true`.
 	pub fn will_still_be_councillor_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
 		Self::active_council().iter()
 			.find(|&&(ref a, _)| a == who)
