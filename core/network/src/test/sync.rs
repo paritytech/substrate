@@ -452,3 +452,36 @@ fn can_not_sync_from_light_peer() {
 	// check that light #1 has disconnected from #2
 	assert_eq!(net.peer(1).protocol_status().num_peers, 1);
 }
+
+#[test]
+fn light_peer_imports_header_from_announce() {
+	let _ = ::env_logger::try_init();
+
+	fn import_with_announce(net: &mut TestNet, hash: H256) {
+		let header = net.peer(0).client().header(&BlockId::Hash(hash)).unwrap().unwrap();
+		net.peer(1).receive_message(
+			&net.peer(0).peer_id,
+			message::generic::Message::BlockAnnounce(message::generic::BlockAnnounce {
+				header,
+			}),
+		);
+
+		net.peer(1).import_queue_sync();
+		assert!(net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some());
+	}
+
+	// given the network with 1 full nodes (#0) and 1 light node (#1)
+	let mut net = TestNet::new(1);
+	net.add_light_peer(&Default::default());
+
+	// let them connect to each other
+	net.sync();
+
+	// check that NEW block is imported from announce message
+	let new_hash = net.peer(0).push_blocks(1, false);
+	import_with_announce(&mut net, new_hash);
+
+	// check that KNOWN STALE block is imported from announce message
+	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
+	import_with_announce(&mut net, known_stale_hash);
+}

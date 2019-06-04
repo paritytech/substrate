@@ -31,7 +31,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
+	error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -87,12 +87,11 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						inherents_pool: service.inherents_pool(),
 					});
 
 					let client = service.client();
 					let select_chain = service.select_chain()
-						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
+						.ok_or(ServiceError::SelectChainRequired)?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
@@ -180,6 +179,7 @@ construct_service_factory! {
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+				#[allow(deprecated)]
 				let fetch_checker = client.backend().blockchain().fetcher()
 					.upgrade()
 					.map(|fetcher| fetcher.checker().clone())
@@ -204,6 +204,7 @@ construct_service_factory! {
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+				#[allow(deprecated)]
 				Ok(LongestChain::new(
 					client.backend().clone(),
 					client.import_lock()
@@ -230,9 +231,9 @@ mod tests {
 		sr25519::Public as AddressPublic,
 	};
 	use sr_primitives::{generic::{BlockId, Era}, traits::Block, OpaqueExtrinsic};
-	use srml_timestamp;
-	use srml_finality_tracker;
-	use substrate_keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
+	use timestamp;
+	use finality_tracker;
+	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
 	use substrate_service::ServiceFactory;
 	use crate::service::Factory;
 
@@ -293,19 +294,17 @@ mod tests {
 		let block_factory = |service: &<Factory as ServiceFactory>::FullService| {
 			let mut inherent_data = service.config.custom.inherent_data_providers
 				.create_inherent_data().unwrap();
-			inherent_data.replace_data(srml_finality_tracker::INHERENT_IDENTIFIER, &1u64);
-			inherent_data.replace_data(srml_timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
+			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
+			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
 
 			let parent_id = BlockId::number(service.client().info().unwrap().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
-				inherents_pool: service.inherents_pool(),
 			});
-			proposer_factory.inherents_pool.drain();
 			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
-			let new_block = proposer.propose(inherent_data, ::std::time::Duration::from_secs(1))
+			let new_block = proposer.propose(inherent_data, Default::default(), ::std::time::Duration::from_secs(1))
 				.expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
@@ -315,7 +314,7 @@ mod tests {
 			let to_sign = (slot_num * 10 / 2, pre_hash).encode();
 			let signature = alice.sign(&to_sign[..]);
 			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
-				slot_num * 10 / 2,
+				//slot_num * 10 / 2,
 				signature,
 			);
 			slot_num += 1;

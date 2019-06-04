@@ -28,13 +28,14 @@ use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
 };
+use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
-use crate::specialization::NetworkSpecialization;
+use crate::specialization::{NetworkSpecialization, Context as SpecializationContext};
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{ProtocolConfig, Roles};
+use crate::config::Roles;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -79,9 +80,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio::timer::Interval,
+	tick_timeout: tokio_timer::Interval,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio::timer::Interval,
+	propagate_timeout: tokio_timer::Interval,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -169,7 +170,102 @@ impl<'a, 'b, B: BlockT> OnDemandNetwork<B> for &'a mut &'b mut dyn NetworkOut<B>
 		NetworkOut::disconnect_peer(**self, who.clone())
 	}
 
-	fn send_request(&mut self, who: &PeerId, message: Message<B>) {
+	fn send_header_request(&mut self, who: &PeerId, id: RequestId, block: <<B as BlockT>::Header as HeaderT>::Number) {
+		let message = message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
+			id,
+			block,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>) {
+		let message = message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
+			id,
+			block,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_child_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		storage_key: Vec<u8>,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
+			id,
+			block,
+			storage_key,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_call_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		method: String,
+		data: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
+			id,
+			block,
+			method,
+			data,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_changes_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		first: <B as BlockT>::Hash,
+		last: <B as BlockT>::Hash,
+		min: <B as BlockT>::Hash,
+		max: <B as BlockT>::Hash,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
+			id,
+			first,
+			last,
+			min,
+			max,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_body_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		fields: BlockAttributes,
+		from: FromBlock<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>,
+		to: Option<<B as BlockT>::Hash>,
+		direction: Direction,
+		max: Option<u32>
+	) {
+		let message = message::generic::Message::BlockRequest(message::BlockRequest::<B> {
+			id,
+			fields,
+			from,
+			to,
+			direction,
+			max,
+		});
+
 		NetworkOut::send_message(**self, who.clone(), message)
 	}
 }
@@ -185,9 +281,6 @@ pub trait Context<B: BlockT> {
 
 	/// Send a consensus message to a peer.
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
-
-	/// Send a chain-specific message to a peer.
-	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Protocol context.
@@ -218,6 +311,16 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 			who,
 			GenericMessage::Consensus(consensus)
 		)
+	}
+}
+
+impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SpecializationContext<B> for ProtocolContext<'a, B, H> {
+	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+		self.network_out.report_peer(who, reputation)
+	}
+
+	fn disconnect_peer(&mut self, who: PeerId) {
+		self.network_out.disconnect_peer(who)
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
@@ -273,6 +376,21 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
+/// Configuration for the Substrate-specific part of the networking layer.
+#[derive(Clone)]
+pub struct ProtocolConfig {
+	/// Assigned roles.
+	pub roles: Roles,
+}
+
+impl Default for ProtocolConfig {
+	fn default() -> ProtocolConfig {
+		ProtocolConfig {
+			roles: Roles::FULL,
+		}
+	}
+}
+
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
@@ -284,8 +402,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
-			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
+			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -410,8 +528,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			},
 			GenericMessage::BlockAnnounce(announce) => {
-				self.on_block_announce(network_out, who.clone(), announce);
+				let outcome = self.on_block_announce(network_out, who.clone(), announce);
 				self.update_peer_info(&who);
+				return outcome;
 			},
 			GenericMessage::Transactions(m) =>
 				self.on_extrinsics(network_out, transaction_pool, who, m),
@@ -908,7 +1027,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		announce: message::BlockAnnounce<B::Header>
-	) {
+	) -> CustomMessageOutcome<B>  {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -917,12 +1036,55 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		self.on_demand_core.on_block_announce(&mut network_out, who.clone(), *header.number());
-		self.sync.on_block_announce(
+		let try_import = self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, network_out),
 			who.clone(),
 			hash,
 			&header,
 		);
+
+		// try_import is only true when we have all data required to import block
+		// in the BlockAnnounce message. This is only when:
+		// 1) we're on light client;
+		// AND
+		// - EITHER 2.1) announced block is stale;
+		// - OR 2.2) announced block is NEW and we normally only want to download this single block (i.e.
+		//           there are no ascendants of this block scheduled for retrieval)
+		if !try_import {
+			return CustomMessageOutcome::None;
+		}
+
+		// to import header from announced block let's construct response to request that normally would have
+		// been sent over network (but it is not in our case)
+		let blocks_to_import = self.sync.on_block_data(
+			&mut ProtocolContext::new(&mut self.context_data, network_out),
+			who.clone(),
+			message::generic::BlockRequest {
+				id: 0,
+				fields: BlockAttributes::HEADER,
+				from: message::FromBlock::Hash(hash),
+				to: None,
+				direction: message::Direction::Ascending,
+				max: Some(1),
+			},
+			message::generic::BlockResponse {
+				id: 0,
+				blocks: vec![
+					message::generic::BlockData {
+						hash: hash,
+						header: Some(header),
+						body: None,
+						receipt: None,
+						message_queue: None,
+						justification: None,
+					},
+				],
+			},
+		);
+		match blocks_to_import {
+			Some((origin, blocks)) => CustomMessageOutcome::BlockImport(origin, blocks),
+			None => CustomMessageOutcome::None,
+		}
 	}
 
 	/// Call this when a block has been imported in the import queue and we should announce it on

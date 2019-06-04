@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain
 };
 
 pub mod backend;
@@ -219,12 +219,10 @@ pub trait Externalities<H: Hasher> {
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
-	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
+	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> where H::Out: Ord;
 
-	/// Submit extrinsic.
-	///
-	/// Returns an error in case the API is not available.
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+	/// Returns offchain externalities extension if present.
+	fn offchain(&mut self) -> Option<&mut offchain::Externalities>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -237,8 +235,121 @@ impl NeverOffchainExt {
 	}
 }
 
-impl OffchainExt for NeverOffchainExt {
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) { unreachable!() }
+impl offchain::Externalities for NeverOffchainExt {
+	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn new_crypto_key(
+		&mut self,
+		_crypto: offchain::CryptoKind,
+	) -> Result<offchain::CryptoKeyId, ()> {
+		unreachable!()
+	}
+
+	fn encrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn decrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn sign(&mut self, _key: Option<offchain::CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn verify(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_msg: &[u8],
+		_signature: &[u8],
+	) -> Result<bool, ()> {
+		unreachable!()
+	}
+
+	fn timestamp(&mut self) -> offchain::Timestamp {
+		unreachable!()
+	}
+
+	fn sleep_until(&mut self, _deadline: offchain::Timestamp) {
+		unreachable!()
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		unreachable!()
+	}
+
+	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+		unreachable!()
+	}
+
+	fn http_request_start(
+		&mut self,
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> Result<offchain::HttpRequestId, ()> {
+		unreachable!()
+	}
+
+	fn http_request_add_header(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_name: &str,
+		_value: &str
+	) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_chunk: &[u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<(), offchain::HttpError> {
+		unreachable!()
+	}
+
+	fn http_response_wait(
+		&mut self,
+		_ids: &[offchain::HttpRequestId],
+		_deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::HttpRequestStatus> {
+		unreachable!()
+	}
+
+	fn http_response_headers(
+		&mut self,
+		_request_id: offchain::HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unreachable!()
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<usize, offchain::HttpError> {
+		unreachable!()
+	}
 }
 
 /// Code execution engine.
@@ -338,7 +449,7 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 }
 
 /// Creates new substrate state machine.
-pub fn new<'a, H, B, T, O, Exec>(
+pub fn new<'a, H, N, B, T, O, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
 	offchain_ext: Option<&'a mut O>,
@@ -346,7 +457,7 @@ pub fn new<'a, H, B, T, O, Exec>(
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-) -> StateMachine<'a, H, B, T, O, Exec> {
+) -> StateMachine<'a, H, N, B, T, O, Exec> {
 	StateMachine {
 		backend,
 		changes_trie_storage,
@@ -360,7 +471,7 @@ pub fn new<'a, H, B, T, O, Exec>(
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, B, T, O, Exec> {
+pub struct StateMachine<'a, H, N, B, T, O, Exec> {
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
 	offchain_ext: Option<&'a mut O>,
@@ -368,16 +479,17 @@ pub struct StateMachine<'a, H, B, T, O, Exec> {
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-	_hasher: PhantomData<H>,
+	_hasher: PhantomData<(H, N)>,
 }
 
-impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
+impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
-	T: ChangesTrieStorage<H>,
-	O: OffchainExt,
-	H::Out: Ord,
+	T: ChangesTrieStorage<H, N>,
+	O: offchain::Externalities,
+	H::Out: Ord + 'static,
+	N: crate::changes_trie::BlockNumber,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
 	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
@@ -414,12 +526,11 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
-		let offchain = self.offchain_ext.as_mut();
 		let mut externalities = ext::Ext::new(
 			self.overlay,
 			self.backend,
 			self.changes_trie_storage,
-			offchain.map(|x| &mut **x),
+			self.offchain_ext.as_mut().map(|x| &mut **x),
 		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
@@ -558,7 +669,7 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
 pub fn prove_execution<B, H, Exec>(
-	backend: B,
+	mut backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
@@ -568,11 +679,11 @@ where
 	B: Backend<H>,
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord,
+	H::Out: Ord + 'static,
 {
-	let trie_backend = backend.try_into_trie_backend()
+	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
-	prove_execution_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+	prove_execution_on_trie_backend(trie_backend, overlay, exec, method, call_data)
 }
 
 /// Prove execution using the given trie backend, overlayed changes, and call executor.
@@ -595,12 +706,12 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord,
+	H::Out: Ord + 'static,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine {
 		backend: &proving_backend,
-		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H, u64>>,
 		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
@@ -629,7 +740,7 @@ pub fn execution_proof_check<H, Exec>(
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord,
+	H::Out: Ord + 'static,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
 	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
@@ -646,11 +757,11 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord,
+	H::Out: Ord + 'static,
 {
 	let mut sm = StateMachine {
 		backend: trie_backend,
-		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H, u64>>,
 		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
@@ -667,7 +778,7 @@ where
 
 /// Generate storage read proof.
 pub fn prove_read<B, H>(
-	backend: B,
+	mut backend: B,
 	key: &[u8]
 ) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
 where
@@ -675,16 +786,16 @@ where
 	H: Hasher,
 	H::Out: Ord
 {
-	let trie_backend = backend.try_into_trie_backend()
+	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(
 			||Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>
 		)?;
-	prove_read_on_trie_backend(&trie_backend, key)
+	prove_read_on_trie_backend(trie_backend, key)
 }
 
 /// Generate child storage read proof.
 pub fn prove_child_read<B, H>(
-	backend: B,
+	mut backend: B,
 	storage_key: &[u8],
 	key: &[u8],
 ) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
@@ -693,9 +804,9 @@ where
 	H: Hasher,
 	H::Out: Ord
 {
-	let trie_backend = backend.try_into_trie_backend()
+	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
-	prove_child_read_on_trie_backend(&trie_backend, storage_key, key)
+	prove_child_read_on_trie_backend(trie_backend, storage_key, key)
 }
 
 
@@ -892,7 +1003,7 @@ mod tests {
 	fn execute_works() {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new()),
+			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -913,7 +1024,7 @@ mod tests {
 	fn execute_works_with_native_else_wasm() {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new()),
+			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -934,7 +1045,7 @@ mod tests {
 		let mut consensus_failed = false;
 		assert!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new()),
+			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -989,7 +1100,8 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::<Blake2Hasher>::from(initial).try_into_trie_backend().unwrap();
+		let mut state = InMemory::<Blake2Hasher>::from(initial);
+		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => OverlayedValue::from(Some(b"1312".to_vec())),
@@ -1003,8 +1115,8 @@ mod tests {
 		};
 
 		{
-			let changes_trie_storage = InMemoryChangesTrieStorage::new();
-			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
+			let mut ext = Ext::new(&mut overlay, backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
@@ -1025,12 +1137,13 @@ mod tests {
 
 	#[test]
 	fn set_child_storage_works() {
-		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
-		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let mut state = InMemory::<Blake2Hasher>::default();
+		let backend = state.as_trie_backend().unwrap();
+		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut overlay = OverlayedChanges::default();
 		let mut ext = Ext::new(
 			&mut overlay,
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new()
 		);
@@ -1106,7 +1219,7 @@ mod tests {
 	fn cannot_change_changes_trie_config() {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new()),
+			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -1126,7 +1239,7 @@ mod tests {
 	fn cannot_change_changes_trie_config_with_native_else_wasm() {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new()),
+			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {

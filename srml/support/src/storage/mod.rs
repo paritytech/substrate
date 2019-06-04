@@ -196,74 +196,6 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	}
 }
 
-/// A strongly-typed list in storage.
-pub trait StorageList<T: Codec> {
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the key used to store the length field.
-	fn len_key() -> Vec<u8>;
-
-	/// Get the storage key used to fetch a value at a given index.
-	fn key_for(index: u32) -> Vec<u8>;
-
-	/// Read out all the items.
-	fn items() -> Vec<T>;
-
-	/// Set the current set of items.
-	fn set_items(items: &[T]);
-
-	/// Set the item at the given index.
-	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg);
-
-	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-	fn get(index: u32) -> Option<T>;
-
-	/// Load the length of the list
-	fn len() -> u32;
-
-	/// Clear the list.
-	fn clear();
-}
-
-impl<T: Codec, U> StorageList<T> for U where U: hashed::generator::StorageList<T> {
-	fn prefix() -> &'static [u8] {
-		<U as hashed::generator::StorageList<T>>::prefix()
-	}
-
-	fn len_key() -> Vec<u8> {
-		<U as hashed::generator::StorageList<T>>::len_key()
-	}
-
-	fn key_for(index: u32) -> Vec<u8> {
-		<U as hashed::generator::StorageList<T>>::key_for(index)
-	}
-
-	fn items() -> Vec<T> {
-		U::items(&RuntimeStorage)
-	}
-
-	fn set_items(items: &[T]) {
-		U::set_items(items, &mut RuntimeStorage)
-	}
-
-	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg) {
-		U::set_item(index, val.borrow(), &mut RuntimeStorage)
-	}
-
-	fn get(index: u32) -> Option<T> {
-		U::get(index, &RuntimeStorage)
-	}
-
-	fn len() -> u32 {
-		U::len(&RuntimeStorage)
-	}
-
-	fn clear() {
-		U::clear(&mut RuntimeStorage)
-	}
-}
-
 /// A strongly-typed map in storage.
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
@@ -330,6 +262,25 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 	}
 }
 
+/// A storage map with values that can be appended to.
+pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Append the given item to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>;
+}
+
+impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
+	where U: hashed::generator::AppendableStorageMap<K, V>
+{
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>
+	{
+		U::append(key.borrow(), items, &mut RuntimeStorage)
+	}
+}
+
 /// A storage map that can be enumerated.
 ///
 /// Primarily useful for off-chain computations.
@@ -342,7 +293,9 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: hashed::generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
+	where U: hashed::generator::EnumerableStorageMap<K, V>
+{
 	fn head() -> Option<K> {
 		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
