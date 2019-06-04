@@ -17,7 +17,7 @@ substrate-primitives = { path = "../../core/primitives" }
 [features]
 default = ["std"]
 std =[
-	"serde/std",
+    "serde/std",
     "parity-codec/std",
     "substrate-primitives/std",
     "rstd/std",
