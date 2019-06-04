@@ -19,12 +19,12 @@
 use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
-use std::time::{Instant, Duration};
+use std::time::Duration;
 use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream};
 use tempdir::TempDir;
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use service::{
 	ServiceFactory,
@@ -54,25 +54,22 @@ struct TestNet<F: ServiceFactory> {
 
 impl<F: ServiceFactory> TestNet<F> {
 	pub fn run_until_all_full<P: Send + Sync + Fn(u32, &F::FullService) -> bool + 'static>(&mut self, predicate: P) {
-		let begin = Instant::now();
 		let full_nodes = self.full_nodes.clone();
-		let interval = Interval::new_interval(Duration::from_millis(100)).map_err(|_| ()).for_each(move |_| {
-			if Instant::now() - begin > MAX_WAIT_TIME {
-				return Err(());
-			}
+		let interval = Interval::new_interval(Duration::from_millis(100))
+			.map_err(|_| ())
+			.for_each(move |_| {
+				if full_nodes.iter().all(|&(ref id, ref service, _)| predicate(*id, service)) {
+					Err(())
+				} else {
+					Ok(())
+				}
+			})
+			.timeout(MAX_WAIT_TIME);
 
-			if full_nodes.iter().all(|&(ref id, ref service, _)| predicate(*id, service)) {
-				Err(())
-			} else {
-				Ok(())
-			}
-		});
-
-		self.runtime.block_on(interval).ok();
-
-		let wait_time = Instant::now() - begin;
-		if wait_time > MAX_WAIT_TIME {
-			panic!("Waited for too long: {:?}", wait_time);
+		match self.runtime.block_on(interval) {
+			Ok(()) => unreachable!("interval always fails; qed"),
+			Err(ref err) if err.is_inner() => (),
+			Err(_) => panic!("Waited for too long"),
 		}
 	}
 }
