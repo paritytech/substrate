@@ -343,7 +343,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -357,7 +357,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 }
 
 impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -433,7 +433,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}
 
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 }

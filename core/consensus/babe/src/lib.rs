@@ -251,7 +251,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
+	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
 
 	fn on_start(
 		&self,
@@ -715,7 +715,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
+			if client.runtime_api().has_api::<dyn AuthoritiesApi<B>>(at).unwrap_or(false) {
 				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \

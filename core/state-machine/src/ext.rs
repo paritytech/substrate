@@ -343,7 +343,7 @@ where
 		Ok(root)
 	}
 
-	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 }

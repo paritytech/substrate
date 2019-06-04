@@ -156,7 +156,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		Ok(None)
 	}
 
-	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		warn!("Call to non-existent out offchain externalities set.");
 		None
 	}
@@ -171,7 +171,7 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
-		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -182,7 +182,7 @@ mod tests {
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = BasicExternalities::default();
-		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());

@@ -38,14 +38,14 @@ pub struct TelemetryConfig {
 	pub endpoints: TelemetryEndpoints,
 	/// What do do when we connect to the servers.
 	/// Note that this closure is executed each time we connect to a telemetry endpoint.
-	pub on_connect: Box<Fn() + Send + Sync + 'static>,
+	pub on_connect: Box<dyn Fn() + Send + Sync + 'static>,
 }
 
 /// Telemetry service guard.
 pub type Telemetry = slog_scope::GlobalLoggerGuard;
 
 /// Size of the channel for passing messages to telemetry thread.
-const CHANNEL_SIZE: usize = 262144;
+const CHANNEL_SIZE: usize = 262_144;
 
 /// Log levels.
 pub const SUBSTRATE_DEBUG: &str = "9";
@@ -154,7 +154,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 		});
 	});
 
-	return logger_guard;
+	logger_guard
 }
 
 /// Translates to `slog_scope::info`, but contains an additional verbosity
@@ -172,7 +172,7 @@ macro_rules! telemetry {
 struct Connection {
 	out: ws::Sender,
 	out_sync: Arc<Mutex<Option<ws::Sender>>>,
-	on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
+	on_connect: Arc<Box<dyn Fn() + Send + Sync + 'static>>,
 	url: String,
 }
 
@@ -180,7 +180,7 @@ impl Connection {
 	fn new(
 		out: ws::Sender,
 		out_sync: Arc<Mutex<Option<ws::Sender>>>,
-		on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
+		on_connect: Arc<Box<dyn Fn() + Send + Sync + 'static>>,
 		url: String
 	) -> Self {
 		Connection {
