@@ -678,15 +678,12 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
-		.or_else(|| {
-			if client.runtime_api().has_api::<dyn AuthoritiesApi<B>>(at).unwrap_or(false) {
-				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
-			} else {
-				CoreApi::authorities(&*client.runtime_api(), at).ok()
-			}
-		}).ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
+		.or_else(|| AuthoritiesApi::authorities(&*client.runtime_api(), at).ok())
+		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.

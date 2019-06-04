@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 91,
-	impl_version: 93,
+	spec_version: 92,
+	impl_version: 92,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -276,10 +276,6 @@ impl_runtime_apis! {
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			Executive::initialize_block(header)
-		}
-
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
-			panic!("Deprecated, please use `AuthoritiesApi`.")
 		}
 	}
 
