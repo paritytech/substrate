@@ -48,6 +48,7 @@ use substrate_primitives::{OpaqueMetadata, ed25519};
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use aura::Call as AuraCall;
+pub use grandpa::Call as GrandpaCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
