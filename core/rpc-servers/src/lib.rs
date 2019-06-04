@@ -89,9 +89,9 @@ pub fn start_ws(
 		.allowed_origins(map_cors(cors))
 		.start(addr)
 		.map_err(|err| match err {
-			ws::Error(ws::ErrorKind::Io(io), _) => io,
-			ws::Error(ws::ErrorKind::ConnectionClosed, _) => io::ErrorKind::BrokenPipe.into(),
-			ws::Error(e, _) => {
+			ws::Error::Io(io) => io,
+			ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
+			e => {
 				error!("{}", e);
 				io::ErrorKind::Other.into()
 			}

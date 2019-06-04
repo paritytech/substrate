@@ -18,7 +18,6 @@
 
 use crate::PeerId;
 use runtime_primitives::traits::Block as BlockT;
-use crate::protocol::Context;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
@@ -26,24 +25,46 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut Context<B>, who: PeerId, status: crate::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
-	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: PeerId);
+	fn on_disconnect(&mut self, ctx: &mut dyn Context<B>, who: PeerId);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: PeerId, message: &mut Option<crate::message::Message<B>>);
+	fn on_message(
+		&mut self,
+		ctx: &mut dyn Context<B>,
+		who: PeerId,
+		message: &mut Option<crate::message::Message<B>>
+	);
 
 	/// Called on abort.
 	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
 	fn on_abort(&mut self) { }
 
 	/// Called periodically to maintain peers and handle timeouts.
-	fn maintain_peers(&mut self, _ctx: &mut Context<B>) { }
+	fn maintain_peers(&mut self, _ctx: &mut dyn Context<B>) { }
 
 	/// Called when a block is _imported_ at the head of the chain (not during major sync).
 	/// Not guaranteed to be called for every block, but will be most of the after major sync.
-	fn on_block_imported(&mut self, _ctx: &mut Context<B>, _hash: B::Hash, _header: &B::Header) { }
+	fn on_block_imported(&mut self, _ctx: &mut dyn Context<B>, _hash: B::Hash, _header: &B::Header) { }
+}
+
+/// Context for a network-specific handler.
+pub trait Context<B: BlockT> {
+	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
+	/// irresponsible or appeared lazy.
+	fn report_peer(&mut self, who: PeerId, reputation: i32);
+
+	/// Force disconnecting from a peer. Use this when a peer misbehaved.
+	fn disconnect_peer(&mut self, who: PeerId);
+
+	/// Send a consensus message to a peer.
+	#[deprecated(note = "This method shouldn't have been part of the specialization API")]
+	fn send_consensus(&mut self, _who: PeerId, _consensus: crate::message::generic::ConsensusMessage) {}
+
+	/// Send a chain-specific message to a peer.
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Construct a simple protocol that is composed of several sub protocols.

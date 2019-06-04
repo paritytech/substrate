@@ -250,11 +250,11 @@ where
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.best_number == NUM_BLOCKS.into()
+		service.client().info().chain.best_number == NUM_BLOCKS.into()
 	);
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
-	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
+	let best_block = BlockId::number(first_service.client().info().chain.best_number);
 	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
 	network.run_until_all_full(|_index, service|
 		service.transaction_pool().ready().count() == 1
@@ -278,7 +278,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.finalized_number >= (NUM_BLOCKS / 2).into()
+		service.client().info().chain.finalized_number >= (NUM_BLOCKS / 2).into()
 	});
 	info!("Adding more peers");
 	network.insert_nodes(&temp, NUM_NODES / 2, 0, vec![]);
@@ -286,6 +286,6 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.finalized_number >= NUM_BLOCKS.into()
+		service.client().info().chain.finalized_number >= NUM_BLOCKS.into()
 	);
 }
