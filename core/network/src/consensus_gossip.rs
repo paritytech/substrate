@@ -478,7 +478,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Send all messages with given topic to a peer.
-	pub fn send_topic(&mut self, protocol: &mut dyn Context<B>, who: &PeerId, topic: B::Hash, engine_id: ConsensusEngineId, force: bool) {
+	pub fn send_topic(
+		&mut self,
+		protocol: &mut dyn Context<B>,
+		who: &PeerId,
+		topic: B::Hash,
+		engine_id: ConsensusEngineId,
+		force: bool
+	) {
 		let validator = self.validators.get(&engine_id);
 		let mut message_allowed = match validator {
 			None => return, // treat all messages with no validator as not allowed
