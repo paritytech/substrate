@@ -50,7 +50,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
-use crate::specialization::NetworkSpecialization;
+use crate::specialization::{NetworkSpecialization, Context as SpecializationContext};
 use test_client::{self, AccountKeyring};
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
@@ -101,15 +101,20 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: crate::message::Status<Block>) {
+	fn on_connect(
+		&mut self,
+		_ctx: &mut SpecializationContext<Block>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<Block>
+	) {
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
+	fn on_disconnect(&mut self, _ctx: &mut SpecializationContext<Block>, _peer_id: PeerId) {
 	}
 
 	fn on_message(
 		&mut self,
-		_ctx: &mut Context<Block>,
+		_ctx: &mut SpecializationContext<Block>,
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
 	) {

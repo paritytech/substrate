@@ -101,14 +101,14 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (None, k, Some(v)))
 		.collect::<Vec<_>>();
-	let storage = InMemoryState::<Hasher>::default().update(transaction);
-	let trie_storage = storage.try_into_trie_backend()
-		.expect("InMemoryState::try_into_trie_backend always returns Some; qed");
+	let mut storage = InMemoryState::<Hasher>::default().update(transaction);
+	let trie_storage = storage.as_trie_backend()
+		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	let mut total_proof = HashSet::new();
 	for block in blocks.into_iter() {
 		debug_assert_eq!(block_to_cht_number(cht_size, block), Some(cht_num));
 
-		let (value, proof) = prove_read_on_trie_backend(&trie_storage, &encode_cht_key(block))?;
+		let (value, proof) = prove_read_on_trie_backend(trie_storage, &encode_cht_key(block))?;
 		assert!(value.is_some(), "we have just built trie that includes the value for block");
 		total_proof.extend(proof);
 	}
