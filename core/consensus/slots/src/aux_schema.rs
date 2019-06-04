@@ -21,6 +21,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header, Verify};
 use safety_primitives::EquivocationProof;
+use std::sync::Arc;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -30,7 +31,7 @@ pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
 pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
-fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
+fn load_decode<C, T>(backend: &Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 	where
 		C: AuxStore,
 		T: Decode,
@@ -49,7 +50,7 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, E, V>(
-	backend: &C,
+	backend: &Arc<C>,
 	slot_now: u64,
 	slot: u64,
 	header: H,

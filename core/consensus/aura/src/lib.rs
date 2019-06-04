@@ -378,7 +378,7 @@ macro_rules! aura_err {
 //
 // FIXME #1018 needs misbehavior types
 fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
-	client: &C,
+	client: &Arc<C>,
 	transaction_pool: &Arc<TransactionPool<A>>,
 	slot_now: u64,
 	mut header: B::Header,
