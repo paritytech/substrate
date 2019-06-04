@@ -103,22 +103,19 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 	fn on_connect(
 		&mut self,
-		_ctx: &mut SpecializationContext<Block>,
+		_ctx: &mut dyn SpecializationContext<Block>,
 		_peer_id: PeerId,
 		_status: crate::message::Status<Block>
-	) {
-	}
+	) {}
 
-	fn on_disconnect(&mut self, _ctx: &mut SpecializationContext<Block>, _peer_id: PeerId) {
-	}
+	fn on_disconnect(&mut self, _ctx: &mut dyn SpecializationContext<Block>, _peer_id: PeerId) {}
 
 	fn on_message(
 		&mut self,
-		_ctx: &mut SpecializationContext<Block>,
+		_ctx: &mut dyn SpecializationContext<Block>,
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
-	) {
-	}
+	) {}
 }
 
 pub type PeersFullClient =
@@ -292,7 +289,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	finalized_hash: Mutex<Option<H256>>,
 }
 
-type MessageFilter = Fn(&NetworkMsg<Block>) -> bool;
+type MessageFilter = dyn Fn(&NetworkMsg<Block>) -> bool;
 
 pub enum FromNetworkMsg<B: BlockT> {
 	/// A peer connected, with debug info.
@@ -605,7 +602,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Execute a closure with the consensus gossip.
 	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
+		where F: FnOnce(&mut ConsensusGossip<Block>, &mut dyn Context<Block>) + Send + 'static
 	{
 		self.net_proto_channel.send_from_client(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
@@ -767,7 +764,7 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Get finality proof provider (if supported).
-	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<FinalityProofProvider<Block>>> {
+	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<dyn FinalityProofProvider<Block>>> {
 		None
 	}
 
@@ -799,7 +796,7 @@ pub trait TestNetFactory: Sized {
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		tx_pool: EmptyTransactionPool,
-		finality_proof_provider: Option<Arc<FinalityProofProvider<Block>>>,
+		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,

@@ -70,7 +70,7 @@ const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState,
@@ -213,7 +213,7 @@ struct PendingBlock<Block: BlockT> {
 }
 
 // wrapper that implements trait required for state_db
-struct StateMetaDb<'a>(&'a KeyValueDB);
+struct StateMetaDb<'a>(&'a dyn KeyValueDB);
 
 impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 	type Error = io::Error;
@@ -225,13 +225,13 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
+	fn new(db: Arc<dyn KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -340,7 +340,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -354,7 +354,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 }
 
 impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
-	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -473,7 +473,7 @@ where Block: BlockT<Hash=H256>,
 }
 
 struct StorageDb<Block: BlockT> {
-	pub db: Arc<KeyValueDB>,
+	pub db: Arc<dyn KeyValueDB>,
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
@@ -512,7 +512,7 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 }
 
 pub struct DbChangesTrieStorage<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	min_blocks_to_keep: Option<u32>,
 	_phantom: ::std::marker::PhantomData<Block>,
@@ -693,7 +693,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, canonicalization_delay: u64, state_cache_size: usize) -> Result<Self, client::error::Error> {
+	fn from_kvdb(
+		db: Arc<dyn KeyValueDB>,
+		pruning: PruningMode,
+		canonicalization_delay: u64,
+		state_cache_size: usize
+	) -> Result<Self, client::error::Error> {
 		let is_archive_pruning = pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();

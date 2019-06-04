@@ -176,7 +176,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///         ///
 ///         /// Is callable by `set_balance_before_version_2`.
 ///         #[changed_in(2)]
-///         fn set_balance(val: u8);
+///         fn set_balance(val: u16);
 ///         /// In version 2, we added this new function.
 ///         fn increase_balance(val: u64);
 ///     }

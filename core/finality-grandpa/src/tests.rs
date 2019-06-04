@@ -150,7 +150,10 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn make_finality_proof_provider(&self, client: PeersClient) -> Option<Arc<network::FinalityProofProvider<Block>>> {
+	fn make_finality_proof_provider(
+		&self,
+		client: PeersClient
+	) -> Option<Arc<dyn network::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(ref client) => {
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -201,7 +204,7 @@ impl MessageRouting {
 }
 
 impl Network<Block> for MessageRouting {
-	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
+	type In = Box<dyn Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Hash) -> Self::In {
@@ -463,7 +466,7 @@ fn run_to_completion_with<F>(
 	peers: &[AuthorityKeyring],
 	with: F,
 ) -> u64 where
-	F: FnOnce(current_thread::Handle) -> Option<Box<Future<Item=(),Error=()>>>
+	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Item=(), Error=()>>>
 {
 	use parking_lot::RwLock;
 

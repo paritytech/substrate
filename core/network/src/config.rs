@@ -35,9 +35,9 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Substrate relay chain access point.
-	pub chain: Arc<Client<B>>,
+	pub chain: Arc<dyn Client<B>>,
 	/// Finality proof provider.
-	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
+	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemand<B>>>,
 	/// Transaction pool.
@@ -45,7 +45,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
 	/// Import queue to use.
-	pub import_queue: Box<ImportQueue<B>>,
+	pub import_queue: Box<dyn ImportQueue<B>>,
 	/// Protocol specialization.
 	pub specialization: S,
 }

@@ -43,9 +43,9 @@ pub type TrieError<H> = trie_db::TrieError<H, Error>;
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// As in `hash_db`, but less generic, trait exposed.
-pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
+pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
-pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
+pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
@@ -471,7 +471,7 @@ mod tests {
 	}
 
 	fn populate_trie<'db>(
-		db: &'db mut HashDB<Blake2Hasher, DBValue>,
+		db: &'db mut dyn HashDB<Blake2Hasher, DBValue>,
 		root: &'db mut <Blake2Hasher as Hasher>::Out,
 		v: &[(Vec<u8>, Vec<u8>)]
 	) -> TrieDBMut<'db, Blake2Hasher> {

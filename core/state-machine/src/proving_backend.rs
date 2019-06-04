@@ -193,17 +193,17 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<MemoryDB<H>, H>, Box<Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
 where
 	H: Hasher,
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if !db.contains(&root, &[]) {
-		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
+	if db.contains(&root, &[]) {
+		Ok(TrieBackend::new(db, root))
+	} else {
+		Err(Box::new(ExecutionError::InvalidProof))
 	}
-
-	Ok(TrieBackend::new(db, root))
 }
 
 /// Create in-memory storage of proof check backend.
