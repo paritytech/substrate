@@ -26,7 +26,8 @@ use tokio::timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	blockchain::HeaderBackend,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -38,6 +39,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -45,6 +47,8 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
+use consensus_safety::submit_report_call;
+use node_runtime::{Call, GrandpaCall};
 
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
@@ -268,7 +272,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, A: txpool::ChainApi> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -278,9 +282,13 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
+	pub(crate) transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N, RA, SC> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, A> Environment<B, E, Block, N, RA, SC, A> 
+where
+	A: txpool::ChainApi,
+{
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -296,17 +304,20 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N,
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, A>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, A>
 where
-	Block: 'static,
+	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
 	N: Network<Block> + 'static,
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	A: txpool::ChainApi,
+	RA: Send + Sync,
+
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.inner, base, block)
@@ -424,9 +435,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, A>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, A>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -436,6 +447,7 @@ where
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	A: txpool::ChainApi<Block=Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -658,8 +670,6 @@ where
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		use client::blockchain::HeaderBackend;
-
 		#[allow(deprecated)]
 		let blockchain = self.inner.backend().blockchain();
 		let status = blockchain.info()?;
@@ -704,6 +714,19 @@ where
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
+		submit_report_call(
+			&self.inner,
+			&self.transaction_pool,
+			Call::Grandpa(GrandpaCall::report_equivocation()
+			// Call::Aura(AuraCall::report_equivocation(
+			// 	AuraEquivocationProof::new(
+			// 		header.clone(),
+			// 		header.clone(),
+			// 		sig.clone(),
+			// 		sig.clone(),
+			// 	).encode()
+			),
+		);
 	}
 
 	fn precommit_equivocation(
