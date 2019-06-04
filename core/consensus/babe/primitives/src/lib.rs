@@ -72,7 +72,7 @@ decl_runtime_apis! {
 	}
 }
 
-/// Represents an AuRa equivocation proof.
+/// Represents an Babe equivocation proof.
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct BabeEquivocationProof<H, S> {
 	first_header: H,
@@ -86,7 +86,7 @@ where
 	H: Clone,
 	S: Clone,
 {
-	/// Create a new AuRa equivocation proof.
+	/// Create a new Babe equivocation proof.
 	fn new(
 		first_header: H,
 		second_header: H,

@@ -261,7 +261,7 @@ where
 				priority: 0,
 				requires: vec![],
 				provides: vec![],
-				longevity: 1000,
+				longevity: 18446744073709551615,
 				propagate: true,
 			}
 		}
