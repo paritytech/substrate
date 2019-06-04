@@ -117,17 +117,17 @@ where
 	/// No changes are made.
 	fn prove_at_state<S: state_machine::Backend<H>>(
 		&self,
-		state: S,
+		mut state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		let trie_state = state.try_into_trie_backend()
+		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
 					as Box<state_machine::Error>
 			)?;
-		self.prove_at_trie_state(&trie_state, overlay, method, call_data)
+		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
 
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
@@ -239,18 +239,18 @@ where
 			_ => {},
 		}
 
-		let state = self.backend.state_at(*at)?;
+		let mut state = self.backend.state_at(*at)?;
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.try_into_trie_backend()
+				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
 							as Box<state_machine::Error>
 					)?;
 
 				let backend = state_machine::ProvingBackend::new_with_recorder(
-					&trie_state,
+					trie_state,
 					recorder.clone()
 				);
 
