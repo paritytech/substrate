@@ -53,7 +53,8 @@ use parity_codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
 use crate::overlayed_changes::OverlayedChanges;
-use trie::{DBValue, trie_root};
+use trie::{DBValue, TrieOps};
+use trie::trie_types::LayOut;
 
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
@@ -154,7 +155,7 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H, Number>, H: Ha
 			let transaction = input_pairs.into_iter()
 				.map(Into::into)
 				.collect::<Vec<_>>();
-			let root = trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
+			let root = LayOut::<H>::trie_root(transaction.iter().map(|(k, v)| (&*k, &*v)));
 
 			Ok(Some((root, transaction)))
 		},

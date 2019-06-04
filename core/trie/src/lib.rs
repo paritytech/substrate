@@ -113,7 +113,7 @@ impl<H: Hasher> TrieOps for LegacyLayout<H> {
 }
 
 
-/// As in `trie_db`, but less generic, error type for the crate.
+/// `trie_db`, error type.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// As in `hash_db`, but less generic, trait exposed.
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
@@ -137,6 +137,20 @@ pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
 pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
 /// Hash type for a trie layout.
 pub type TrieHash<L> = <<L as TrieLayOut>::H as Hasher>::Out;
+
+/// This module is for non generic definition of trie type.
+/// Only the `Hasher` is generic in this case.
+pub mod trie_types {
+	pub type LayOut<H> = super::Layout<H>;
+	/// Persistent trie database read-access interface for the a given hasher.
+	pub type TrieDB<'a, H> = super::TrieDB<'a, LayOut<H>>;
+	/// Persistent trie database write-access interface for the a given hasher.
+	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, LayOut<H>>;
+	/// Querying interface, as in `trie_db` but less generic.
+	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, LayOut<H>, Q>;
+	/// As in `trie_db`, but less generic, error type for the crate.
+	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
+}
 
 /// Determine a trie root given a hash DB and delta values.
 pub fn delta_trie_root<L: TrieOps, I, A, B, DB>(

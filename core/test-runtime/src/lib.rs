@@ -27,7 +27,8 @@ use parity_codec::{Encode, Decode, Input};
 
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};
-use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
+use substrate_trie::PrefixedMemoryDB;
+use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,

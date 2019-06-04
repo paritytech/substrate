@@ -23,7 +23,8 @@ use crate::changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_ro
 use crate::{Externalities, OverlayedChanges, OffchainExt, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
+use trie::{MemoryDB, TrieMut, default_child_trie_root};
+use trie::trie_types::{LayOut, TrieDBMut};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -296,7 +297,7 @@ where
 			self
 				.storage(storage_key.as_ref())
 				.unwrap_or(
-					default_child_trie_root::<H>(storage_key.as_ref())
+					default_child_trie_root::<LayOut<H>>(storage_key.as_ref())
 				)
 		} else {
 			let storage_key = storage_key.as_ref();

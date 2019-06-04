@@ -19,7 +19,8 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
-use trie::trie_root;
+use trie::TrieOps;
+use trie::trie_types::LayOut;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -144,7 +145,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.inner.clone())
+		LayOut::<H>::trie_root(self.inner.clone())
 	}
 
 	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Vec<u8> {

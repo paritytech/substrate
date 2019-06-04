@@ -66,11 +66,12 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieOps, trie_types::LayOut};
 
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();
+		let iter = transactions.iter().map(Encode::encode);
+		let extrinsics_root = LayOut::<Blake2Hasher>::ordered_trie_root(iter).into();
 
 		let mut header = Header {
 			parent_hash,

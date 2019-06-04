@@ -29,6 +29,7 @@ pub use substrate_state_machine::{
 
 use environmental::environmental;
 use primitives::{hexdisplay::HexDisplay, H256};
+use trie::{TrieOps, trie_types::LayOut};
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -169,7 +170,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::ordered_trie_root::<H, _, _>(input.iter())
+		LayOut::<H>::ordered_trie_root(input)
 	}
 
 	fn trie_root<H, I, A, B>(input: I) -> H::Out
@@ -180,7 +181,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::trie_root::<H, _, _, _>(input)
+		LayOut::<H>::trie_root(input)
 	}
 
 	fn ordered_trie_root<H, I, A>(input: I) -> H::Out
@@ -190,7 +191,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::ordered_trie_root::<H, _, _>(input)
+		LayOut::<H>::ordered_trie_root(input)
 	}
 }
 
