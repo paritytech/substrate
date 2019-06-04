@@ -33,26 +33,26 @@ use client::{
 	blockchain::HeaderBackend,
 };
 
-
+// A, B, E, Block, RA
 /// Submit report call to the transaction pool.
-/// TODO: Ask how to do submit an unsigned in the proper way.
-pub fn submit_report_call<A, B, E, Block, RA>(
-	client: &Client<B, E, Block, RA>,
+pub fn submit_report_call<C, A, Block>(
+	client: &Arc<C>,
 	transaction_pool: &TransactionPool<A>,
 	report_call: Call,
 ) where
-	Block: BlockT<Hash=H256> + 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	RA: 'static + Send + Sync,
+	Block: BlockT + 'static,
+	C: HeaderBackend<Block>,
+	// B: Backend<Block, Blake2Hasher> + 'static,
+	// E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	// RA: 'static + Send + Sync,
 	A: txpool::ChainApi<Block=Block>,
-	NumberFor<Block>: BlockNumberOps,
+	// NumberFor<Block>: BlockNumberOps,
 {
 	info!(target: "accountable-safety", "Submitting report call to tx pool");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice())
 		.expect("Encoded extrinsic is valid");
-	let block_id = BlockId::<Block>::number(client.info().unwrap().best_queued_number.unwrap());
+	let block_id = BlockId::<Block>::number(client.info().unwrap().best_number);
 	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
 		info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
 	}
