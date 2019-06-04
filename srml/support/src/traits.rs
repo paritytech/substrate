@@ -46,7 +46,7 @@ macro_rules! impl_on_free_balance_zero {
 	);
 
 	( $($t:ident)* ) => {
-		impl<AccountId: Clone, $($t: OnFreeBalanceZero<AccountId>),*> OnFreeBalanceZero<AccountId> for ($($t,)*) {
+		impl<AccountId, $($t: OnFreeBalanceZero<AccountId>),*> OnFreeBalanceZero<AccountId> for ($($t,)*) {
 			fn on_free_balance_zero(who: &AccountId) {
 				$($t::on_free_balance_zero(who);)*
 			}
