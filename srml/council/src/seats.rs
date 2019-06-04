@@ -528,7 +528,7 @@ impl<T: Trait> Module<T> {
 
 		// return bond to winners.
 		let candidacy_bond = Self::candidacy_bond();
-		let incoming: Vec<T::AccountId> = leaderboard.iter()
+		let incoming: Vec<_> = leaderboard.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
@@ -537,7 +537,9 @@ impl<T: Trait> Module<T> {
 			.inspect(|a| {T::Currency::unreserve(a, candidacy_bond);})
 			.collect();
 		let active_council = Self::active_council();
-		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
+		let outgoing: Vec<_> = active_council.iter()
+			.take(expiring.len())
+			.map(|a| a.0.clone()).collect();
 
 		// set the new council.
 		let mut new_council: Vec<_> = active_council
@@ -547,6 +549,8 @@ impl<T: Trait> Module<T> {
 			.collect();
 		new_council.sort_by_key(|&(_, expiry)| expiry);
 		<ActiveCouncil<T>>::put(new_council);
+
+		T::OnMembersChanged::on_members_changed(&incoming, &outgoing);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();

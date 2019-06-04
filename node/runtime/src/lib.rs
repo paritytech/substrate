@@ -182,6 +182,7 @@ impl council::Trait for Runtime {
 	type Event = Event;
 	type BadPresentation = ();
 	type BadReaper = ();
+	type OnMembersChanged = CouncilMotions;
 }
 
 impl council::motions::Trait for Runtime {

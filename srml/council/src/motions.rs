@@ -22,7 +22,7 @@ use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
 use srml_support::{
-	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure, traits::Get
+	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
 };
 use super::{Trait as CouncilTrait, Module as Council, OnMembersChanged};
 use system::{self, ensure_signed};
