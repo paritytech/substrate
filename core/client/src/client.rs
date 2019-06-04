@@ -1728,7 +1728,7 @@ pub(crate) mod tests {
 	use primitives::blake2_256;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient, AccountKeyring};
+	use test_client::{self, TestClient, AccountKeyring, TestClientBuilder};
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
@@ -1753,7 +1753,7 @@ pub(crate) mod tests {
 
 		// prepare client ang import blocks
 		let mut local_roots = Vec::new();
-		let remote_client = test_client::new_with_changes_trie();
+		let remote_client = TestClientBuilder::new().set_support_changes_trie(true).build();
 		let mut nonces: HashMap<_, u64> = Default::default();
 		for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
 			let mut builder = remote_client.new_block(Default::default()).unwrap();
