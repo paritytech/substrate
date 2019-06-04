@@ -91,7 +91,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	{
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
-		let has_api = runtime.has_api::<OffchainWorkerApi<Block>>(&at);
+		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block>>(&at);
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {

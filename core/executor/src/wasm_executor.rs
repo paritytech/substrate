@@ -1101,7 +1101,7 @@ impl WasmExecutor {
 	/// This should be used for tests only.
 	pub fn call_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
@@ -1158,7 +1158,7 @@ impl WasmExecutor {
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(

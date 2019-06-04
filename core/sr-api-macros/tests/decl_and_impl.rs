@@ -122,7 +122,7 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 
 #[test]
 fn check_runtime_api_versions() {
-	check_runtime_api_versions_contains::<Api<Block>>();
-	check_runtime_api_versions_contains::<ApiWithCustomVersion<Block>>();
-	check_runtime_api_versions_contains::<runtime_api::Core<Block>>();
+	check_runtime_api_versions_contains::<dyn Api<Block>>();
+	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<dyn runtime_api::Core<Block>>();
 }

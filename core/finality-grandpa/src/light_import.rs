@@ -53,7 +53,7 @@ const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 /// Create light block importer.
 pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
-	authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
+	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	api: Arc<PRA>,
 ) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
 	where
@@ -80,7 +80,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 /// - fetching finality proofs for blocks that are enacting consensus changes.
 pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
-	authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
+	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
@@ -144,7 +144,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
 		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
@@ -160,7 +160,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		finality_proof: Vec<u8>,
-		verifier: &Verifier<Block>,
+		verifier: &dyn Verifier<Block>,
 	) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 		do_import_finality_proof::<_, _, _, _, GrandpaJustification<Block>>(
 			&*self.client,
@@ -271,12 +271,12 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 /// Try to import finality proof.
 fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
-	authority_set_provider: &AuthoritySetForFinalityChecker<Block>,
+	authority_set_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	data: &mut LightImportData<Block>,
 	_hash: Block::Hash,
 	_number: NumberFor<Block>,
 	finality_proof: Vec<u8>,
-	verifier: &Verifier<Block>,
+	verifier: &dyn Verifier<Block>,
 ) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -572,7 +572,7 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+		fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
 			self.0.on_start(link)
 		}
 
@@ -581,7 +581,7 @@ pub mod tests {
 			hash: Block::Hash,
 			number: NumberFor<Block>,
 			finality_proof: Vec<u8>,
-			verifier: &Verifier<Block>,
+			verifier: &dyn Verifier<Block>,
 		) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 			self.0.import_finality_proof(hash, number, finality_proof, verifier)
 		}
@@ -590,7 +590,7 @@ pub mod tests {
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
 	pub fn light_block_import_without_justifications<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		client: Arc<Client<B, E, Block, RA>>,
-		authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
+		authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 		api: Arc<PRA>,
 	) -> Result<NoJustificationsImport<B, E, Block, RA>, ClientError>
 		where

@@ -80,7 +80,7 @@ pub struct Service<Components: components::Components> {
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
@@ -104,7 +104,7 @@ pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 /// Used to hook on telemetry connection established events.
 pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 	/// Executor to which the hook is spawned.
