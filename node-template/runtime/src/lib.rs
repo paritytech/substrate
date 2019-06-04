@@ -200,7 +200,7 @@ construct_runtime!(
 		System: system::{default, Log(ChangesTrieRoot)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
-		Aura: aura::{Module},
+		Aura: aura::{Module, Log(PreRuntime)},
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,

@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 90,
-	impl_version: 91,
+	spec_version: 91,
+	impl_version: 92,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -227,7 +227,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Inherent(Timestamp)},
+		Aura: aura::{Module, Inherent(Timestamp), Log(PreRuntime)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
