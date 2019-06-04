@@ -23,7 +23,7 @@ pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
-pub use sr_primitives::traits::DummyWeight;
+pub use sr_primitives::weights::{WeighableCall, TxWeight, WeighableTx, Weight};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -467,7 +467,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			[ $($t)* ]
 			$(#[doc = $doc_attr])*
-			#[weight = 10]
+			#[weight = $crate::dispatch::TxWeight::default()]
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
@@ -1001,12 +1001,16 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::DummyWeight
+		// no-op wrapper to semantically imply `where $weight: WeighableTx` with a meaningful error message.
+		fn __calculate_weight<T: $crate::dispatch::WeighableTx>(w: T) -> $crate::dispatch::Weight {
+			w.calculate_weight()
+		}
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::WeighableCall
 			for $call_type<$trait_instance $(, $instance)?>
 		{
-			fn weight(&self) -> u32 {
+			fn weight(&self) -> $crate::dispatch::Weight {
 				match *self {
-					$( $call_type::$fn_name( $( ref $param_name ),* ) => $weight, )*
+					$( $call_type::$fn_name(..) => __calculate_weight($weight), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
@@ -1133,8 +1137,8 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
-		impl $crate::dispatch::DummyWeight for $call_type {
-			fn weight(&self) -> u32 {
+		impl $crate::dispatch::WeighableCall for $call_type {
+			fn weight(&self) -> $crate::dispatch::Weight {
 				match self {
 					$( $call_type::$camelcase(call) => call.weight(), )*
 				}
@@ -1337,6 +1341,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
+			#[weight = TxWeight::Basic((10, 100))]
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1344,6 +1349,9 @@ mod tests {
 			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
+
+			#[weight = TxWeight::Max]
+			fn weighted() { unreachable!() }
 		}
 	}
 
@@ -1408,6 +1416,11 @@ mod tests {
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
+				FunctionMetadata {
+					name: DecodeDifferent::Encode("weighted"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
 			];
 
 	struct TraitImpl {}
@@ -1461,5 +1474,15 @@ mod tests {
 	#[should_panic(expected = "on_finalize")]
 	fn on_finalize_should_work() {
 		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
+	}
+
+	#[test]
+	fn weight_should_attach_to_call_enum() {
+		// max weight
+		assert_eq!(Call::<TraitImpl>::weighted().weight(), (4 * 1024 * 1024, 0));
+		// default weight
+		assert_eq!(Call::<TraitImpl>::aux_0().weight(), (0, 1));
+		// custom basic
+		assert_eq!(Call::<TraitImpl>::aux_3().weight(), (10, 100));
 	}
 }

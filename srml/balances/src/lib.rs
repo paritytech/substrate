@@ -157,7 +157,7 @@ use srml_support::traits::{
 use srml_support::dispatch::Result;
 use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating
+	MaybeSerializeDebug, Saturating,
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
@@ -346,7 +346,6 @@ decl_module! {
 		/// of the transfer, the account will be reaped.
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
-		#[weight = 20]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -365,7 +364,6 @@ decl_module! {
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		#[weight = 10]
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] free: T::Balance,

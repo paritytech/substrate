@@ -21,7 +21,9 @@ use serde::{Serialize, Deserialize};
 
 use crate::codec::{Decode, Encode, Input, Output};
 
+/// Type alias for: period of validity.
 pub type Period = u64;
+/// Type alias for: phase within a period when the transaction's lifetime starts.
 pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.

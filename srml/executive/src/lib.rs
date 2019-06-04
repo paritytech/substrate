@@ -82,15 +82,15 @@ use primitives::traits::{
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
 	ValidateUnsigned,
 };
-use srml_support::{Dispatchable, traits::MakePayment};
-use srml_support::dispatch::DummyWeight;
-use parity_codec::{Codec, Encode};
-use system::extrinsics_root;
+use primitives::weights::WeighableCall;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use srml_support::{Dispatchable, traits::MakePayment};
+use parity_codec::{Codec, Encode};
+use system::extrinsics_root;
 
 mod internal {
-	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
+	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -126,7 +126,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + DummyWeight,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
@@ -146,7 +146,7 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + DummyWeight,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
@@ -249,27 +249,13 @@ where
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
-		// Check the size of the block if that extrinsic is applied.
-		// TODO: this has to change to all extrinsics weight and the weight should be fetched, multiplied by the size etc and added to base weight.
-		// To fetch the weight, I have no clue how to do it. But once that is done, we are good to go.
-		// Probably we can stick it to the call Enum of each dispatch? ehh
-		// YES! we can easily get the .function from a checkedExtrinsic.
-		// This below does not work but maybe we can fix it. If not we can a just call decunstract faster.
-		// Note that we are using Applyable here.
-		// let _ = <xt as checkedExtrinsic>.function;
-		// let's not try this
-		let w = xt.weight();
-		println!("++++++++++++ [EXEC] The weight of this tx is {}", w);
-		if <system::Module<System>>::all_extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
+		// Check the weight of the block if that extrinsic is applied.
+		let (base_weight, byte_weight) = xt.weight();
+		let tx_weight = base_weight + encoded_len as u32 * byte_weight;
+		println!("++++++++++++ [EXEC] The weight of this tx is {:?} [{:?}]", tx_weight, (base_weight, byte_weight));
+		if <system::Module<System>>::all_extrinsics_weight() + tx_weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
-
-
-		println!("+++ [EXEC] apply_extrinsic_with_len({}, {}, {})",
-			encoded_len,
-			<system::Module<System>>::all_extrinsics_len(),
-			<system::Module<System>>::extrinsic_count()
-		);
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
@@ -549,27 +535,27 @@ mod tests {
 	}
 
 	#[test]
-	fn block_size_limit_enforced() {
+	fn block_weight_limit_enforced() {
 		let run_test = |should_fail: bool| {
 			let mut t = new_test_ext();
 			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
 			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
 			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
+			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
 				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
-				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
+				assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
 				Executive::apply_extrinsic(xt).unwrap();
 				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
 
 				if should_fail {
 					assert!(res.is_err());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 28);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
 				} else {
 					assert!(res.is_ok());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 56);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
 				}
 			});
@@ -577,6 +563,21 @@ mod tests {
 
 		run_test(false);
 		run_test(true);
+	}
+
+	#[test]
+	fn default_block_weight() {
+		let xt = primitives::testing::TestXt(None, 0, Call::set_balance(33, 69, 69));
+		let mut t = new_test_ext();
+		with_externalities(&mut t, || {
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			assert_eq!(
+				<system::Module<Runtime>>::all_extrinsics_weight(),
+				3 * (0 /*base*/ + 22 /*len*/ * 1 /*byte*/)
+			);
+		});
 	}
 
 	#[test]

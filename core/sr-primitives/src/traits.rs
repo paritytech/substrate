@@ -683,10 +683,6 @@ pub trait Extrinsic {
 	fn is_signed(&self) -> Option<bool> { None }
 }
 
-/// A dummy tx weight for now.
-pub trait DummyWeight{
-	fn weight(&self) -> u32;
-}
 
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;

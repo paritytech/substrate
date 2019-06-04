@@ -17,7 +17,8 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, DummyWeight};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use crate::weights::{WeighableCall, Weight};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -56,14 +57,14 @@ where
 	}
 }
 
-impl<AccountId, Index, Call> traits::DummyWeight
+impl<AccountId, Index, Call> WeighableCall
 	for CheckedExtrinsic<AccountId, Index, Call>
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member + DummyWeight,
+	Call: Member + WeighableCall,
 {
-	fn weight(&self) -> u32 {
+	fn weight(&self) -> Weight {
 		self.function.weight()
 	}
 }

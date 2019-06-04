@@ -19,7 +19,8 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert, DummyWeight};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::weights::{WeighableCall, Weight, DEFAULT_WEIGHT};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -240,8 +241,8 @@ impl<Call> Applyable for TestXt<Call> where
 		(self.2, self.0)
 	}
 }
-impl<Call> DummyWeight for TestXt<Call> {
-	fn weight(&self) -> u32 {
-		10
+impl<Call> WeighableCall for TestXt<Call> {
+	fn weight(&self) -> Weight {
+		DEFAULT_WEIGHT
 	}
 }
