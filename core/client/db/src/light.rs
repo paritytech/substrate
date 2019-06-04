@@ -155,15 +155,15 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
-	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
+	fn info(&self) -> BlockchainInfo<Block> {
 		let meta = self.meta.read();
-		Ok(BlockchainInfo {
+		BlockchainInfo {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
-		})
+		}
 	}
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<BlockStatus> {
@@ -655,12 +655,12 @@ pub(crate) mod tests {
 	fn returns_info() {
 		let db = LightStorage::new_test();
 		let genesis_hash = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
-		let info = db.info().unwrap();
+		let info = db.info();
 		assert_eq!(info.best_hash, genesis_hash);
 		assert_eq!(info.best_number, 0);
 		assert_eq!(info.genesis_hash, genesis_hash);
 		let best_hash = insert_block(&db, HashMap::new(), || default_header(&genesis_hash, 1));
-		let info = db.info().unwrap();
+		let info = db.info();
 		assert_eq!(info.best_hash, best_hash);
 		assert_eq!(info.best_number, 1);
 		assert_eq!(info.genesis_hash, genesis_hash);
@@ -1034,12 +1034,12 @@ pub(crate) mod tests {
 	fn database_is_reopened() {
 		let db = LightStorage::new_test();
 		let hash0 = insert_final_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
-		assert_eq!(db.info().unwrap().best_hash, hash0);
+		assert_eq!(db.info().best_hash, hash0);
 		assert_eq!(db.header(BlockId::Hash(hash0)).unwrap().unwrap().hash(), hash0);
 
 		let db = db.db;
 		let db = LightStorage::from_kvdb(db).unwrap();
-		assert_eq!(db.info().unwrap().best_hash, hash0);
+		assert_eq!(db.info().best_hash, hash0);
 		assert_eq!(db.header(BlockId::Hash::<Block>(hash0)).unwrap().unwrap().hash(), hash0);
 	}
 
