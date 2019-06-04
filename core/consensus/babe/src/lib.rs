@@ -215,7 +215,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
 		config.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
 		on_exit,
 		inherent_data_providers

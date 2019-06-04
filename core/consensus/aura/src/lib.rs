@@ -173,7 +173,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
 		on_exit,
 		inherent_data_providers
