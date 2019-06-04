@@ -16,9 +16,11 @@
 
 //! Configuration for the networking layer of Substrate.
 
-pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, Secret};
+pub use crate::protocol::ProtocolConfig;
+pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, ProtocolId, Secret};
 
 use bitflags::bitflags;
+use consensus::import_queue::ImportQueue;
 use crate::chain::{Client, FinalityProofProvider};
 use parity_codec;
 use crate::on_demand_layer::OnDemand;
@@ -28,35 +30,24 @@ use std::sync::Arc;
 
 /// Service initialization parameters.
 pub struct Params<B: BlockT, S, H: ExHashT> {
-	/// Configuration.
-	pub config: ProtocolConfig,
+	/// Assigned roles for our node.
+	pub roles: Roles,
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 	/// Substrate relay chain access point.
-	pub chain: Arc<Client<B>>,
+	pub chain: Arc<dyn Client<B>>,
 	/// Finality proof provider.
-	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
+	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemand<B>>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
+	/// Name of the protocol to use on the wire. Should be different for each chain.
+	pub protocol_id: ProtocolId,
+	/// Import queue to use.
+	pub import_queue: Box<dyn ImportQueue<B>>,
 	/// Protocol specialization.
 	pub specialization: S,
-}
-
-/// Configuration for the Substrate-specific part of the networking layer.
-#[derive(Clone)]
-pub struct ProtocolConfig {
-	/// Assigned roles.
-	pub roles: Roles,
-}
-
-impl Default for ProtocolConfig {
-	fn default() -> ProtocolConfig {
-		ProtocolConfig {
-			roles: Roles::FULL,
-		}
-	}
 }
 
 bitflags! {

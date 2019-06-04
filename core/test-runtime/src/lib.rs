@@ -34,8 +34,9 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity,
+	ApplyResult,
 	create_runtime_str,
+	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
@@ -121,14 +122,18 @@ impl BlindCheckable for Extrinsic {
 					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
-			Extrinsic::IncludeData(data) => Ok(Extrinsic::IncludeData(data)),
+			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
 		}
 	}
 }
 
 impl ExtrinsicT for Extrinsic {
 	fn is_signed(&self) -> Option<bool> {
-		Some(true)
+		if let Extrinsic::IncludeData(_) = *self {
+			Some(false)
+		} else {
+			Some(true)
+		}
 	}
 }
 
@@ -347,10 +352,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -361,6 +362,16 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					if let Extrinsic::IncludeData(data) = utx {
+						return TransactionValidity::Valid {
+							priority: data.len() as u64,
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						};
+					}
+
 					system::validate_transaction(utx)
 				}
 			}
@@ -461,7 +472,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap();
 				}
 			}
 
@@ -485,10 +496,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -499,6 +506,16 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					if let Extrinsic::IncludeData(data) = utx {
+						return TransactionValidity::Valid {
+							priority: data.len() as u64,
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						};
+					}
+
 					system::validate_transaction(utx)
 				}
 			}
@@ -603,7 +620,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
 

@@ -17,11 +17,11 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, websocket, bandwidth
+	mplex, identity, secio, yamux, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns};
-use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::{tcp, dns, websocket};
+use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -31,20 +31,26 @@ pub use self::bandwidth::BandwidthSinks;
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
 pub fn build_transport(
-	keypair: identity::Keypair
+	keypair: identity::Keypair,
+	wasm_external_transport: Option<wasm_ext::ExtTransport>
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
+	let transport = if let Some(t) = wasm_external_transport {
+		OptionalTransport::some(t)
+	} else {
+		OptionalTransport::none()
+	};
+
 	#[cfg(not(target_os = "unknown"))]
 	let transport = {
-		let transport = tcp::TcpConfig::new();
-		let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
-		dns::DnsConfig::new(transport)
+		let desktop_trans = tcp::TcpConfig::new();
+		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
+			.or_transport(desktop_trans);
+		transport.or_transport(dns::DnsConfig::new(desktop_trans))
 	};
-	#[cfg(target_os = "unknown")]
-	let transport = websocket::BrowserWsConfig::new();
 
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
@@ -62,7 +68,9 @@ pub fn build_transport(
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
 		.with_timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+		// TODO: pass the error directly, instead of calling `to_string()`
+		// https://github.com/libp2p/rust-libp2p/issues/1162
+		.map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))
 		.boxed();
 
 	(transport, sinks)

@@ -204,16 +204,16 @@ impl From<schnorrkel::Signature> for Signature {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Signature {
+impl std::fmt::Debug for Signature {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Signature {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		::std::hash::Hash::hash(&self.0[..], state);
+impl std::hash::Hash for Signature {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -304,15 +304,13 @@ impl Public {
 
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	pub fn to_raw_vec(self) -> Vec<u8> {
-		let r: &[u8; 32] = self.as_ref();
-		r.to_vec()
+	pub fn into_raw_vec(self) -> Vec<u8> {
+		self.0.to_vec()
 	}
 
 	/// Return a slice filled with raw data.
 	pub fn as_slice(&self) -> &[u8] {
-		let r: &[u8; 32] = self.as_ref();
-		&r[..]
+		&self.0
 	}
 
 	/// Return a slice filled with raw data.
@@ -637,7 +635,7 @@ mod test {
 	#[test]
 	fn verify_from_wasm_works() {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
-		// 
+		//
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();

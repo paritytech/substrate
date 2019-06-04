@@ -31,7 +31,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
+	error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -87,12 +87,11 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						inherents_pool: service.inherents_pool(),
 					});
 
 					let client = service.client();
 					let select_chain = service.select_chain()
-						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
+						.ok_or(ServiceError::SelectChainRequired)?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
@@ -180,6 +179,7 @@ construct_service_factory! {
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+				#[allow(deprecated)]
 				let fetch_checker = client.backend().blockchain().fetcher()
 					.upgrade()
 					.map(|fetcher| fetcher.checker().clone())
@@ -204,6 +204,7 @@ construct_service_factory! {
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+				#[allow(deprecated)]
 				Ok(LongestChain::new(
 					client.backend().clone(),
 					client.import_lock()
@@ -230,7 +231,7 @@ mod tests {
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let block_id = BlockId::number(service.client().info().unwrap().chain.best_number);
+			let block_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&block_id).unwrap().unwrap();
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {

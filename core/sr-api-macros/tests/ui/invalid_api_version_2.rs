@@ -8,4 +8,3 @@ decl_runtime_apis! {
 }
 
 fn main() {}
-

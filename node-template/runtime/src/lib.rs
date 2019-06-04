@@ -155,7 +155,7 @@ impl indices::Trait for Runtime {
 	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
 	/// Determine whether an account is dead.
 	type IsDeadAccount = Balances;
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 }
 
@@ -172,7 +172,7 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 
 	type TransactionPayment = ();
@@ -181,7 +181,7 @@ impl balances::Trait for Runtime {
 }
 
 impl sudo::Trait for Runtime {
-	/// The uniquitous event type.
+	/// The ubiquitous event type.
 	type Event = Event;
 	type Proposal = Call;
 }
@@ -200,7 +200,7 @@ construct_runtime!(
 		System: system::{default, Log(ChangesTrieRoot)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
-		Aura: aura::{Module},
+		Aura: aura::{Module, Log(PreRuntime)},
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
@@ -239,10 +239,6 @@ impl_runtime_apis! {
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			Executive::initialize_block(header)
-		}
-
-		fn authorities() -> Vec<AuthorityId> {
-			panic!("Deprecated, please use `AuthoritiesApi`.")
 		}
 	}
 

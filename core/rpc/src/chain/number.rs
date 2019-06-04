@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::Deserialize;
+//! Chain RPC Block number type.
+
+use serde::{Serialize, Deserialize};
 use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;
-use runtime_primitives::traits;
 
 /// RPC Block number type
 ///
@@ -26,7 +27,7 @@ use runtime_primitives::traits;
 /// or we attempt to parse given hex value.
 /// We do that for consistency with the returned type, default generic header
 /// serializes block number as hex to avoid overflows in JavaScript.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum NumberOrHex<Number> {
 	/// The original header number type of block.

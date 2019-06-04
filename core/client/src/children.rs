@@ -26,7 +26,7 @@ use std::hash::Hash;
 pub fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
->(db: &KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
+>(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
 	let mut buf = prefix.to_vec();
 	parent_hash.using_encoded(|s| buf.extend(s));
 
@@ -116,6 +116,6 @@ mod tests {
 		let r2: Vec<u32> = read_children(&db, None, PREFIX, 1_2).unwrap();
 
 		assert_eq!(r1, vec![1_3, 1_5]);
-		assert_eq!(r2.len(), 0);		
+		assert_eq!(r2.len(), 0);
 	}
 }

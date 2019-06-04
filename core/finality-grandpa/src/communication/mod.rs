@@ -39,7 +39,7 @@ use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
-use network::{consensus_gossip as network_gossip, Service as NetworkService};
+use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
@@ -99,6 +99,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// Only should be used in case of consensus stall.
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
 
+	/// Register a message with the gossip service, it isn't broadcast right
+	/// away to any peers, but may be sent to new peers joining or when asked to
+	/// broadcast the topic. Useful to register previous messages on node
+	/// startup.
+	fn register_gossip_message(&self, topic: Block::Hash, data: Vec<u8>);
+
 	/// Send a message to a bunch of specific peers, even if they've seen it already.
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
 
@@ -145,9 +151,19 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
+
 		self.with_gossip(
 			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
 		)
+	}
+
+	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
+		let msg = ConsensusMessage {
+			engine_id: GRANDPA_ENGINE_ID,
+			data,
+		};
+
+		self.with_gossip(move |gossip, _| gossip.register_message(topic, msg))
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
@@ -212,9 +228,12 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
+	/// If a voter set state is given it registers previous round votes with the
+	/// gossip service.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
+		set_state: Option<(u64, &crate::environment::VoterSetState<B>)>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 	) -> (
 		Self,
@@ -224,6 +243,41 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let (validator, report_stream) = GossipValidator::new(config);
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
+
+		if let Some((set_id, set_state)) = set_state {
+			// register all previous votes with the gossip service so that they're
+			// available to peers potentially stuck on a previous round.
+			for round in set_state.completed_rounds().iter() {
+				let topic = round_topic::<B>(round.number, set_id);
+
+				// we need to note the round with the gossip validator otherwise
+				// messages will be ignored.
+				validator.note_round(Round(round.number), SetId(set_id), |_, _| {});
+
+				for signed in round.votes.iter() {
+					let message = gossip::GossipMessage::VoteOrPrecommit(
+						gossip::VoteOrPrecommitMessage::<B> {
+							message: signed.clone(),
+							round: Round(round.number),
+							set_id: SetId(set_id),
+						}
+					);
+
+					service.register_gossip_message(
+						topic,
+						message.encode(),
+					);
+				}
+
+				trace!(target: "afg",
+					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
+					round.votes.len(),
+					topic,
+					round.number,
+					set_id,
+				);
+			}
+		}
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());

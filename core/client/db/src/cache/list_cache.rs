@@ -45,7 +45,7 @@ use log::warn;
 
 use client::error::{Error as ClientError, Result as ClientResult};
 use runtime_primitives::traits::{
-	Block as BlockT, NumberFor, Zero, Bounded, SaturatedConversion, CheckedSub
+	Block as BlockT, NumberFor, Zero, Bounded, CheckedSub
 };
 
 use crate::cache::{CacheItemT, ComplexBlockId, EntryType};
