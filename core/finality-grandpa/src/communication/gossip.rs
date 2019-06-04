@@ -197,7 +197,7 @@ impl<B: BlockT> KeepTopics<B> {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 		self.rounds.push_back((round, set_id));
 
-        let mut pruned_rounds = vec![];
+		let mut pruned_rounds = vec![];
 
 		// the 1 is for the current round.
 		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
@@ -454,7 +454,7 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	incoming_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
-    incoming_msg_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
+	incoming_msg_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
 	outgoing_votes_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
 }
 
@@ -469,7 +469,7 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
 			incoming_votes_tally: Default::default(),
-            incoming_msg_tally: Default::default(),
+			incoming_msg_tally: Default::default(),
 			outgoing_votes_tally: Default::default(),
 		}
 	}
@@ -558,8 +558,8 @@ impl<Block: BlockT> Inner<Block> {
 		// once we're received more than two messages of that kind.
 		// We report peers who send us a third or more of message of a given kind,
 		// when we've already sent out two messages of that kind for that voter to that peer.
-        // We also report peers who send us in excess of two messages of a kind,
-        // regardless of what we've sent them.
+		// We also report peers who send us in excess of two messages of a kind,
+		// regardless of what we've sent them.
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
 				if per_peer_tally.primary_proposals < 3 {
