@@ -71,9 +71,25 @@ check-line-width:
   allow_failure:                   false
 
 
-test-linux-stable:                 &test
+prebuild-wasm-binaries:
   stage:                           test
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when:                          on_success
+    expire_in:                     7 days
+    paths:
+      - node/runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm
+  tags:
+    - linux-docker
+  script:
+    - ./scripts/build.sh
+
+
+test-linux-stable:                 &test
+  stage:                           build
   <<:                              *compiler_info
+  dependencies:
+    - prebuild-wasm-binaries
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
@@ -92,7 +108,6 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
@@ -136,15 +151,16 @@ check-web-wasm:
 build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
-  <<:                              *build-only
+  # debug <<:                              *build-only
   <<:                              *compiler_info
   except:
     variables:
       - $DEPLOY_TAG
+  dependencies:
+    - prebuild-wasm-binaries
   tags:
     - linux-docker
   script:
-    - ./scripts/build.sh
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
@@ -166,17 +182,18 @@ build-rust-doc-release:
   stage:                           build
   <<:                              *compiler_info
   allow_failure:                   true
+  dependencies:
+    - prebuild-wasm-binaries
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
+  # debug <<:                              *build-only
   tags:
     - linux-docker
   script:
-    - ./scripts/build.sh
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
