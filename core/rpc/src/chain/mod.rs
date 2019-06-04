@@ -16,26 +16,27 @@
 
 //! Substrate blockchain API.
 
-use std::sync::Arc;
+pub mod error;
+pub mod number;
 
-use log::warn;
-use client::{self, Client, BlockchainEvents};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{H256, Blake2Hasher};
-use crate::rpc::Result as RpcResult;
-use crate::rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::{BlockId, SignedBlock};
-use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
-
-use crate::subscriptions::Subscriptions;
-
-mod error;
 #[cfg(test)]
 mod tests;
-mod number;
 
+use std::sync::Arc;
+
+use client::{self, Client, BlockchainEvents};
+use crate::rpc::Result as RpcResult;
+use crate::rpc::futures::{stream, Future, Sink, Stream};
+use crate::subscriptions::Subscriptions;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use log::warn;
+use primitives::{H256, Blake2Hasher};
+use runtime_primitives::generic::{BlockId, SignedBlock};
+use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use self::error::Result;
+
+pub use self::gen_client::Client as ChainClient;
 
 /// Substrate blockchain API
 #[rpc]
