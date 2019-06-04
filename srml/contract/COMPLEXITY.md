@@ -85,9 +85,10 @@ execution contexts operate on the AccountDb. All changes are flushed into underl
 
 ## Relation to the underlying storage
 
-At present, `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. Each overlay is
-represented by a `Map`. On a commit from an overlay to an overlay, maps are merged. On commit from an overlay to the
-bottommost `AccountDb` all changes are flushed to the storage and on revert, the overlay is just discarded.
+At present, `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. The direct
+storage `AccountDb` leverages child tries. Each overlay is represented by a `Map`. On a commit from an overlay to an
+overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage
+and on revert, the overlay is just discarded.
 
 > ℹ️ The underlying storage has a overlay layer implemented as a `Map`. If the runtime reads a storage location and the
 > respective key doesn't exist in the overlay, then the underlying storage performs a DB access, but the value won't be
