@@ -388,7 +388,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 /// Method is executed using passed header as environment' current block.
 /// Proof includes both environment preparation proof and method execution proof.
 pub fn prove_execution<Block, S, E>(
-	state: S,
+	mut state: S,
 	header: Block::Header,
 	executor: &E,
 	method: &str,
@@ -399,13 +399,13 @@ pub fn prove_execution<Block, S, E>(
 		S: StateBackend<Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 {
-	let trie_state = state.try_into_trie_backend()
+	let trie_state = state.as_trie_backend()
 		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
-		&trie_state,
+		trie_state,
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
