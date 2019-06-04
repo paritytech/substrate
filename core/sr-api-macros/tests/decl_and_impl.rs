@@ -74,9 +74,6 @@ impl_runtime_apis! {
 		fn initialize_block(_: &<Block as BlockT>::Header) {
 			unimplemented!()
 		}
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
-			unimplemented!()
-		}
 	}
 }
 
