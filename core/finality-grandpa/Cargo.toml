@@ -23,7 +23,11 @@ network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-grandpa = { package = "finality-grandpa", version = "0.7.2", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
+consensus_safety = { package = "substrate-consensus-safety", path = "../consensus/safety" }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../consensus/safety/primitives" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+node-runtime = { path = "../../node/runtime" }
 
 [dev-dependencies]
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }

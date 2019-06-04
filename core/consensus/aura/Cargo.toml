@@ -23,6 +23,7 @@ safety-primitives = { package = "substrate-consensus-safety-primitives", path = 
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 node-runtime = { path = "../../../node/runtime" }
 futures = "0.1.17"

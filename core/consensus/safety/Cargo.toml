@@ -10,5 +10,7 @@ client = { package = "substrate-client", path = "../../client" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 node-runtime = { path = "../../../node/runtime" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+substrate-primitives = { path = "../../primitives" }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 parity-codec = "3.5.1"
 log = "0.4"
