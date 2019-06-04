@@ -17,7 +17,6 @@
 //! `NodeCodec` implementation for Substrate's trie format.
 
 use rstd::marker::PhantomData;
-use rstd::vec::Vec;
 use codec::{Encode, Decode, Compact};
 use hash_db::Hasher;
 use trie_db::{self, NibbleSlice, NibbleOps, node::Node, ChildReference, Partial, ChildBitmap, ChildSliceIx};
@@ -28,6 +27,8 @@ use crate::legacy::util::{EMPTY_TRIE, LEAF_NODE_OFFSET, EXTENSION_NODE_OVER,
 	EXTENSION_NODE_OFFSET, branch_node_buf};
 use rstd::borrow::Borrow;
 use super::node_header::NodeHeader;
+#[cfg(not(feature = "std"))]
+use rstd::prelude::{vec, Vec};
 
 /// Concrete implementation of a `NodeCodec` with Parity Codec encoding, generic over the `Hasher`
 #[derive(Default, Clone)]
@@ -136,8 +137,7 @@ impl<H: Hasher, N: NibbleOps, BM: ChildBitmap<Error = Error>> TraitNodeCodec<H, 
 	fn branch_node(
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		maybe_value: Option<&[u8]>) -> Vec<u8> {
-		let mut output = Vec::with_capacity(BM::ENCODED_LEN + 1);
-		(0..BM::ENCODED_LEN + 1).for_each(|_| output.push(0));
+		let mut output = vec![0;BM::ENCODED_LEN + 1];
 		let mut prefix: BM::Buff = Default::default();
 		let have_value = if let Some(value) = maybe_value {
 			value.encode_to(&mut output);
