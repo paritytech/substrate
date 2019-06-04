@@ -212,14 +212,14 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 		threshold: config.threshold(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
-	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
+	Ok(slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
 		config.0,
 		select_chain,
 		worker,
 		sync_oracle,
 		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct BabeWorker<C, E, I, SO> {

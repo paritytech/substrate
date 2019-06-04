@@ -98,27 +98,18 @@ where
 			}
 		};
 
-		let slot_worker_future = match start_slot_worker::<_, _, _, T, _, SC, _>(
+		let slot_worker_future = start_slot_worker::<_, _, _, T, _, SC, _>(
 			slot_duration.clone(),
 			select_chain,
 			worker,
 			sync_oracle,
 			on_exit,
 			inherent_data_providers,
-		) {
-			Ok(slot_worker_future) => {
-				result_sender
-					.send(Ok(()))
-					.expect("Receive is not dropped before receiving a result; qed");
-				slot_worker_future
-			}
-			Err(e) => {
-				result_sender
-					.send(Err(e))
-					.expect("Receive is not dropped before receiving a result; qed");
-				return;
-			}
-		};
+		);
+
+		result_sender
+			.send(Ok(()))
+			.expect("Receive is not dropped before receiving a result; qed");
 
 		let _ = runtime.block_on(slot_worker_future);
 	});
@@ -136,7 +127,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<impl Future<Item = (), Error = ()>, consensus_common::Error>
+) -> impl Future<Item = (), Error = ()>
 where
 	B: Block,
 	C: SelectChain<B> + Clone,
@@ -192,7 +183,7 @@ where
 		}
 	);
 
-	Ok(work.select(on_exit).then(|_| Ok(())))
+	work.select(on_exit).then(|_| Ok(()))
 }
 
 /// A header which has been checked

@@ -170,14 +170,14 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 		&inherent_data_providers,
 		slot_duration.0.slot_duration()
 	)?;
-	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		select_chain,
 		worker,
 		sync_oracle,
 		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
