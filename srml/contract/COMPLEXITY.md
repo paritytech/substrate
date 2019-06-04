@@ -242,7 +242,7 @@ This function receives a `key` as an argument. It consists of the following step
 Key is of a constant size. Therefore, the sandbox memory load can be considered to be of constant complexity.
 
 Unless the value is cached, a DB read will be performed. The size of the value is not known until the read is
-performed. Moreover, the DB read has to be synchronous and no progress can be made before the value is known.
+performed. Moreover, the DB read has to be synchronous and no progress can be made until the value is fetched.
 
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
 DB read.
