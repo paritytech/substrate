@@ -85,6 +85,7 @@ prebuild-wasm-binaries:
   script:
     - ./scripts/build.sh
     - ls node/runtime/wasm/target/wasm32-unknown-unknown/release/ # debug
+    # - find ./node/runtime/wasm/target/wasm32-unknown-unknown/release/ -depth -not -name node_template_runtime_wasm.compact.wasm -not -name node -delete
 
 
 test-linux-stable:                 &test
@@ -110,6 +111,7 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   script:
+    - ls node/runtime/wasm/target/wasm32-unknown-unknown/release/ # debug
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
