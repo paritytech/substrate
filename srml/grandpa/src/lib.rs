@@ -215,6 +215,10 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
+		/// Report equivocation in Grandpa.
+		fn report_equivocation(_origin, _equivocation_proof: Vec<u8>) {
+		}
+
 		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
