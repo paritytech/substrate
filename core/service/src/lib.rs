@@ -749,21 +749,20 @@ macro_rules! construct_service_factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::LongestChain;
 	use consensus_common::SelectChain;
 	use runtime_primitives::traits::BlindCheckable;
-	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}};
+	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}, TestClientBuilder};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
-		let client = Arc::new(substrate_test_client::new());
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
 		let pool = Arc::new(TransactionPool::new(
 			Default::default(),
 			transaction_pool::ChainApi::new(client.clone())
 		));
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
-			.best_chain().unwrap();
+		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
