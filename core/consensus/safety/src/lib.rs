@@ -23,17 +23,11 @@ use transaction_pool::txpool::{self, Pool as TransactionPool};
 use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
 use std::sync::Arc;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use log::{error, warn, debug, info, trace};
-use substrate_primitives::{H256, Blake2Hasher};
-use grandpa::BlockNumberOps;
-use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
-	blockchain::HeaderBackend,
-};
+use client::blockchain::HeaderBackend;
 
-// A, B, E, Block, RA
 /// Submit report call to the transaction pool.
 pub fn submit_report_call<C, A, Block>(
 	client: &Arc<C>,
@@ -42,11 +36,7 @@ pub fn submit_report_call<C, A, Block>(
 ) where
 	Block: BlockT + 'static,
 	C: HeaderBackend<Block>,
-	// B: Backend<Block, Blake2Hasher> + 'static,
-	// E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	// RA: 'static + Send + Sync,
 	A: txpool::ChainApi<Block=Block>,
-	// NumberFor<Block>: BlockNumberOps,
 {
 	info!(target: "accountable-safety", "Submitting report call to tx pool");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);

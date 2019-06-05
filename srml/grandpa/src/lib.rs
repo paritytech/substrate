@@ -42,10 +42,8 @@ use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
-use system::ensure_signed;
 use primitives::traits::{
-	MaybeSerializeDebug, ValidateUnsigned, Verify, Digest, Header, Block, 
-	DigestItem, NumberFor,
+	MaybeSerializeDebug, ValidateUnsigned, Verify,
 };
 use primitives::transaction_validity::TransactionValidity;
 
