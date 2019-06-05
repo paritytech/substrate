@@ -20,7 +20,7 @@ runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4"
 rhododendron = { version = "0.5.0", features = ["codec"] }
 exit-future = "0.1"
