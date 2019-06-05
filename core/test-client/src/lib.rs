@@ -29,6 +29,7 @@ pub use runtime;
 
 use std::sync::Arc;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
 #[cfg(feature = "include-wasm-blob")]
 mod local_executor {
@@ -83,11 +84,81 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 	>
 >;
 
-//pub type TestClientBuilder = generic_test_client::TestClientBuilder<runtime::Block, init_builder>;
-pub type TestClientBuilder = generic_test_client::TestClientBuilder<runtime::Block>;
+/// Parameters of test-client builder with test-runtime.
+#[derive(Default)]
+pub struct GenesisParameters {
+	support_changes_trie: bool,
+}
 
-fn init_builder(builder: &mut TestClientBuilder) {
+/// A `TestClient` with `test-runtime` builder.
+pub type TestClientBuilder = generic_test_client::TestClientBuilder<GenesisParameters>;
 
+/// A `test-runtime` extensions to `TestClientBuilder`.
+pub trait TestClientBuilderExt: Sized {
+	/// Create a new instance of the test client builder.
+	fn new() -> Self;
+
+	/// Enable or disable support for changes trie in genesis.
+	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
+
+	/// Build the test client.
+	#[cfg(feature = "include-wasm-blob")]
+	fn build(self) -> client::Client<
+		Backend, Executor, runtime::Block, runtime::RuntimeApi
+	>;
+
+	/// Build the test client with the given backend.
+	#[cfg(feature = "include-wasm-blob")]
+	fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
+		B,
+		client::LocalCallExecutor<B, NativeExecutor<LocalExecutor>>,
+		runtime::Block,
+		runtime::RuntimeApi
+	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher>;
+}
+
+impl TestClientBuilderExt for TestClientBuilder {
+	fn new() -> Self {
+		generic_test_client::TestClientBuilder::with_genesis_storage(
+			|params| {
+				let mut storage = genesis_config(params.support_changes_trie).genesis_map();
+
+				let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+					storage.clone().into_iter()
+				);
+				let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
+				storage.extend(additional_storage_with_genesis(&block));
+
+				(storage, Default::default())
+			},
+			GenesisParameters::default(),
+		)
+	}
+
+	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
+		self.genesis_storage_params_mut().support_changes_trie = support_changes_trie;
+		self
+	}
+
+	#[cfg(feature = "include-wasm-blob")]
+	fn build(self) -> client::Client<
+		Backend, Executor, runtime::Block, runtime::RuntimeApi
+	> {
+		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
+		self.build_with_backend(backend)
+	}
+
+	#[cfg(feature = "include-wasm-blob")]
+	fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
+		B,
+		client::LocalCallExecutor<B, NativeExecutor<LocalExecutor>>,
+		runtime::Block,
+		runtime::RuntimeApi
+	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher> {
+		let executor = client::LocalCallExecutor::new(backend.clone(), NativeExecutor::new(None));
+
+		self.build_with(backend, executor)
+	}
 }
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
@@ -121,7 +192,9 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(blockchain.clone(), fetcher);
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
-	client::Client::new(backend, call_executor, genesis_config(false).genesis_map(), Default::default()).unwrap()
+
+	TestClientBuilder::new()
+		.build_with(backend, call_executor)
 }
 
 /// Creates new client instance used for tests with the given api execution strategy.
@@ -129,7 +202,9 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 pub fn new_with_execution_strategy(
 	execution_strategy: ExecutionStrategy
 ) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	TestClientBuilder::new().set_execution_strategy(execution_strategy).build()
+	TestClientBuilder::new()
+		.set_execution_strategy(execution_strategy)
+		.build()
 }
 
 /// Creates new test client instance that suports changes trie creation.
@@ -137,7 +212,9 @@ pub fn new_with_execution_strategy(
 pub fn new_with_changes_trie()
 	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
 {
-	TestClientBuilder::new().set_support_changes_trie(true).build()
+	TestClientBuilder::new()
+		.set_support_changes_trie(true)
+		.build()
 }
 
 /// Creates new client instance used for tests with an explicitly provided backend.
@@ -156,41 +233,4 @@ pub fn new_with_backend<B>(
 	TestClientBuilder::new()
 		.set_support_changes_trie(support_changes_trie)
 		.build_with_backend(backend)
-}
-
-trait TestClientBuilderExt: Sized {
-	/// Build the test client.
-	#[cfg(feature = "include-wasm-blob")]
-	fn build(self) -> client::Client<
-		Backend, Executor, runtime::Block, runtime::RuntimeApi
-	>;
-
-	/// Build the test client with the given backend.
-	#[cfg(feature = "include-wasm-blob")]
-	fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
-		B,
-		client::LocalCallExecutor<B, NativeExecutor<LocalExecutor>>,
-		runtime::Block,
-		runtime::RuntimeApi
-	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher>;
-}
-
-impl TestClientBuilderExt for TestClientBuilder {
-	#[cfg(feature = "include-wasm-blob")]
-	fn build(self) -> client::Client<
-		Backend, Executor, runtime::Block, runtime::RuntimeApi
-	> {
-		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
-		self.build_with_backend(backend)
-	}
-
-	#[cfg(feature = "include-wasm-blob")]
-	fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
-		B,
-		client::LocalCallExecutor<B, NativeExecutor<LocalExecutor>>,
-		runtime::Block,
-		runtime::RuntimeApi
-	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher> {
-		self.build_with(backend, None)
-	}
 }

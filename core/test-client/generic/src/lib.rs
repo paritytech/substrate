@@ -29,13 +29,13 @@ pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 pub use primitives::Blake2Hasher;
 pub use state_machine::ExecutionStrategy;
 
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
 use futures::future::FutureResult;
 use hash_db::Hasher;
 use primitives::storage::well_known_keys;
 use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
+	Block as BlockT, NumberFor
 };
 use client::LocalCallExecutor;
 
@@ -49,46 +49,49 @@ pub type LightBackend<Block> = client::light::backend::Backend<
 /// Test client light fetcher.
 pub struct LightFetcher;
 
-type ExtraStorage = HashMap<Vec<u8>, Vec<u8>>;
-
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Block> {
+pub struct TestClientBuilder<GenesisStorageParams = ()> {
 	execution_strategies: ExecutionStrategies,
-	genesis_extension: ExtraStorage,
-	support_changes_trie: bool,
-	genesis_config: Box<Fn(bool) -> StorageOverlay>,
-	additional_storage_with_genesis: Box<Fn(&Block) -> ExtraStorage>,
+	genesis_init: Box<Fn(GenesisStorageParams) -> (StorageOverlay, ChildrenStorageOverlay)>,
+	genesis_params: GenesisStorageParams,
 }
 
-impl<Block> TestClientBuilder<Block> {
+impl<GenesisStorageParams: Default> TestClientBuilder<GenesisStorageParams> {
 	/// Create a new instance of the test client builder.
 	pub fn new() -> Self {
+		Self::with_genesis_storage(|_| Default::default(), Default::default())
+	}
+}
+
+impl<GenesisStorageParams> TestClientBuilder<GenesisStorageParams> {
+	/// Set new genesis storage initialisation code.
+	pub fn with_genesis_storage(
+		genesis_init: impl Fn(GenesisStorageParams) -> (StorageOverlay, ChildrenStorageOverlay) + 'static,
+		genesis_params: GenesisStorageParams,
+	) -> Self {
 		TestClientBuilder {
 			execution_strategies: ExecutionStrategies::default(),
-			genesis_extension: HashMap::default(),
-			support_changes_trie: false,
-			genesis_config: Box::new(|_| StorageOverlay::default()),
-			additional_storage_with_genesis: Box::new(|_| ExtraStorage::default()),
+			genesis_init: Box::new(genesis_init) as _,
+			genesis_params,
 		}
 	}
 
-	/// Set the genesis storage creator.
-	#[deprecated]
-	pub fn set_genesis_config(
-		mut self,
-		genesis_config: impl Fn(bool) -> StorageOverlay + 'static,
-	) -> Self {
-		self.genesis_config = Box::new(genesis_config) as _;
-		self
+	/// Alter the genesis storage parameters.
+	pub fn genesis_storage_params_mut(&mut self) -> &mut GenesisStorageParams {
+		&mut self.genesis_params
 	}
 
-	/// Set the genesis storage creator.
-	#[deprecated]
-	pub fn set_additional_storage_with_genesis(
+	/// Extend genesis storage.
+	pub fn extend_genesis_storage(
 		mut self,
-		extra_storage: impl Fn(&Block) -> ExtraStorage + 'static,
-	) -> Self {
-		self.additional_storage_with_genesis = Box::new(extra_storage) as _;
+		extender: impl Fn(&mut (StorageOverlay, ChildrenStorageOverlay)) + 'static,
+	) -> Self where GenesisStorageParams: 'static {
+		let genesis_init = std::mem::replace(&mut self.genesis_init, Box::new(|_| Default::default()));
+		self.genesis_init = Box::new(move |params| {
+			let mut storage = (*genesis_init)(params);
+			(extender)(&mut storage);
+			storage
+		});
 		self
 	}
 
@@ -107,25 +110,8 @@ impl<Block> TestClientBuilder<Block> {
 		self
 	}
 
-	/// Set an extension of the genesis storage.
-	#[deprecated]
-	pub fn set_genesis_extension(
-		mut self,
-		extension: HashMap<Vec<u8>, Vec<u8>>
-	) -> Self {
-		self.genesis_extension = extension;
-		self
-	}
-
-	/// Enable/Disable changes trie support.
-	#[deprecated]
-	pub fn set_support_changes_trie(mut self, enable: bool) -> Self {
-		self.support_changes_trie = enable;
-		self
-	}
-
 	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<E, RuntimeApi>(
+	pub fn build_with_native_executor<Block, E, RuntimeApi>(
 		self,
 		executor: impl Into<Option<executor::NativeExecutor<E>>>,
 	) -> client::Client<
@@ -138,56 +124,46 @@ impl<Block> TestClientBuilder<Block> {
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
+		let executor = executor.into().unwrap_or_else(|| executor::NativeExecutor::new(None));
+		let executor = LocalCallExecutor::new(backend.clone(), executor);
+
 		self.build_with(backend, executor)
 	}
 
 	/// Build the test client with the given native executor.
-	pub fn build_with<E, Backend, RuntimeApi>(
+	pub fn build_with<Block, Executor, Backend, RuntimeApi>(
 		self,
 		backend: Arc<Backend>,
-		executor: impl Into<Option<executor::NativeExecutor<E>>>,
+		executor: Executor,
 	) -> client::Client<
 		Backend,
-		client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+		Executor,
 		Block,
 		RuntimeApi,
 	> where
-		E: executor::NativeExecutionDispatch,
+		Executor: client::CallExecutor<Block, Blake2Hasher>,
 		Backend: client::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
-		let executor = executor.into().unwrap_or_else(|| executor::NativeExecutor::new(None));
-		let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+		let storage = {
+			let mut storage = (self.genesis_init)(self.genesis_params);
+
+			// Add some child storage keys.
+			storage.1.insert(
+				well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect(),
+				vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect()
+			);
+
+			storage
+		};
 
 		client::Client::new(
 			backend,
 			executor,
-			self.genesis_storage(),
+			storage,
 			self.execution_strategies
 		).expect("Creates new client")
-	}
-
-	fn genesis_storage(
-		&self,
-	) -> (StorageOverlay, ChildrenStorageOverlay) where
-		Block: BlockT
-	{
-		let mut storage = (*self.genesis_config)(self.support_changes_trie);
-		storage.extend(self.genesis_extension.clone());
-
-		let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.clone().into_iter()
-		);
-		let block: Block = client::genesis::construct_genesis_block(state_root);
-		storage.extend((*self.additional_storage_with_genesis)(&block));
-
-		let mut child_storage = ChildrenStorageOverlay::default();
-		child_storage.insert(
-			well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect(),
-			vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect()
-		);
-
-		(storage, child_storage)
 	}
 }
 
