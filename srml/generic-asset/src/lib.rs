@@ -615,7 +615,7 @@ impl<T: Trait> Module<T> {
 
 	/// Deduct up to `amount` from reserved balance of `who`. This function cannot fail.
 	///
-	/// much funds up to `amount` will be deducted as possible. If this is less than `amount`
+	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	pub fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
