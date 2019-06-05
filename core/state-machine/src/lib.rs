@@ -222,7 +222,7 @@ pub trait Externalities<H: Hasher> {
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> where H::Out: Ord;
 
 	/// Returns offchain externalities extension if present.
-	fn offchain(&mut self) -> Option<&mut offchain::Externalities>;
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -502,7 +502,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	pub fn execute(
 		&mut self,
 		strategy: ExecutionStrategy,
-	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>> {
+	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<dyn Error>> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
 		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -613,7 +613,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		manager: ExecutionManager<Handler>,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
-	) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>> where
+	) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<dyn Error>> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(
@@ -674,7 +674,7 @@ pub fn prove_execution<B, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -682,7 +682,7 @@ where
 	H::Out: Ord + 'static,
 {
 	let trie_backend = backend.as_trie_backend()
-		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_execution_on_trie_backend(trie_backend, overlay, exec, method, call_data)
 }
 
@@ -701,7 +701,7 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
@@ -736,7 +736,7 @@ pub fn execution_proof_check<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<Vec<u8>, Box<Error>>
+) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
@@ -753,7 +753,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<Vec<u8>, Box<Error>>
+) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
@@ -780,7 +780,7 @@ where
 pub fn prove_read<B, H>(
 	mut backend: B,
 	key: &[u8]
-) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -788,7 +788,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(
-			||Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>
+			||Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>
 		)?;
 	prove_read_on_trie_backend(trie_backend, key)
 }
@@ -798,14 +798,14 @@ pub fn prove_child_read<B, H>(
 	mut backend: B,
 	storage_key: &[u8],
 	key: &[u8],
-) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
 	H::Out: Ord
 {
 	let trie_backend = backend.as_trie_backend()
-		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_child_read_on_trie_backend(trie_backend, storage_key, key)
 }
 
@@ -814,14 +814,14 @@ where
 pub fn prove_read_on_trie_backend<S, H>(
 	trie_backend: &TrieBackend<S, H>,
 	key: &[u8]
-) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
-	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)?;
+	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	Ok((result, proving_backend.extract_proof()))
 }
 
@@ -830,15 +830,14 @@ pub fn prove_child_read_on_trie_backend<S, H>(
 	trie_backend: &TrieBackend<S, H>,
 	storage_key: &[u8],
 	key: &[u8]
-) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
-	let result = proving_backend.child_storage(storage_key, key)
-		.map_err(|e| Box::new(e) as Box<Error>)?;
+	let result = proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	Ok((result, proving_backend.extract_proof()))
 }
 
@@ -847,7 +846,7 @@ pub fn read_proof_check<H>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>,
 	key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<Error>>
+) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Ord
@@ -862,7 +861,7 @@ pub fn read_child_proof_check<H>(
 	proof: Vec<Vec<u8>>,
 	storage_key: &[u8],
 	key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<Error>>
+) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Ord
@@ -876,12 +875,12 @@ where
 pub fn read_proof_check_on_proving_backend<H>(
 	proving_backend: &TrieBackend<MemoryDB<H>, H>,
 	key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<Error>>
+) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Ord
 {
-	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
+	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Check child storage read proof on pre-created proving backend.
@@ -889,20 +888,24 @@ pub fn read_child_proof_check_on_proving_backend<H>(
 	proving_backend: &TrieBackend<MemoryDB<H>, H>,
 	storage_key: &[u8],
 	key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<Error>>
+) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Ord
 {
-	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<Error>)
+	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
 /// differs from previous OR config decode has failed.
-pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
+pub(crate) fn set_changes_trie_config(
+	overlay: &mut OverlayedChanges,
+	config: Option<Vec<u8>>,
+	final_check: bool,
+) -> Result<(), Box<dyn Error>> {
 	let config = match config {
 		Some(v) => Some(Decode::decode(&mut &v[..])
-			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
+			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
 		None => None,
 	};
 
@@ -920,16 +923,16 @@ pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Op
 
 /// Reads storage value from overlay or from the backend.
 fn try_read_overlay_value<H, B>(overlay: &OverlayedChanges, backend: &B, key: &[u8])
-	-> Result<Option<Vec<u8>>, Box<Error>>
+	-> Result<Option<Vec<u8>>, Box<dyn Error>>
 where
 	H: Hasher,
-
 	B: Backend<H>,
 {
 	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
 		Some(value) => Ok(value),
-		None => backend.storage(key)
-			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<Error>),
+		None => backend
+			.storage(key)
+			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<dyn Error>),
 	}
 }
 

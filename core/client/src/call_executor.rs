@@ -125,7 +125,7 @@ where
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<state_machine::Error>
+					as Box<dyn state_machine::Error>
 			)?;
 		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
@@ -246,7 +246,7 @@ where
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<state_machine::Error>
+							as Box<dyn state_machine::Error>
 					)?;
 
 				let backend = state_machine::ProvingBackend::new_with_recorder(

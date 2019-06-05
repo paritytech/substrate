@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream};
 use tempdir::TempDir;
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use service::{
 	ServiceFactory,
@@ -39,6 +39,9 @@ use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPe
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
+/// Maximum duration of single wait call.
+const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
+
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
 	authority_nodes: Vec<(u32, Arc<F::FullService>, Multiaddr)>,
@@ -52,14 +55,22 @@ struct TestNet<F: ServiceFactory> {
 impl<F: ServiceFactory> TestNet<F> {
 	pub fn run_until_all_full<P: Send + Sync + Fn(u32, &F::FullService) -> bool + 'static>(&mut self, predicate: P) {
 		let full_nodes = self.full_nodes.clone();
-		let interval = Interval::new_interval(Duration::from_millis(100)).map_err(|_| ()).for_each(move |_| {
-			if full_nodes.iter().all(|&(ref id, ref service, _)| predicate(*id, service)) {
-				Err(())
-			} else {
-				Ok(())
-			}
-		});
-		self.runtime.block_on(interval).ok();
+		let interval = Interval::new_interval(Duration::from_millis(100))
+			.map_err(|_| ())
+			.for_each(move |_| {
+				if full_nodes.iter().all(|&(ref id, ref service, _)| predicate(*id, service)) {
+					Err(())
+				} else {
+					Ok(())
+				}
+			})
+			.timeout(MAX_WAIT_TIME);
+
+		match self.runtime.block_on(interval) {
+			Ok(()) => unreachable!("interval always fails; qed"),
+			Err(ref err) if err.is_inner() => (),
+			Err(_) => panic!("Waited for too long"),
+		}
 	}
 }
 
@@ -223,11 +234,15 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	}
 }
 
-pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, block_factory: B, extrinsic_factory: E)
+pub fn sync<F, B, E>(
+	spec: FactoryChainSpec<F>,
+	mut block_factory: B,
+	mut extrinsic_factory: E,
+)
 where
 	F: ServiceFactory,
-	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
-	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
+	B: FnMut(&F::FullService) -> ImportBlock<F::Block>,
+	E: FnMut(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: u32 = 512;
@@ -250,11 +265,11 @@ where
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.best_number == NUM_BLOCKS.into()
+		service.client().info().chain.best_number == NUM_BLOCKS.into()
 	);
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
-	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
+	let best_block = BlockId::number(first_service.client().info().chain.best_number);
 	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
 	network.run_until_all_full(|_index, service|
 		service.transaction_pool().ready().count() == 1
@@ -265,8 +280,8 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 	where
 		F: ServiceFactory,
 {
-	const NUM_NODES: u32 = 20;
-	const NUM_BLOCKS: u32 = 200;
+	const NUM_NODES: u32 = 10;
+	const NUM_BLOCKS: u32 = 10; // 10 * 2 sec block production time = ~20 seconds
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES / 2, 0, authorities, 30600);
 	info!("Checking consensus");
@@ -278,7 +293,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.finalized_number >= (NUM_BLOCKS / 2).into()
+		service.client().info().chain.finalized_number >= (NUM_BLOCKS / 2).into()
 	});
 	info!("Adding more peers");
 	network.insert_nodes(&temp, NUM_NODES / 2, 0, vec![]);
@@ -286,6 +301,6 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.finalized_number >= NUM_BLOCKS.into()
+		service.client().info().chain.finalized_number >= NUM_BLOCKS.into()
 	);
 }

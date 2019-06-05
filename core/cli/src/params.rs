@@ -476,7 +476,7 @@ impl Keyring {
 }
 
 /// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Error>> {
+fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
 		None => {
@@ -512,7 +512,7 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins
-fn parse_cors(s: &str) -> Result<Cors, Box<std::error::Error>> {
+fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {

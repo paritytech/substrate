@@ -18,11 +18,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod voting;
 pub mod motions;
 pub mod seats;
 
 pub use crate::seats::{Trait, Module, RawEvent, Event, VoteIndex};
+
+/// Trait for type that can handle incremental changes to a set of account IDs.
+pub trait OnMembersChanged<AccountId> {
+	/// A number of members `new` just joined the set and replaced some `old` ones.
+	fn on_members_changed(new: &[AccountId], old: &[AccountId]);
+}
+
+impl<T> OnMembersChanged<T> for () {
+	fn on_members_changed(_new: &[T], _old: &[T]) {}
+}
 
 #[cfg(test)]
 mod tests {
@@ -30,22 +39,21 @@ mod tests {
 	pub use super::*;
 	pub use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
-	pub use substrate_primitives::H256;
-	pub use primitives::BuildStorage;
-	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
-	pub use primitives::testing::{Digest, DigestItem, Header};
-	pub use substrate_primitives::{Blake2Hasher};
-	pub use {seats, motions, voting};
+	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
+	pub use primitives::{
+		BuildStorage, traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
+	};
+	pub use {seats, motions};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {
-			motions
+			motions<T>
 		}
 	}
 
 	impl_outer_event! {
 		pub enum Event for Test {
-			balances<T>, democracy<T>, seats<T>, voting<T>, motions<T>,
+			balances<T>, democracy<T>, seats<T>, motions<T>,
 		}
 	}
 
@@ -86,6 +94,7 @@ mod tests {
 		pub const VotingPeriod: u64 = 3;
 		pub const MinimumDeposit: u64 = 1;
 		pub const EnactmentPeriod: u64 = 0;
+		pub const CooloffPeriod: u64 = 2;
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Call;
@@ -93,20 +102,25 @@ mod tests {
 		type Currency = balances::Module<Self>;
 		type EnactmentPeriod = EnactmentPeriod;
 		type LaunchPeriod = LaunchPeriod;
+		type EmergencyVotingPeriod = VotingPeriod;
 		type VotingPeriod = VotingPeriod;
 		type MinimumDeposit = MinimumDeposit;
+		type ExternalOrigin = motions::EnsureProportionAtLeast<_1, _2, u64>;
+		type ExternalMajorityOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
+		type EmergencyOrigin = motions::EnsureProportionAtLeast<_1, _1, u64>;
+		type CancellationOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
+		type VetoOrigin = motions::EnsureMember<u64>;
+		type CooloffPeriod = CooloffPeriod;
 	}
 	impl seats::Trait for Test {
 		type Event = Event;
 		type BadPresentation = ();
 		type BadReaper = ();
+		type OnMembersChanged = CouncilMotions;
 	}
 	impl motions::Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
-		type Event = Event;
-	}
-	impl voting::Trait for Test {
 		type Event = Event;
 	}
 
@@ -138,11 +152,6 @@ mod tests {
 			desired_seats: 2,
 			term_duration: 5,
 		}.build_storage().unwrap().0);
-		t.extend(voting::GenesisConfig::<Test> {
-			cooloff_period: 2,
-			voting_period: 1,
-			enact_delay_period: 0,
-		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 
@@ -150,6 +159,5 @@ mod tests {
 	pub type Balances = balances::Module<Test>;
 	pub type Democracy = democracy::Module<Test>;
 	pub type Council = seats::Module<Test>;
-	pub type CouncilVoting = voting::Module<Test>;
 	pub type CouncilMotions = motions::Module<Test>;
 }

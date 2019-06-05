@@ -251,7 +251,7 @@ impl HashingApi for () {
 	}
 }
 
-fn with_offchain<R>(f: impl FnOnce(&mut offchain::Externalities) -> R, msg: &'static str) -> R {
+fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: &'static str) -> R {
 	ext::with(|ext| ext
 		.offchain()
 		.map(|ext| f(ext))
@@ -395,7 +395,7 @@ impl Api for () {}
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
 }
 

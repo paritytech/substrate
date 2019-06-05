@@ -32,7 +32,7 @@ use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
-use crate::specialization::{NetworkSpecialization, Context as SpecializationContext};
+use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
@@ -119,7 +119,7 @@ pub struct ProtocolStatus<B: BlockT> {
 }
 
 /// Peer information
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
@@ -281,6 +281,9 @@ pub trait Context<B: BlockT> {
 
 	/// Send a consensus message to a peer.
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+
+	/// Send a chain-specific message to a peer.
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Protocol context.
@@ -312,16 +315,6 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 			GenericMessage::Consensus(consensus)
 		)
 	}
-}
-
-impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SpecializationContext<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.network_out.report_peer(who, reputation)
-	}
-
-	fn disconnect_peer(&mut self, who: PeerId) {
-		self.network_out.disconnect_peer(who)
-	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
 		send_message(
@@ -342,11 +335,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 		self.network_out.disconnect_peer(who)
 	}
 
-	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(who).map(|p| p.info.clone())
-	}
-
-	fn client(&self) -> &Client<B> {
+	fn client(&self) -> &dyn Client<B> {
 		&*self.context_data.chain
 	}
 
@@ -373,7 +362,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
-	pub chain: Arc<Client<B>>,
+	pub chain: Arc<dyn Client<B>>,
 }
 
 /// Configuration for the Substrate-specific part of the networking layer.
@@ -395,11 +384,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<Client<B>>,
+		chain: Arc<dyn Client<B>>,
 		checker: Arc<dyn FetchChecker<B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
-		let info = chain.info()?;
+		let info = chain.info();
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
 			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
@@ -510,7 +499,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
 		message: Message<B>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
@@ -861,8 +850,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.context_data
 					.chain
 					.info()
-					.ok()
-					.and_then(|info| info.best_queued_number)
+					.best_queued_number
 					.unwrap_or_else(|| Zero::zero());
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
@@ -907,9 +895,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			status.version
 		};
 
+		let info = self.context_data.peers.get(&who).expect("We just inserted above; QED").info.clone();
 		self.on_demand_core.on_connect(&mut network_out, who.clone(), status.roles, status.best_number);
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.new_peer(&mut context, who.clone());
+		self.sync.new_peer(&mut context, who.clone(), info);
 		if protocol_version > 2 {
 			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
 		}
@@ -1008,18 +997,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Send Status message
 	fn send_status(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId) {
-		if let Ok(info) = self.context_data.chain.info() {
-			let status = message::generic::Status {
-				version: CURRENT_VERSION,
-				min_supported_version: MIN_VERSION,
-				genesis_hash: info.chain.genesis_hash,
-				roles: self.config.roles.into(),
-				best_number: info.chain.best_number,
-				best_hash: info.chain.best_hash,
-				chain_status: self.specialization.status(),
-			};
-			self.send_message(network_out, who, GenericMessage::Status(status))
-		}
+		let info = self.context_data.chain.info();
+		let status = message::generic::Status {
+			version: CURRENT_VERSION,
+			min_supported_version: MIN_VERSION,
+			genesis_hash: info.chain.genesis_hash,
+			roles: self.config.roles.into(),
+			best_number: info.chain.best_number,
+			best_hash: info.chain.best_hash,
+			chain_status: self.specialization.status(),
+		};
+
+		self.send_message(network_out, who, GenericMessage::Status(status))
 	}
 
 	fn on_block_announce(
@@ -1189,16 +1178,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		processed_blocks: Vec<B::Hash>,
 		has_error: bool
 	) {
-		self.sync.blocks_processed(processed_blocks, has_error);
-		let mut context =
-			ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.maintain_sync(&mut context);
+		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
+		self.sync.blocks_processed(&mut context, processed_blocks, has_error);
 	}
 
 	/// Restart the sync process.
 	pub fn restart(&mut self, network_out: &mut dyn NetworkOut<B>) {
+		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.restart(&mut context);
+		self.sync.restart(&mut context, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
 	/// Notify about successful import of the given block.
@@ -1400,7 +1388,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = finality_proof_provider.as_ref()

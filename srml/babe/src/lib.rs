@@ -17,19 +17,21 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code, warnings)]
+#![forbid(unsafe_code)]
 pub use timestamp;
 
-use rstd::{result, prelude::*};
+use rstd::{result, prelude::*, marker::PhantomData};
 use srml_support::{decl_storage, decl_module};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::traits::{SaturatedConversion, Saturating};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::Decode;
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -54,6 +56,20 @@ impl BabeInherentData for InherentData {
 	fn babe_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// Logs in this module.
+///
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// BABE inherent digests
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for BABE.

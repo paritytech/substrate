@@ -42,7 +42,7 @@ pub enum Error {
 	ApplyExtrinsicFailed(ApplyError),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
-	Execution(Box<state_machine::Error>),
+	Execution(Box<dyn state_machine::Error>),
 	/// Blockchain error.
 	#[display(fmt = "Blockchain: {}", _0)]
 	Blockchain(Box<Error>),
@@ -100,7 +100,7 @@ pub enum Error {
 }
 
 impl error::Error for Error {
-	fn source(&self) -> Option<&(error::Error + 'static)> {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
 		match self {
 			Error::Consensus(e) => Some(e),
 			Error::Blockchain(e) => Some(e),
@@ -128,7 +128,7 @@ impl Error {
 	}
 
 	/// Chain a state error.
-	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
+	pub fn from_state(e: Box<dyn state_machine::Error + Send>) -> Self {
 		Error::Execution(e)
 	}
 }
