@@ -180,6 +180,7 @@ For Unix-based operating systems, you should run the following commands:
 [source, shell]
 ----
 curl https://sh.rustup.rs -sSf | sh
+source ~/.cargo/env
 
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
