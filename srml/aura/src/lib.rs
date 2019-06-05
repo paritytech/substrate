@@ -184,7 +184,7 @@ pub trait Trait: timestamp::Trait
 	type HandleReport: HandleReport;
 	type Signature: Verify + Encode + Decode + Clone;
 	type DigestItem: CompatibleDigestItem<Self::Signature>
-								+ DigestItem<Hash = Self::Hash>;
+		+ DigestItem<Hash = Self::Hash>;
 	type Digest: Digest<Item = Self::DigestItem, Hash = Self::Hash> + Codec;
 	type Header: Header<Digest = <Self as Trait>::Digest, Hash = Self::Hash>;
 }

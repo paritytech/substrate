@@ -205,6 +205,7 @@ impl sudo::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type SessionKey = AuthorityId;
+	type Signature = ed25519::Signature;
 	type Log = Log;
 	type Event = Event;
 }

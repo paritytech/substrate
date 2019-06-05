@@ -34,8 +34,8 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 use serde::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
-use codec::{Encode, Decode};
-use fg_primitives::ScheduledChange;
+use codec::{Encode, Decode, Codec};
+use fg_primitives::{ScheduledChange, Prevote, Precommit, Equivocation};
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
@@ -43,7 +43,12 @@ use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
 use system::ensure_signed;
-use primitives::traits::MaybeSerializeDebug;
+use primitives::traits::{
+	MaybeSerializeDebug, ValidateUnsigned, Verify, Digest, Header, Block, 
+	DigestItem, NumberFor,
+};
+use primitives::transaction_validity::TransactionValidity;
+
 use ed25519::Public as AuthorityId;
 
 mod mock;
@@ -133,6 +138,12 @@ pub trait Trait: system::Trait {
 
 	/// The event type of this module.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	type Signature: Verify + Codec + Clone;
+	// type DigestItem: CompatibleDigestItem<Self::Signature>
+	// 	+ DigestItem<Hash = Self::Hash>;
+	// type Digest: Digest<Item = Self::DigestItem, Hash = Self::Hash> + Codec;
+	// type Header: Header<Digest = <Self as Trait>::Digest, Hash = Self::Hash>;
 }
 
 /// A stored pending change, old format.
@@ -208,6 +219,68 @@ decl_storage! {
 				auth_count.encode(),
 			);
 		});
+	}
+}
+
+fn handle_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
+where
+	T: Trait, // + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
+	// <T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
+	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	// let maybe_equivocation_proof: 
+	// 	Option<AuraEquivocationProof::<<T as Trait>::Header, <T as Trait>::Signature>> =
+	// 		Decode::decode(&mut proof.as_slice());
+
+	let maybe_equivocation_proof: Option<Equivocation<
+		<<T as Trait>::Signature as Verify>::Signer,
+		Prevote<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>,
+		<T as Trait>::Signature,
+	>> = Decode::decode(&mut proof.as_slice());
+	// if let Some(equivocation_proof) = maybe_equivocation_proof {
+	// 	let authorities = <consensus::Module<T>>::authorities();
+
+	// 	let fst_author = verify_header::<T, _>(
+	// 		&mut equivocation_proof.first_header(),
+	// 		equivocation_proof.first_signature().clone(),
+	// 		&authorities
+	// 	);
+
+	// 	let snd_author = verify_header::<T, _>(
+	// 		&mut equivocation_proof.second_header(),
+	// 		equivocation_proof.second_signature().clone(),
+	// 		&authorities
+	// 	);
+
+	// 	let proof_is_valid = fst_author.map_or(false, |f| snd_author.map_or(false, |s| f == s));
+
+	// 	if  proof_is_valid {
+	// 		return TransactionValidity::Valid {
+	// 			priority: 0,
+	// 			requires: vec![],
+	// 			provides: vec![],
+	// 			longevity: 18446744073709551615,
+	// 			propagate: true,
+	// 		}
+	// 	}
+	// }
+
+	TransactionValidity::Invalid(0)
+}
+
+impl<T> ValidateUnsigned for Module<T> 
+where
+	T: Trait, //+ consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
+	// <T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
+	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(proof) => handle_equivocation_proof::<T>(proof),
+			_ => TransactionValidity::Invalid(0),
+		}
 	}
 }
 
