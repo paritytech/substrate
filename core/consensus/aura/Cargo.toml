@@ -23,7 +23,7 @@ authorities = { package = "substrate-consensus-authorities", path = "../authorit
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.17"
 tokio = "0.1.7"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4"
 
 [dev-dependencies]

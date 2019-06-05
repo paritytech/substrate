@@ -205,10 +205,7 @@ construct_service_factory! {
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 				#[allow(deprecated)]
-				Ok(LongestChain::new(
-					client.backend().clone(),
-					client.import_lock()
-				))
+				Ok(LongestChain::new(client.backend().clone()))
 			}
 		},
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {

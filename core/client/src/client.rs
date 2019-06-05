@@ -124,7 +124,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
-	import_lock: Arc<Mutex<()>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	execution_strategies: ExecutionStrategies,
@@ -318,7 +317,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
-			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategies,
 			_phantom: Default::default(),
@@ -342,15 +340,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	will be removed once that is in place.")]
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
-	}
-
-	/// Expose reference to import lock
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn import_lock(&self) -> Arc<Mutex<()>> {
-		self.import_lock.clone()
 	}
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
@@ -744,7 +733,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Err: From<error::Error>,
 	{
 		let inner = || {
-			let _import_lock = self.import_lock.lock();
+			let _import_lock = self.backend.get_import_lock().lock();
 
 			let mut op = ClientImportOperation {
 				op: self.backend.begin_operation()?,
@@ -1493,17 +1482,14 @@ where
 /// where 'longest' is defined as the highest number of blocks
 pub struct LongestChain<B, Block> {
 	backend: Arc<B>,
-	import_lock: Arc<Mutex<()>>,
 	_phantom: PhantomData<Block>
 }
 
 impl<B, Block> Clone for LongestChain<B, Block> {
 	fn clone(&self) -> Self {
 		let backend = self.backend.clone();
-		let import_lock = self.import_lock.clone();
 		LongestChain {
 			backend,
-			import_lock,
 			_phantom: Default::default()
 		}
 	}
@@ -1515,10 +1501,9 @@ where
 	Block: BlockT<Hash=H256>,
 {
 	/// Instantiate a new LongestChain for Backend B
-	pub fn new(backend: Arc<B>, import_lock: Arc<Mutex<()>>) -> Self {
+	pub fn new(backend: Arc<B>) -> Self {
 		LongestChain {
 			backend,
-			import_lock,
 			_phantom: Default::default()
 		}
 	}
@@ -1564,7 +1549,7 @@ where
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
-			let _import_lock = self.import_lock.lock();
+			let _import_lock = self.backend.get_import_lock().lock();
 
 			let info = self.backend.blockchain().info();
 
