@@ -508,7 +508,7 @@ mod test {
 		let pair = Pair::from_seed(seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
-		let derived = pair.derive(path.into_iter()).map_err(|_| ()).unwrap();
+		let derived = pair.derive(path.into_iter()).ok().unwrap();
 		assert_eq!(derived.seed(), &hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"));
 	}
 
