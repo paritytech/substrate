@@ -554,46 +554,46 @@ impl<Block: BlockT> Inner<Block> {
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
 		let outgoing_tally = outgoing_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
 
-		// We reject all messages of a given kind for a given voter,
-		// once we're received more than two messages of that kind.
-		// We report peers who send us a third or more of message of a given kind,
-		// when we've already sent out two messages of that kind for that voter to that peer.
-		// We also report peers who send us in excess of two messages of a kind,
-		// regardless of what we've sent them.
-		let (should_reject, should_report) = match &msg.message {
+		match &msg.message {
 			PrimaryPropose(_propose) => {
 				if per_peer_tally.primary_proposals < 3 {
 					per_peer_tally.primary_proposals += 1;
 				}
-				if tally.primary_proposals > 1 {
-					(true, outgoing_tally.primary_proposals > 1 || per_peer_tally.primary_proposals > 2)
-				} else {
+				if tally.primary_proposals < 2 {
 					tally.primary_proposals += 1;
-					(false, false)
 				}
 			},
 			Prevote(_prevote) => {
 				if per_peer_tally.pre_votes < 3 {
 					per_peer_tally.pre_votes += 1;
 				}
-				if tally.pre_votes > 1 {
-					(true, outgoing_tally.pre_votes > 1 || per_peer_tally.pre_votes > 2)
-				} else {
+				if tally.pre_votes < 2 {
 					tally.pre_votes += 1;
-					(false, false)
 				}
 			},
 			Precommit(_precommit) => {
 				if per_peer_tally.pre_commits < 3 {
 					per_peer_tally.pre_commits += 1;
 				}
-				if tally.pre_commits > 1 {
-					(true, outgoing_tally.pre_commits > 1 || per_peer_tally.pre_commits > 2)
-				} else {
+				if tally.pre_commits < 2 {
 					tally.pre_commits += 1;
-					(false, false)
 				}
 			},
+		}
+
+		// We reject all messages for a given voter,
+		// once we're received more than two messages of any kind for that voter.
+		//
+		// We report peers who send us a third or more of message of any kind,
+		// when we've already sent out two messages of any kind for that voter to that peer.
+		// We also report peers who send us in excess of two messages any kind,
+		// regardless of what we've sent them.
+		let (should_reject, should_report) = {
+			let should_reject = tally.primary_proposals > 1 || tally.pre_votes > 1 || tally.pre_commits > 1;
+			let should_report = (outgoing_tally.primary_proposals > 1 || per_peer_tally.primary_proposals > 2) ||
+				(outgoing_tally.pre_votes > 1 || per_peer_tally.pre_votes > 2) ||
+				(outgoing_tally.pre_commits > 1 || per_peer_tally.pre_commits > 2);
+			(should_reject, should_report)
 		};
 
 		// When a peer sends us a redundant message, and should have known better,
@@ -888,7 +888,47 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							}
 						},
 					}
-					// If the peer allowed this message, make sure we don't send it too often.
+
+
+
+					let (primary_proposals_to_peer, pre_votes_to_peer, pre_commits_to_peer) = {
+						let mut inner = inner.write();
+						// If we haven't noted this round yet, the message is not allowed.
+						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+							Some(tally_for_round) => tally_for_round,
+							None => return false
+						};
+						let tally = tally_for_round
+							.entry((msg.message.id.clone(), who.clone()))
+							.or_insert(Default::default());
+						(tally.primary_proposals, tally.pre_votes, tally.pre_commits)
+					};
+
+
+					let (primary_proposals_from_peer, pre_votes_from_peer, pre_commits_from_peer) = {
+						let mut inner = inner.write();
+						// A tally of messages received per peer, per voter, per round.
+						let peer_tally_for_round = match inner.incoming_msg_tally.get_mut(&round) {
+							Some(tally_for_round) =>  tally_for_round,
+							None => {
+								return false
+							}
+						};
+						let per_peer_tally = peer_tally_for_round
+							.entry((msg.message.id.clone(), who.clone()))
+							.or_insert(Default::default());
+						(per_peer_tally.primary_proposals, per_peer_tally.pre_votes, per_peer_tally.pre_commits)
+					};
+
+					// and check that what we've sent, plus what we've received from a given peer,
+					// doesn't add up to more than two messages of a any kind
+					// for a given voter/peer combo.
+					if (primary_proposals_to_peer + primary_proposals_from_peer) > 2 ||
+						(pre_votes_to_peer + pre_votes_from_peer) > 2 ||
+						(pre_commits_to_peer + pre_commits_from_peer) > 2 {
+							return false
+					}
+
 					let mut inner = inner.write();
 					// If we haven't noted this round yet, the message is not allowed.
 					let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
@@ -898,28 +938,21 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					let mut tally = tally_for_round
 						.entry((msg.message.id.clone(), who.clone()))
 						.or_insert(Default::default());
+
 					// Tally what we send out,
-					// and check that we don't send each message more than twice
-					// for a given voter/peer combo.
 					match &msg.message.message {
 						PrimaryPropose(_propose) => {
-							if tally.primary_proposals > 1 {
-								return false
-							} else {
+							if tally.primary_proposals < 2 {
 								tally.primary_proposals += 1;
 							}
 						},
 						Prevote(_prevote) => {
-							if tally.pre_votes > 1 {
-								return false
-							} else {
+							if tally.pre_votes < 2 {
 								tally.pre_votes += 1;
 							}
 						},
 						Precommit(_precommit) => {
-							if tally.pre_commits > 1 {
-								return false
-							} else {
+							if tally.pre_commits < 2 {
 								tally.pre_commits += 1;
 							}
 						},
