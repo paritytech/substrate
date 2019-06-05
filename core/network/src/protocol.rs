@@ -72,8 +72,6 @@ const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 10);
 const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
 /// Reputation change when we are a light client and a peer is behind us.
 const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
-/// Reputation change when we are a light client and light client connects us.
-const LIGHT_PEER_CONNECTS_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
 /// Reputation change when a peer sends us an extrinsic that we didn't know about.
 const NEW_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
 /// We sent an RPC query to the given node, but it failed.
@@ -859,10 +857,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				// we're not interested in light peers
 				if status.roles.is_light() {
 					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-					self.network_chan.send(
-						NetworkMsg::ReportPeer(who.clone(), LIGHT_PEER_CONNECTS_LIGHT_REPUTATION_CHANGE)
-					);
-					self.network_chan.send(NetworkMsg::DisconnectPeer(who));
+					network_out.report_peer(who.clone(), i32::min_value());
+					network_out.disconnect_peer(who);
 					return;
 				}
 
