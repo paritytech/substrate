@@ -585,14 +585,12 @@ impl<Block: BlockT> Inner<Block> {
 		// once we're received more than two messages of any kind for that voter.
 		//
 		// We report peers who send us a third or more of message of any kind,
-		// when we've already sent out two messages of any kind for that voter to that peer.
-		// We also report peers who send us in excess of two messages any kind,
-		// regardless of what we've sent them.
+		// when we've already exchanged two messages of any kind for that voter to that peer.
 		let (should_reject, should_report) = {
 			let should_reject = tally.primary_proposals > 1 || tally.pre_votes > 1 || tally.pre_commits > 1;
-			let should_report = (outgoing_tally.primary_proposals > 1 || per_peer_tally.primary_proposals > 2) ||
-				(outgoing_tally.pre_votes > 1 || per_peer_tally.pre_votes > 2) ||
-				(outgoing_tally.pre_commits > 1 || per_peer_tally.pre_commits > 2);
+			let should_report = (outgoing_tally.primary_proposals + per_peer_tally.primary_proposals) > 2 ||
+				(outgoing_tally.pre_votes + per_peer_tally.pre_votes) > 2 ||
+				(outgoing_tally.pre_commits + per_peer_tally.pre_commits) > 2;
 			(should_reject, should_report)
 		};
 
@@ -888,8 +886,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							}
 						},
 					}
-
-
 
 					let (primary_proposals_to_peer, pre_votes_to_peer, pre_commits_to_peer) = {
 						let mut inner = inner.write();
