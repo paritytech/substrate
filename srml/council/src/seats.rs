@@ -305,7 +305,7 @@ decl_module! {
 			<TermDuration<T>>::put(count);
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
