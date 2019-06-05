@@ -633,7 +633,7 @@ impl<T: Trait> Module<T> {
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
 	/// returned.
 	///
-	/// much funds up to `amount` will be moved as possible. If this is less than `amount`, the
+	/// As much funds up to `amount` will be moved as possible. If this is less than `amount`, then
 	/// the `remaining` would be returned, else `Zero::zero()`.
 	pub fn repatriate_reserved(
 		asset_id: &T::AssetId,
