@@ -103,16 +103,16 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 	fn on_connect(
 		&mut self,
-		_ctx: &mut dyn SpecializationContext<Block>,
+		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
 		_status: crate::message::Status<Block>
 	) {}
 
-	fn on_disconnect(&mut self, _ctx: &mut dyn SpecializationContext<Block>, _peer_id: PeerId) {}
+	fn on_disconnect(&mut self, _ctx: &mut dyn Context<Block>, _peer_id: PeerId) {}
 
 	fn on_message(
 		&mut self,
-		_ctx: &mut dyn SpecializationContext<Block>,
+		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
 	) {}
