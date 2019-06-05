@@ -107,7 +107,7 @@ pub use observer::run_grandpa_observer;
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
-use until_imported::{UntilCatchUpBlocksImported, UntilCommitBlocksImported};
+use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
 
@@ -387,52 +387,21 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		.unwrap_or(false);
 
 	// verification stream
-	let (commit_in, commit_out) = network.global_communication(
+	let (global_in, global_out) = network.global_communication(
 		communication::SetId(set_id),
 		voters.clone(),
 		is_voter,
 	);
 
-	// block commit messages until relevant blocks are imported.
-	let commit_in = UntilCommitBlocksImported::new(
+	// block commit and catch up messages until relevant blocks are imported.
+	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
 		client.clone(),
-		commit_in,
+		global_in,
 	);
 
-	let commits_in = commit_in.map_err(CommandOrError::from);
-	let commits_out = commit_out.sink_map_err(CommandOrError::from);
-
-	let commits_in = commits_in.map(|(round, commit, mut callback)| {
-		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
-			voter::CommitProcessingOutcome::Good(_) =>
-				callback(communication::CommitProcessingOutcome::Good),
-			voter::CommitProcessingOutcome::Bad(_) =>
-				callback(communication::CommitProcessingOutcome::Bad),
-		}));
-		voter::CommunicationIn::Commit(round, commit, callback)
-	});
-
-	let catch_ups_in = UntilCatchUpBlocksImported::new(
-		client.import_notification_stream(),
-		client.clone(),
-		network.catch_up_stream(communication::SetId(set_id)),
-	);
-
-	// FIXME: read from same gossip topic stream.
-	let catch_ups_in = catch_ups_in.map_err(CommandOrError::from)
-		.map(|catch_up| {
-			voter::CommunicationIn::Auxiliary(voter::AuxiliaryCommunication::CatchUp(catch_up))
-		});
-
-	let global_in = commits_in.select(catch_ups_in);
-
-	// NOTE: eventually this will also handle catch-up requests
-	// FIXME: CommunicationOut doesn't need auxiliary communication
-	let global_out = commits_out.with(|global| match global {
-		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
-		_ => unimplemented!(),
-	});
+	let global_in = global_in.map_err(CommandOrError::from);
+	let global_out = global_out.sink_map_err(CommandOrError::from);
 
 	(global_in, global_out)
 }

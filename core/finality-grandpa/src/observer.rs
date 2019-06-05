@@ -84,8 +84,8 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 				let commit = grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
-			voter::CommunicationIn::Auxiliary(_) => {
-				// ignore aux messages
+			voter::CommunicationIn::CatchUp(..) => {
+				// ignore catch up messages
 				return future::ok(last_finalized_number);
 			},
 		};
