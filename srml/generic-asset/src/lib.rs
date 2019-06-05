@@ -88,7 +88,7 @@
 //! - `reserved_balance`: Get an account's reserved balance of an asset kind.
 //! - `create_asset`: Creates an asset.
 //! - `make_transfer`: Transfer some liquid free balance from one account to another.
-//! This will not emit Transferred event.
+//! This will not emit the `Transferred` event.
 //! - `make_transfer_with_event`: Transfer some liquid free balance from one account to another.
 //! This will emit Transferred event.
 //! - `reserve`: Moves an amount from free balance to reserved balance.
