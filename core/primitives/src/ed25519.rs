@@ -505,7 +505,7 @@ mod test {
 	#[test]
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
-		let pair: Pair = Pair::from_seed(seed);
+		let pair = Pair::from_seed(seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter()).map_err(|_| ()).unwrap();
