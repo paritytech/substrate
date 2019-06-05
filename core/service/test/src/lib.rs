@@ -238,9 +238,9 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(
-				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize - 1
+				|_index, service| service.network().peers_debug_info().len() == NUM_FULL_NODES as usize - 1
 					+ NUM_LIGHT_NODES as usize,
-				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize,
+				|_index, service| service.network().peers_debug_info().len() == NUM_FULL_NODES as usize,
 			);
 			network.runtime
 		};
@@ -277,9 +277,9 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				}
 			}
 			network.run_until_all_full(
-				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize - 1
+				|_index, service| service.network().peers_debug_info().len() == NUM_FULL_NODES as usize - 1
 					+ NUM_LIGHT_NODES as usize,
-				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize,
+				|_index, service| service.network().peers_debug_info().len() == NUM_FULL_NODES as usize,
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -298,7 +298,7 @@ where
 {
 	const NUM_FULL_NODES: u32 = 10;
 	const NUM_LIGHT_NODES: u32 = 10;
-	const NUM_BLOCKS: usize = 512;
+	const NUM_BLOCKS: u32 = 512;
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(
 		&temp,
@@ -329,9 +329,9 @@ where
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS as u64),
+			service.client().info().chain.best_number == NUM_BLOCKS.into(),
 		|_index, service|
-			service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS as u64),
+			service.client().info().chain.best_number == NUM_BLOCKS.into(),
 	);
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
@@ -349,7 +349,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 {
 	const NUM_FULL_NODES: u32 = 10;
 	const NUM_LIGHT_NODES: u32 = 0;
-	const NUM_BLOCKS: u64 = 10; // 10 * 2 sec block production time = ~20 seconds
+	const NUM_BLOCKS: u32 = 10; // 10 * 2 sec block production time = ~20 seconds
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(
 		&temp,
@@ -372,9 +372,9 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS / 2),
+			service.client().info().chain.finalized_number >= (NUM_BLOCKS / 2).into(),
 		|_index, service|
-			service.client().info().unwrap().chain.best_number >= As::sa(NUM_BLOCKS / 2),
+			service.client().info().chain.best_number >= (NUM_BLOCKS / 2).into(),
 	);
 	info!("Adding more peers");
 	network.insert_nodes(&temp, NUM_FULL_NODES / 2, NUM_LIGHT_NODES / 2, vec![]);
@@ -386,8 +386,8 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS),
+			service.client().info().chain.finalized_number >= NUM_BLOCKS.into(),
 		|_index, service|
-			service.client().info().unwrap().chain.best_number >= As::sa(NUM_BLOCKS),
+			service.client().info().chain.best_number >= NUM_BLOCKS.into(),
 	);
 }
