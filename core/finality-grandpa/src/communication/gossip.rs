@@ -903,7 +903,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 					let (primary_proposals_from_peer, pre_votes_from_peer, pre_commits_from_peer) = {
 						let mut inner = inner.write();
-						// A tally of messages received per peer, per voter, per round.
+						// If we haven't noted this round yet, the message is not allowed.
 						let peer_tally_for_round = match inner.incoming_msg_tally.get_mut(&round) {
 							Some(tally_for_round) =>  tally_for_round,
 							None => {
