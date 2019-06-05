@@ -57,7 +57,7 @@ mod util {
 		assert!(nibble_count < over as usize);
 		let mut output = vec![offset + nibble_count as u8];
 		if nb_nibble_hpe > 0 {
-			output.push(N::masked_right(nb_nibble_hpe as u8, (partial.0).1));
+			output.push(N::masked_right((N::NIBBLE_PER_BYTE - nb_nibble_hpe) as u8, (partial.0).1));
 		}
 		output.extend_from_slice(&partial.1[..]);
 		output

@@ -47,7 +47,6 @@ impl<
 	BM: ChildBitmap<Error = Error>
 > NodeCodecT<H, N> for NodeCodec<H, N, BM> {
 	type Error = Error;
-	type BM = BM;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
 		H::hash(<Self as NodeCodecT<_, N>>::empty_node())
@@ -199,7 +198,7 @@ fn partial_enc<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 	};
 	if nb_nibble_hpe > 0 {
-		output.push(N::masked_right((N::NIBBLE_PER_BYTE - nb_nibble_hpe) as u8, (partial.0).1));
+		output.push(N::masked_right(nb_nibble_hpe as u8, (partial.0).1));
 	}
 	output.extend_from_slice(&partial.1[..]);
 	output

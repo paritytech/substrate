@@ -36,7 +36,6 @@ pub struct NodeCodec<H, N, BM>(PhantomData<(H, N, BM)>);
 
 impl<H: Hasher, N: NibbleOps, BM: ChildBitmap<Error = Error>> TraitNodeCodec<H, N> for NodeCodec<H, N, BM> {
 	type Error = Error;
-	type BM = BM;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
 		H::hash(<Self as TraitNodeCodec<_, N>>::empty_node())
