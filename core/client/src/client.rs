@@ -1728,11 +1728,11 @@ pub(crate) mod tests {
 	use primitives::blake2_256;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient, AccountKeyring};
 	use consensus::{BlockOrigin, SelectChain};
-	use test_client::client::backend::Backend as TestBackend;
-	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
+	use test_client::{
+		TestClient, AccountKeyring, client::backend::Backend as TestBackend, TestClientBuilder,
+		BlockBuilderExt, runtime::{self, Block, Transfer, RuntimeApi, TestAPI}
+	};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1753,7 +1753,7 @@ pub(crate) mod tests {
 
 		// prepare client ang import blocks
 		let mut local_roots = Vec::new();
-		let remote_client = test_client::new_with_changes_trie();
+		let remote_client = TestClientBuilder::new().set_support_changes_trie(true).build();
 		let mut nonces: HashMap<_, u64> = Default::default();
 		for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
 			let mut builder = remote_client.new_block(Default::default()).unwrap();
@@ -1854,7 +1854,10 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
+		assert_ne!(
+			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+			client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().chain.best_number),
@@ -1894,7 +1897,10 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
+		assert_ne!(
+			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+			client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		);
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
 
@@ -1903,18 +1909,14 @@ pub(crate) mod tests {
 		// block tree:
 		// G
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		let genesis_hash = client.info().chain.genesis_hash;
-		#[allow(deprecated)]
-		let longest_chain_select = test_client::client::LongestChain::new(
-			client.backend().clone(),
-			client.import_lock()
+
+		assert_eq!(
+			genesis_hash.clone(),
+			longest_chain_select.finality_target(genesis_hash.clone(), None).unwrap().unwrap()
 		);
-
-
-		assert_eq!(genesis_hash.clone(), longest_chain_select.finality_target(
-			genesis_hash.clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -1922,18 +1924,14 @@ pub(crate) mod tests {
 		// block tree:
 		// G
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		let uninserted_block = client.new_block(Default::default()).unwrap().bake().unwrap();
-		#[allow(deprecated)]
-		let backend = client.backend().as_in_memory();
-		#[allow(deprecated)]
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(backend),
-				client.import_lock());
 
-		assert_eq!(None, longest_chain_select.finality_target(
-			uninserted_block.hash().clone(), None).unwrap());
+		assert_eq!(
+			None,
+			longest_chain_select.finality_target(uninserted_block.hash().clone(), None).unwrap()
+		);
 	}
 
 	#[test]
@@ -2052,7 +2050,7 @@ pub(crate) mod tests {
 		// block tree:
 		// G -> A1 -> A2
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -2063,17 +2061,10 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().chain.genesis_hash;
-		#[allow(deprecated)]
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(client.backend().as_in_memory()),
-				client.import_lock());
 
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			a1.hash(), None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			a2.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(a2.hash(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -2083,7 +2074,7 @@ pub(crate) mod tests {
 		//      A1 -> B2 -> B3 -> B4
 		//	          B2 -> C3
 		//	    A1 -> D2
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -2152,11 +2143,6 @@ pub(crate) mod tests {
 		assert_eq!(client.info().chain.best_hash, a5.hash());
 
 		let genesis_hash = client.info().chain.genesis_hash;
-		#[allow(deprecated)]
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(client.backend().as_in_memory()),
-				client.import_lock());
-
 		let leaves = longest_chain_select.leaves().unwrap();
 
 		assert!(leaves.contains(&a5.hash()));
@@ -2372,7 +2358,7 @@ pub(crate) mod tests {
 		// block tree:
 		// G -> A1 -> A2
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
 		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -2383,14 +2369,8 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().chain.genesis_hash;
-		#[allow(deprecated)]
-		let longest_chain_select = test_client::client::LongestChain::new(
-			Arc::new(client.backend().as_in_memory()),
-			client.import_lock()
-		);
 
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			genesis_hash, Some(10)).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, Some(10)).unwrap().unwrap());
 	}
 
 	#[test]
