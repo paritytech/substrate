@@ -492,6 +492,7 @@ impl Pair {
 mod test {
 	use super::*;
 	use hex_literal::hex;
+	use crate::hexdisplay::HexDisplay;
 	use crate::crypto::DEV_PHRASE;
 
 	#[test]
@@ -500,6 +501,16 @@ mod test {
 			Pair::from_string("//Alice///password", None).unwrap().public(),
 			Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password")).unwrap().public(),
 		);
+	}
+
+	#[test]
+	fn seed_and_derive_should_work() {
+		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+		let pair: Pair = Pair::from_seed(seed);
+		assert_eq!(pair.seed(), &seed);
+		let path = vec![DeriveJunction::Hard([0u8; 32])];
+		let derived = pair.derive(path.into_iter()).map_err(|_| ()).unwrap();
+		assert_eq!(derived.seed(), &hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"));
 	}
 
 	#[test]
