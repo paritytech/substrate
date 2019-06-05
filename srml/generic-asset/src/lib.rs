@@ -24,7 +24,7 @@
 //! The Generic Asset module provides functions for:
 //!
 //! - Creating a new kind of asset.
-//! - Set permissions of an asset.
+//! - Setting permissions of an asset.
 //! - Getting and setting free balances.
 //! - Retrieving total, reserved and unreserved balances.
 //! - Repatriating a reserved balance to a beneficiary account.
