@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-parking_lot = { version = "0.7", optional = true }
+parking_lot = { version = "0.8.0", optional = true }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
