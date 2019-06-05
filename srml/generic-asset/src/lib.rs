@@ -405,7 +405,7 @@ decl_storage! {
 		/// The reserved balance of a given asset under an account.
 		pub ReservedBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
 
-		/// Next available id for user created asset.
+		/// Next available ID for user-created asset.
 		pub NextAssetId get(next_asset_id) config(): T::AssetId;
 
 		/// PermissionOptions for a given asset.
