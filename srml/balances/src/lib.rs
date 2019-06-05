@@ -157,7 +157,7 @@ use srml_support::traits::{
 use srml_support::dispatch::Result;
 use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating,
+	MaybeSerializeDebug, Saturating
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 

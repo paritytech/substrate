@@ -637,7 +637,7 @@ mod test {
 	#[test]
 	fn verify_from_wasm_works() {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
-		// 
+		//
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();

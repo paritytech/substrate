@@ -208,7 +208,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			|block_builder| {
 				// Add inherents from the internal pool
 				let inherents = self.inherents_pool.drain();
-				println!("+++ [AUTH] propose_with() Pulled {} from inherent pool.", inherents.len());
 				debug!("Pushing {} queued inherents.", inherents.len());
 				for i in inherents {
 					if let Err(e) = block_builder.push_extrinsic(i) {
@@ -223,7 +222,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				let pending_iterator = self.transaction_pool.ready();
 
 				debug!("Attempting to push transactions from the pool.");
-				println!("+++ [AUTH] propose_with() Attempting to push transactions from the pool.");
 				for pending in pending_iterator {
 					if (self.now)() > deadline {
 						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
@@ -231,7 +229,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					}
 
 					trace!("[{:?}] Pushing to the block.", pending.hash);
-					println!("+++ [AUTH] propose_with() [{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);

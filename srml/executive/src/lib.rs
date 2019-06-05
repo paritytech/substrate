@@ -194,7 +194,6 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		println!("+++ [EXEC] execute_extrinsics_with_book_keeping({}, {})", extrinsics.len(), block_number);
 
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
@@ -236,7 +235,6 @@ where
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(internal::ApplyOutcome::Success) => (),
-			Ok(internal::ApplyOutcome::Fail(e)) => runtime_io::print(e),
 			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
 			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
 			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
@@ -252,7 +250,6 @@ where
 		// Check the weight of the block if that extrinsic is applied.
 		let (base_weight, byte_weight) = xt.weight();
 		let tx_weight = base_weight + encoded_len as u32 * byte_weight;
-		println!("++++++++++++ [EXEC] The weight of this tx is {:?} [{:?}]", tx_weight, (base_weight, byte_weight));
 		if <system::Module<System>>::all_extrinsics_weight() + tx_weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
@@ -263,7 +260,6 @@ where
 			if index != &expected_index { return Err(
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
-			println!("+++ [EXEC] Paying fees for {:?}. and index is {}", sender, index);
 			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 

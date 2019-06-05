@@ -347,7 +347,6 @@ pub fn new<'a, H, N, B, T, O, Exec>(
 	method: &'a str,
 	call_data: &'a [u8],
 ) -> StateMachine<'a, H, N, B, T, O, Exec> {
-	println!("+++ [STATE-MACHINE] state-machine::new()");
 	StateMachine {
 		backend,
 		changes_trie_storage,
@@ -423,7 +422,6 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 			self.changes_trie_storage,
 			offchain.map(|x| &mut **x),
 		);
-		println!("+++ [StateMachine] execute_aux() calling into self.exec.call() for method <<{}>> ", self.method);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
 			self.method,
@@ -531,28 +529,22 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 
 		let result = {
 			let orig_prospective = self.overlay.prospective.clone();
-			print!("+++ [State-Machine] Executing with some manager  ");
 			let (result, storage_delta, changes_delta) = match manager {
 				ExecutionManager::Both(on_consensus_failure) => {
-					println!("ExecutionStrategy 1");
 					self.execute_call_with_both_strategy(compute_tx, native_call.take(), orig_prospective, on_consensus_failure)
 				},
 				ExecutionManager::NativeElseWasm => {
-					println!("ExecutionStrategy 2");
 					self.execute_call_with_native_else_wasm_strategy(compute_tx, native_call.take(), orig_prospective)
 				},
 				ExecutionManager::AlwaysWasm => {
-					println!("ExecutionStrategy 3");
 					let (result, _, storage_delta, changes_delta) = self.execute_aux(compute_tx, false, native_call);
 					(result, storage_delta, changes_delta)
 				},
 				ExecutionManager::NativeWhenPossible => {
-					println!("ExecutionStrategy 4");
 					let (result, _was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call);
 					(result, storage_delta, changes_delta)
 				},
 			};
-			println!("+++ [StateMachine] Result was {:?}", result);
 			result.map(move |out| (out, storage_delta, changes_delta))
 		};
 
@@ -956,7 +948,6 @@ mod tests {
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
-				println!("HELLO!");
 				we
 			}),
 			true,

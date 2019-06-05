@@ -683,7 +683,6 @@ pub trait Extrinsic {
 	fn is_signed(&self) -> Option<bool> { None }
 }
 
-
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.

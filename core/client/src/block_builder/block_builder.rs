@@ -97,7 +97,6 @@ where
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
-		println!("+++ [BUILDER] .push() to block.");
 
 		self.api.map_api_result(|api| {
 			match api.apply_extrinsic_with_context(

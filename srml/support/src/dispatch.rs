@@ -23,7 +23,7 @@ pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
-pub use sr_primitives::weights::{WeighableCall, TxWeight, WeighableTx, Weight};
+pub use sr_primitives::weights::{WeighableCall, TransactionWeight, WeighableTransaction, Weight};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -467,7 +467,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			[ $($t)* ]
 			$(#[doc = $doc_attr])*
-			#[weight = $crate::dispatch::TxWeight::default()]
+			#[weight = $crate::dispatch::TransactionWeight::default()]
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
@@ -556,7 +556,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// Last normalize step. Triggers `@imp` expansion which is the expansion.
+	// Last normalize step. Triggers `@imp` expansion which is the real expansion.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -1001,8 +1001,8 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		// no-op wrapper to semantically imply `where $weight: WeighableTx` with a meaningful error message.
-		fn __calculate_weight<T: $crate::dispatch::WeighableTx>(w: T) -> $crate::dispatch::Weight {
+		// no-op wrapper to semantically imply `where $weight: WeighableTransaction` with a meaningful error message.
+		fn __calculate_weight<T: $crate::dispatch::WeighableTransaction>(w: T) -> $crate::dispatch::Weight {
 			w.calculate_weight()
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::WeighableCall
@@ -1341,7 +1341,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = TxWeight::Basic((10, 100))]
+			#[weight = TransactionWeight::Basic((10, 100))]
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1350,7 +1350,7 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = TxWeight::Max]
+			#[weight = TransactionWeight::Max]
 			fn weighted() { unreachable!() }
 		}
 	}

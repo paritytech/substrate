@@ -16,25 +16,27 @@
 
 //! Primitives for transaction weighting.
 //!
-//! Each dispatch function withing decl_module can now have an optional `#[weight = $x]`
-//! attribute. $x can be any object that implements the [`WeighableTx`] trait. By default,
-//! All transactions are annotated by `#[weight = TxWeight::default()]`.
+//! Each dispatch function withing `decl_module!` can now have an optional
+//! `#[weight = $x]` attribute. $x can be any object that implements the
+//! [`WeighableTransaction`] trait. By default, All transactions are annotated by
+//! `#[weight = TransactionWeight::default()]`.
 //!
-//! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid
-//! struct is passed in.
+//! Note that the decl_module macro _cannot_ enforce this and will simply fail
+//! if an invalid struct is passed in.
 //!
-//! Note that [`WeighableCall`] and [`WeighableTx`] are more or less similar.
+//! Note that [`WeighableCall`] and [`WeighableTransaction`] are more or less similar.
 //! The distinction is because one serves to pass the weight from the the
-//! dispatchable function to the call enum ([`WeighableTx`]) and the other to pass
-//! the final weight from call enum to the executive module ([`WeighableCall`]).
+//! dispatchable function's attribute to the call enum ([`WeighableTransaction`]) and the
+//! other to pass the final weight from call enum to the executive module
+//! ([`WeighableCall`]).
 
 /// The final type that each `#[weight = $x:expr]`'s
 /// expression must evaluate to. Consists of `(base_weight, byte_weight)`.
 pub type Weight = (u32, u32);
 
-// TODO #2431 this value is now set in a way that the weight is the transaction is
-// just the size of input. Must be updated based based on benchmarks. Same for
-// maximum_weight and ::max variant of TxWeight.
+// TODO #2431 this value is now set in a way that the weight in the transaction
+// is just the size of input. Must be updated based based on benchmarks. Same for
+// maximum_weight and ::max() variant of TransactionWeight.
 /// The default weight as literal value.
 pub const DEFAULT_WEIGHT: Weight = (0, 1);
 
@@ -46,38 +48,38 @@ pub trait WeighableCall {
 }
 
 /// a _dispatchable_ function (anything inside `decl_module! {}`) that can be weighted.
-/// An object implementing this trait can _optionally_ be passed to the as
+/// A type implementing this trait can _optionally_ be passed to the as
 /// `#[weight = X]`. Otherwise, default implementation will be used.
-pub trait WeighableTx {
+pub trait WeighableTransaction {
 	/// Consume self and return the final weight of the call.
 	fn calculate_weight(self) -> Weight;
 }
 
-/// Default  weight calculator.
-pub enum TxWeight {
-	/// basic weight (base + byte).
+/// Default weight wrapper.
+pub enum TransactionWeight {
+	/// basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
 	Basic(Weight),
 	/// Maximum fee. This implies tha a this transaction _might_ get included but
-	/// no more transaction can be added. This can be done by setting the implementation
-	/// to _maximum block weight_.
+	/// no more transaction can be added. This can be done by setting the
+	/// implementation to _maximum block weight_.
 	Max,
 	/// Free. Don't do anything.
 	Free
 }
 
-impl WeighableTx for TxWeight {
+impl WeighableTransaction for TransactionWeight {
 	fn calculate_weight(self) -> Weight {
 		match self {
-			TxWeight::Basic(w) => w,
-			TxWeight::Max => (4 * 1024 * 1024, 0),
-			TxWeight::Free => (0, 0),
+			TransactionWeight::Basic(w) => w,
+			TransactionWeight::Max => (4 * 1024 * 1024, 0),
+			TransactionWeight::Free => (0, 0),
 		}
 	}
 }
 
-impl Default for TxWeight {
+impl Default for TransactionWeight {
 	fn default() -> Self {
-		TxWeight::Basic(DEFAULT_WEIGHT)
+		TransactionWeight::Basic(DEFAULT_WEIGHT)
 	}
 }
