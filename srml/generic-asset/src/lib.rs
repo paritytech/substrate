@@ -408,7 +408,7 @@ decl_storage! {
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(next_asset_id) config(): T::AssetId;
 
-		/// PermissionOptions for a given asset.
+		/// Permission options for a given asset.
 		pub Permissions get(get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
 
 		pub CreateAssetStakes get(create_asset_stake) config(): T::Balance;
