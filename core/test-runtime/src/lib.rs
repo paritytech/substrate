@@ -352,10 +352,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -499,10 +495,6 @@ cfg_if! {
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
-				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
 				}
 			}
 

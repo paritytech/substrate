@@ -370,7 +370,7 @@ pub fn local_testnet_config() -> ChainSpec {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use service_test;
 	use crate::service::Factory;
@@ -381,13 +381,41 @@ mod tests {
 		genesis
 	}
 
+	fn local_testnet_genesis_instant_single() -> GenesisConfig {
+		let mut genesis = testnet_genesis(
+			vec![
+				get_authority_keys_from_seed("Alice"),
+			],
+			get_account_id_from_seed("Alice"),
+			None,
+			false,
+		);
+		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
+		genesis
+	}
+
+	/// Local testnet config (single validator - Alice)
+	pub fn integration_test_config_with_single_authority() -> ChainSpec {
+		ChainSpec::from_genesis(
+			"Integration Test",
+			"test",
+			local_testnet_genesis_instant_single,
+			vec![],
+			None,
+			None,
+			None,
+			None,
+		)
+	}
+
 	/// Local testnet config (multivalidator Alice + Bob)
-	pub fn integration_test_config() -> ChainSpec {
+	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
 		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
 	}
 
 	#[test]
+	#[ignore]
 	fn test_connectivity() {
-		service_test::connectivity::<Factory>(integration_test_config());
+		service_test::connectivity::<Factory>(integration_test_config_with_two_authorities());
 	}
 }
