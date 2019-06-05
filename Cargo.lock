@@ -4270,6 +4270,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-generic-test-client"
+version = "2.0.0"
+dependencies = [
+ "futures 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-client-db 2.0.0",
+ "substrate-consensus-common 2.0.0",
+ "substrate-executor 2.0.0",
+ "substrate-keyring 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-state-machine 2.0.0",
+]
+
+[[package]]
 name = "substrate-inherents"
 version = "2.0.0"
 dependencies = [
@@ -4599,16 +4616,9 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0"
 dependencies = [
- "futures 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
- "substrate-client-db 2.0.0",
- "substrate-consensus-common 2.0.0",
- "substrate-executor 2.0.0",
- "substrate-keyring 2.0.0",
+ "substrate-generic-test-client 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-state-machine 2.0.0",
  "substrate-test-runtime 2.0.0",
 ]
 

@@ -20,14 +20,14 @@
 #![allow(missing_docs)]
 
 use std::sync::Arc;
-use consensus::BlockOrigin;
-use primitives::Blake2Hasher;
 use crate::{TestClient, AccountKeyring};
-use runtime_primitives::traits::Block as BlockT;
 use crate::backend;
 use crate::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use crate::{BlockBuilderExt, new_with_backend};
+use generic_test_client::consensus::BlockOrigin;
+use primitives::Blake2Hasher;
 use runtime::{self, Transfer};
+use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 
 /// helper to test the `leaves` implementation for various backends
