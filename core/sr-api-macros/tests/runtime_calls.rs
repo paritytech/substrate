@@ -16,7 +16,7 @@
 
 use test_client::{
 	AccountKeyring, runtime::{TestAPI, DecodeFails, Transfer, Header},
-	NativeExecutor, LocalExecutor,
+	NativeExecutor, LocalExecutor, TestClientBuilder
 };
 use runtime_primitives::{
 	generic::BlockId,
@@ -27,12 +27,11 @@ use state_machine::{
 	execution_proof_check_on_trie_backend,
 };
 
-use client::LongestChain;
 use consensus_common::SelectChain;
 use codec::Encode;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
-	let client = test_client::new_with_execution_strategy(strat);
+	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 
@@ -52,7 +51,7 @@ fn calling_wasm_runtime_function() {
 #[test]
 #[should_panic(expected = "Could not convert parameter `param` between node and runtime!")]
 fn calling_native_runtime_function_with_non_decodable_parameter() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeWhenPossible);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	runtime_api.fail_convert_parameter(&block_id, DecodeFails::new()).unwrap();
@@ -61,7 +60,7 @@ fn calling_native_runtime_function_with_non_decodable_parameter() {
 #[test]
 #[should_panic(expected = "Could not convert return value from runtime to node!")]
 fn calling_native_runtime_function_with_non_decodable_return_value() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeWhenPossible);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	runtime_api.fail_convert_return_value(&block_id).unwrap();
@@ -69,7 +68,7 @@ fn calling_native_runtime_function_with_non_decodable_return_value() {
 
 #[test]
 fn calling_native_runtime_signature_changed_function() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeWhenPossible);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 
@@ -78,7 +77,7 @@ fn calling_native_runtime_signature_changed_function() {
 
 #[test]
 fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 
@@ -89,7 +88,7 @@ fn calling_wasm_runtime_signature_changed_old_function() {
 
 #[test]
 fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert!(runtime_api.fail_on_wasm(&block_id).is_err());
@@ -97,7 +96,7 @@ fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
 
 #[test]
 fn calling_with_both_strategy_and_fail_on_native_should_work() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
@@ -106,7 +105,7 @@ fn calling_with_both_strategy_and_fail_on_native_should_work() {
 
 #[test]
 fn calling_with_native_else_wasm_and_faild_on_wasm_should_work() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeElseWasm);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeElseWasm).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
@@ -114,7 +113,7 @@ fn calling_with_native_else_wasm_and_faild_on_wasm_should_work() {
 
 #[test]
 fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeElseWasm);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeElseWasm).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
@@ -122,7 +121,7 @@ fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
 
 #[test]
 fn use_trie_function() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.use_trie(&block_id).unwrap(), 2);
@@ -130,7 +129,7 @@ fn use_trie_function() {
 
 #[test]
 fn initialize_block_works() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.get_block_number(&block_id).unwrap(), 1);
@@ -138,7 +137,7 @@ fn initialize_block_works() {
 
 #[test]
 fn initialize_block_is_called_only_once() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), Some(1));
@@ -147,7 +146,7 @@ fn initialize_block_is_called_only_once() {
 
 #[test]
 fn initialize_block_is_skipped() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 	assert!(runtime_api.without_initialize_block(&block_id).unwrap());
@@ -155,12 +154,12 @@ fn initialize_block_is_skipped() {
 
 #[test]
 fn record_proof_works() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let (client, longest_chain) = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::Both)
+		.build_with_longest_chain();
 
 	let block_id = BlockId::Number(client.info().chain.best_number);
-	#[allow(deprecated)]
-	let storage_root = LongestChain::new(client.backend().clone(), client.import_lock())
-		.best_chain().unwrap().state_root().clone();
+	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
 	let transaction = Transfer {
 		amount: 1000,

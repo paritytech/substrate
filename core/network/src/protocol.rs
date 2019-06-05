@@ -32,7 +32,7 @@ use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
-use crate::specialization::{NetworkSpecialization, Context as SpecializationContext};
+use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
@@ -281,6 +281,9 @@ pub trait Context<B: BlockT> {
 
 	/// Send a consensus message to a peer.
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+
+	/// Send a chain-specific message to a peer.
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Protocol context.
@@ -311,16 +314,6 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 			who,
 			GenericMessage::Consensus(consensus)
 		)
-	}
-}
-
-impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SpecializationContext<B> for ProtocolContext<'a, B, H> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.network_out.report_peer(who, reputation)
-	}
-
-	fn disconnect_peer(&mut self, who: PeerId) {
-		self.network_out.disconnect_peer(who)
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
@@ -852,13 +845,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				network_out.disconnect_peer(who);
 				return;
 			}
+
 			if self.config.roles.is_light() {
+				// we're not interested in light peers
+				if status.roles.is_light() {
+					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
+					network_out.report_peer(who.clone(), i32::min_value());
+					network_out.disconnect_peer(who);
+					return;
+				}
+
+				// we don't interested in peers that are far behind us
 				let self_best_block = self
 					.context_data
 					.chain
 					.info()
-					.best_queued_number
-					.unwrap_or_else(|| Zero::zero());
+					.chain.best_number;
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
 					.unwrap_or_else(Zero::zero)
