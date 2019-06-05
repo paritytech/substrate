@@ -29,7 +29,7 @@ mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch};
+	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
@@ -81,10 +81,20 @@ mod tests {
 		type TransferPayment = ();
 		type DustRemoval = ();
 	}
+	parameter_types! {
+		pub const LaunchPeriod: u64 = 1;
+		pub const VotingPeriod: u64 = 3;
+		pub const MinimumDeposit: u64 = 1;
+		pub const EnactmentPeriod: u64 = 0;
+	}
 	impl democracy::Trait for Test {
-		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = Event;
+		type Currency = balances::Module<Self>;
+		type EnactmentPeriod = EnactmentPeriod;
+		type LaunchPeriod = LaunchPeriod;
+		type VotingPeriod = VotingPeriod;
+		type MinimumDeposit = MinimumDeposit;
 	}
 	impl seats::Trait for Test {
 		type Event = Event;
@@ -111,13 +121,7 @@ mod tests {
 			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
-		t.extend(democracy::GenesisConfig::<Test>{
-			launch_period: 1,
-			voting_period: 3,
-			minimum_deposit: 1,
-			public_delay: 0,
-			max_lock_periods: 6,
-		}.build_storage().unwrap().0);
+		t.extend(democracy::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
 			candidacy_bond: 9,
 			voter_bond: 3,

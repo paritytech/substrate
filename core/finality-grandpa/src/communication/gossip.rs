@@ -791,7 +791,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
+	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
 		let packet_data = {
 			self.inner.write().peers.new_peer(who.clone());
 
@@ -809,11 +809,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		context.send_message(who, packet_data);
 	}
 
-	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: &PeerId) {
+	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<Block>, who: &PeerId) {
 		self.inner.write().peers.peer_disconnected(who);
 	}
 
-	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, data: &[u8])
+	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		let (action, broadcast_topics) = self.do_validate(who, data);
@@ -841,7 +841,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_allowed<'a>(&'a self)
-		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
+		-> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
 		let (inner, do_rebroadcast) = {
 			let inner = Arc::clone(&self.inner);
@@ -987,7 +987,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		})
 	}
 
-	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
+	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(Block::Hash, &[u8]) -> bool + 'a> {
 		let inner = Arc::clone(&self.inner);
 		Box::new(move |topic, mut data| {
 

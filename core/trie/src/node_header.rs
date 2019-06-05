@@ -60,12 +60,12 @@ impl Decode for NodeHeader {
 		Some(match input.read_byte()? {
 			EMPTY_TRIE => NodeHeader::Null,							// 0
 
-			i @ LEAF_NODE_OFFSET ... LEAF_NODE_SMALL_MAX =>			// 1 ... (127 - 1)
+			i @ LEAF_NODE_OFFSET ..= LEAF_NODE_SMALL_MAX =>			// 1 ... (127 - 1)
 				NodeHeader::Leaf((i - LEAF_NODE_OFFSET) as usize),
 			LEAF_NODE_BIG =>										// 127
 				NodeHeader::Leaf(input.read_byte()? as usize + LEAF_NODE_THRESHOLD as usize),
 
-			i @ EXTENSION_NODE_OFFSET ... EXTENSION_NODE_SMALL_MAX =>// 128 ... (253 - 1)
+			i @ EXTENSION_NODE_OFFSET ..= EXTENSION_NODE_SMALL_MAX =>// 128 ... (253 - 1)
 				NodeHeader::Extension((i - EXTENSION_NODE_OFFSET) as usize),
 			EXTENSION_NODE_BIG =>									// 253
 				NodeHeader::Extension(input.read_byte()? as usize + EXTENSION_NODE_THRESHOLD as usize),

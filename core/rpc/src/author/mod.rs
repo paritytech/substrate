@@ -16,6 +16,12 @@
 
 //! Substrate block-author/full-node API.
 
+pub mod error;
+pub mod hash;
+
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
 use client::{self, Client};
@@ -27,6 +33,7 @@ use log::warn;
 use parity_codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256};
 use runtime_primitives::{generic, traits};
+use self::error::Result;
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -38,13 +45,7 @@ use transaction_pool::{
 	},
 };
 
-pub mod error;
-mod hash;
-
-#[cfg(test)]
-mod tests;
-
-use self::error::Result;
+pub use self::gen_client::Client as AuthorClient;
 
 /// Substrate authoring RPC API
 #[rpc]
@@ -110,7 +111,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
-		let best_block_hash = self.client.info()?.chain.best_hash;
+		let best_block_hash = self.client.info().chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.map_err(|e| e.into_pool_error()
@@ -144,7 +145,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info()?.chain.best_hash;
+			let best_block_hash = self.client.info().chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
 				.ok_or(error::Error::BadFormat)?;
 			self.pool

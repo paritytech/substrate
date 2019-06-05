@@ -662,7 +662,7 @@ where
 
 		#[allow(deprecated)]
 		let blockchain = self.inner.backend().blockchain();
-		let status = blockchain.info()?;
+		let status = blockchain.info();
 		if number <= status.finalized_number && blockchain.hash(number)? == Some(hash) {
 			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -812,7 +812,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info()?.chain.finalized_number;
+						let last_finalized_number = client.info().chain.finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);

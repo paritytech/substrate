@@ -28,7 +28,7 @@ use primitives::{H256, Blake2Hasher, storage::StorageKey};
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get blockchain info.
-	fn info(&self) -> Result<ClientInfo<Block>, Error>;
+	fn info(&self) -> ClientInfo<Block>;
 
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
@@ -81,7 +81,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn info(&self) -> Result<ClientInfo<Block>, Error> {
+	fn info(&self) -> ClientInfo<Block> {
 		(self as &SubstrateClient<B, E, Block, RA>).info()
 	}
 
