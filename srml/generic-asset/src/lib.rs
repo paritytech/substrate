@@ -309,7 +309,7 @@ decl_module! {
 			Self::make_transfer_with_event(&asset_id, &origin, &to, amount)?;
 		}
 
-		/// Updates permission for a given asset_id and an account.
+		/// Updates permission for a given `asset_id` and an account.
 		/// The origin must have `update` permission.
 		fn update_permission(
 			origin,
