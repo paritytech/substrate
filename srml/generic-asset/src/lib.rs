@@ -90,7 +90,7 @@
 //! - `make_transfer`: Transfer some liquid free balance from one account to another.
 //! This will not emit the `Transferred` event.
 //! - `make_transfer_with_event`: Transfer some liquid free balance from one account to another.
-//! This will emit Transferred event.
+//! This will emit the `Transferred` event.
 //! - `reserve`: Moves an amount from free balance to reserved balance.
 //! - `unreserve`: Move up to an amount from reserved balance to free balance. This function cannot fail.
 //! - `slash`: Deduct up to an amount from the combined balance of `who`, preferring to deduct from the
