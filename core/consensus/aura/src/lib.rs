@@ -381,7 +381,8 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<Hash=B::Hash>,
 	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
-	<<P as Pair>::Signature as Verify>::Signer: Encode + Decode + Clone + AsRef<<P as Pair>::Public> + PartialEq + Send + Sync,
+	<<P as Pair>::Signature as Verify>::Signer: 
+		Encode + Decode + Clone + AsRef<<P as Pair>::Public> + PartialEq + Send + Sync,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
