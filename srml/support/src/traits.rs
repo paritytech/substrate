@@ -26,10 +26,24 @@ use crate::runtime_primitives::traits::{
 
 use super::for_each_tuple;
 
-/// New trait for querying a single fixed value from a type.
+/// A trait for querying a single fixed value from a type.
 pub trait Get<T> {
 	/// Return a constant value.
 	fn get() -> T;
+}
+
+/// A trait for querying whether a type can be said to statically "contain" a value. Similar
+/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
+/// enumerate all values that it contains) and work for multiple values rather than just one.
+pub trait Contains<T> {
+	/// Return `true` if this "contains" the given value `t`.
+	fn contains(t: &T) -> bool;
+}
+
+impl<V: PartialEq, T: Get<V>> Contains<V> for T {
+	fn contains(t: &V) -> bool {
+		&Self::get() == t
+	}
 }
 
 /// The account with the given id was killed.
