@@ -163,20 +163,24 @@ pub trait SessionHandler<AccountId, Keys> {
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
-/*
+
 // TODO: this should automatically use Keys: OpaqueKeys and translate them into the local type
 // before dispatching
 macro_rules! impl_session_handlers {
 	() => (
 		impl<A, K> SessionHandler<A, K> for () {
-			fn on_new_session(_: bool, _: impl Iterator<Item=(&A, &K)>) {}
+			fn on_new_session(_: bool, _: &[(A, K)]) {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
-		impl<A, K, $($t: SessionHandler<A, K>),*> SessionHandler<A, K> for ($($t,)*) {
-			fn on_new_session(changed: bool, validators: impl Iterator<Item=(&A, &K)>) {
+		impl<
+			AccountId,
+			Keys,
+			$($t: SessionHandler<AccountId, Keys>),*
+		> SessionHandler<AccountId, Keys> for ($($t,)*) {
+			fn on_new_session(changed: bool, validators: &[(AccountId, Keys)]) {
 				$($t::on_new_session(changed, validators);)*
 			}
 			fn on_disabled(i: usize) {
@@ -187,7 +191,7 @@ macro_rules! impl_session_handlers {
 }
 
 for_each_tuple!(impl_session_handlers);
-*/
+
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
