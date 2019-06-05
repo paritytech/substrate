@@ -283,8 +283,7 @@ use srml_support::{
 use session::{OnSessionEnding, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
-	Bounded, SaturatedConversion
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -356,19 +355,19 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct UnlockChunk<Balance: HasCompact, BlockNumber: HasCompact> {
+pub struct UnlockChunk<Balance: HasCompact> {
 	/// Amount of funds to be unlocked.
 	#[codec(compact)]
 	value: Balance,
 	/// Era number at which point it'll be unlocked.
 	#[codec(compact)]
-	era: BlockNumber,
+	era: EraIndex,
 }
 
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact> {
+pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
@@ -381,17 +380,16 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	pub active: Balance,
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
+	pub unlocking: Vec<UnlockChunk<Balance>>,
 }
 
 impl<
 	AccountId,
 	Balance: HasCompact + Copy + Saturating,
-	BlockNumber: HasCompact + PartialOrd
-> StakingLedger<AccountId, Balance, BlockNumber> {
+> StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	fn consolidate_unlocked(self, current_era: BlockNumber) -> Self {
+	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
 		let unlocking = self.unlocking.into_iter()
 			.filter(|chunk| if chunk.era > current_era {
@@ -468,6 +466,9 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// Number of sessions per era.
 	type SessionsPerEra: Get<SessionIndex>;
+
+	/// Number of eras that staked funds must remain bonded for.
+	type BondingDuration: Get<EraIndex>;
 }
 
 decl_storage! {
@@ -484,8 +485,6 @@ decl_storage! {
 		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
-		/// The length of the bonding duration in eras.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = 12.into();
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
@@ -496,7 +495,7 @@ decl_storage! {
 		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(ledger):
-			map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+			map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
 		pub Payee get(payee): map T::AccountId => RewardDestination;
@@ -535,11 +534,6 @@ decl_storage! {
 		/// and increased for every successfully finished session.
 		pub CurrentEraReward get(current_era_reward): BalanceOf<T>;
 
-		/// The next value of sessions per era.
-		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
-		/// The session index at which the era length last changed.
-		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
-
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
 		/// This is used to derive rewards and punishments.
@@ -554,6 +548,9 @@ decl_storage! {
 		/// Most recent `RECENT_OFFLINE_COUNT` instances. (Who it was, when it was reported, how
 		/// many instances they were offline for).
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
+
+		/// True if the next session change will be a new era regardless of index.
+		pub ForceNewEra get(forcing_new_era): bool;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -696,7 +693,7 @@ decl_module! {
 					ledger.active = Zero::zero();
 				}
 
-				let era = Self::current_era() + Self::bonding_duration();
+				let era = Self::current_era() + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 			}
@@ -798,16 +795,6 @@ decl_module! {
 			}
 		}
 
-		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(#[compact] new: T::BlockNumber) {
-			<NextSessionsPerEra<T>>::put(new);
-		}
-
-		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(#[compact] new: T::BlockNumber) {
-			<BondingDuration<T>>::put(new);
-		}
-
 		/// The ideal number of validators.
 		fn set_validator_count(#[compact] new: u32) {
 			<ValidatorCount<T>>::put(new);
@@ -815,8 +802,8 @@ decl_module! {
 
 		/// Force there to be a new era. This also forces a new session immediately after.
 		/// `apply_rewards` should be true for validators to get the session reward.
-		fn force_new_era(apply_rewards: bool) -> Result {
-			Self::apply_force_new_era(apply_rewards)
+		fn force_new_era() {
+			Self::apply_force_new_era()
 		}
 
 		/// Set the offline slash grace period.
@@ -845,7 +832,7 @@ impl<T: Trait> Module<T> {
 	/// Update the ledger for a controller. This will also update the stash lock.
 	fn update_ledger(
 		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>
+		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
 	) {
 		T::Currency::set_lock(
 			STAKING_ID,
@@ -940,7 +927,7 @@ impl<T: Trait> Module<T> {
 		let reward = Self::current_session_reward();
 		<CurrentEraReward<T>>::mutate(|r| *r += reward);
 
-		if session_index % T::SessionsPerEra::get() == 0 {
+		if <ForceNewEra<T>>::take() || session_index % T::SessionsPerEra::get() == 0 {
 			Self::new_era()
 		} else {
 			None
@@ -968,15 +955,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		<CurrentEra<T>>::put(&(<CurrentEra<T>>::get() + One::one()));
-
-		// Enact era length change.
-		if let Some(next_spe) = Self::next_sessions_per_era() {
-			if next_spe != Self::sessions_per_era() {
-				<SessionsPerEra<T>>::put(&next_spe);
-				<LastEraLengthChange<T>>::put(&<session::Module<T>>::current_index());
-			}
-		}
+		<CurrentEra<T>>::mutate(|s| *s += 1);
 
 		// Reassign all Stakers.
 		let (slot_stake, maybe_new_validators) = Self::select_validators();
@@ -1098,8 +1077,12 @@ impl<T: Trait> Module<T> {
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
 			// TODO: #2494
-			(slot_stake, None)
+			(Self::slot_stake(), None)
 		}
+	}
+
+	fn apply_force_new_era() {
+		<ForceNewEra<T>>::put(true);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
@@ -1149,7 +1132,7 @@ impl<T: Trait> Module<T> {
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
 				<Validators<T>>::remove(&stash);
-				let _ = Self::apply_force_new_era(false);
+				let _ = Self::apply_force_new_era();
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
@@ -1161,7 +1144,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::Moment> for Module<T> {
+impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
 	fn on_session_ending(i: SessionIndex) -> Option<Vec<T::AccountId>> {
 		Self::new_session(i + 1)
 	}

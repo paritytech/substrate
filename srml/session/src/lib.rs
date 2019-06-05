@@ -159,14 +159,14 @@ pub trait OnSessionEnding<AccountId> {
 }
 
 /// Handler for when a session keys set changes.
-pub trait SessionHandler<AccountId, Keys> {
+pub trait SessionHandler<AccountId> {
 	/// Session set has changed; act appropriately.
-	fn on_new_session(changed: bool, validators: &[(AccountId, Keys)]);
+	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AccountId, Ks)]);
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
-
+/*
 // TODO: this should automatically use Keys: OpaqueKeys and translate them into the local type
 // before dispatching
 macro_rules! impl_session_handlers {
@@ -181,10 +181,10 @@ macro_rules! impl_session_handlers {
 		impl<
 			AccountId,
 			Keys,
-			$($t: SessionHandler<AccountId, Keys>),*
+			$($t: OneSessionHandler<AccountId, Keys>),*
 		> SessionHandler<AccountId, Keys> for ($($t,)*) {
 			fn on_new_session(changed: bool, validators: &[(AccountId, Keys)]) {
-				$($t::on_new_session(changed, validators);)*
+				$(<$t as SessionHandler>::on_new_session(changed, validators);)*
 			}
 			fn on_disabled(i: usize) {
 				$($t::on_disabled(i);)*
@@ -194,10 +194,58 @@ macro_rules! impl_session_handlers {
 }
 
 for_each_tuple!(impl_session_handlers);
+*/
+
+pub trait OneSessionHandler<AccountId> {
+	type Key: Decode + Default;
+	fn on_new_session(changed: bool, validators: &[(&AccountId, Self::Key)]);
+	fn on_disabled(i: usize);
+}
+
+impl<A> SessionHandler<A> for () {
+	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(A, Ks)]) {}
+	fn on_disabled(_: usize) {}
+}
+
+impl<A: OpaqueKeys, O1: OneSessionHandler<A>> SessionHandler<A> for (O1,) {
+	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(A, Ks)]) {
+		// TODO: move to an iterator API to avoid the cloning
+		let mut i: usize = 0;
+		i += 1;
+		let our_keys = validators.iter()
+			.map(|k| (&k.0, k.1.get::<O1::Key>(i - 1).unwrap_or_default()))
+			.collect::<Vec<_>>();
+		O1::on_new_session(changed, &our_keys[..]);
+	}
+	fn on_disabled(i: usize) {
+		O1::on_disabled(i);
+	}
+}
+
+impl<A: OpaqueKeys, O1: OneSessionHandler<A>, O2: OneSessionHandler<A>> SessionHandler<A> for (O1, O2) {
+	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(A, Ks)]) {
+		// TODO: move to an iterator API to avoid the cloning
+		let mut i: usize = 0;
+		i += 1;
+		let our_keys = validators.iter()
+			.map(|k| (&k.0, k.1.get::<O1::Key>(i - 1).unwrap_or_default()))
+			.collect::<Vec<_>>();
+		O1::on_new_session(changed, &our_keys[..]);
+		i += 1;
+		let our_keys = validators.iter()
+			.map(|k| (&k.0, k.1.get::<O2::Key>(i - 1).unwrap_or_default()))
+			.collect::<Vec<_>>();
+		O2::on_new_session(changed, &our_keys[..]);
+	}
+	fn on_disabled(i: usize) {
+		O1::on_disabled(i);
+		O2::on_disabled(i);
+	}
+}
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
@@ -206,7 +254,7 @@ pub trait Trait: system::Trait {
 	type OnSessionEnding: OnSessionEnding<Self::AccountId>;
 
 	/// Handler when a session has changed.
-	type SessionHandler: SessionHandler<Self::AccountId, Self::Keys>;
+	type SessionHandler: SessionHandler<Self::AccountId>;
 
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
@@ -256,7 +304,7 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Sets the session key of a validator (function caller) to `key`.
 		/// This doesn't take effect until the next session.
@@ -334,13 +382,13 @@ impl<T: Trait> Module<T> {
 		<CurrentIndex<T>>::put(session_index);
 
 		// Record that this happened.
-		Self::deposit_event(RawEvent::NewSession(session_index));
+		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
 		let amalgamated = validators.into_iter()
 			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
-		T::SessionHandler::on_new_session(changed, &amalgamated);
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &amalgamated);
 	}
 
 	/// Disable the validator of index `i`.
