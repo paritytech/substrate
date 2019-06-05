@@ -533,7 +533,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Transfer some liquid free balance from one account to another.
-	/// This will emit Transferred event.
+	/// This will emit the `Transferred` event.
 	pub fn make_transfer_with_event(
 		asset_id: &T::AssetId,
 		from: &T::AccountId,
