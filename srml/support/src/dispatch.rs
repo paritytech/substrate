@@ -1001,16 +1001,12 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		// no-op wrapper to semantically imply `where $weight: WeighableTransaction` with a meaningful error message.
-		fn __calculate_weight<T: $crate::dispatch::WeighableTransaction>(w: T, len: usize) -> $crate::dispatch::Weight {
-			w.calculate_weight(len)
-		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::WeighableCall
 			for $call_type<$trait_instance $(, $instance)?>
 		{
 			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
 				match *self {
-					$( $call_type::$fn_name(..) => __calculate_weight($weight, len), )*
+					$( $call_type::$fn_name(..) => $crate::dispatch::WeighableTransaction::calculate_weight($weight, len), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
