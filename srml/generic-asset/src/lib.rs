@@ -416,7 +416,7 @@ decl_storage! {
 		/// Any liquidity locks on some account balances.
 		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 
-		/// Staking Asset Id
+		/// Staking Asset ID.
 		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
 
 		/// Spending Asset Id.
