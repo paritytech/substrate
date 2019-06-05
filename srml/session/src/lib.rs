@@ -166,82 +166,44 @@ pub trait SessionHandler<AccountId> {
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
-/*
-// TODO: this should automatically use Keys: OpaqueKeys and translate them into the local type
-// before dispatching
+
+pub trait OneSessionHandler<AccountId> {
+	type Key: Decode + Default;
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a;
+	fn on_disabled(i: usize);
+}
+
 macro_rules! impl_session_handlers {
 	() => (
-		impl<A, K> SessionHandler<A, K> for () {
-			fn on_new_session(_: bool, _: &[(A, K)]) {}
+		impl<AId> SessionHandler<AId> for () {
+			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)]) {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
-		impl<
-			AccountId,
-			Keys,
-			$($t: OneSessionHandler<AccountId, Keys>),*
-		> SessionHandler<AccountId, Keys> for ($($t,)*) {
-			fn on_new_session(changed: bool, validators: &[(AccountId, Keys)]) {
-				$(<$t as SessionHandler>::on_new_session(changed, validators);)*
+		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
+			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
+				let mut i: usize = 0;
+				$(
+					i += 1;
+					let our_keys = validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(i - 1).unwrap_or_default()));
+					$t::on_new_session(changed, our_keys);
+				)*
 			}
 			fn on_disabled(i: usize) {
-				$($t::on_disabled(i);)*
+				$(
+					$t::on_disabled(i);
+				)*
 			}
 		}
 	}
 }
 
 for_each_tuple!(impl_session_handlers);
-*/
 
-pub trait OneSessionHandler<AccountId> {
-	type Key: Decode + Default;
-	fn on_new_session(changed: bool, validators: &[(&AccountId, Self::Key)]);
-	fn on_disabled(i: usize);
-}
-
-impl<A> SessionHandler<A> for () {
-	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(A, Ks)]) {}
-	fn on_disabled(_: usize) {}
-}
-
-impl<A: OpaqueKeys, O1: OneSessionHandler<A>> SessionHandler<A> for (O1,) {
-	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(A, Ks)]) {
-		// TODO: move to an iterator API to avoid the cloning
-		let mut i: usize = 0;
-		i += 1;
-		let our_keys = validators.iter()
-			.map(|k| (&k.0, k.1.get::<O1::Key>(i - 1).unwrap_or_default()))
-			.collect::<Vec<_>>();
-		O1::on_new_session(changed, &our_keys[..]);
-	}
-	fn on_disabled(i: usize) {
-		O1::on_disabled(i);
-	}
-}
-
-impl<A: OpaqueKeys, O1: OneSessionHandler<A>, O2: OneSessionHandler<A>> SessionHandler<A> for (O1, O2) {
-	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(A, Ks)]) {
-		// TODO: move to an iterator API to avoid the cloning
-		let mut i: usize = 0;
-		i += 1;
-		let our_keys = validators.iter()
-			.map(|k| (&k.0, k.1.get::<O1::Key>(i - 1).unwrap_or_default()))
-			.collect::<Vec<_>>();
-		O1::on_new_session(changed, &our_keys[..]);
-		i += 1;
-		let our_keys = validators.iter()
-			.map(|k| (&k.0, k.1.get::<O2::Key>(i - 1).unwrap_or_default()))
-			.collect::<Vec<_>>();
-		O2::on_new_session(changed, &our_keys[..]);
-	}
-	fn on_disabled(i: usize) {
-		O1::on_disabled(i);
-		O2::on_disabled(i);
-	}
-}
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.

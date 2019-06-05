@@ -326,14 +326,14 @@ impl<T: Trait> Module<T> where AuthorityId: core::convert::From<<T as Trait>::Se
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::SessionKey;
-	fn on_new_session(changed: bool, validators: &[(&T::AccountId, Self::Key)]) {
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::SessionKey)>
+	{
 		// instant changes
 		if changed {
 			// TODO: handle case where stalled. this will presumably mean tracking the `on_stalled`
 			// TODO:    signal below and checking it here.
-			let next_authorities = validators.iter()
-				.map(|(_, k)| (k.clone(), 1u64))
-				.collect::<Vec<_>>();
+			let next_authorities = validators.map(|(_, k)| (k, 1u64)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::grandpa_authorities();
 			if next_authorities != last_authorities {
 				use primitives::traits::Zero;
