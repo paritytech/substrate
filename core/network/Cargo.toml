@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 derive_more = "0.14.0"
 log = "0.4"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"

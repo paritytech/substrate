@@ -139,7 +139,7 @@ pub trait StartRPC<C: Components> {
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
 		should_have_peers: bool,
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
@@ -159,7 +159,7 @@ impl<C: Components> StartRPC<Self> for C where
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
 		should_have_peers: bool,
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
@@ -339,7 +339,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build finality proof provider for serving network requests on full node.
 	fn build_finality_proof_provider(
 		client: Arc<FullClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<Self::Block>>>, error::Error>;
+	) -> Result<Option<Arc<dyn FinalityProofProvider<Self::Block>>>, error::Error>;
 
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
@@ -437,7 +437,7 @@ pub trait Components: Sized + 'static {
 	/// Finality proof provider for serving network requests.
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
 
 	/// Build fork choice selector
 	fn build_select_chain(
@@ -539,7 +539,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Factory::build_finality_proof_provider(client)
 	}
 }
@@ -623,7 +623,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		_client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Ok(None)
 	}
 	fn build_select_chain(
@@ -638,12 +638,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
-	use client::LongestChain;
-	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer, TestClientBuilder};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
-		let client = Arc::new(substrate_test_client::new());
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
 		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
 		let transaction = Transfer {
 			amount: 5,
@@ -651,9 +651,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		#[allow(deprecated)]
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
-			.best_chain().unwrap();
+		let best = longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();

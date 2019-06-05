@@ -28,7 +28,7 @@ keyring = { package = "substrate-keyring", path = "../../keyring" }
 node-runtime = { path = "../../../node/runtime" }
 futures = "0.1.17"
 tokio = "0.1.7"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4"
 parity-codec = "3.5.1"
 

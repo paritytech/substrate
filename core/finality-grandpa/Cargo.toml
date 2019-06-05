@@ -8,7 +8,7 @@ edition = "2018"
 fork-tree = { path = "../../core/util/fork-tree" }
 futures = "0.1"
 log = "0.4"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 tokio = "0.1.7"
 rand = "0.6"
 parity-codec = { version = "3.3", features = ["derive"] }

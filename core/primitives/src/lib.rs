@@ -86,7 +86,7 @@ pub enum ExecutionContext {
 	/// Context used for block construction.
 	BlockConstruction,
 	/// Offchain worker context.
-	OffchainWorker(Box<offchain::Externalities>),
+	OffchainWorker(Box<dyn offchain::Externalities>),
 	/// Context used for other calls.
 	Other,
 }

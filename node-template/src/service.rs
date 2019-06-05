@@ -14,6 +14,7 @@ use substrate_service::{
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
@@ -75,7 +76,7 @@ construct_service_factory! {
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;
-					executor.spawn(start_aura(
+					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client.clone(),
@@ -83,10 +84,10 @@ construct_service_factory! {
 						client,
 						proposer,
 						service.network(),
-						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
-					)?);
+					)?;
+					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
 				}
 
 				Ok(service)
@@ -129,10 +130,7 @@ construct_service_factory! {
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 				#[allow(deprecated)]
-				Ok(LongestChain::new(
-					client.backend().clone(),
-					client.import_lock()
-				))
+				Ok(LongestChain::new(client.backend().clone()))
 			}
 		},
 		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {

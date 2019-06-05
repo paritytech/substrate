@@ -17,10 +17,10 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, websocket, bandwidth, wasm_ext
+	mplex, identity, secio, yamux, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns};
+use libp2p::{tcp, dns, websocket};
 use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -68,7 +68,9 @@ pub fn build_transport(
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
 		.with_timeout(Duration::from_secs(20))
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+		// TODO: pass the error directly, instead of calling `to_string()`
+		// https://github.com/libp2p/rust-libp2p/issues/1162
+		.map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))
 		.boxed();
 
 	(transport, sinks)

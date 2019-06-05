@@ -66,7 +66,7 @@ use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode, Codec};
 use inherents::{
 	RuntimeString, InherentIdentifier, InherentData, ProvideInherent,
-	MakeFatalError
+	MakeFatalError,
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -287,7 +287,7 @@ where
 }
 
 /// A report of skipped authorities in Aura.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
 	// The first skipped slot.

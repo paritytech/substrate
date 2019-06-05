@@ -76,15 +76,15 @@ use substrate_telemetry::{
 
 use slots::{
 	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now,
-	check_equivocation,
+	check_equivocation, SlotData,
 };
 
 use node_runtime::{Call, AuraCall};
 use consensus_safety::submit_report_call;
+use safety_primitives::EquivocationProof;
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
-use safety_primitives::EquivocationProof;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -124,7 +124,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -132,7 +132,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
-	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
@@ -156,25 +155,26 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	register_aura_inherent_data_provider(
+		&inherent_data_providers,
+		slot_duration.0.slot_duration()
+	)?;
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible>(
 		slot_duration.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
-		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
@@ -183,7 +183,6 @@ struct AuraWorker<C, E, I, P, SO> {
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 }
 
@@ -207,14 +206,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_aura_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
+	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
 
 	fn on_slot(
 		&self,
@@ -591,10 +583,8 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(
-							&BlockId::Hash(parent_hash),
-							|v| v >= 2,
-						).map_err(|e| format!("{:?}", e))?
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
+						.map_err(|e| format!("{:?}", e))?
 					{
 						self.check_inherents(
 							block.clone(),
@@ -698,15 +688,12 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
-		.or_else(|| {
-			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
-				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
-			} else {
-				CoreApi::authorities(&*client.runtime_api(), at).ok()
-			}
-		}).ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
+		.or_else(|| AuthoritiesApi::authorities(&*client.runtime_api(), at).ok())
+		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.
@@ -912,7 +899,6 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
-				client.import_lock().clone(),
 			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
@@ -929,7 +915,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
@@ -937,7 +923,6 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
-				futures::empty(),
 				inherent_data_providers,
 				false,
 			).expect("Starts aura");
@@ -966,7 +951,7 @@ mod tests {
 	fn authorities_call_works() {
 		let client = test_client::new();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),

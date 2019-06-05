@@ -25,6 +25,8 @@ pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+pub use rstd;
 
 #[cfg(not(feature = "std"))]
 pub use core::marker::PhantomData;
@@ -346,8 +348,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {
@@ -616,14 +618,21 @@ macro_rules! impl_outer_config {
 	}
 }
 
+// NOTE [`PreRuntime` and `Consensus` are special]
+//
+// We MUST treat `PreRuntime` and `Consensus` variants specially, as they:
+//
+// * have more parameters (both in `generic::DigestItem` and in runtimes)
+// * have a `PhantomData` parameter in the runtime, but not in `generic::DigestItem`
+
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __parse_pattern_2 {
 	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::PhantomData))
+		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
 	};
 	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::PhantomData))
+		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
 	};
 	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
 		$internal::$module($module::RawLog::$name(ref $v1))
@@ -648,10 +657,10 @@ macro_rules! __parse_pattern {
 #[doc(hidden)]
 macro_rules! __parse_expr {
 	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, $crate::PhantomData))
+		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, Default::default()))
 	};
 	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::Consensus($engine_id, $binder, $crate::PhantomData))
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, Default::default()))
 	};
 	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
 		$internal::$module($module::RawLog::$name($binder))
@@ -742,7 +751,7 @@ macro_rules! impl_outer_log {
 			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 				self.dref().and_then(|dref| dref.as_changes_trie_root())
 			}
-
+ 
 			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
 				self.dref().and_then(|dref| dref.as_pre_runtime())
 			}
@@ -764,11 +773,14 @@ macro_rules! impl_outer_log {
 					)*)*
 					_ => {
 						if let Some(s) = gen.as_other()
-						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name) {
+							.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
+							.map($name)
+						{
 							s
 						} else {
-							panic!("Unhandled digest in runtime")
+							panic!("we only reach here if the runtime did not handle a digest; \
+									runtimes are required to handle all digests they receive; qed"
+									)
 						}
 					}
 				}
