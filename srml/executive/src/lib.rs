@@ -251,9 +251,8 @@ where
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the weight of the block if that extrinsic is applied.
-		let (base_weight, byte_weight) = xt.weight();
-		let tx_weight = base_weight + encoded_len as u32 * byte_weight;
-		if <system::Module<System>>::all_extrinsics_weight() + tx_weight > internal::MAX_TRANSACTIONS_WEIGHT {
+		let weight = xt.weight(encoded_len);
+		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
 

@@ -31,55 +31,56 @@
 //! ([`WeighableCall`]).
 
 /// The final type that each `#[weight = $x:expr]`'s
-/// expression must evaluate to. Consists of `(base_weight, byte_weight)`.
-pub type Weight = (u32, u32);
+/// expression must evaluate to.
+pub type Weight = u32;
 
-// TODO #2431 this value is now set in a way that the weight in the transaction
-// is just the size of input. Must be updated based based on benchmarks. Same for
-// maximum_weight and ::max() variant of TransactionWeight.
-/// The default weight as literal value.
-pub const DEFAULT_WEIGHT: Weight = (0, 1);
 
 /// A `Call` enum that can be weighted using the custom weight attribute of the
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
 pub trait WeighableCall {
 	/// Return the weight of this call.
-	fn weight(&self) -> Weight;
+	fn weight(&self, len: usize) -> Weight;
 }
 
 /// a _dispatchable_ function (anything inside `decl_module! {}`) that can be weighted.
 /// A type implementing this trait can _optionally_ be passed to the as
 /// `#[weight = X]`. Otherwise, default implementation will be used.
 pub trait WeighableTransaction {
-	/// Consume self and return the final weight of the call.
-	fn calculate_weight(self) -> Weight;
+	/// Consume self and return the final weight of the call given the length
+	/// of the extrinsic.
+	fn calculate_weight(self, len: usize) -> Weight;
 }
 
 /// Default weight wrapper.
+/// This is tailored for the Polkadot's use case. Users may replace it with anything.
 pub enum TransactionWeight {
 	/// basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
-	Basic(Weight),
-	/// Maximum fee. This implies tha a this transaction _might_ get included but
+	Basic(Weight, Weight),
+	/// Maximum fee. This implies that this transaction _might_ get included but
 	/// no more transaction can be added. This can be done by setting the
 	/// implementation to _maximum block weight_.
 	Max,
-	/// Free. Don't do anything.
-	Free
+	/// Free. The transaction does not increase the total weight
+	/// (i.e. is not included in weight calculation).
+	Free,
 }
 
 impl WeighableTransaction for TransactionWeight {
-	fn calculate_weight(self) -> Weight {
+	fn calculate_weight(self, len: usize) -> Weight {
 		match self {
-			TransactionWeight::Basic(w) => w,
-			TransactionWeight::Max => (4 * 1024 * 1024, 0),
-			TransactionWeight::Free => (0, 0),
+			TransactionWeight::Basic(base, byte) => base + byte * len as Weight,
+			TransactionWeight::Max => 4 * 1024 * 1024,
+			TransactionWeight::Free => 0,
 		}
 	}
 }
 
 impl Default for TransactionWeight {
 	fn default() -> Self {
-		TransactionWeight::Basic(DEFAULT_WEIGHT)
+		// This implies that the weight is currently equal to tx-size, nothing more
+		// for all substrate transactions that do NOT explicitly annotate weight.
+		// TODO #2431 needs to be updated with proper max values.
+		TransactionWeight::Basic(0, 1)
 	}
 }

@@ -1002,15 +1002,15 @@ macro_rules! decl_module {
 
 		// Implement weight calculation function for Call
 		// no-op wrapper to semantically imply `where $weight: WeighableTransaction` with a meaningful error message.
-		fn __calculate_weight<T: $crate::dispatch::WeighableTransaction>(w: T) -> $crate::dispatch::Weight {
-			w.calculate_weight()
+		fn __calculate_weight<T: $crate::dispatch::WeighableTransaction>(w: T, len: usize) -> $crate::dispatch::Weight {
+			w.calculate_weight(len)
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::WeighableCall
 			for $call_type<$trait_instance $(, $instance)?>
 		{
-			fn weight(&self) -> $crate::dispatch::Weight {
+			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
 				match *self {
-					$( $call_type::$fn_name(..) => __calculate_weight($weight), )*
+					$( $call_type::$fn_name(..) => __calculate_weight($weight, len), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
@@ -1138,9 +1138,9 @@ macro_rules! impl_outer_dispatch {
 			,)*
 		}
 		impl $crate::dispatch::WeighableCall for $call_type {
-			fn weight(&self) -> $crate::dispatch::Weight {
+			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
 				match self {
-					$( $call_type::$camelcase(call) => call.weight(), )*
+					$( $call_type::$camelcase(call) => call.weight(len), )*
 				}
 			}
 		}
@@ -1341,7 +1341,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = TransactionWeight::Basic((10, 100))]
+			#[weight = TransactionWeight::Basic(10, 100)]
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1478,11 +1478,11 @@ mod tests {
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
-		// max weight
-		assert_eq!(Call::<TraitImpl>::weighted().weight(), (4 * 1024 * 1024, 0));
-		// default weight
-		assert_eq!(Call::<TraitImpl>::aux_0().weight(), (0, 1));
+		// max weight. not dependent on input.
+		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 4 * 1024 * 1024);
+		// default weight.
+		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
 		// custom basic
-		assert_eq!(Call::<TraitImpl>::aux_3().weight(), (10, 100));
+		assert_eq!(Call::<TraitImpl>::aux_3().weight(5), 10 + 100 * 5 );
 	}
 }

@@ -60,11 +60,9 @@ where
 impl<AccountId, Index, Call> WeighableCall
 	for CheckedExtrinsic<AccountId, Index, Call>
 where
-	AccountId: Member + MaybeDisplay,
-	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member + WeighableCall,
+	Call: WeighableCall,
 {
-	fn weight(&self) -> Weight {
-		self.function.weight()
+	fn weight(&self, len: usize) -> Weight {
+		self.function.weight(len)
 	}
 }
