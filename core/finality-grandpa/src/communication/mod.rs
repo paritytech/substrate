@@ -387,6 +387,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,
 		service: &mut N,
+		gossip_validator: &Arc<GossipValidator<B>>,
 	| {
 		let precommits_signed_by: Vec<String> =
 			msg.message.auth_data.iter().map(move |(_, a)| {
@@ -447,13 +448,30 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 
 	let process_catch_up = move |
 		msg: FullCatchUpMessage<B>,
-		_notification: network_gossip::TopicNotification,
-		_service: &mut N,
+		mut notification: network_gossip::TopicNotification,
+		service: &mut N,
+		gossip_validator: &Arc<GossipValidator<B>>,
 	| {
 		// FIXME: handle catch up replies and requests?
 		// signal to validator about import outcome,
 		// cleanup pending request after import!
-		Some(voter::CommunicationIn::CatchUp(msg.message, voter::Callback::Blank))
+		let gossip_validator = gossip_validator.clone();
+		let service = service.clone();
+		let cb = move |outcome| {
+			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
+				// report peer
+				// FIXME: invalid catch up cost
+				if let Some(who) = notification.sender.take() {
+					service.report(who, cost::INVALID_COMMIT);
+				}
+			}
+
+			gossip_validator.note_catch_up_message_imported();
+		};
+
+		let cb = voter::Callback::Work(Box::new(cb));
+
+		Some(voter::CommunicationIn::CatchUp(msg.message, cb))
 	};
 
 	service.messages_for(topic)
@@ -467,8 +485,10 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		})
 		.filter_map(move |(notification, msg)| {
 			match msg {
-				GossipMessage::Commit(msg) => process_commit(msg, notification, &mut service),
-				GossipMessage::CatchUp(msg) => process_catch_up(msg, notification, &mut service),
+				GossipMessage::Commit(msg) =>
+					process_commit(msg, notification, &mut service, &gossip_validator),
+				GossipMessage::CatchUp(msg) =>
+					process_catch_up(msg, notification, &mut service, &gossip_validator),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;

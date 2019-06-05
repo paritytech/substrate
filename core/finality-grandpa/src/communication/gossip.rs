@@ -448,7 +448,7 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	pending_catch_up_request: Option<(PeerId, CatchUpRequestMessage, Instant)>,
-	last_catch_up_import: Option<Instant>,
+	pending_catch_up_import: Option<(PeerId, CatchUpRequestMessage, Instant)>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -461,7 +461,7 @@ impl<Block: BlockT> Inner<Block> {
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			pending_catch_up_request: None,
-			last_catch_up_import: None,
+			pending_catch_up_import: None,
 			config,
 		}
 	}
@@ -577,9 +577,9 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_catch_up_message(&mut self, who: &PeerId, full: &FullCatchUpMessage<Block>)
 		-> Action<Block::Hash>
 	{
+		// FIXME: adjust costs
 		match self.pending_catch_up_request.take() {
 			Some((peer, request, instant)) => {
-				// FIXME: adjust costs
 				if peer != *who {
 					self.pending_catch_up_request = Some((peer, request, instant));
 					return Action::Discard(-1);
@@ -592,14 +592,21 @@ impl<Block: BlockT> Inner<Block> {
 				if request.round.0 > full.message.round_number {
 					return Action::Discard(-1);
 				}
+
+				// move request to pending import state we won't push out any
+				// catch up requests until we import this one (either with a
+				// success or failure)
+				self.pending_catch_up_import = Some((peer, request, instant));
+
+				let topic = super::global_topic::<Block>(full.set_id.0);
+				Action::ProcessAndDiscard(topic, 0)
 			},
-			None => return Action::Discard(-1),
+			None => Action::Discard(-1),
 		}
+	}
 
-		self.last_catch_up_import = Some(Instant::now());
-
-		let topic = super::global_topic::<Block>(full.set_id.0);
-		Action::ProcessAndDiscard(topic, 0)
+	fn note_catch_up_message_imported(&mut self) {
+		self.pending_catch_up_import.take();
 	}
 
 	fn handle_catch_up_request(
@@ -707,12 +714,14 @@ impl<Block: BlockT> Inner<Block> {
 			None => {},
 		}
 
-		match self.last_catch_up_import.take() {
-			Some(instant) if instant.elapsed() < CATCH_UP_IMPORT_TIMEOUT => {
-				self.last_catch_up_import = Some(instant);
-				return false;
+		match self.pending_catch_up_import.take() {
+			Some((peer, request, instant)) => {
+				if instant.elapsed() < CATCH_UP_IMPORT_TIMEOUT {
+					self.pending_catch_up_import = Some((peer, request, instant));
+					return false;
+				}
 			},
-			_ => {},
+			None => {},
 		}
 
 		self.pending_catch_up_request = Some((
@@ -775,6 +784,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		if let Some((to, msg)) = maybe_msg {
 			send_neighbor(to, msg);
 		}
+	}
+
+	/// Note that we've imported a catch up message.
+	pub(super) fn note_catch_up_message_imported(&self)	{
+		self.inner.write().note_catch_up_message_imported();
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: i32) {
@@ -866,7 +880,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						round: Round(round),
 					};
 
-					// TODO: track catch up message import outcome similar to what's done for commits
 					if inner.note_catch_up_request(who, &request) {
 						trace!(target: "afg", "Sending catch-up request for round {} to {}",
 							round,
