@@ -38,11 +38,14 @@ use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
 
-use crate::{Error, Message, SignedMessage, CatchUp, Commit, CompactCommit};
+use crate::{
+	Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
+	Message, SignedMessage,
+};
 use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
@@ -346,14 +349,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<
-			Item = voter::CommunicationIn<B::Hash, NumberFor<B>, AuthoritySignature, AuthorityId>,
-			Error = Error,
-		>,
-		impl Sink<
-			SinkItem = voter::CommunicationOut<B::Hash, NumberFor<B>, AuthoritySignature, AuthorityId>,
-			SinkError = Error,
-		>,
+		impl Stream<Item = CommunicationIn<B>, Error = Error>,
+		impl Sink<SinkItem = CommunicationOut<B>, SinkError = Error>,
 	) {
 		self.validator.note_set(
 			set_id,
@@ -385,10 +382,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
-) -> impl Stream<
-		Item = voter::CommunicationIn<B::Hash, NumberFor<B>, AuthoritySignature, AuthorityId>,
-		Error = Error,
-	> {
+) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,

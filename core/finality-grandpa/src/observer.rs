@@ -30,7 +30,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use substrate_primitives::{ed25519::Public as AuthorityId, H256, Blake2Hasher};
 
 use crate::{
-	AuthoritySignature, global_communication, CommandOrError, Config, environment,
+	global_communication, CommandOrError, CommunicationIn, Config, environment,
 	Error, LinkHalf, Network, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
@@ -69,7 +69,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationIn<Block>,
 		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
 {

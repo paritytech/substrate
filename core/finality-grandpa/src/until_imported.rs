@@ -20,7 +20,7 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, Error, SignedMessage, CatchUp, CompactCommit};
+use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
 
 use log::{debug, warn};
 use client::ImportNotifications;
@@ -29,7 +29,7 @@ use futures::stream::Fuse;
 use grandpa::voter;
 use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::ed25519::{Public as AuthorityId};
 use tokio::timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
@@ -255,10 +255,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
 
 pub(crate) struct BlockGlobalMessage<Block: BlockT> {
-	inner: Arc<(
-		AtomicUsize,
-		Mutex<Option<voter::CommunicationIn<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>>>,
-	)>,
+	inner: Arc<(AtomicUsize, Mutex<Option<CommunicationIn<Block>>>)>,
 	target_number: NumberFor<Block>,
 }
 
@@ -273,7 +270,7 @@ pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 /// This is used for compact commits which have already been checked for
 /// structural soundness.
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
-	type Blocked = voter::CommunicationIn<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+	type Blocked = CommunicationIn<Block>;
 
 	fn schedule_wait<S, Wait, Ready>(
 		input: Self::Blocked,

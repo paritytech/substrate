@@ -153,6 +153,44 @@ pub type CompactCommit<Block> = grandpa::CompactCommit<
 	AuthoritySignature,
 	AuthorityId
 >;
+/// A global communication input stream for commits and catch up messages. Not
+/// exposed publicly, used internally to simplify types in the communication
+/// layer.
+type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId
+>;
+
+/// Global communication input stream for commits and catch up messages, with
+/// the hash type not being derived from the block, useful for forcing the hash
+/// to some type (e.g. `H256`) when the compiler can't do the inference.
+type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId
+>;
+
+/// A global communication sink for commits. Not exposed publicly, used
+/// internally to simplify types in the communication layer.
+type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId
+>;
+
+/// Global communication sink for commits with the hash type not being derived
+/// from the block, useful for forcing the hash to some type (e.g. `H256`) when
+/// the compiler can't do the inference.
+type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId
+>;
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
@@ -367,11 +405,11 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	network: &NetworkBridge<Block, N>,
 ) -> (
 	impl Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationInH<Block, H256>,
 		Error = CommandOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = voter::CommunicationOut<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		SinkItem = CommunicationOutH<Block, H256>,
 		SinkError = CommandOrError<H256, NumberFor<Block>>,
 	>,
 ) where
