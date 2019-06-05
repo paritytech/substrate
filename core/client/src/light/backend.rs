@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
@@ -41,6 +41,7 @@ const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type
 pub struct Backend<S, F, H: Hasher> {
 	blockchain: Arc<Blockchain<S, F>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
+	import_lock: Mutex<()>,
 }
 
 /// Light block (header and justification) import operation.
@@ -77,6 +78,7 @@ impl<S, F, H: Hasher> Backend<S, F, H> {
 		Self {
 			blockchain,
 			genesis_state: RwLock::new(None),
+			import_lock: Default::default(),
 		}
 	}
 
@@ -212,6 +214,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
 		Err(ClientError::NotAvailableOnLightClient.into())
+	}
+
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
 	}
 }
 

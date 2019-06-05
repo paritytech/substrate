@@ -622,7 +622,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 				#[allow(deprecated)]
+/// 				Ok(LongestChain::new(client.backend().clone()))
 /// 			}},
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))

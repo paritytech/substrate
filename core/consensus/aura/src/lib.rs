@@ -886,7 +886,6 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
-				client.import_lock().clone(),
 			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(

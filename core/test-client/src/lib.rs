@@ -237,7 +237,7 @@ impl<E, B> TestClientBuilder<E, B> where
 		).expect("Creates new client");
 
 		#[allow(deprecated)]
-		let longest_chain = client::LongestChain::new(self.backend, client.import_lock());
+		let longest_chain = client::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
