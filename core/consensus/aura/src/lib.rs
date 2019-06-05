@@ -69,9 +69,9 @@ use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
+pub use digest::CompatibleDigestItem;
 
 mod digest;
-use digest::CompatibleDigestItem;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
