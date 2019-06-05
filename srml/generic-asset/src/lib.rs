@@ -558,7 +558,7 @@ impl<T: Trait> Module<T> {
 	/// Move `amount` from free balance to reserved balance.
 	///
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
-	/// be returned to notify of this. This is different behaviour to `unreserve`.
+	/// be returned. This is different behavior than `unreserve`.
 	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
