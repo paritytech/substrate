@@ -266,6 +266,7 @@ mod mock;
 mod tests;
 
 mod phragmen;
+mod inflation;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
