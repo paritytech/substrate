@@ -122,6 +122,9 @@ use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_e
 use srml_support::{ensure, dispatch::Result, traits::{OnFreeBalanceZero, Get}, Parameter};
 use system::ensure_signed;
 
+/// Simple index type with which we can count sessions.
+pub type SessionIndex = u32;
+
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys {
@@ -152,7 +155,7 @@ impl<
 
 pub trait OnSessionEnding<AccountId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
-	fn on_session_ending() -> Option<Vec<AccountId>>;
+	fn on_session_ending(i: SessionIndex) -> Option<Vec<AccountId>>;
 }
 
 /// Handler for when a session keys set changes.
@@ -218,7 +221,7 @@ decl_storage! {
 		pub Validators get(validators) config(): Vec<T::AccountId>;
 
 		/// Current index of the session.
-		pub CurrentIndex get(current_index): T::BlockNumber;
+		pub CurrentIndex get(current_index): SessionIndex;
 
 		/// True if anything has changed in this session.
 		Changed: bool;
@@ -244,10 +247,10 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::BlockNumber {
+	pub enum Event {
 		/// New session has happened. Note that the argument is the session index, not the block
 		/// number as the type might suggest.
-		NewSession(BlockNumber),
+		NewSession(SessionIndex),
 	}
 );
 
@@ -314,21 +317,24 @@ impl<T: Trait> Module<T> {
 	/// Move on to next session: register the new authority set.
 	pub fn rotate_session() {
 		// Increment current session index.
-		let session_index = <CurrentIndex<T>>::mutate(|i| { *i += One::one(); *i });
-
-		// Record that this happened.
-		Self::deposit_event(RawEvent::NewSession(session_index));
+		let session_index = <CurrentIndex<T>>::get();
 
 		let mut changed = <Changed<T>>::take();
 
 		// See if we have a new validator set.
-		let validators = if let Some(new) = T::OnSessionEnding::on_session_ending() {
+		let validators = if let Some(new) = T::OnSessionEnding::on_session_ending(session_index) {
 			changed = true;
 			<Validators<T>>::put(&new);
 			new
 		} else {
 			<Validators<T>>::get()
 		};
+
+		let session_index = session_index + 1;
+		<CurrentIndex<T>>::put(session_index);
+
+		// Record that this happened.
+		Self::deposit_event(RawEvent::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
 		let amalgamated = validators.into_iter()
