@@ -710,14 +710,15 @@ where
 
 	fn prevote_equivocation(
 		&self,
-		_round: u64,
+		round: u64,
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+		let proof = (self.set_id, round, equivocation).encode();
 		submit_report_call(
 			&self.inner,
 			&self.transaction_pool,
-			Call::Grandpa(GrandpaCall::report_equivocation(equivocation.encode())),
+			Call::Grandpa(GrandpaCall::report_equivocation(proof)),
 		);
 	}
 
