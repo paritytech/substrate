@@ -251,7 +251,7 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
-use primitives::weights::TransactionWeight;
+use sr_primitives::weights::TransactionWeight;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -401,7 +401,7 @@ decl_module! {
 		//
 		// The example below showcases a transaction which is relatively costly, but less dependent on
 		// the input, hence byte_weight is configured smaller.
-		#[weight = TransactionWeight::Base((10_000, 100))]
+		#[weight = TransactionWeight::Basic((10_000, 100))]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
