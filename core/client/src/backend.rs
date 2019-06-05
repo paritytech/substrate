@@ -28,10 +28,6 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use parking_lot::Mutex;
 
-lazy_static! {
-    static ref IMPORT_LOCK: Mutex<()> = Mutex::new(());
-}
-
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewBlockState {
@@ -185,12 +181,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// the using components should acquire and hold the lock whenever they do
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
-	fn get_import_lock(&self) -> &Mutex<()> {
-		// You only have to implement that yourself, if your backend is expected
-		// to run in a multi-backend-instances-per-process environment, otherwise
-		// this default implementation works well enough for you.
-		&IMPORT_LOCK
-	}
+	fn get_import_lock(&self) -> &Mutex<()>;
 }
 
 /// Changes trie storage that supports pruning.

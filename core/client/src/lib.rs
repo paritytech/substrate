@@ -21,8 +21,6 @@
 #![recursion_limit="128"]
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]
 pub mod error;

@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -541,6 +541,7 @@ where
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: ChangesTrieStorage<Block, H>,
 	blockchain: Blockchain<Block>,
+	import_lock: Mutex<()>,
 }
 
 impl<Block, H> Backend<Block, H>
@@ -555,6 +556,7 @@ where
 			states: RwLock::new(HashMap::new()),
 			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
+			import_lock: Default::default(),
 		}
 	}
 }
@@ -683,6 +685,10 @@ where
 
 	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
 		Ok(Zero::zero())
+	}
+
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
 	}
 }
 
