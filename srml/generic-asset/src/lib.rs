@@ -86,8 +86,10 @@
 //! - `free_balance`: Get an account's free balance of an asset kind.
 //! - `reserved_balance`: Get an account's reserved balance of an asset kind.
 //! - `create_asset`: Creates an asset.
-//! - `make_transfer`: Transfer some liquid free balance from one account to another. This will not emit Transferred event.
-//! - `make_transfer_with_event`: Transfer some liquid free balance from one account to another. This will emit Transferred event.
+//! - `make_transfer`: Transfer some liquid free balance from one account to another.
+//! This will not emit Transferred event.
+//! - `make_transfer_with_event`: Transfer some liquid free balance from one account to another.
+//! This will emit Transferred event.
 //! - `reserve`: Moves an amount from free balance to reserved balance.
 //! - `unreserve`: Move up to an amount from reserved balance to free balance. This function cannot fail.
 //! - `slash`: Deduct up to an amount from the combined balance of `who`, preferring to deduct from the
@@ -308,7 +310,11 @@ decl_module! {
 
 		/// Updates permission for a given asset_id and an account.
 		/// The origin must have `update` permission.
-		fn update_permission(origin, #[compact] asset_id: T::AssetId, new_permission: PermissionLatest<T::AccountId>) -> Result {
+		fn update_permission(
+			origin,
+			#[compact] asset_id: T::AssetId,
+			new_permission: PermissionLatest<T::AccountId>
+		) -> Result {
 			let origin = ensure_signed(origin)?;
 
 			let permissions: PermissionVersions<T::AccountId> = new_permission.into();
@@ -329,8 +335,10 @@ decl_module! {
 
 				let original_free_balance = Self::free_balance(&asset_id, &to);
 				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
-				let new_total_issuance = current_total_issuance.checked_add(&amount).ok_or_else(|| "total_issuance got overflow after minting.")?;
-				let value = original_free_balance.checked_add(&amount).ok_or_else(|| "free balance got overflow after minting.")?;
+				let new_total_issuance = current_total_issuance.checked_add(&amount)
+					.ok_or_else(|| "total_issuance got overflow after minting.")?;
+				let value = original_free_balance.checked_add(&amount)
+					.ok_or_else(|| "free balance got overflow after minting.")?;
 
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 				Self::set_free_balance(&asset_id, &to, value);
@@ -350,8 +358,10 @@ decl_module! {
 				let original_free_balance = Self::free_balance(&asset_id, &to);
 
 				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
-				let new_total_issuance = current_total_issuance.checked_sub(&amount).ok_or_else(|| "total_issuance got underflow after burning")?;
-				let value = original_free_balance.checked_sub(&amount).ok_or_else(|| "free_balance got underflow after burning")?;
+				let new_total_issuance = current_total_issuance.checked_sub(&amount)
+					.ok_or_else(|| "total_issuance got underflow after burning")?;
+				let value = original_free_balance.checked_sub(&amount)
+					.ok_or_else(|| "free_balance got underflow after burning")?;
 
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 
@@ -416,7 +426,10 @@ decl_storage! {
 		config(initial_balance): T::Balance;
 		config(endowed_accounts): Vec<T::AccountId>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|
+			storage: &mut primitives::StorageOverlay,
+			_: &mut primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
 					storage.insert(
@@ -467,7 +480,8 @@ impl<T: Trait> Module<T> {
 	/// Creates an asset.
 	///
 	/// # Arguments
-	/// * `asset_id` An id of reserved asset. If not provided, an user generated asset would be created with next available id.
+	/// * `asset_id` An id of reserved asset.
+	/// If not provided, an user generated asset would be created with next available id.
 	/// * `from_account` An option value can have the account_id or None.
 	/// * `asset_options` A struct which has the balance and permissions for the asset.
 	///
@@ -646,7 +660,7 @@ impl<T: Trait> Module<T> {
 	/// * `what` - A string slice contains the permission type.
 	///
 	pub fn check_permission(asset_id: &T::AssetId, who: &T::AccountId, what: &PermissionType) -> bool {
-		let permission_versions: PermissionVersions<T::AccountId> = Self::get_permission(asset_id); // This returns an enum.
+		let permission_versions: PermissionVersions<T::AccountId> = Self::get_permission(asset_id);
 		let permission = permission_versions.into();
 
 		match (what, permission) {
