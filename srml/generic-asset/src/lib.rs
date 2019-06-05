@@ -517,7 +517,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Transfer some liquid free balance from one account to another.
-	/// This will not emit Transferred event.
+	/// This will not emit the `Transferred` event.
 	pub fn make_transfer(asset_id: &T::AssetId, from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
