@@ -76,9 +76,7 @@ where
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
-		let r = client::block_builder::BlockBuilder::push(self, extrinsic.clone()).map_err(Into::into);
-		println!("+++ [AUTH] push_extrinsic() ended with {:?}", r);
-		r
+		client::block_builder::BlockBuilder::push(self, extrinsic.clone()).map_err(Into::into)
 	}
 }
 

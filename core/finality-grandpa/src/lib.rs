@@ -51,7 +51,7 @@
 //! number (this is num(signal) + N). When finalizing a block, we either apply
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
-// #![forbid(warnings)]
+#![forbid(warnings)]
 
 use futures::prelude::*;
 use log::{debug, info, warn};
