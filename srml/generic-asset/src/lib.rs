@@ -375,7 +375,7 @@ decl_module! {
 		}
 
 		/// Can be used to create reserved tokens.
-		/// Requires Root call
+		/// Requires Root call.
 		fn create_reserved(asset_id: T::AssetId, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
 			Self::create_asset(Some(asset_id), None, options)
 		}
