@@ -413,7 +413,7 @@ impl TraitPair for Pair {
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
-		let mut acc = self.0.public.to_bytes();
+		let mut acc = self.0.secret.to_bytes();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -473,7 +473,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> &Seed {
-		self.0.public.as_bytes()
+		self.0.secret.as_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
