@@ -38,13 +38,13 @@ use consensus::well_known_cache_keys;
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, F, H> {
+pub struct Backend<S, F, H: Hasher> {
 	blockchain: Arc<Blockchain<S, F>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, S, F, H> {
+pub struct ImportOperation<Block: BlockT, S, F, H: Hasher> {
 	header: Option<Block::Header>,
 	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
@@ -64,14 +64,14 @@ pub struct OnDemandState<Block: BlockT, S, F> {
 }
 
 /// On-demand or in-memory genesis state.
-pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H> {
+pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H: Hasher> {
 	/// On-demand state - storage values are fetched from remote nodes.
 	OnDemand(OnDemandState<Block, S, F>),
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryState<H>),
 }
 
-impl<S, F, H> Backend<S, F, H> {
+impl<S, F, H: Hasher> Backend<S, F, H> {
 	/// Create new light backend.
 	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
 		Self {
@@ -86,7 +86,7 @@ impl<S, F, H> Backend<S, F, H> {
 	}
 }
 
-impl<S: AuxStore, F, H> AuxStore for Backend<S, F, H> {
+impl<S: AuxStore, F, H: Hasher> AuxStore for Backend<S, F, H> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -387,7 +387,7 @@ where
 		Vec::new()
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
 }
@@ -482,10 +482,10 @@ where
 		}
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
-			OnDemandOrGenesisState::OnDemand(state) => state.try_into_trie_backend(),
-			OnDemandOrGenesisState::Genesis(state) => state.try_into_trie_backend(),
+			OnDemandOrGenesisState::OnDemand(ref mut state) => state.as_trie_backend(),
+			OnDemandOrGenesisState::Genesis(ref mut state) => state.as_trie_backend(),
 		}
 	}
 }

@@ -38,7 +38,8 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
+pub type NetworkService<F> =
+	network::NetworkService<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -138,7 +139,7 @@ pub trait StartRPC<C: Components> {
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
 		should_have_peers: bool,
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
@@ -158,7 +159,7 @@ impl<C: Components> StartRPC<Self> for C where
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
 		should_have_peers: bool,
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
@@ -338,7 +339,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build finality proof provider for serving network requests on full node.
 	fn build_finality_proof_provider(
 		client: Arc<FullClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<Self::Block>>>, error::Error>;
+	) -> Result<Option<Arc<dyn FinalityProofProvider<Self::Block>>>, error::Error>;
 
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
@@ -434,7 +435,7 @@ pub trait Components: Sized + 'static {
 	/// Finality proof provider for serving network requests.
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
 
 	/// Build fork choice selector
 	fn build_select_chain(
@@ -535,7 +536,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Factory::build_finality_proof_provider(client)
 	}
 }
@@ -618,7 +619,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		_client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Ok(None)
 	}
 	fn build_select_chain(
@@ -634,7 +635,7 @@ mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -654,7 +655,7 @@ mod tests {
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 
 		// import the block
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());

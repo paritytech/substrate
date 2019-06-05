@@ -17,6 +17,8 @@
 //! Rust implementation of Substrate contracts.
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::str;
 use tiny_keccak;
 use secp256k1;
 
@@ -29,6 +31,7 @@ use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, Result};
 use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
+use primitives::offchain;
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -110,6 +113,24 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, UserError> {
 		use byteorder::{LittleEndian, ByteOrder};
 		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| UserError("Invalid attempt to read_primitive"))?))
+	}
+}
+
+fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
+	if deadline == 0 {
+		None
+	} else {
+		Some(offchain::Timestamp::from_unix_millis(deadline))
+	}
+}
+
+fn u32_to_key(key: u32) -> std::result::Result<Option<offchain::CryptoKeyId>, ()> {
+	if key > u16::max_value() as u32 {
+		Err(())
+	} else if key == 0 {
+		Ok(None)
+	} else {
+		Ok(Some(offchain::CryptoKeyId(key as u16)))
 	}
 }
 
@@ -459,7 +480,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_64"))?;
 			let hashed_key = twox_64(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
-				if let Ok(_skey) = ::std::str::from_utf8(&key) {
+				if let Ok(_skey) = str::from_utf8(&key) {
 					_skey
 				} else {
 					&format!("{}", HexDisplay::from(&key))
@@ -483,10 +504,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
-				if let Ok(_skey) = ::std::str::from_utf8(&key) {
-					_skey
+				&if let Ok(_skey) = str::from_utf8(&key) {
+					*_skey
 				} else {
-					&format!("{}", HexDisplay::from(&key))
+					format!("{}", HexDisplay::from(&key))
 				},
 				HexDisplay::from(&hashed_key)
 			);
@@ -590,14 +611,344 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(0)
 	},
-	ext_submit_extrinsic(msg_data: *const u8, len: u32) => {
+	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
-			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
+			.map_err(|_| UserError("OOB while ext_submit_transaction: wasm"))?;
 
-		this.ext.submit_extrinsic(extrinsic)
-			.map_err(|_| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
+		let res = this.ext.offchain()
+			.map(|api| api.submit_transaction(extrinsic))
+			.ok_or_else(|| UserError("Calling unavailable API ext_submit_transaction: wasm"))?;
+
+		Ok(if res.is_ok() { 0 } else { 1 })
+	},
+	ext_new_crypto_key(crypto: u32) -> u32 => {
+		let kind = offchain::CryptoKind::try_from(crypto)
+			.map_err(|_| UserError("crypto kind OOB while ext_new_crypto_key: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.new_crypto_key(kind))
+			.ok_or_else(|| UserError("Calling unavailable API ext_new_crypto_key: wasm"))?;
+
+		match res {
+			Ok(key_id) => Ok(key_id.0 as u32),
+			Err(()) => Ok(u32::max_value()),
+		}
+	},
+	ext_encrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_encrypt: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
+			.map_err(|_| UserError("OOB while ext_encrypt: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.encrypt(key, &*message))
+			.ok_or_else(|| UserError("Calling unavailable API ext_encrypt: wasm"))?;
+
+		let (offset,len) = match res {
+			Ok(encrypted) => {
+				let len = encrypted.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &encrypted)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_encrypt"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(msg_len, len)
+			.map_err(|_| UserError("Invalid attempt to write msg_len in ext_encrypt"))?;
+
+		Ok(offset)
+	},
+	ext_decrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_decrypt: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
+			.map_err(|_| UserError("OOB while ext_decrypt: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.decrypt(key, &*message))
+			.ok_or_else(|| UserError("Calling unavailable API ext_decrypt: wasm"))?;
+
+		let (offset,len) = match res {
+			Ok(decrypted) => {
+				let len = decrypted.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &decrypted)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_decrypt"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(msg_len, len)
+			.map_err(|_| UserError("Invalid attempt to write msg_len in ext_decrypt"))?;
+
+		Ok(offset)
+	},
+	ext_sign(key: u32, data: *const u8, data_len: u32, sig_data_len: *mut u32) -> *mut u8  => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_sign: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
+			.map_err(|_| UserError("OOB while ext_sign: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.sign(key, &*message))
+			.ok_or_else(|| UserError("Calling unavailable API ext_sign: wasm"))?;
+
+		let (offset,len) = match res {
+			Ok(signature) => {
+				let len = signature.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &signature)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_sign"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(sig_data_len, len)
+			.map_err(|_| UserError("Invalid attempt to write sig_data_len in ext_sign"))?;
+
+		Ok(offset)
+	},
+	ext_verify(
+		key: u32,
+		msg: *const u8,
+		msg_len: u32,
+		signature: *const u8,
+		signature_len: u32
+	) -> u32 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_verify: wasm"))?;
+		let message = this.memory.get(msg, msg_len as usize)
+			.map_err(|_| UserError("OOB while ext_verify: wasm"))?;
+		let signature = this.memory.get(signature, signature_len as usize)
+			.map_err(|_| UserError("OOB while ext_verify: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.verify(key, &*message, &*signature))
+			.ok_or_else(|| UserError("Calling unavailable API ext_verify: wasm"))?;
+
+		match res {
+			Ok(true) => Ok(0),
+			Ok(false) => Ok(1),
+			Err(()) => Ok(u32::max_value()),
+		}
+	},
+	ext_timestamp() -> u64 => {
+		let timestamp = this.ext.offchain()
+			.map(|api| api.timestamp())
+			.ok_or_else(|| UserError("Calling unavailable API ext_timestamp: wasm"))?;
+		Ok(timestamp.unix_millis())
+	},
+	ext_sleep_until(deadline: u64) => {
+		this.ext.offchain()
+			.map(|api| api.sleep_until(offchain::Timestamp::from_unix_millis(deadline)))
+			.ok_or_else(|| UserError("Calling unavailable API ext_sleep_until: wasm"))?;
+		Ok(())
+	},
+	ext_random_seed(seed_data: *mut u8) => {
+		// NOTE the runtime as assumptions about seed size.
+		let seed: [u8; 32] = this.ext.offchain()
+			.map(|api| api.random_seed())
+			.ok_or_else(|| UserError("Calling unavailable API ext_random_seed: wasm"))?;
+
+		this.memory.set(seed_data, &seed)
+			.map_err(|_| UserError("Invalid attempt to set value in ext_random_seed"))?;
+		Ok(())
+	},
+	ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32) => {
+		let key = this.memory.get(key, key_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_set: wasm"))?;
+		let value = this.memory.get(value, value_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_set: wasm"))?;
+
+		this.ext.offchain()
+			.map(|api| api.local_storage_set(&key, &value))
+			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_set: wasm"))?;
 
 		Ok(())
+	},
+	ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
+		let key = this.memory.get(key, key_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_get: wasm"))?;
+
+		let maybe_value = this.ext.offchain()
+			.map(|api| api.local_storage_get(&key))
+			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_get: wasm"))?;
+
+		let (offset, len) = if let Some(value) = maybe_value {
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
+			this.memory.set(offset, &value)
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_local_storage_get"))?;
+			(offset, value.len() as u32)
+		} else {
+			(0, u32::max_value())
+		};
+
+		this.memory.write_primitive(value_len, len)
+			.map_err(|_| UserError("Invalid attempt to write value_len in ext_local_storage_get"))?;
+
+		Ok(offset)
+	},
+	ext_http_request_start(
+		method: *const u8,
+		method_len: u32,
+		url: *const u8,
+		url_len: u32,
+		meta: *const u8,
+		meta_len: u32
+	) -> u32 => {
+		let method = this.memory.get(method, method_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_start: wasm"))?;
+		let url = this.memory.get(url, url_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_start: wasm"))?;
+		let meta = this.memory.get(meta, meta_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_start: wasm"))?;
+
+		let method_str = str::from_utf8(&method)
+			.map_err(|_| UserError("invalid str while ext_http_request_start: wasm"))?;
+		let url_str = str::from_utf8(&url)
+			.map_err(|_| UserError("invalid str while ext_http_request_start: wasm"))?;
+
+		let id = this.ext.offchain()
+			.map(|api| api.http_request_start(method_str, url_str, &*meta))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_request_start: wasm"))?;
+
+		if let Ok(id) = id {
+			Ok(id.0 as u32)
+		} else {
+			Ok(u32::max_value())
+		}
+	},
+	ext_http_request_add_header(
+		request_id: u32,
+		name: *const u8,
+		name_len: u32,
+		value: *const u8,
+		value_len: u32
+	) -> u32 => {
+		let name = this.memory.get(name, name_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_add_header: wasm"))?;
+		let value = this.memory.get(value, value_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_add_header: wasm"))?;
+
+		let name_str = str::from_utf8(&name)
+			.map_err(|_| UserError("invalid str while ext_http_request_add_header: wasm"))?;
+		let value_str = str::from_utf8(&value)
+			.map_err(|_| UserError("invalid str while ext_http_request_add_header: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.http_request_add_header(
+				offchain::HttpRequestId(request_id as u16),
+				&name_str,
+				&value_str,
+			))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_request_add_header: wasm"))?;
+
+		Ok(if res.is_ok() { 0 } else { 1 })
+	},
+	ext_http_request_write_body(
+		request_id: u32,
+		chunk: *const u8,
+		chunk_len: u32,
+		deadline: u64
+	) -> u32 => {
+		let chunk = this.memory.get(chunk, chunk_len as usize)
+			.map_err(|_| UserError("OOB while ext_http_request_write_body: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.http_request_write_body(
+				offchain::HttpRequestId(request_id as u16),
+				&chunk,
+				deadline_to_timestamp(deadline)
+			))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_request_write_body: wasm"))?;
+
+		Ok(match res {
+			Ok(()) => 0,
+			Err(e) => e as u8 as u32,
+		})
+	},
+	ext_http_response_wait(
+		ids: *const u32,
+		ids_len: u32,
+		statuses: *mut u32,
+		deadline: u64
+	) => {
+		let ids = (0..ids_len)
+			.map(|i|
+				 this.memory.read_primitive(ids + i * 4)
+					.map(|id: u32| offchain::HttpRequestId(id as u16))
+					.map_err(|_| UserError("OOB while ext_http_response_wait: wasm"))
+			)
+			.collect::<::std::result::Result<Vec<_>, _>>()?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.http_response_wait(&ids, deadline_to_timestamp(deadline)))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_wait: wasm"))?
+			.into_iter()
+			.map(|status| status.into())
+			.enumerate()
+			// make sure to take up to `ids_len` to avoid exceeding the mem.
+			.take(ids_len as usize);
+
+		for (i, status) in res {
+			this.memory.write_primitive(statuses + i as u32 * 4, status)
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_wait"))?;
+		}
+
+		Ok(())
+	},
+	ext_http_response_headers(
+		request_id: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
+		use parity_codec::Encode;
+
+		let headers = this.ext.offchain()
+			.map(|api| api.http_response_headers(offchain::HttpRequestId(request_id as u16)))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_headers: wasm"))?;
+
+		let encoded = headers.encode();
+		let len = encoded.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+		this.memory.set(offset, &encoded)
+			.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_headers"))?;
+		this.memory.write_primitive(written_out, len)
+			.map_err(|_| UserError("Invalid attempt to write written_out in ext_http_response_headers"))?;
+
+		Ok(offset)
+	},
+	ext_http_response_read_body(
+		request_id: u32,
+		buffer: *mut u8,
+		buffer_len: u32,
+		deadline: u64
+	) -> u32 => {
+		let mut internal_buffer = Vec::with_capacity(buffer_len as usize);
+		internal_buffer.resize(buffer_len as usize, 0);
+
+		let res = this.ext.offchain()
+			.map(|api| api.http_response_read_body(
+				offchain::HttpRequestId(request_id as u16),
+				&mut internal_buffer,
+				deadline_to_timestamp(deadline),
+			))
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_read_body: wasm"))?;
+
+		Ok(match res {
+			Ok(read) => {
+				this.memory.set(buffer, &internal_buffer[..read])
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_read_body"))?;
+
+				read as u32
+			},
+			Err(err) => {
+				u32::max_value() - err as u8 as u32 + 1
+			}
+		})
 	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
@@ -750,7 +1101,7 @@ impl WasmExecutor {
 	/// This should be used for tests only.
 	pub fn call_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
@@ -807,7 +1158,7 @@ impl WasmExecutor {
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(

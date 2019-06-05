@@ -499,6 +499,7 @@ mod tests {
 			valid_till: 2,
 			requires: vec![vec![1], vec![2]],
 			provides: vec![vec![3], vec![4]],
+			propagate: true,
 		}
 	}
 
@@ -558,6 +559,7 @@ mod tests {
 			valid_till: u64::max_value(),	// use the max_value() here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
+			propagate: true,
 		};
 
 		// when

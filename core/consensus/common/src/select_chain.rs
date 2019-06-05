@@ -19,13 +19,13 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 
 /// The SelectChain trait defines the strategy upon which the head is chosen
-/// if multiple forks are present for an opaque definition of "best" in the 
+/// if multiple forks are present for an opaque definition of "best" in the
 /// specific chain build.
 ///
 /// The Strategy can be customised for the two use cases of authoring new blocks
 /// upon the best chain or which fork to finalise. Unless implemented differently
 /// by default finalisation methods fall back to use authoring, so as a minimum
-/// `_authoring`-functions must be implemented. 
+/// `_authoring`-functions must be implemented.
 ///
 /// Any particular user must make explicit, however, whether they intend to finalise
 /// or author through the using the right function call, as these might differ in

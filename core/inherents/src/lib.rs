@@ -44,16 +44,13 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
-#[cfg(feature = "std")]
-pub mod pool;
-
 pub use runtime_primitives::RuntimeString;
 
 /// An identifier for an inherent.
 pub type InherentIdentifier = [u8; 8];
 
 /// Inherent data to include in a block.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Encode, Decode)]
 pub struct InherentData {
 	/// All inherent data encoded with parity-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>
@@ -120,33 +117,6 @@ impl InherentData {
 					.map(Some),
 			None => Ok(None)
 		}
-	}
-}
-
-impl codec::Encode for InherentData {
-	fn encode(&self) -> Vec<u8> {
-		let keys = self.data.keys().collect::<Vec<_>>();
-		let values = self.data.values().collect::<Vec<_>>();
-
-		let mut encoded = keys.encode();
-		encoded.extend(values.encode());
-		encoded
-	}
-}
-
-impl codec::Decode for InherentData {
-	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
-		Vec::<InherentIdentifier>::decode(value)
-			.and_then(|i| Vec::<Vec<u8>>::decode(value).map(|v| (i, v)))
-			.and_then(|(i, v)| {
-				if i.len() == v.len() {
-					Some(Self {
-						data: i.into_iter().zip(v.into_iter()).collect()
-					})
-				} else {
-					None
-				}
-			})
 	}
 }
 

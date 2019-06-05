@@ -16,11 +16,24 @@
 
 //! Substrate block-author/full-node API.
 
+pub mod error;
+pub mod hash;
+
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
-use log::warn;
 use client::{self, Client};
+use crate::rpc::futures::{Sink, Stream, Future};
+use crate::subscriptions::Subscriptions;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use log::warn;
 use parity_codec::{Encode, Decode};
+use primitives::{Bytes, Blake2Hasher, H256};
+use runtime_primitives::{generic, traits};
+use self::error::Result;
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -31,19 +44,8 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{Bytes, Blake2Hasher, H256};
-use crate::rpc::futures::{Sink, Stream, Future};
-use runtime_primitives::{generic, traits};
-use crate::subscriptions::Subscriptions;
 
-pub mod error;
-
-#[cfg(test)]
-mod tests;
-
-use self::error::Result;
+pub use self::gen_client::Client as AuthorClient;
 
 /// Substrate authoring RPC API
 #[rpc]
@@ -59,6 +61,10 @@ pub trait AuthorApi<Hash, BlockHash> {
 	#[rpc(name = "author_pendingExtrinsics")]
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
 
+	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
+	#[rpc(name = "author_removeExtrinsic")]
+	fn remove_extrinsic(&self, bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>) -> Result<Vec<Hash>>;
+
 	/// Submit an extrinsic to watch.
 	#[pubsub(subscription = "author_extrinsicUpdate", subscribe, name = "author_submitAndWatchExtrinsic")]
 	fn watch_extrinsic(&self, metadata: Self::Metadata, subscriber: Subscriber<Status<Hash, BlockHash>>, bytes: Bytes);
@@ -72,7 +78,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Substrate client
 	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
-	/// Extrinsic pool
+	/// Transactions pool
 	pool: Arc<Pool<P>>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
@@ -105,7 +111,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
-		let best_block_hash = self.client.info()?.chain.best_hash;
+		let best_block_hash = self.client.info().chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.map_err(|e| e.into_pool_error()
@@ -118,9 +124,28 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
+	fn remove_extrinsic(&self, bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>) -> Result<Vec<ExHash<P>>> {
+		let hashes = bytes_or_hash.into_iter()
+			.map(|x| match x {
+				hash::ExtrinsicOrHash::Hash(h) => Ok(h),
+				hash::ExtrinsicOrHash::Extrinsic(bytes) => {
+					let xt = Decode::decode(&mut &bytes[..]).ok_or(error::Error::BadFormat)?;
+					Ok(self.pool.hash_of(&xt))
+				},
+			})
+			.collect::<Result<Vec<_>>>()?;
+
+		Ok(
+			self.pool.remove_invalid(&hashes)
+				.into_iter()
+				.map(|tx| tx.hash.clone())
+				.collect()
+		)
+	}
+
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info()?.chain.best_hash;
+			let best_block_hash = self.client.info().chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
 				.ok_or(error::Error::BadFormat)?;
 			self.pool

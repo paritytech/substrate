@@ -174,7 +174,7 @@ macro_rules! impl_function_executor {
 	  => $($pre:tt)+ ) => (
 		impl $( $pre ) + $structname {
 			#[allow(unused)]
-			fn resolver() -> &'static $crate::wasmi::ModuleImportResolver {
+			fn resolver() -> &'static dyn $crate::wasmi::ModuleImportResolver {
 				struct Resolver;
 				impl $crate::wasmi::ModuleImportResolver for Resolver {
 					fn resolve_func(&self, name: &str, signature: &$crate::wasmi::Signature) -> ::std::result::Result<$crate::wasmi::FuncRef, $crate::wasmi::Error> {

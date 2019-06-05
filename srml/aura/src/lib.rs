@@ -51,16 +51,19 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
+use parity_codec::{Encode, Decode};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
 use timestamp::OnTimestampSet;
+use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 mod mock;
 mod tests;
@@ -88,6 +91,20 @@ impl AuraInherentData for InherentData {
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// Logs in this module.
+///
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// AuRa inherent digests
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for `Aura`.
@@ -163,7 +180,7 @@ decl_module! {
 }
 
 /// A report of skipped authorities in Aura.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
 	// The first skipped slot.

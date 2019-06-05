@@ -24,7 +24,7 @@ use std::{
 use futures::{IntoFuture, Future};
 
 use parity_codec::{Encode, Decode};
-use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded, OffchainExt};
+use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{One, Block as BlockT, Header as HeaderT};
 use state_machine::{
@@ -87,7 +87,7 @@ where
 	type Error = ClientError;
 
 	fn call<
-		O: OffchainExt,
+		O: offchain::Externalities,
 	>(
 		&self,
 		id: &BlockId<Block>,
@@ -111,7 +111,7 @@ where
 
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -154,7 +154,7 @@ where
 	}
 
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -230,7 +230,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	type Error = ClientError;
 
 	fn call<
-		O: OffchainExt,
+		O: offchain::Externalities,
 	>(
 		&self,
 		id: &BlockId<Block>,
@@ -247,7 +247,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -327,7 +327,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -388,7 +388,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 /// Method is executed using passed header as environment' current block.
 /// Proof includes both environment preparation proof and method execution proof.
 pub fn prove_execution<Block, S, E>(
-	state: S,
+	mut state: S,
 	header: Block::Header,
 	executor: &E,
 	method: &str,
@@ -399,13 +399,13 @@ pub fn prove_execution<Block, S, E>(
 		S: StateBackend<Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 {
-	let trie_state = state.try_into_trie_backend()
-		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+	let trie_state = state.as_trie_backend()
+		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
-		&trie_state,
+		trie_state,
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
@@ -448,7 +448,7 @@ pub fn check_execution_proof<Header, E, H>(
 		Default::default(),
 		Default::default(),
 		request.header.hash(),
-		Default::default(),
+		request.header.digest().clone(),
 	);
 	execution_proof_check_on_trie_backend::<H, _>(
 		&trie_backend,
@@ -525,7 +525,7 @@ mod tests {
 		for _ in 1..3 {
 			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block().unwrap().bake().unwrap(),
+				remote_client.new_block(Default::default()).unwrap().bake().unwrap(),
 				Default::default(),
 			).unwrap();
 		}
