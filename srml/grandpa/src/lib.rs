@@ -224,51 +224,47 @@ decl_storage! {
 
 fn handle_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
 where
-	T: Trait, // + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
-	// <T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
-	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
-	let maybe_equivocation_proof: Option<Equivocation<
+	let maybe_equivocation_proof: Option<(u64, u64, Equivocation<
 		<<T as Trait>::Signature as Verify>::Signer,
 		Prevote<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>,
 		<T as Trait>::Signature,
-	>> = Decode::decode(&mut proof.as_slice());
-	if let Some(equivocation_proof) = maybe_equivocation_proof {
-	// 	let authorities = <consensus::Module<T>>::authorities();
+	>)> = Decode::decode(&mut proof.as_slice());
+	if let Some(proof) = maybe_equivocation_proof {
+		let (set_id, round, equivocation_proof) = proof;
+		
+		let fst_sig = equivocation_proof.first.1;
+		let fst_message = Message::Prevote(equivocation_proof.first.0);
+		let fst_payload = (fst_message, round, set_id).encode();
+		
+		let snd_sig = equivocation_proof.second.1;
+		let snd_message = Message::Prevote(equivocation_proof.second.0);
+		let snd_payload = (snd_message, round, set_id).encode();
 
-	// 	let fst_author = verify_header::<T, _>(
-	// 		&mut equivocation_proof.first_header(),
-	// 		equivocation_proof.first_signature().clone(),
-	// 		&authorities
-	// 	);
+		let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation_proof.identity);
+		let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation_proof.identity);
 
-	// 	let snd_author = verify_header::<T, _>(
-	// 		&mut equivocation_proof.second_header(),
-	// 		equivocation_proof.second_signature().clone(),
-	// 		&authorities
-	// 	);
-
-	// 	let proof_is_valid = fst_author.map_or(false, |f| snd_author.map_or(false, |s| f == s));
-
-	// 	if  proof_is_valid {
-	// 		return TransactionValidity::Valid {
-	// 			priority: 0,
-	// 			requires: vec![],
-	// 			provides: vec![],
-	// 			longevity: 18446744073709551615,
-	// 			propagate: true,
-	// 		}
-	// 	}
+		if valid_sig1 && valid_sig2 {
+			return TransactionValidity::Valid {
+				priority: 0,
+				requires: vec![],
+				provides: vec![],
+				longevity: 18446744073709551615,
+				propagate: true,
+			}
+		}
 	}
-
 	TransactionValidity::Invalid(0)
 }
 
 impl<T> ValidateUnsigned for Module<T> 
 where
-	T: Trait, //+ consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
-	// <T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
-	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
 	type Call = Call<T>;
 
