@@ -16,12 +16,11 @@
 
 //! Council voting system.
 
-use rstd::prelude::*;
-use rstd::result;
+use rstd::{prelude::*, result};
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
-use srml_support::dispatch::{Dispatchable, Parameter};
 use srml_support::{
+	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
 };
 use super::{Trait as CouncilTrait, Module as Council, OnMembersChanged};
@@ -59,26 +58,37 @@ pub enum RawOrigin<AccountId> {
 /// Origin for the council module.
 pub type Origin<T> = RawOrigin<<T as system::Trait>::AccountId>;
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+/// Info for keeping track of a motion being voted on.
+pub struct Votes<AccountId> {
+	/// The proposal's unique index.
+	index: ProposalIndex,
+	/// The number of approval votes that are needed to pass the motion.
+	threshold: MemberCount,
+	/// The current set of voters that approved it.
+	ayes: Vec<AccountId>,
+	/// The current set of voters that rejected it.
+	nays: Vec<AccountId>,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilMotions {
-		/// The (hashes of) the active proposals.
+		/// The hashes of the active proposals.
 		pub Proposals get(proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
-		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): map T::Hash =>
-			Option<(ProposalIndex, MemberCount, Vec<T::AccountId>, Vec<T::AccountId>)>;
+		pub ProposalOf get(proposal_of): map T::Hash => Option<<T as Trait>::Proposal>;
+		/// Votes on a given proposal, if it is ongoing.
+		pub Voting get(voting): map T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
-	}
-	add_extra_genesis {
-		build(|_, _, _| {});
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
-		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
+		/// A motion (given hash) has been proposed (by given account) with a threshold (given
+		/// `MemberCount`).
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
 		/// A motion (given hash) has been voted on by given account, leaving
 		/// a tally (yes votes and no votes given respectively as `MemberCount`).
@@ -128,7 +138,8 @@ decl_module! {
 				<ProposalCount<T>>::mutate(|i| *i += 1);
 				<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
 				<ProposalOf<T>>::insert(proposal_hash, *proposal);
-				<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));
+				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![] };
+				<Voting<T>>::insert(proposal_hash, votes);
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
 			}
@@ -140,46 +151,46 @@ decl_module! {
 			ensure!(Self::is_councillor(&who), "voter not on council");
 
 			let mut voting = Self::voting(&proposal).ok_or("proposal must exist")?;
-			ensure!(voting.0 == index, "mismatched index");
+			ensure!(voting.index == index, "mismatched index");
 
-			let position_yes = voting.2.iter().position(|a| a == &who);
-			let position_no = voting.3.iter().position(|a| a == &who);
+			let position_yes = voting.ayes.iter().position(|a| a == &who);
+			let position_no = voting.nays.iter().position(|a| a == &who);
 
 			if approve {
 				if position_yes.is_none() {
-					voting.2.push(who.clone());
+					voting.ayes.push(who.clone());
 				} else {
 					return Err("duplicate vote ignored")
 				}
 				if let Some(pos) = position_no {
-					voting.3.swap_remove(pos);
+					voting.nays.swap_remove(pos);
 				}
 			} else {
 				if position_no.is_none() {
-					voting.3.push(who.clone());
+					voting.nays.push(who.clone());
 				} else {
 					return Err("duplicate vote ignored")
 				}
 				if let Some(pos) = position_yes {
-					voting.2.swap_remove(pos);
+					voting.ayes.swap_remove(pos);
 				}
 			}
 
-			let yes_votes = voting.2.len() as MemberCount;
-			let no_votes = voting.3.len() as MemberCount;
+			let yes_votes = voting.ayes.len() as MemberCount;
+			let no_votes = voting.nays.len() as MemberCount;
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
-			let threshold = voting.1;
 			let seats = <Council<T>>::active_council().len() as MemberCount;
-			let approved = yes_votes >= threshold;
-			let disapproved = seats.saturating_sub(no_votes) < threshold;
+			let approved = yes_votes >= voting.threshold;
+			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 			if approved || disapproved {
 				if approved {
 					Self::deposit_event(RawEvent::Approved(proposal));
 
 					// execute motion, assuming it exists.
 					if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-						let ok = p.dispatch(RawOrigin::Members(threshold, seats).into()).is_ok();
+						let origin = RawOrigin::Members(voting.threshold, seats).into();
+						let ok = p.dispatch(origin).is_ok();
 						Self::deposit_event(RawEvent::Executed(proposal, ok));
 					}
 				} else {
@@ -208,14 +219,18 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnMembersChanged<T::AccountId> for Module<T> {
 	fn on_members_changed(_new: &[T::AccountId], old: &[T::AccountId]) {
 		// remove accounts from all current voting in motions.
+		let mut old = old.to_vec();
+		old.sort_unstable();
 		for h in Self::proposals().into_iter() {
-			let mut old = old.to_vec();
-			old.sort_unstable();
 			<Voting<T>>::mutate(h, |v|
-				if let Some((index, count, ayes, nays)) = v.take() {
-					let ayes = ayes.into_iter().filter(|i| old.binary_search(i).is_err()).collect();
-					let nays = nays.into_iter().filter(|i| old.binary_search(i).is_err()).collect();
-					*v = Some((index, count, ayes, nays));
+				if let Some(mut votes) = v.take() {
+					votes.ayes = votes.ayes.into_iter()
+						.filter(|i| old.binary_search(i).is_err())
+						.collect();
+					votes.nays = votes.nays.into_iter()
+						.filter(|i| old.binary_search(i).is_err())
+						.collect();
+					*v = Some(votes);
 				}
 			);
 		}
@@ -331,17 +346,29 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, true));
-			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1, 2], vec![])));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
+			);
 			CouncilMotions::on_members_changed(&[], &[1]);
-			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![2], vec![])));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
+			);
 
 			let proposal = set_balance_proposal(69);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(CouncilMotions::propose(Origin::signed(2), 2, Box::new(proposal.clone())));
 			assert_ok!(CouncilMotions::vote(Origin::signed(3), hash.clone(), 1, false));
-			assert_eq!(CouncilMotions::voting(&hash), Some((1, 2, vec![2], vec![3])));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
+			);
 			CouncilMotions::on_members_changed(&[], &[3]);
-			assert_eq!(CouncilMotions::voting(&hash), Some((1, 2, vec![2], vec![])));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })
+			);
 		});
 	}
 
@@ -354,7 +381,10 @@ mod tests {
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_eq!(CouncilMotions::proposals(), vec![hash]);
 			assert_eq!(CouncilMotions::proposal_of(&hash), Some(proposal));
-			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1], Vec::<u64>::new())));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 0, threshold: 3, ayes: vec![1], nays: vec![] })
+			);
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -404,10 +434,16 @@ mod tests {
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
-			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, vec![1], Vec::<u64>::new())));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![] })
+			);
 			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, true), "duplicate vote ignored");
 			assert_ok!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false));
-			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, Vec::<u64>::new(), vec![1])));
+			assert_eq!(
+				CouncilMotions::voting(&hash),
+				Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1] })
+			);
 			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
 
 			assert_eq!(System::events(), vec![
