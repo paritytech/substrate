@@ -419,7 +419,7 @@ decl_storage! {
 		/// Staking Asset ID.
 		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
 
-		/// Spending Asset Id.
+		/// Spending Asset ID.
 		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
