@@ -714,7 +714,6 @@ where
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
 		submit_report_call(
 			&self.inner,
 			&self.transaction_pool,
@@ -728,7 +727,11 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
+		submit_report_call(
+			&self.inner,
+			&self.transaction_pool,
+			Call::Grandpa(GrandpaCall::report_equivocation(equivocation.encode())),
+		);
 	}
 }
 
