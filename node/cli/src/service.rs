@@ -297,7 +297,7 @@ mod tests {
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
 
-			let parent_id = BlockId::number(service.client().info().unwrap().chain.best_number);
+			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
 				client: service.client(),

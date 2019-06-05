@@ -241,16 +241,31 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
+#![cfg_attr(all(feature = "bench", test), feature(test))]
+
+#[cfg(all(feature = "bench", test))]
+extern crate test;
+
+#[cfg(any(feature = "bench", test))]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
+mod phragmen;
+
+#[cfg(all(feature = "bench", test))]
+mod benches;
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
-use srml_support::{decl_module, decl_event, decl_storage, ensure};
-use srml_support::traits::{
-	Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency, WithdrawReasons,
-	OnUnbalanced, Imbalance,
+use srml_support::{ StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result,
+	decl_module, decl_event, decl_storage, ensure,
+	traits::{Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
+		WithdrawReasons, OnUnbalanced, Imbalance
+	}
 };
 use session::OnSessionChange;
 use primitives::Perbill;
@@ -261,10 +276,6 @@ use primitives::traits::{
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
-
-mod mock;
-mod tests;
-mod phragmen;
 
 use phragmen::{elect, ACCURACY, ExtendedBalance};
 
