@@ -492,7 +492,6 @@ impl Pair {
 mod test {
 	use super::*;
 	use hex_literal::hex;
-	use crate::hexdisplay::HexDisplay;
 	use crate::crypto::DEV_PHRASE;
 
 	#[test]
