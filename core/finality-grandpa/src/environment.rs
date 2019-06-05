@@ -718,7 +718,7 @@ where
 		submit_report_call(
 			&self.inner,
 			&self.transaction_pool,
-			Call::Grandpa(GrandpaCall::report_equivocation(proof)),
+			Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof)),
 		);
 	}
 
@@ -731,7 +731,7 @@ where
 		submit_report_call(
 			&self.inner,
 			&self.transaction_pool,
-			Call::Grandpa(GrandpaCall::report_equivocation(equivocation.encode())),
+			Call::Grandpa(GrandpaCall::report_precommit_equivocation(equivocation.encode())),
 		);
 	}
 }

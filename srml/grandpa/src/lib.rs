@@ -222,7 +222,7 @@ decl_storage! {
 	}
 }
 
-fn handle_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
+fn handle_prevote_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
 where
 	T: Trait,
 	<<T as Trait>::Signature as Verify>::Signer:
@@ -235,13 +235,51 @@ where
 	>)> = Decode::decode(&mut proof.as_slice());
 	if let Some(proof) = maybe_equivocation_proof {
 		let (set_id, round, equivocation_proof) = proof;
-		
+
 		let fst_sig = equivocation_proof.first.1;
 		let fst_message = Message::Prevote(equivocation_proof.first.0);
 		let fst_payload = (fst_message, round, set_id).encode();
-		
+
 		let snd_sig = equivocation_proof.second.1;
 		let snd_message = Message::Prevote(equivocation_proof.second.0);
+		let snd_payload = (snd_message, round, set_id).encode();
+
+		let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation_proof.identity);
+		let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation_proof.identity);
+
+		if valid_sig1 && valid_sig2 {
+			return TransactionValidity::Valid {
+				priority: 0,
+				requires: vec![],
+				provides: vec![],
+				longevity: 18446744073709551615,
+				propagate: true,
+			}
+		}
+	}
+	TransactionValidity::Invalid(0)
+}
+
+fn handle_precommit_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	let maybe_equivocation_proof: Option<(u64, u64, Equivocation<
+		<<T as Trait>::Signature as Verify>::Signer,
+		Precommit<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>,
+		<T as Trait>::Signature,
+	>)> = Decode::decode(&mut proof.as_slice());
+	if let Some(proof) = maybe_equivocation_proof {
+		let (set_id, round, equivocation_proof) = proof;
+
+		let fst_sig = equivocation_proof.first.1;
+		let fst_message = Message::Precommit(equivocation_proof.first.0);
+		let fst_payload = (fst_message, round, set_id).encode();
+
+		let snd_sig = equivocation_proof.second.1;
+		let snd_message = Message::Precommit(equivocation_proof.second.0);
 		let snd_payload = (snd_message, round, set_id).encode();
 
 		let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation_proof.identity);
@@ -270,7 +308,10 @@ where
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
-			Call::report_equivocation(proof) => handle_equivocation_proof::<T>(proof),
+			Call::report_prevote_equivocation(proof) =>
+				handle_prevote_equivocation_proof::<T>(proof),
+			Call::report_precommit_equivocation(proof) =>
+				handle_precommit_equivocation_proof::<T>(proof),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}
@@ -280,15 +321,11 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Report equivocation in Grandpa.
-		fn report_equivocation(_origin, _equivocation_proof: Vec<u8>) {
-		}
+		/// Report Prevote equivocation in Grandpa.
+		fn report_prevote_equivocation(_origin, _equivocation_proof: Vec<u8>) {}
 
-		/// Report some misbehavior.
-		fn report_misbehavior(origin, _report: Vec<u8>) {
-			ensure_signed(origin)?;
-			// FIXME: https://github.com/paritytech/substrate/issues/1112
-		}
+		/// Report Precommit equivocation in Grandpa.
+		fn report_precommit_equivocation(_origin, _equivocation_proof: Vec<u8>) {}
 
 		fn on_finalize(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
