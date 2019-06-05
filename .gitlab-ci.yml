@@ -96,6 +96,34 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
+test-linux-stable-int:             &test
+  stage:                           test
+  variables:
+    RUST_TOOLCHAIN: stable
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    TARGET: native
+  tags:
+    - linux-docker
+  only:
+    - tags
+    - master
+    - schedules
+    - web
+    - /^[0-9]+$/
+  except:
+    variables:
+      - $DEPLOY_TAG
+  before_script:
+    - sccache -s
+    - ./scripts/build.sh
+  script:
+    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - sccache -s
+  allow_failure:                   true
+
+
 check-web-wasm:
   stage:                           test
   <<:                              *compiler_info

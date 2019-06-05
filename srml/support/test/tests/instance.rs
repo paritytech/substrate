@@ -39,7 +39,8 @@ mod system {
 	use super::*;
 
 	pub trait Trait: 'static + Eq + Clone {
-		type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+			+ From<RawOrigin<Self::AccountId>>;
 		type BlockNumber;
 		type Digest: Digest<Hash = H256>;
 		type Hash;
@@ -100,12 +101,9 @@ mod system {
 	}
 
 	pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-		where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+		where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 	{
-		match o.into() {
-			Some(RawOrigin::Root) => Ok(()),
-			_ => Err("bad origin: expected to be a root origin"),
-		}
+		o.into().map(|_| ()).map_err(|_| "bad origin: expected to be a root origin")
 	}
 }
 
