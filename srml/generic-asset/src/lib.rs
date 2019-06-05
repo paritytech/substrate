@@ -590,7 +590,7 @@ impl<T: Trait> Module<T> {
 	/// Deduct up to `amount` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///
-	/// much funds up to `amount` will be deducted as possible. If this is less than `amount`
+	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	pub fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(asset_id, who);
