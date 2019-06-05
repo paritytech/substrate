@@ -145,7 +145,7 @@
 //!
 //! ## Genesis config
 //!
-//! The Generic Asset module depends on the `GenesisConfig`.
+//! The Generic Asset module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
