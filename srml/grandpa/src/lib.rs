@@ -35,7 +35,7 @@ use serde::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode, Codec};
-use fg_primitives::{ScheduledChange, Prevote, Precommit, Equivocation};
+use fg_primitives::{ScheduledChange, Prevote, Precommit, Message, Equivocation};
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
@@ -228,16 +228,12 @@ where
 	// <T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
 	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
-	// let maybe_equivocation_proof: 
-	// 	Option<AuraEquivocationProof::<<T as Trait>::Header, <T as Trait>::Signature>> =
-	// 		Decode::decode(&mut proof.as_slice());
-
 	let maybe_equivocation_proof: Option<Equivocation<
 		<<T as Trait>::Signature as Verify>::Signer,
 		Prevote<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>,
 		<T as Trait>::Signature,
 	>> = Decode::decode(&mut proof.as_slice());
-	// if let Some(equivocation_proof) = maybe_equivocation_proof {
+	if let Some(equivocation_proof) = maybe_equivocation_proof {
 	// 	let authorities = <consensus::Module<T>>::authorities();
 
 	// 	let fst_author = verify_header::<T, _>(
@@ -263,7 +259,7 @@ where
 	// 			propagate: true,
 	// 		}
 	// 	}
-	// }
+	}
 
 	TransactionValidity::Invalid(0)
 }
