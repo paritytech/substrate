@@ -156,8 +156,8 @@ use primitives::traits::{
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use srml_support::dispatch::Result;
-use srml_support::{
+use support::dispatch::Result;
+use support::{
 	decl_event, decl_module, decl_storage, ensure,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
