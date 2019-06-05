@@ -75,7 +75,7 @@
 //!
 //! - `create`: Create a new kind of asset.
 //! - `transfer`: Transfer some liquid free balance to another account.
-//! - `update_permission`: Updates permission for a given asset_id and an account. The origin of this call
+//! - `update_permission`: Updates permission for a given `asset_id` and an account. The origin of this call
 //! must have update permissions.
 //! - `mint`: Mint an asset, increases its total issuance. The origin of this call must have mint permissions.
 //! - `burn`: Burn an asset, decreases its total issuance. The origin of this call must have burn permissions.
