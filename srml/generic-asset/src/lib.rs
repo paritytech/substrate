@@ -1,19 +1,18 @@
 // Copyright (C) 2019 Centrality Investments Limited
-// This file is part of CENNZnet.
-//
-// This program is free software: you can redistribute it and/or modify
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
+
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//
+
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-// TODO: add legal and license info.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Generic Asset Module
 //!
@@ -38,7 +37,7 @@
 //! - **Staking Asset:** The asset for staking, to participate as Validators in the network.
 //! - **Spending Asset:** The asset for payment, such as paying transfer fees, gas fees, etc.
 //! - **Permissions:** A set of rules for a kind of asset, defining the allowed operations to the asset, and which
-//! accounts are allowed.
+//! accounts are allowed to possess it.
 //! - **Total Issuance:** The total number of units in existence in a system.
 //! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
 //! for most operations. When this balance falls below the existential deposit, most functionality of the account is
@@ -47,9 +46,10 @@
 //! can still be slashed, but only after all the free balance has been slashed. If the reserved balance falls below the
 //! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
 //! deleted, then the account is said to be dead.
-//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
+//! - **Imbalance:** A condition when some assets were credited or debited without equal and opposite accounting
 //! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-//! return an object of the `Imbalance` trait that must be handled.
+//! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
+//! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //!
@@ -203,15 +203,20 @@ impl<T: Trait> Subtrait for T {
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
+	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]
 	pub initial_issuance: Balance,
+	/// Which accounts are allowed to possess this asset.
 	pub permissions: PermissionLatest<AccountId>,
 }
 
+/// Owner of an asset.
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub enum Owner<AccountId> {
+	/// No owner.
 	None,
+	/// Owned by an AccountId
 	Address(AccountId),
 }
 
@@ -221,27 +226,32 @@ impl<AccountId> Default for Owner<AccountId> {
 	}
 }
 
+/// Asset permissions
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct PermissionsV1<AccountId> {
+	/// Who have permission to update asset permission
 	pub update: Owner<AccountId>,
+	/// Who have permission to mint new asset
 	pub mint: Owner<AccountId>,
+	/// Who have permission to burn asset
 	pub burn: Owner<AccountId>,
 }
 
+/// Versioned asset permission
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
 
-/// Permissions Types in GenericAsset.
-pub enum PermissionType {
+enum PermissionType {
 	Burn,
 	Mint,
 	Update,
 }
 
+/// Alias to latest asset permissions
 pub type PermissionLatest<AccountId> = PermissionsV1<AccountId>;
 
 impl<AccountId> Default for PermissionVersions<AccountId> {
@@ -481,10 +491,10 @@ impl<T: Trait> Module<T> {
 	/// Creates an asset.
 	///
 	/// # Arguments
-	/// * `asset_id` An id of reserved asset.
-	/// If not provided, an user generated asset would be created with next available id.
-	/// * `from_account` An option value can have the account_id or None.
-	/// * `asset_options` A struct which has the balance and permissions for the asset.
+	/// * `asset_id`: An ID of a reserved asset.
+	/// If not provided, a user-generated asset will be created with the next available ID.
+	/// * `from_account`: The initiator account of this call
+	/// * `asset_options`: Asset creation options.
 	///
 	pub fn create_asset(
 		asset_id: Option<T::AssetId>,
@@ -573,10 +583,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Move up to `amount` from reserved balance to free balance. This function cannot fail.
+	/// Moves up to `amount` from reserved balance to free balance. This function cannot fail.
 	///
-	/// much funds up to `amount` will be deducted as possible, `remaining` will be returned
-	/// NOTE: This is different to `reserve`.
+	/// As many assets up to `amount` will be moved as possible. If the reserve balance of `who`
+	/// is less than `amount`, then the remaining amount will be returned.
+	/// NOTE: This is different behavior than `reserve`.
 	pub fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let actual = rstd::cmp::min(b, amount);
@@ -613,10 +624,10 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Deduct up to `amount` from reserved balance of `who`. This function cannot fail.
+	/// Deducts up to `amount` from reserved balance of `who`. This function cannot fail.
 	///
-	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
+	/// As much funds up to `amount` will be deducted as possible. If the reserve balance of `who`
+	/// is less than `amount`, then a non-zero second item will be returned.
 	pub fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(original_reserve_balance, amount);
@@ -656,9 +667,9 @@ impl<T: Trait> Module<T> {
 	/// Check permission to perform burn, mint or update.
 	///
 	/// # Arguments
-	/// * `asset_id` -  A T::AssetId type contains the asset_id which the permission embedded.
-	/// * `who` - A T::AccountId type contains the account_id that the permission going to check.
-	/// * `what` - A string slice contains the permission type.
+	/// * `asset_id`:  A `T::AssetId` type that contains the `asset_id`, which has the permission embedded.
+	/// * `who`: A `T::AccountId` type that contains the `account_id` for which to check permissions.
+	/// * `what`: A string slice that contains the permission type.
 	///
 	pub fn check_permission(asset_id: &T::AssetId, who: &T::AccountId, what: &PermissionType) -> bool {
 		let permission_versions: PermissionVersions<T::AccountId> = Self::get_permission(asset_id);
