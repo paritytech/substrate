@@ -191,8 +191,8 @@ impl<B: BlockT> ChainSync<B> {
 			_genesis_hash: info.chain.genesis_hash,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
-			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
-			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
+			best_queued_hash: info.chain.best_hash,
+			best_queued_number: info.chain.best_number,
 			extra_requests: ExtraRequestsAggregator::new(),
 			role,
 			required_block_attributes,
@@ -852,8 +852,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
 		let info = protocol.client().info();
-		self.best_queued_hash = info.best_queued_hash.unwrap_or(info.chain.best_hash);
-		self.best_queued_number = info.best_queued_number.unwrap_or(info.chain.best_number);
+		self.best_queued_hash = info.chain.best_hash;
+		self.best_queued_number = info.chain.best_number;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let ids: Vec<PeerId> = self.peers.drain().map(|(id, _)| id).collect();
 		for id in ids {
