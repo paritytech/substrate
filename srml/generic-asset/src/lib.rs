@@ -245,9 +245,13 @@ pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
 
-enum PermissionType {
+/// Asset permission types
+pub enum PermissionType {
+	/// Permission to update asset permission
 	Burn,
+	/// Permission to mint new asset
 	Mint,
+	/// Permission to burn asset
 	Update,
 }
 
@@ -464,8 +468,11 @@ decl_event!(
 		Created(AssetId, AccountId, AssetOptions),
 		/// Asset transfer succeeded (asset_id, from, to, amount).
 		Transferred(AssetId, AccountId, AccountId, Balance),
+		/// Asset permission updated (asset_id, new permission).
 		PermissionUpdated(AssetId, PermissionLatest<AccountId>),
+		/// New asset minted (asset_id, account, amount).
 		Minted(AssetId, AccountId, Balance),
+		/// Asset burned (asset_id, account, amount).
 		Burned(AssetId, AccountId, Balance),
 	}
 );
