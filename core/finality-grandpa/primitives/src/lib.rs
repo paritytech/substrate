@@ -28,6 +28,7 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 use ed25519::Public as AuthorityId;
+pub use grandpa::{Precommit, Prevote, Equivocation};
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
