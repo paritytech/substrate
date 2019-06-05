@@ -181,7 +181,14 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	}
 
 	/// Gain access to the import lock around this backend.
+	/// _Note_ Backend isn't expected to acquire the lock by itself ever. Rather
+	/// the using components should acquire and hold the lock whenever they do
+	/// something that the import of a block would interfere with, e.g. importing
+	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &Mutex<()> {
+		// You only have to implement that yourself, if your backend is expected
+		// to run in a multi-backend-instances-per-process environment, otherwise
+		// this default implementation works well enough for you.
 		&IMPORT_LOCK
 	}
 }
