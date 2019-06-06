@@ -597,7 +597,11 @@ impl txpool::ChainApi for TestPoolApi {
 	type Hash = u64;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> result::Result<TransactionValidity, Self::Error> {
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: ExtrinsicFor<Self>,
+	) -> result::Result<TransactionValidity, Self::Error> {
 
 		let block_number = self.block_id_to_number(at)?.unwrap();
 		let nonce = uxt.transfer().nonce;

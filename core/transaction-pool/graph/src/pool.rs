@@ -63,7 +63,11 @@ pub trait ChainApi: Send + Sync {
 	type Error: From<error::Error> + error::IntoPoolError;
 
 	/// Verify extrinsic at given block.
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: ExtrinsicFor<Self>,
+	) -> Result<TransactionValidity, Self::Error>;
 
 	/// Returns a block number given the block id.
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
