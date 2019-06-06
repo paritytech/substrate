@@ -60,6 +60,17 @@ trait Crypto {
 			Self::ss58_from_pair(&pair)
 		);
 	}
+
+	/// Given a mnemonic phrase and optional password, print out the
+	/// equivalent raw seed in hexadecimal.
+	fn print_seed_from_phrase(phrase: &str, password: Option<&str>) {
+		let seed = Self::seed_from_phrase(phrase, password);
+		println!("Phrase `{}` is raw seed:\n  Seed: 0x{}\n",
+			phrase,
+			HexDisplay::from(&seed.as_ref())
+		);
+	}
+
 	fn print_from_phrase(phrase: &str, password: Option<&str>) {
 		let seed = Self::seed_from_phrase(phrase, password);
 		let pair = Self::pair_from_seed(&seed);
@@ -147,6 +158,11 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 {
 	let password = matches.value_of("password");
 	match matches.subcommand() {
+		("convert", Some(matches)) => {
+			// Given a mnemonic, print out the raw seed
+			let mnemonic = matches.value_of("mnemonic").expect("Mnemonic required");
+			C::print_seed_from_phrase(mnemonic, password);
+		},
 		("generate", Some(_matches)) => {
 			// create a new randomly generated mnemonic phrase
 			let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);

@@ -19,6 +19,13 @@ args:
       required: false
       help: The password for the key
 subcommands:
+  - convert:
+      about: Given a mnemonic, show raw seed.
+      args:
+        - mnemonic:
+            index: 1
+            required: true
+            help: A mnemonic phrase.
   - generate:
       about: Generate a random account
   - inspect:
