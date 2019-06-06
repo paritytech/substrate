@@ -20,7 +20,7 @@ use self::error::Error;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
 use sr_io::blake2_256;
-use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor};
+use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor, TestClientBuilder};
 use substrate_executor::NativeExecutionDispatch;
 
 #[test]
@@ -235,7 +235,7 @@ fn should_query_storage() {
 	}
 
 	run_tests(Arc::new(test_client::new()));
-	run_tests(Arc::new(test_client::new_with_changes_trie()));
+	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
 }
 
 #[test]

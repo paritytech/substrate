@@ -171,9 +171,6 @@ decl_runtime_apis! {
 		#[skip_initialize_block]
 		#[initialize_block]
 		fn initialize_block(header: &<Block as BlockT>::Header);
-		/// Returns the authorities.
-		#[deprecated(since = "1.0", note = "Please switch to `AuthoritiesApi`.")]
-		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

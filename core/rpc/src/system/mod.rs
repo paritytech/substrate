@@ -17,8 +17,8 @@
 //! Substrate system API.
 
 pub mod error;
+pub mod helpers;
 
-mod helpers;
 #[cfg(test)]
 mod tests;
 
@@ -29,6 +29,8 @@ use runtime_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
+
+pub use self::gen_client::Client as SystemClient;
 
 /// Substrate system RPC API
 #[rpc]
@@ -72,7 +74,7 @@ pub trait SystemApi<Hash, Number> {
 /// System API implementation
 pub struct System<B: traits::Block> {
 	info: SystemInfo,
-	sync: Arc<network::SyncProvider<B>>,
+	sync: Arc<dyn network::SyncProvider<B>>,
 	should_have_peers: bool,
 }
 
@@ -80,7 +82,7 @@ impl<B: traits::Block> System<B> {
 	/// Creates new `System` given the `SystemInfo`.
 	pub fn new(
 		info: SystemInfo,
-		sync: Arc<network::SyncProvider<B>>,
+		sync: Arc<dyn network::SyncProvider<B>>,
 		should_have_peers: bool,
 	) -> Self {
 		System {
