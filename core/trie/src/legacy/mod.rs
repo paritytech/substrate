@@ -64,7 +64,12 @@ mod util {
 	}
 
 
-	pub fn partial_to_key_it<N: NibbleOps, I: Iterator<Item = u8>>(partial: I, nibble_count: usize, offset: u8, over: u8) -> Vec<u8> {
+	pub fn partial_to_key_it<N: NibbleOps, I: Iterator<Item = u8>>(
+		partial: I,
+		nibble_count: usize,
+		offset: u8,
+		over: u8,
+	) -> Vec<u8> {
 		assert!(nibble_count < over as usize);
 		let mut output = Vec::with_capacity(1 + (nibble_count / N::NIBBLE_PER_BYTE));
 		output.push(offset + nibble_count as u8);

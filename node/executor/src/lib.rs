@@ -316,7 +316,6 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
-			council_voting: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),

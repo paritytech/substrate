@@ -124,11 +124,21 @@ impl<H: Hasher, N: NibbleOps, BM: ChildBitmap<Error = Error>> TraitNodeCodec<H, 
 		output
 	}
 
-	fn ext_node(partial: impl Iterator<Item = u8>, nb_nibble: usize, child: ChildReference<<H as Hasher>::Out>) -> Vec<u8> {
-		let mut output = partial_to_key_it::<N,_>(partial, nb_nibble, EXTENSION_NODE_OFFSET, EXTENSION_NODE_OVER);
+	fn ext_node(
+		partial: impl Iterator<Item = u8>,
+		nb_nibble: usize,
+		child: ChildReference<<H as Hasher>::Out>,
+	) -> Vec<u8> {
+		let mut output = partial_to_key_it::<N,_>(
+			partial,
+			nb_nibble,
+			EXTENSION_NODE_OFFSET,
+			EXTENSION_NODE_OVER,
+		);
 		match child {
 			ChildReference::Hash(h) => h.as_ref().encode_to(&mut output),
-			ChildReference::Inline(inline_data, len) => (&AsRef::<[u8]>::as_ref(&inline_data)[..len]).encode_to(&mut output),
+			ChildReference::Inline(inline_data, len) => (&AsRef::<[u8]>::as_ref(&inline_data)[..len])
+				.encode_to(&mut output),
 		};
 		output
 	}

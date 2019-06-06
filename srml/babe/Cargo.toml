@@ -20,7 +20,7 @@ babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../
 
 [dev-dependencies]
 lazy_static = "1.3.0"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 substrate-primitives = { path = "../../core/primitives" }
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 consensus = { package = "srml-consensus", path = "../consensus" }

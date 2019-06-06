@@ -48,7 +48,10 @@ impl TrieStream {
 /// cannot handle a number of nibbles that is zero or greater than 127 and if
 /// you attempt to do so *IT WILL PANIC*.
 fn fuse_nibbles_node<'a>(nibbles: &'a [u8], leaf: bool) -> impl Iterator<Item = u8> + 'a {
-	debug_assert!(nibbles.len() < 255 + 126, "nibbles length too long. what kind of size of key are you trying to include in the trie!?!");
+	debug_assert!(
+		nibbles.len() < 255 + 126,
+		"nibbles length too long. what kind of size of key are you trying to include in the trie!?!",
+	);
 	// We use two ranges of possible values; one for leafs and the other for extensions.
 	// Each range encodes zero following nibbles up to some maximum. If the maximum is
 	// reached, then it is considered "big" and a second byte follows it in order to
@@ -72,7 +75,11 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], leaf: bool) -> impl Iterator<Item = 
 impl trie_root::TrieStream for TrieStream {
 
 
-	fn begin_branch(&mut self, maybe_key: Option<&[u8]>, maybe_value: Option<&[u8]>, has_children: impl Iterator<Item = bool>) {
+	fn begin_branch(
+		&mut self, maybe_key: Option<&[u8]>,
+		maybe_value: Option<&[u8]>,
+		has_children: impl Iterator<Item = bool>,
+	) {
 		self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
 		if let Some(partial) = maybe_key {
 			// should not happen

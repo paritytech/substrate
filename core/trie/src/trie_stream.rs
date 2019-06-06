@@ -82,7 +82,12 @@ impl trie_root::TrieStream for TrieStream {
 		value.encode_to(&mut self.buffer);
 	}
 
-	fn begin_branch(&mut self, maybe_key: Option<&[u8]>, maybe_value: Option<&[u8]>, has_children: impl Iterator<Item = bool>) {
+	fn begin_branch(
+    &mut self,
+    maybe_key: Option<&[u8]>,
+    maybe_value: Option<&[u8]>,
+    has_children: impl Iterator<Item = bool>,
+  ) {
 		if let Some(partial) = maybe_key {
 			if maybe_value.is_some() {
 				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
@@ -121,7 +126,11 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	res
 }
 
-fn branch_node_buf<BM: ChildBitmap, I: Iterator<Item = bool>>(has_value: bool, has_children: I, dest: &mut[u8]) {
+fn branch_node_buf<BM, I>(has_value: bool, has_children: I, dest: &mut[u8]) 
+  where
+    BM: ChildBitmap,
+    I: Iterator<Item = bool>,
+{
 	let first = if has_value {
 		BRANCH_NODE_WITH_VALUE
 	} else {

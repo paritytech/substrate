@@ -121,8 +121,7 @@ impl TestNetFactory for GrandpaTestNet {
 			PeersClient::Full(ref client) => {
 				#[allow(deprecated)]
 				let select_chain = LongestChain::new(
-					client.backend().clone(),
-					client.import_lock().clone()
+					client.backend().clone()
 				);
 				let (import, link) = block_import(
 					client.clone(),
@@ -340,15 +339,6 @@ impl Core<Block> for RuntimeApi {
 		_: Option<&<Block as BlockT>::Header>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-	fn Core_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<substrate_primitives::sr25519::Public>>> {
 		unimplemented!("Not required for testing!")
 	}
 }

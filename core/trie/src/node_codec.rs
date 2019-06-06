@@ -59,7 +59,8 @@ impl<
 			NodeHeader::Null => Ok(Node::Empty),
 			NodeHeader::Branch(has_value, nibble_count) => {
 				let nb_nibble_hpe = nibble_count % N::NIBBLE_PER_BYTE;
-				if nb_nibble_hpe > 0 && N::masked_left((N::NIBBLE_PER_BYTE - nb_nibble_hpe) as u8, input[0]) != 0 {
+				if nb_nibble_hpe > 0
+					&& N::masked_left((N::NIBBLE_PER_BYTE - nb_nibble_hpe) as u8, input[0]) != 0 {
 					return Err(Error::BadFormat);
 				}
 				let nibble_data = take(input, (nibble_count + (N::NIBBLE_PER_BYTE - 1)) / N::NIBBLE_PER_BYTE)
@@ -127,7 +128,11 @@ impl<
 		output
 	}
 
-	fn ext_node(_partial: impl Iterator<Item = u8>, _nbnibble: usize, _child: ChildReference<<H as Hasher>::Out>) -> Vec<u8> {
+	fn ext_node(
+		_partial: impl Iterator<Item = u8>,
+		_nbnibble: usize,
+		_child: ChildReference<<H as Hasher>::Out>,
+	) -> Vec<u8> {
 		unreachable!()
 	}
 
@@ -172,7 +177,11 @@ impl<
 
 // utils
 
-fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(partial: I, nibble_count: usize, node_kind: NodeKind) -> Vec<u8> {
+fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(
+	partial: I,
+	nibble_count: usize,
+	node_kind: NodeKind,
+) -> Vec<u8> {
 	let nibble_count = rstd::cmp::min(s_cst::NIBBLE_SIZE_BOUND, nibble_count);
 
 	let mut output = Vec::with_capacity(3 + (nibble_count / N::NIBBLE_PER_BYTE));

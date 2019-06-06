@@ -50,7 +50,12 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<LayOut<H>, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+		read_trie_value_with::<LayOut<H>, _, Ephemeral<S, H>>(
+			&eph,
+			self.backend.root(),
+			key,
+			&mut *self.proof_recorder
+		).map_err(map_e)
 	}
 
 	pub fn child_storage(
