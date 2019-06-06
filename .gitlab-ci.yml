@@ -156,8 +156,8 @@ check-web-wasm:
 build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
-  <<:                              *build-only
   <<:                              *docker-env
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
