@@ -168,10 +168,6 @@ pub trait BlockBody<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: ChainInfo<Block>,
-	/// Best block number in the queue.
-	pub best_queued_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>,
-	/// Best queued block hash.
-	pub best_queued_hash: Option<Block::Hash>,
 }
 
 /// Block status.
@@ -1171,8 +1167,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let info = self.backend.blockchain().info();
 		ClientInfo {
 			chain: info,
-			best_queued_hash: None,
-			best_queued_number: None,
 		}
 	}
 

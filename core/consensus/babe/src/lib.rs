@@ -82,7 +82,7 @@ use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
 
 /// A slot duration. Create with `get_or_compute`.
@@ -134,7 +134,7 @@ impl SlotCompatible for BabeSlotCompatible {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<C, E, I, SO, SC, OnExit> {
+pub struct BabeParams<C, E, I, SO, SC> {
 
 	/// The configuration for BABE.  Includes the slot duration, threshold, and
 	/// other parameters.
@@ -158,9 +158,6 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
-	/// Exit callback.
-	pub on_exit: OnExit,
-
 	/// Providers for inherent data.
 	pub inherent_data_providers: InherentDataProviders,
 
@@ -169,7 +166,7 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	config,
 	local_key,
 	client,
@@ -177,10 +174,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	block_import,
 	env,
 	sync_oracle,
-	on_exit,
 	inherent_data_providers,
 	force_authoring,
-}: BabeParams<C, E, I, SO, SC, OnExit>) -> Result<
+}: BabeParams<C, E, I, SO, SC>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
@@ -200,26 +196,24 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = BabeWorker {
 		client: client.clone(),
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
 	};
-	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
+	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
+	Ok(slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible>(
 		config.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
-		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct BabeWorker<C, E, I, SO> {
@@ -228,7 +222,6 @@ struct BabeWorker<C, E, I, SO> {
 	env: Arc<E>,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	threshold: u64,
 }
@@ -252,13 +245,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_babe_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
 
 	fn on_slot(
 		&self,
@@ -985,7 +971,6 @@ mod tests {
 				client,
 				env: environ.clone(),
 				sync_oracle: DummyOracle,
-				on_exit: futures::empty(),
 				inherent_data_providers,
 				force_authoring: false,
 			}).expect("Starts babe");

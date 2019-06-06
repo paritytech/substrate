@@ -413,7 +413,7 @@ impl TraitPair for Pair {
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
-		let mut acc = self.0.public.to_bytes();
+		let mut acc = self.0.secret.to_bytes();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -473,7 +473,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> &Seed {
-		self.0.public.as_bytes()
+		self.0.secret.as_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -500,6 +500,16 @@ mod test {
 			Pair::from_string("//Alice///password", None).unwrap().public(),
 			Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password")).unwrap().public(),
 		);
+	}
+
+	#[test]
+	fn seed_and_derive_should_work() {
+		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+		let pair = Pair::from_seed(seed);
+		assert_eq!(pair.seed(), &seed);
+		let path = vec![DeriveJunction::Hard([0u8; 32])];
+		let derived = pair.derive(path.into_iter()).ok().unwrap();
+		assert_eq!(derived.seed(), &hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"));
 	}
 
 	#[test]
