@@ -141,7 +141,7 @@ impl DefaultTestClientBuilderExt for TestClientBuilder<
 	Backend,
 > {
 	fn new() -> Self {
-		Self::default()
+		Self::with_default_backend()
 	}
 }
 

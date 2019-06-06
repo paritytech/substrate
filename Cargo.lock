@@ -2188,6 +2188,7 @@ dependencies = [
  "srml-timestamp 2.0.0",
  "srml-treasury 2.0.0",
  "substrate-executor 2.0.0",
+ "substrate-generic-test-client 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",

@@ -69,14 +69,26 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
 	_executor: std::marker::PhantomData<Executor>,
 }
 
-impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
+impl<Block, Executor> Default for TestClientBuilder<
+	Executor,
+	Backend<Block>,
+> where
+	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+{
+	fn default() -> Self {
+		Self::with_default_backend()
+	}
+}
+
+impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 	Executor,
 	Backend<Block>,
 	G,
 > where
 	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
-	fn default() -> Self {
+	/// Create new `TestClientBuilder` with default backend.
+	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		Self::with_backend(backend)
 	}
@@ -167,9 +179,9 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 	G,
 > {
 	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<Block, RuntimeApi>(
+	pub fn build_with_native_executor<Block, RuntimeApi, I>(
 		self,
-		executor: impl Into<Option<executor::NativeExecutor<E>>>,
+		executor: I,
 	) -> (
 		client::Client<
 			Backend,
@@ -179,6 +191,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		>,
 		client::LongestChain<Backend, Block>,
 	) where
+		I: Into<Option<executor::NativeExecutor<E>>>,
 		E: executor::NativeExecutionDispatch,
 		Backend: client::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
