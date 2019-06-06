@@ -68,7 +68,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::{SelectChain, well_known_cache_keys, EquivocationProof};
+use consensus_common::{SelectChain, well_known_cache_keys};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -81,9 +81,9 @@ use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
-
+use transaction_pool::txpool::{self, PoolApi};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
-
+use safety_primitives::EquivocationProof;
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -443,18 +443,22 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-//
-// FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
-fn check_header<B: Block + Sized, C: AuxStore>(
-	client: &C,
+fn check_header<B: Block + Sized, C, T>(
+	client: &Arc<C>,
+	_transaction_pool: &Arc<T>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[Public],
 	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+where
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<Hash=B::Hash>,
+	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
+	<B as Block>::Header: Header,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -467,17 +471,17 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	})?;
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
-	let BabePreDigest { slot_num, ref author, ref proof, ref vrf_output } = pre_digest;
+	let BabePreDigest { slot_num, author, proof, vrf_output } = pre_digest.clone();
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_num))
-	} else if !authorities.contains(&author) {
+	} else if !authorities.contains(&author.clone()) {
 		Err(babe_err!("Slot author not found"))
 	} else {
 		let pre_hash = header.hash();
 
-		if sr25519::Pair::verify(&sig, pre_hash, author) {
+		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -486,7 +490,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					0,
 				);
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-					p.vrf_verify(transcript, vrf_output, proof)
+					p.vrf_verify(transcript, &vrf_output, &proof)
 				}).map_err(|s| {
 					babe_err!("VRF verification failed: {:?}", s)
 				})?
@@ -497,19 +501,22 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(mut equivocation_proof) = check_equivocation(
+			if let Some(equivocation_proof) = check_equivocation::<
+				_, _, BabeEquivocationProof<B::Header, Signature>, _
+			>(
 				client,
 				slot_now,
 				slot_num,
-				&header,
-				author,
+				header.clone(),
+				sig,
+				author.clone(),
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header().hash(),
+					equivocation_proof.second_header().hash(),
 				);
 			}
 
@@ -522,21 +529,28 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<C, E> {
+pub struct BabeVerifier<C, E, T> {
 	client: Arc<C>,
+	transaction_pool: Arc<T>,
 	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
 	threshold: u64,
 }
 
-impl<C, E> BabeVerifier<C, E> {
+impl<C, E, T> BabeVerifier<C, E, T>
+where
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi,
+{
 	fn check_inherents<B: Block>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 	) -> Result<(), String>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+	where
+		C: ProvideRuntimeApi,
+		C::Api: BlockBuilderApi<B>,
 	{
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
@@ -566,8 +580,10 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 	}
 }
 
-impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore,
+impl<B: Block, C, E, T> Verifier<B> for BabeVerifier<C, E, T> where
+	T: PoolApi + Sync + Send,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	E: ExtraVerification<B>,
@@ -609,8 +625,9 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<B, C>(
+		let checked_header = check_header::<B, C, T>(
 			&self.client,
+			&self.transaction_pool,
 			slot_now + 1,
 			header,
 			hash,
@@ -677,8 +694,10 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	}
 }
 
-impl<B, C, E> Authorities<B> for BabeVerifier<C, E> where
+impl<B, C, E, T> Authorities<B> for BabeVerifier<C, E, T> where
 	B: Block,
+	T: PoolApi + Sync + Send,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 {
@@ -796,7 +815,11 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
-	use runtime_primitives::traits::{Block as BlockT, DigestFor};
+	use runtime_primitives::{
+		traits::{Block as BlockT, DigestFor}, 
+		transaction_validity::TransactionValidity,
+	};
+	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
@@ -807,9 +830,10 @@ mod tests {
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
-	type Item = generic::DigestItem<Hash, Public, Signature>;
+	use transaction_pool::txpool::{ExtrinsicFor, BlockHash, error, NumberFor, ChainApi, ExHash};
 	use test_client::AuthorityKeyring;
 
+	type Item = generic::DigestItem<Hash, Public, Signature>;
 	type Error = client::error::Error;
 
 	type TestClient = client::Client<
@@ -850,9 +874,86 @@ mod tests {
 		started: bool,
 	}
 
+	#[derive(Debug, Default)]
+	pub struct TestPool {}
+
+	impl PoolApi for TestPool {
+		type Api = TestPoolApi;
+		fn submit_one(
+			&self,
+			_at: &BlockId<<Self::Api as ChainApi>::Block>,
+			_xt: ExtrinsicFor<Self::Api>,
+		) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error> {
+			unimplemented!()
+		}
+	}
+
+	pub struct TestPoolApi {
+		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+	}
+
+	impl txpool::ChainApi for TestPoolApi {
+		type Block = Block;
+		type Hash = u64;
+		type Error = error::Error;
+
+		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+
+			let block_number = self.block_id_to_number(at)?.unwrap();
+			let nonce = uxt.transfer().nonce;
+
+			// This is used to control the test flow.
+			if nonce > 0 {
+				let opt = self.delay.lock().take();
+				if let Some(delay) = opt {
+					if delay.recv().is_err() {
+						println!("Error waiting for delay!");
+					}
+				}
+			}
+
+			if nonce < block_number {
+				Ok(TransactionValidity::Invalid(0))
+			} else {
+				Ok(TransactionValidity::Valid {
+					priority: 4,
+					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+					provides: vec![vec![nonce as u8]],
+					longevity: 3,
+					propagate: true,
+				})
+			}
+		}
+
+		/// Returns a block number given the block id.
+		fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some(*num),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Returns a block hash given the block id.
+		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Hash the extrinsic.
+		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+			let len = uxt.encode().len();
+			(
+				(H256::from(uxt.transfer().from.clone()).to_low_u64_be() << 5) + uxt.transfer().nonce,
+				len
+			)
+		}
+	}
+
 	impl TestNetFactory for BabeTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = BabeVerifier<PeersFullClient, NothingExtra>;
+		type Verifier = BabeVerifier<PeersFullClient, NothingExtra, TestPool>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -881,6 +982,7 @@ mod tests {
 			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
+				transaction_pool: Arc::new(TestPool::default()),
 				extra: NothingExtra,
 				inherent_data_providers,
 				threshold: config.threshold(),

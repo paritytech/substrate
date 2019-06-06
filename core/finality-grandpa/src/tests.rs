@@ -17,7 +17,7 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
-use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
+use network::test::{DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use network::consensus_gossip as network_gossip;
@@ -37,7 +37,7 @@ use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImpor
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT, NumberFor as NumberForB};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
 
@@ -45,6 +45,12 @@ use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
 use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
+use runtime_primitives::transaction_validity::TransactionValidity;
+use test_runtime::{Block, H256};
+use transaction_pool::txpool::{
+	PoolApi, ExtrinsicFor, BlockHash, error, NumberFor, ExHash,
+};
+
 
 type PeerData =
 	Mutex<
@@ -381,7 +387,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<(&DigestFor<Block>)>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
+	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberForB<Block>>>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
 			_ => panic!("not requested by block hash!!"),
@@ -399,7 +405,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: Option<(&DigestFor<Block>)>,
 		_: Vec<u8>,
 	)
-		-> Result<NativeOrEncoded<Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>>> {
+		-> Result<NativeOrEncoded<Option<(NumberForB<Block>, ScheduledChange<NumberForB<Block>>)>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
 			_ => panic!("not requested by block hash!!"),
@@ -510,6 +516,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool::default()),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -566,6 +573,85 @@ fn finalize_3_voters_no_observers() {
 		"Extra justification for block#1");
 }
 
+
+#[derive(Debug, Default)]
+pub struct TestPool {}
+
+impl PoolApi for TestPool {
+	type Api = TestPoolApi;
+	fn submit_one(
+		&self,
+		_at: &BlockId<Block>,
+		_xt: ExtrinsicFor<Self::Api>,
+	) -> result::Result<ExHash<Self::Api>, error::Error> {
+		unimplemented!()
+	}
+}
+
+pub struct TestPoolApi {
+	delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+}
+
+impl txpool::ChainApi for TestPoolApi {
+	type Block = Block;
+	type Hash = u64;
+	type Error = error::Error;
+
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> result::Result<TransactionValidity, Self::Error> {
+
+		let block_number = self.block_id_to_number(at)?.unwrap();
+		let nonce = uxt.transfer().nonce;
+
+		// This is used to control the test flow.
+		if nonce > 0 {
+			let opt = self.delay.lock().take();
+			if let Some(delay) = opt {
+				if delay.recv().is_err() {
+					println!("Error waiting for delay!");
+				}
+			}
+		}
+
+		if nonce < block_number {
+			Ok(TransactionValidity::Invalid(0))
+		} else {
+			Ok(TransactionValidity::Valid {
+				priority: 4,
+				requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+				provides: vec![vec![nonce as u8]],
+				longevity: 3,
+				propagate: true,
+			})
+		}
+	}
+
+	/// Returns a block number given the block id.
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> result::Result<Option<NumberFor<Self>>, Self::Error> {
+		Ok(match at {
+			BlockId::Number(num) => Some(*num),
+			BlockId::Hash(_) => None,
+		})
+	}
+
+	/// Returns a block hash given the block id.
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> result::Result<Option<BlockHash<Self>>, Self::Error> {
+		Ok(match at {
+			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
+			BlockId::Hash(_) => None,
+		})
+	}
+
+	/// Hash the extrinsic.
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		let len = uxt.encode().len();
+		(
+			(H256::from(uxt.transfer().from.clone()).to_low_u64_be() << 5) + uxt.transfer().nonce,
+			len
+		)
+	}
+}
+
+
 #[test]
 fn finalize_3_voters_1_full_observer() {
 	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
@@ -611,6 +697,7 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool::default()),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -780,6 +867,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool::default()),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1197,6 +1285,7 @@ fn voter_persists_its_votes() {
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
 				telemetry_on_connect: None,
+				transaction_pool: Arc::new(TestPool::default()),
 			};
 			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 

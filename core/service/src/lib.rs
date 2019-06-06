@@ -47,7 +47,8 @@ pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
+	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi,
+	IntoPoolError, PoolApi as _,
 };
 use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;

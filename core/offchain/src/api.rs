@@ -27,7 +27,7 @@ use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, Extrinsic},
 };
-use transaction_pool::txpool::{Pool, ChainApi};
+use transaction_pool::txpool::{Pool, ChainApi, PoolApi};
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {

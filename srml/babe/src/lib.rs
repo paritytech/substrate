@@ -23,7 +23,8 @@ pub use timestamp;
 use rstd::{result, prelude::*, marker::PhantomData};
 use srml_support::{decl_storage, decl_module};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::traits::{SaturatedConversion, Saturating};
+use primitives::transaction_validity::TransactionValidity;
+use primitives::traits::{SaturatedConversion, Saturating, ValidateUnsigned};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -129,8 +130,7 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Report equivocation in block production.
-		fn report_equivocation(origin, _equivocation_proof: Vec<u8>) {
-			ensure_signed(origin)?;
+		fn report_equivocation(_origin, _equivocation_proof: Vec<u8>) {
 		}
 	}
 }
@@ -140,20 +140,7 @@ impl<T: Trait> ValidateUnsigned for Module<T> {
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
-			Call::report_equivocation(proof) => {
-				let maybe_equivocation_proof = EquivocationProof::decode(proof);
-				if let Some(equivocation_proof) = maybe_equivocation_proof {
-					if equivocation_proof.is_valid() {
-						return TransactionValidity::Valid {
-							priority: 0,
-							requires: vec![],
-							provides: vec![],
-							longevity: 1000,
-						}
-					}
-				}
-				TransactionValidity::Invalid(0)
-			},
+			Call::report_equivocation(proof) => TransactionValidity::Invalid(0),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}

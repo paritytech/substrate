@@ -26,7 +26,9 @@ use crate::{error, Service, maybe_start_server};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
+use transaction_pool::txpool::{
+	self, Options as TransactionPoolOptions, Pool as TransactionPool, PoolApi as _PoolApi,
+};
 use runtime_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };

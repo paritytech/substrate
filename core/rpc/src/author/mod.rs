@@ -42,6 +42,7 @@ use transaction_pool::{
 		IntoPoolError,
 		Pool,
 		watcher::Status,
+		PoolApi,
 	},
 };
 

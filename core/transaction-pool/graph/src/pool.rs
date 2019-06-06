@@ -99,6 +99,15 @@ impl Default for Options {
 	}
 }
 
+pub trait PoolApi {
+	type Api: ChainApi;
+	fn submit_one(
+		&self,
+		at: &BlockId<<Self::Api as ChainApi>::Block>,
+		xt: ExtrinsicFor<Self::Api>,
+	) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error>;
+} 
+
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
 	api: B,
@@ -110,6 +119,14 @@ pub struct Pool<B: ChainApi> {
 	>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
 	rotator: PoolRotator<ExHash<B>>,
+}
+
+impl<B: ChainApi> PoolApi for Pool<B> {
+	type Api = B;
+	/// Imports one unverified extrinsic to the pool
+	fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
+		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
+	}
 }
 
 impl<B: ChainApi> Pool<B> {
@@ -201,11 +218,6 @@ impl<B: ChainApi> Pool<B> {
 		} else {
 			Default::default()
 		}
-	}
-
-	/// Imports one unverified extrinsic to the pool
-	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
@@ -458,7 +470,7 @@ mod tests {
 	use crate::watcher;
 
 	#[derive(Debug, Default)]
-	struct TestApi {
+	pub struct TestApi {
 		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 	}
 

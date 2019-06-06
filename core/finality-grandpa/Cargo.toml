@@ -34,6 +34,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../consensu
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test_client = { package = "substrate-test-client", path = "../test-client"}
+test_runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
 env_logger = "0.6"
 
 [features]

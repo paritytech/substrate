@@ -19,7 +19,7 @@
 #![forbid(missing_docs, unsafe_code)]
 
 use client;
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::txpool::{self, Pool as TransactionPool, PoolApi};
 use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
 use std::sync::Arc;
@@ -29,14 +29,15 @@ use log::{error, warn, debug, info, trace};
 use client::blockchain::HeaderBackend;
 
 /// Submit report call to the transaction pool.
-pub fn submit_report_call<C, A, Block>(
+pub fn submit_report_call<C, T, Block>(
 	client: &Arc<C>,
-	transaction_pool: &TransactionPool<A>,
+	transaction_pool: &Arc<T>,
 	report_call: Call,
 ) where
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
 	Block: BlockT + 'static,
 	C: HeaderBackend<Block>,
-	A: txpool::ChainApi<Block=Block>,
 {
 	info!(target: "accountable-safety", "Submitting report call to tx pool");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);

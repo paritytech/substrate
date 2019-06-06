@@ -72,7 +72,7 @@ use consensus_common::SelectChain;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::txpool::{self, PoolApi};
 
 use srml_finality_tracker;
 
@@ -448,7 +448,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A: txpool::ChainApi<Block=Block>> {
+pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -462,13 +462,13 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A: tx
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool<A>>,
+	pub transaction_pool: Arc<T>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, A>,
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -480,7 +480,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	A: txpool::ChainApi<Block=Block> + 'static,
+	T: PoolApi + Send + Sync + 'static,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -735,8 +736,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, A>,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -748,7 +749,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, A>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	A: txpool::ChainApi<Block=Block> + 'static,
+	T: PoolApi + txpool::ChainApi<Block=Block> + 'static,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

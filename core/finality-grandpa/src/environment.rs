@@ -39,7 +39,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::txpool::{self, PoolApi};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -272,7 +272,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, A: txpool::ChainApi> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -282,12 +282,13 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, A:
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
-	pub(crate) transaction_pool: Arc<TransactionPool<A>>,
+	pub(crate) transaction_pool: Arc<T>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, A> Environment<B, E, Block, N, RA, SC, A> 
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T> 
 where
-	A: txpool::ChainApi,
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi,
 {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
@@ -304,9 +305,9 @@ where
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, A>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, A>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -315,7 +316,8 @@ where
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	A: txpool::ChainApi,
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi,
 	RA: Send + Sync,
 
 {
@@ -435,9 +437,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, A>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, A>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -447,7 +449,8 @@ where
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	A: txpool::ChainApi<Block=Block>,
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
 	Client<B, E, Block, RA>: HeaderBackend<Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;

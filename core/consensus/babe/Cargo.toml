@@ -22,6 +22,8 @@ consensus_common = { package = "substrate-consensus-common", path = "../common" 
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../safety/primitives" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 futures = "0.1.26"
 tokio = "0.1.18"
 parking_lot = "0.8.0"
@@ -36,4 +38,5 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
+test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }
 env_logger = "0.6.1"

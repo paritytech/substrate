@@ -34,7 +34,7 @@ use substrate_service::{
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
 	error::{Error as ServiceError},
 };
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+use transaction_pool::{self, txpool::{Pool as TransactionPool, PoolApi}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
@@ -174,7 +174,7 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, _, _, ed25519::Pair>(
+				import_queue::<TransactionPool<Self::FullTransactionPoolApi>, _, _, _, ed25519::Pair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
@@ -200,7 +200,7 @@ construct_service_factory! {
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<Self::FullTransactionPoolApi, _, _, _, ed25519::Pair>(
+				import_queue::<TransactionPool<Self::FullTransactionPoolApi>, _, _, _, ed25519::Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import,
 					None,
@@ -235,7 +235,7 @@ mod tests {
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
-		sr25519::Public as AddressPublic,
+		sr25519::Public as AddressPublic, ed25519::Signature,
 	};
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::{Block, Digest as DigestT}, OpaqueExtrinsic};
 	use timestamp;
@@ -311,7 +311,7 @@ mod tests {
 				transaction_pool: service.transaction_pool(),
 			});
 			let mut digest = Digest::<DigestItem>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
+			digest.push(<DigestItem as CompatibleDigestItem<Signature>>::aura_pre_digest(slot_num * 10 / 2));
 			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
@@ -325,7 +325,7 @@ mod tests {
 			// add it to a digest item.
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
-			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
+			let item = <DigestItem as CompatibleDigestItem<Signature>>::aura_seal(
 				signature,
 			);
 			slot_num += 1;

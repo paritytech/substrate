@@ -134,12 +134,31 @@ pub fn check_equivocation<C, H, E, V>(
 
 #[cfg(test)]
 mod test {
-	use primitives::{sr25519, Pair};
+	use primitives::{ed25519, ed25519::Signature, Pair};
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
+	use std::sync::Arc;
+	use safety_primitives::EquivocationProof;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
+
+	struct TestEquivocation {
+		h1: HeaderTest,
+		h2: HeaderTest,
+		s1: Signature,
+		s2: Signature,
+	}
+
+	impl EquivocationProof<HeaderTest, Signature> for TestEquivocation {
+		fn new(h1: HeaderTest, h2: HeaderTest, s1: Signature, s2: Signature) -> Self {
+			TestEquivocation { h1, h2, s1, s2 }
+		}
+		fn first_header(&self) -> HeaderTest { self.h1.clone() }
+		fn second_header(&self) -> HeaderTest { self.h2.clone() }
+		fn first_signature(&self) -> Signature { self.s1.clone() }
+		fn second_signature(&self) -> Signature { self.s2.clone() }
+	}
 
 	fn create_header(number: u64) -> HeaderTest {
 		// so that different headers for the same number get different hashes
@@ -158,9 +177,10 @@ mod test {
 
 	#[test]
 	fn check_equivocation_works() {
-		let client = test_client::new();
-		let pair = sr25519::Pair::generate();
+		let client = Arc::new(test_client::new());
+		let pair = ed25519::Pair::generate();
 		let public = pair.public();
+		let sig = ed25519::Signature::default();
 
 		let header1 = create_header(1); // @ slot 2
 		let header2 = create_header(2); // @ slot 2
@@ -171,77 +191,84 @@ mod test {
 
 		// It's ok to sign same headers.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				2,
 				2,
-				&header1,
-				&public,
+				header1.clone(),
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_none(),
 		);
 
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				3,
 				2,
-				&header1,
-				&public,
+				header1,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_none(),
 		);
 
 		// But not two different headers at the same slot.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				4,
 				2,
-				&header2,
-				&public,
+				header2,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_some(),
 		);
 
 		// Different slot is ok.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				5,
 				4,
-				&header3,
-				&public,
+				header3,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_none(),
 		);
 
 		// Here we trigger pruning and save header 4.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 2,
 				MAX_SLOT_CAPACITY + 4,
-				&header4,
-				&public,
+				header4,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_none(),
 		);
 
 		// This fails because header 5 is an equivocation of header 4.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 3,
 				MAX_SLOT_CAPACITY + 4,
-				&header5,
-				&public,
+				header5,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_some(),
 		);
 
 		// This is ok because we pruned the corresponding header. Shows that we are pruning.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 4,
 				4,
-				&header6,
-				&public,
+				header6,
+				sig.clone(),
+				public.clone(),
 			).unwrap().is_none(),
 		);
 	}

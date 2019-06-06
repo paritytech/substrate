@@ -58,7 +58,7 @@ use authorities::AuthoritiesApi;
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::txpool::{self, Pool as TransactionPool, PoolApi};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -365,16 +365,17 @@ macro_rules! aura_err {
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-//
-// FIXME #1018 needs misbehavior types
-fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
+fn check_header<C, B: Block, P: Pair, T>(
 	client: &Arc<C>,
-	transaction_pool: &Arc<TransactionPool<A>>,
+	transaction_pool: &Arc<T>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
+) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
+where
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<Hash=B::Hash>,
@@ -408,10 +409,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
 			if let Some(equivocation_proof) = check_equivocation::<
-				_,
-				_,
-				AuraEquivocationProof<B::Header, P::Signature>,
-				P::Signature,
+				_, _, AuraEquivocationProof<B::Header, P::Signature>, P::Signature,
 			>(
 				client,
 				slot_now,
@@ -449,17 +447,18 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E, P, A: txpool::ChainApi> {
+pub struct AuraVerifier<C, E, P, T> {
 	client: Arc<C>,
-	transaction_queue: Arc<TransactionPool<A>>,
+	transaction_queue: Arc<T>,
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
-impl<C, E, P, A> AuraVerifier<C, E, P, A>
+impl<C, E, P, T> AuraVerifier<C, E, P, T>
 where
-	A: txpool::ChainApi,
+	T: PoolApi,
+	<T as PoolApi>::Api: txpool::ChainApi,
 	P: Send + Sync + 'static,
 {
 	fn check_inherents<B: Block>(
@@ -526,8 +525,9 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 #[forbid(deprecated)]
-impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
-	A: txpool::ChainApi<Block=B>,
+impl<B: Block, C, E, P, T> Verifier<B> for AuraVerifier<C, E, P, T> where
+	T: PoolApi + Send + Sync,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B>,
 	P: Pair + Send + Sync + 'static,
@@ -562,7 +562,7 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers.
-		let checked_header = check_header::<C, B, P, A>(
+		let checked_header = check_header::<C, B, P, T>(
 			&self.client,
 			&self.transaction_queue,
 			slot_now + 1,
@@ -634,9 +634,10 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 	}
 }
 
-impl<B, C, E, P, A> Authorities<B> for AuraVerifier<C, E, P, A> where
+impl<B, C, E, P, T> Authorities<B> for AuraVerifier<C, E, P, T> where
 	B: Block,
-	A: txpool::ChainApi<Block=B>,
+	T: PoolApi + Send + Sync,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 {
@@ -714,7 +715,7 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<A, B, C, E, P>(
+pub fn import_queue<T, B, C, E, P>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -723,10 +724,11 @@ pub fn import_queue<A, B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-	transaction_queue: Option<Arc<TransactionPool<A>>>,
+	transaction_queue: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	A: txpool::ChainApi<Block=B> + 'static,
+	T: PoolApi + Send + Sync + 'static,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=B> + 'static,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	P: Pair + Send + Sync + 'static,
@@ -739,7 +741,7 @@ pub fn import_queue<A, B, C, E, P>(
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = Arc::new(
-		AuraVerifier::<_, _, P, _> {
+		AuraVerifier::<C, E, P, T> {
 			client: client.clone(),
 			transaction_queue: transaction_queue.unwrap().clone(), // TODO: remove unwrap.
 			extra,
@@ -763,7 +765,6 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
-	use runtime_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
@@ -771,6 +772,13 @@ mod tests {
 	use primitives::sr25519;
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
+	use runtime_primitives::{
+		traits::{Block as BlockT, DigestFor}, 
+		transaction_validity::TransactionValidity,
+	};
+	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+	use transaction_pool::txpool::{Pool, PoolApi, ExtrinsicFor, BlockHash, error, NumberFor, ChainApi, ExHash};
+	use test_client::AuthorityKeyring;
 
 	type Error = client::error::Error;
 
@@ -812,9 +820,86 @@ mod tests {
 		started: bool,
 	}
 
+	#[derive(Debug, Default)]
+	pub struct TestPool {}
+	
+	impl PoolApi for TestPool {
+		type Api = TestPoolApi;
+		fn submit_one(
+			&self,
+			_at: &BlockId<<Self::Api as ChainApi>::Block>,
+			_xt: ExtrinsicFor<Self::Api>,
+		) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error> {
+			unimplemented!()
+		}
+	}
+
+	pub struct TestPoolApi {
+		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+	}
+
+	impl txpool::ChainApi for TestPoolApi {
+		type Block = Block;
+		type Hash = u64;
+		type Error = error::Error;
+
+		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+
+			let block_number = self.block_id_to_number(at)?.unwrap();
+			let nonce = uxt.transfer().nonce;
+
+			// This is used to control the test flow.
+			if nonce > 0 {
+				let opt = self.delay.lock().take();
+				if let Some(delay) = opt {
+					if delay.recv().is_err() {
+						println!("Error waiting for delay!");
+					}
+				}
+			}
+
+			if nonce < block_number {
+				Ok(TransactionValidity::Invalid(0))
+			} else {
+				Ok(TransactionValidity::Valid {
+					priority: 4,
+					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+					provides: vec![vec![nonce as u8]],
+					longevity: 3,
+					propagate: true,
+				})
+			}
+		}
+
+		/// Returns a block number given the block id.
+		fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some(*num),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Returns a block hash given the block id.
+		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Hash the extrinsic.
+		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+			let len = uxt.encode().len();
+			(
+				(H256::from(uxt.transfer().from.clone()).to_low_u64_be() << 5) + uxt.transfer().nonce,
+				len
+			)
+		}
+	}
+
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, NothingExtra, sr25519::Pair>;
+		type Verifier = AuraVerifier<PeersFullClient, NothingExtra, sr25519::Pair, TestPool>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -841,6 +926,7 @@ mod tests {
 					assert_eq!(slot_duration.get(), SLOT_DURATION);
 					Arc::new(AuraVerifier {
 						client,
+						transaction_queue: Arc::new(TestPool::default()),
 						extra: NothingExtra,
 						inherent_data_providers,
 						phantom: Default::default(),

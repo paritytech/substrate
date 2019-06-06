@@ -18,10 +18,13 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use primitives::{
+	BuildStorage, traits::IdentityLookup, generic::DigestItem as GenDigestItem,
+	testing::{Digest, DigestItem, Header, UintAuthorityId},
+};
 use srml_support::impl_outer_origin;
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher, sr25519};
 use crate::{Trait, Module};
 
 impl_outer_origin!{
@@ -59,6 +62,10 @@ impl timestamp::Trait for Test {
 
 impl Trait for Test {
 	type HandleReport = ();
+	type Signature = sr25519::Signature;
+	type DigestItem = GenDigestItem<H256, sr25519::Public, sr25519::Signature>;
+	type Digest = Digest;
+	type Header = Header;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {

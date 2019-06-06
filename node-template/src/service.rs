@@ -98,8 +98,13 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
-					import_queue::<_, _, _, _, Pair>(
+			{ |
+				config: &mut FactoryFullConfiguration<Self> ,
+				client: Arc<FullClient<Self>>,
+				transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+				_select_chain: Self::SelectChain,
+			| {
+					import_queue::<TransactionPool<Self::FullTransactionPoolApi>, _, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
@@ -108,6 +113,7 @@ construct_service_factory! {
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
+						None,
 					).map_err(Into::into)
 				}
 			},
@@ -115,7 +121,7 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-					import_queue::<_, _, _, _, Pair>(
+					import_queue::<TransactionPool<Self::LightTransactionPoolApi>, _, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
@@ -124,6 +130,7 @@ construct_service_factory! {
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
+						None,
 					).map_err(Into::into)
 				}
 			},
