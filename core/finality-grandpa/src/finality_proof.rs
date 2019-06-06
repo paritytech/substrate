@@ -50,8 +50,10 @@ use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
 use substrate_primitives::{ed25519, H256, Blake2Hasher};
-use ed25519::Public as AuthorityId;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+
+// TODO: switch to import from aura primitives.
+use ed25519::Public as AuthorityId;
 
 use crate::justification::GrandpaJustification;
 

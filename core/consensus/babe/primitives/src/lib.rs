@@ -18,10 +18,10 @@
 #![deny(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
 
-use parity_codec::{Encode, Decode};
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
@@ -63,11 +63,14 @@ impl slots::SlotData for BabeConfiguration {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	pub trait BabeApi {
+	pub trait BabeApi<AuthorityId: Codec> {
 		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///
 		/// Dynamic configuration may be supported in the future.
 		fn startup_data() -> BabeConfiguration;
+
+		/// Get the current authorites for Babe.
+		fn authorities() -> Vec<AuthorityId>;
 	}
 }

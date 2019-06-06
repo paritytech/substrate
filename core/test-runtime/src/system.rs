@@ -27,7 +27,9 @@ use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_vali
 use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
 use primitives::{Blake2Hasher, storage::well_known_keys};
-use primitives::sr25519::Public as AuthorityId;
+
+// TODO: switch to import from aura primitives.
+use primitives::ed25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -39,6 +41,7 @@ storage_items! {
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 	StorageDigest: b"sys:digest" => Digest;
+	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -51,17 +54,6 @@ pub fn balance_of(who: AccountId) -> u64 {
 
 pub fn nonce_of(who: AccountId) -> u64 {
 	storage::hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
-}
-
-/// Get authorities at given block.
-pub fn authorities() -> Vec<AuthorityId> {
-	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
-		.expect("There are always authorities in test-runtime");
-	(0..len)
-		.map(|i| storage::unhashed::get(&i.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX))
-			.expect("Authority is properly encoded in test-runtime")
-		)
-		.collect()
 }
 
 pub fn initialize_block(header: &Header) {

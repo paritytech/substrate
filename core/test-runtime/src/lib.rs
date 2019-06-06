@@ -39,12 +39,12 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
+		GetNodeBlockType, GetRuntimeBlockType, Verify,
 	},
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{sr25519, OpaqueMetadata};
+use primitives::{ed25519, sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -147,7 +147,7 @@ impl Extrinsic {
 }
 
 /// The signature type used by authorities.
-pub type AuthoritySignature = sr25519::Signature;
+pub type AuthoritySignature = ed25519::Signature;
 /// The identity type used by authorities.
 pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
 /// The signature type used by accounts/transactions.
@@ -455,11 +455,12 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block> for Runtime {
+			impl consensus_aura::AuraApi<Block, consensus_aura::AuthorityId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
+			impl consensus_babe::BabeApi<Block, consensus_aura::AuthorityId> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
@@ -467,18 +468,13 @@ cfg_if! {
 						threshold: std::u64::MAX,
 					}
 				}
+				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::submit_transaction(&ex).unwrap();
-				}
-			}
-
-			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					system::authorities()
 				}
 			}
 		}

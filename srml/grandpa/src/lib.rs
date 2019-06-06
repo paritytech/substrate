@@ -44,6 +44,8 @@ use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
+
+// TODO: switch to import from aura primitives.
 use ed25519::Public as AuthorityId;
 
 mod mock;

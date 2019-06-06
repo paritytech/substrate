@@ -112,6 +112,8 @@ impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	// TODO: switch to import from aura primitives.
 	use primitives::ed25519::Public as AuthorityId;
 
 	#[test]

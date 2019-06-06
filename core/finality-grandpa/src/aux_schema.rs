@@ -32,6 +32,7 @@ use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
 use crate::NewAuthoritySet;
 
+// TODO: switch to import from aura primitives.
 use substrate_primitives::ed25519::Public as AuthorityId;
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";

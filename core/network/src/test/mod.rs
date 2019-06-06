@@ -44,7 +44,7 @@ use futures::{prelude::*, sync::{mpsc, oneshot}};
 use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
@@ -52,6 +52,9 @@ use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
+
+// TODO: switch to import from aura primitives.
+use primitives::ed25519::Public as AuthorityId;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;

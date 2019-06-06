@@ -39,7 +39,10 @@ use std::result;
 use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
+use substrate_primitives::{NativeOrEncoded, ExecutionContext};
+
+// TODO: switch to import from aura primitives.
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};

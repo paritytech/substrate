@@ -56,10 +56,11 @@ pub use select_chain::SelectChain;
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
+	type AuthorityId;
 	type Error: std::error::Error + Send + 'static;
 
 	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
+	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<Self::AuthorityId>, Self::Error>;
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.

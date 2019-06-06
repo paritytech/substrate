@@ -22,12 +22,12 @@
 extern crate alloc;
 
 use parity_codec::{Encode, Decode};
-use substrate_primitives::ed25519;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
-use ed25519::Public as AuthorityId;
+// TODO: switch to import from aura primitives.
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]

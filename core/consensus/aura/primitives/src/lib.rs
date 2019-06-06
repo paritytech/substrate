@@ -18,20 +18,28 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use parity_codec::Codec;
 use substrate_client::decl_runtime_apis;
+use substrate_primitives::ed25519;
 use runtime_primitives::ConsensusEngineId;
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
+/// The identifier for an Aura authority.
+pub type AuthorityId = ed25519::Public;
+
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
-	pub trait AuraApi {
+	pub trait AuraApi<AuthorityId: Codec> {
 		/// Return the slot duration in seconds for Aura.
 		/// Currently, only the value provided by this type at genesis
 		/// will be used.
 		///
 		/// Dynamic slot duration may be supported in the future.
 		fn slot_duration() -> u64;
+
+		// Return the current set of authorities.
+		fn authorities() -> Vec<AuthorityId>;
 	}
 }

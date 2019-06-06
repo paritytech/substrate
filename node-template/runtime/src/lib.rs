@@ -265,9 +265,12 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block> for Runtime {
+	impl consensus_aura::AuraApi<Block, aura::AuthorityId> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+		fn authorities() -> Vec<aura::AuthorityId> {
+			Aura::authorities()
 		}
 	}
 

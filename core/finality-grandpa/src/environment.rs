@@ -51,6 +51,7 @@ use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 
+// TODO: switch to import from aura primitives.
 use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.

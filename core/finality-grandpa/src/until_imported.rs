@@ -28,12 +28,14 @@ use futures::prelude::*;
 use futures::stream::Fuse;
 use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use substrate_primitives::ed25519::Public as AuthorityId;
 use tokio::timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
+
+// TODO: switch to import from aura primitives.
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 

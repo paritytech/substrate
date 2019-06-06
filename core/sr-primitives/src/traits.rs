@@ -779,12 +779,13 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `ChangesTrieRoot` payload.
 	type Hash: Member;
+/* TODO!!!*/
 	/// `AuthorityChange` payload.
 	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
 	/// Returns `Some` if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
-
+/**/
 	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 

@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
+use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
 use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
@@ -25,6 +25,9 @@ pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
+
+// TODO: switch to import from aura primitives.
+use primitives::ed25519::Public as AuthorityId;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 

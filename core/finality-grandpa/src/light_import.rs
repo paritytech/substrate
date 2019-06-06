@@ -37,7 +37,10 @@ use runtime_primitives::traits::{
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{H256, Blake2Hasher, ed25519::Public as AuthorityId};
+use substrate_primitives::{H256, Blake2Hasher};
+
+// TODO: switch to import from aura primitives.
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;

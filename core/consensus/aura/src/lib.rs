@@ -28,8 +28,8 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
-use parity_codec::{Encode, Decode};
-use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
+use parity_codec::{Encode, Decode, Codec};
+use consensus_common::{self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 	SelectChain, well_known_cache_keys
 };
@@ -40,20 +40,19 @@ use consensus_common::import_queue::{
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
-	runtime_api::{ApiExt, Core as CoreApi},
+	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
 };
 
 use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
 	Zero, Member,
 };
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
-use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
@@ -82,9 +81,12 @@ pub struct SlotDuration(slots::SlotDuration<u64>);
 impl SlotDuration {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<A, B, C>(client: &C) -> CResult<Self>
 	where
-		C: AuxStore, C: ProvideRuntimeApi, C::Api: AuraApi<B>,
+		A: Codec,
+		B: Block,
+		C: AuxStore + ProvideRuntimeApi,
+		C::Api: AuraApi<B, A>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 	}
@@ -138,7 +140,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	generic::DigestItem<B::Hash, P::Public, P::Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -189,7 +191,7 @@ struct AuraWorker<C, E, I, P, SO> {
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -519,14 +521,13 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 
 #[forbid(deprecated)]
 impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore,
-	C::Api: BlockBuilderApi<B>,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode,
-	Self: Authorities<B>,
 {
 	fn verify(
 		&self,
@@ -540,7 +541,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let authorities = self.authorities(&BlockId::Hash(parent_hash))
+		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		let extra_verification = self.extra.verify(
@@ -618,22 +619,11 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	}
 }
 
-impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
+fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
+	A: Codec,
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
-{
-	type Error = ConsensusError;
-
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error> {
-		authorities(self.client.as_ref(), at)
-	}
-}
-
-fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
-	B: Block,
-	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: AuraApi<B, A>,
 {
 	// no cache => no initialization
 	let cache = match client.cache() {
@@ -643,7 +633,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 
 	// check if we already have initialized the cache
 	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<AuthorityIdFor<B>>> = cache
+	let genesis_authorities: Option<Vec<A>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
 		.and_then(|v| Decode::decode(&mut &v[..]));
 	if genesis_authorities.is_some() {
@@ -663,10 +653,11 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 }
 
 #[allow(deprecated)]
-fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
+fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
+	A: Codec,
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: AuraApi<B, A>,
 {
 	client
 		.cache()
@@ -674,7 +665,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 			.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..]))
 		)
-		.or_else(|| AuthoritiesApi::authorities(&*client.runtime_api(), at).ok())
+		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
@@ -709,7 +700,7 @@ pub fn import_queue<B, C, E, P>(
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,

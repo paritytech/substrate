@@ -29,6 +29,7 @@ use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
 
+// TODO: switch to import from aura primitives.
 use ed25519::Public as AuthorityId;
 
 /// A shared authority set.

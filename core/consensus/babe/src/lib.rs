@@ -34,7 +34,7 @@ pub use consensus_common::SyncOracle;
 use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
 	SimpleBitOps,
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
@@ -59,9 +59,8 @@ use schnorrkel::{
 		VRFProof, VRFProofBatchable, VRFInOut,
 	},
 };
-use authorities::AuthoritiesApi;
 use consensus_common::{
-	self, Authorities, BlockImport, Environment, Proposer,
+	self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -94,9 +93,9 @@ pub struct Config(slots::SlotDuration<BabeConfiguration>);
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<A, B: Block, C>(client: &C) -> CResult<Self>
 	where
-		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
+		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B, Public>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self) {
@@ -182,7 +181,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 > where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B, Public>,
 	SC: SelectChain<B>,
 	generic::DigestItem<B::Hash, Public, Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -229,7 +228,7 @@ struct BabeWorker<C, E, I, SO> {
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	B: Block<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B, Public>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -567,11 +566,10 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B>,
+	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
+	C::Api: BlockBuilderApi<B> + BabeApi<B, Public>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	E: ExtraVerification<B>,
-	Self: Authorities<B>,
 {
 	fn verify(
 		&self,
@@ -598,7 +596,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let authorities = self.authorities(&BlockId::Hash(parent_hash))
+		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		let extra_verification = self.extra.verify(
@@ -676,33 +674,21 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	}
 }
 
-impl<B, C, E> Authorities<B> for BabeVerifier<C, E> where
-	B: Block,
-	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
-{
-	type Error = ConsensusError;
-
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error> {
-		authorities(self.client.as_ref(), at)
-	}
-}
-
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
-	Vec<AuthorityIdFor<B>>,
+	Vec<Public>,
 	ConsensusError,
 > where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B, Public>,
 {
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<dyn AuthoritiesApi<B>>(at).unwrap_or(false) {
-				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
+			if client.runtime_api().has_api::<dyn BabeApi<B, Public>>(at).unwrap_or(false) {
+				BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \
 						therefore this is unreachable; qed")

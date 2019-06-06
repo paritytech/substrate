@@ -64,6 +64,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 #[cfg(feature = "std")]
 use serde::Serialize;
+pub use substrate_consensus_aura_primitives::AuthorityId;
 
 mod mock;
 mod tests;
@@ -73,9 +74,6 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The type of the Aura inherent.
 pub type InherentType = u64;
-
-/// The identifier for an Aura authority.
-pub type AuthorityId = substrate_primitives::ed25519::Public;
 
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
