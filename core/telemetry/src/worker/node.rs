@@ -190,10 +190,8 @@ where TTrans::Output: Sink<SinkItem = BytesMut, SinkError = TSinkErr> {
 					self.need_flush = true;
 				}
 
-			} else if self.need_flush {
-				if self.sink.poll_complete()?.is_ready() {
-					self.need_flush = false;
-				}
+			} else if self.need_flush && self.sink.poll_complete()?.is_ready() {
+				self.need_flush = false;
 
 			} else {
 				break
