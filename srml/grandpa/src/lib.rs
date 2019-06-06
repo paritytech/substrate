@@ -37,7 +37,7 @@ use parity_codec as codec;
 use codec::{Encode, Decode};
 use fg_primitives::ScheduledChange;
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
-use srml_support::{dispatch::Result, traits::Get};
+use srml_support::{dispatch::Result};
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::CurrentHeight;
@@ -45,7 +45,6 @@ use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
 use ed25519::Public as AuthorityId;
-use session::{SessionHandler, OpaqueKeys};
 
 mod mock;
 mod tests;

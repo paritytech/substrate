@@ -44,6 +44,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
+pub use session::impl_opaque_keys;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -141,17 +142,18 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct SessionKeys(AuthorityId);
-impl session::OpaqueKeys for SessionKeys {
-	fn count() -> usize { 1 }
-	fn get_raw(&self, i: usize) -> &[u8] { if i == 0 { self.0.as_ref() } else { &[] } }
+type SessionHandlers = (Grandpa,);
+impl_opaque_keys! {
+	pub struct SessionKeys(AuthorityId,);
 }
+// NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
+// The number and order of items in `SessionHandler` *MUST* be the same number and order of keys in
+// `SessionKeys`.
+// TODO: Introduce some structure to tie these together to make it a bit less of a footgun.
 
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;
-	type SessionHandler = (Grandpa,);
+	type SessionHandler = SessionHandlers;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
 	type Keys = SessionKeys;

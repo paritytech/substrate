@@ -117,9 +117,9 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use parity_codec::Decode;
-use primitives::traits::{Zero, One, Convert, Saturating, Member};
+use primitives::traits::{Zero, Saturating, Member};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::{ensure, dispatch::Result, traits::{OnFreeBalanceZero, Get}, Parameter};
+use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter};
 use system::ensure_signed;
 
 /// Simple index type with which we can count sessions.
@@ -132,6 +132,65 @@ pub trait OpaqueKeys {
 	fn get_raw(&self, i: usize) -> &[u8];
 	fn get<T: Decode>(&self, i: usize) -> Option<T> { T::decode(&mut self.get_raw(i)) }
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
+/// e.g.
+/// ```
+/// count!(println ("{}",) foo, bar, baz);
+/// // Will result in three `println!`s: "0", "1" and "2".
+/// ```
+#[macro_export]
+macro_rules! count {
+	($f:ident ($($x:tt)*) ) => ();
+	($f:ident ($($x:tt)*) $x1:tt) => { $f!($($x)* 0); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt) => { $f!($($x)* 0); $f!($($x)* 1); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt) => { $f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt) => {
+		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3);
+	};
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt, $x5:tt) => {
+		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3); $f!($($x)* 4);
+	};
+}
+
+#[macro_export]
+/// Just implement `OpaqueKeys` for a given tuple-struct.
+/// Would be much nicer for this to be converted to `derive` code.
+macro_rules! impl_opaque_keys {
+	(
+		pub struct $name:ident ( $( $t:tt ,)* );
+	) => {
+		impl_opaque_keys! {
+			pub struct $name ( $( $t ,)* );
+			impl OpaqueKeys for _ {}
+		}
+	};
+	(
+		pub struct $name:ident ( $( $t:tt ,)* );
+		impl OpaqueKeys for _ {
+			$($rest:tt)*
+		}
+	) => {
+		#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug))]
+		pub struct $name($( $t ,)*);
+		impl $crate::OpaqueKeys for $name {
+			fn count() -> usize {
+				let mut c = 0;
+				$( let _: $t; c += 1; )*
+				c
+			}
+			fn get_raw(&self, i: usize) -> &[u8] {
+				$crate::count!(impl_opaque_keys (!! self i) $($t),*);
+				&[]
+			}
+			$($rest)*
+		}
+	};
+	( !! $self:ident $param_i:ident $i:tt) => {
+		if $param_i == $i { return $self.$i.as_ref() }
+	}
 }
 
 pub trait ShouldEndSession<BlockNumber> {
@@ -223,7 +282,6 @@ pub trait Trait: system::Trait {
 }
 
 type OpaqueKey = Vec<u8>;
-type OpaqueKeyRef<'a> = &'a [u8];
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
