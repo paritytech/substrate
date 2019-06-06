@@ -37,7 +37,7 @@ use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 	SimpleBitOps,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use primitives::{
@@ -527,9 +527,12 @@ pub struct BabeVerifier<C, E> {
 	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
 	threshold: u64,
+	start: Instant,
+	timestamps: Mutex<Vec<Instant>>,
 }
 
 impl<C, E> BabeVerifier<C, E> {
+
 	fn check_inherents<B: Block>(
 		&self,
 		block: B,
@@ -662,6 +665,29 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
+				// We do not produce an `Instant` synthetically, so this cannot panic.
+				let elapsed = self.start.elapsed();
+				let slot_num: u32 = match u32::try_from(slot_num) {
+					Some(s) => s,
+					// FIXME this needs to be fixed prior to merge!
+					None => panic!("We cannot handle slot numbers above u32::MAX yet!"),
+				}
+				let mut timestamps = self.timestamps.lock();
+				// Remainder of this block is a critical section.
+				let num_timestamps = timestamps.len();
+				if num_timestamps >= self.config.minimum_tmestamps {
+					let new_list = timestamps.iter().map(|(t, sl)| {
+						let a = slot_now
+							.checked_sub(sl)
+							.expect("slot numbers are monotonically increasing; qed")
+						let new_duration = a
+							.checked_mul(slot_num)
+							.expect("we assume duration cannot overflow; qed");
+					})
+				} else {
+					timestamps.push((elapsed, slot_now));
+				}
+
 				// FIXME #1019 extract authorities
 				Ok((import_block, new_authorities))
 			}
@@ -783,6 +809,45 @@ fn claim_slot(
 	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
 
+/// Start an import queue for the Aura consensus algorithm.
+pub fn import_queue<B, C, E>(
+	slot_duration: SlotDuration,
+	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
+	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	client: Arc<C>,
+	extra: E,
+	inherent_data_providers: InherentDataProviders,
+) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+	B: Block,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
+	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	E: 'static + ExtraVerification<B>,
+{
+	register_babe_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	initialize_authorities_cache(&*client)?;
+
+	let verifier = Arc::new(
+		BabeVerifier {
+			client: client.clone(),
+			extra,
+			inherent_data_providers,
+			phantom: PhantomData,
+			start: Instant::now(),
+			timestamps: Default::default(),
+		}
+	);
+	Ok(BasicQueue::new(
+		verifier,
+		block_import,
+		justification_import,
+		finality_proof_import,
+		finality_proof_request_builder,
+	))
+}
+
 #[cfg(test)]
 #[allow(dead_code, unused_imports, deprecated)]
 // FIXME #2532: need to allow deprecated until refactor is done
@@ -883,6 +948,8 @@ mod tests {
 				extra: NothingExtra,
 				inherent_data_providers,
 				threshold: config.threshold(),
+				start: Instant::now(),
+				timestamps: Default::default(),
 			})
 		}
 
