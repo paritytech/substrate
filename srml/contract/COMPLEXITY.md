@@ -184,6 +184,7 @@ This function receives input data for the contract execution. The execution cons
 **Note** that the complexity of executing the contract code should be considered separately.
 
 Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
+Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
@@ -203,7 +204,7 @@ This function takes the code of the constructor and input data. Creation of a co
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most probably it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
