@@ -19,7 +19,7 @@ do
   echo "*** Building wasm binaries in $SRC"
   cd "$PROJECT_ROOT/$SRC"
 
-  ./build.sh
+  ./build.sh $CARGO_BUILD_EXTRA_OPTIONS
 
   cd - >> /dev/null
 done
