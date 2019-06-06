@@ -56,7 +56,7 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 
 	/// Build a block on top of the given block, with inherent extrinsics and
 	/// inherent digests pre-pushed.
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -91,7 +91,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	type Block = Block;
 	type Error = client::error::Error;
 
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -162,7 +162,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	now: Box<Fn() -> time::Instant>,
+	now: Box<dyn Fn() -> time::Instant>,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
