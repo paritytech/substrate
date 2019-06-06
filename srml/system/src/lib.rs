@@ -89,6 +89,7 @@ use srml_support::{
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
+use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -194,6 +195,9 @@ pub trait Trait: 'static + Eq + Clone {
 }
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
+
+pub type Key = Vec<u8>;
+pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {

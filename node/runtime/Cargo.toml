@@ -17,7 +17,6 @@ version = { package = "sr-version", path = "../../core/sr-version", default-feat
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
-consensus = { package = "srml-consensus", path = "../../srml/consensus", default-features = false }
 contract = { package = "srml-contract", path = "../../srml/contract", default-features = false }
 council = { package = "srml-council", path = "../../srml/council", default-features = false }
 democracy = { package = "srml-democracy", path = "../../srml/democracy", default-features = false }
@@ -51,7 +50,6 @@ std = [
 	"support/std",
 	"aura/std",
 	"balances/std",
-	"consensus/std",
 	"contract/std",
 	"council/std",
 	"democracy/std",
