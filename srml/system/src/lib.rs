@@ -201,6 +201,35 @@ decl_module! {
 		pub fn deposit_event(event: T::Event) {
 			Self::deposit_event_indexed(&[], event);
 		}
+
+		/// Make some on-chain remark.
+		fn remark(origin, _remark: Vec<u8>) {
+			ensure_signed(origin)?;
+		}
+
+		/// Set the number of pages in the WebAssembly environment's heap.
+		fn set_heap_pages(pages: u64) {
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+		}
+
+		/// Set the new code.
+		pub fn set_code(new: Vec<u8>) {
+			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+		}
+
+		/// Set some items of storage.
+		fn set_storage(items: Vec<KeyValue>) {
+			for i in &items {
+				storage::unhashed::put_raw(&i.0, &i.1);
+			}
+		}
+
+		/// Kill some items from storage.
+		fn kill_storage(keys: Vec<Key>) {
+			for key in &keys {
+				storage::unhashed::kill(&key);
+			}
+		}
 	}
 }
 
@@ -360,10 +389,13 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
+		#[serde(with = "substrate_primitives::bytes")]
+		config(code): Vec<u8>;
 
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use parity_codec::Encode;
 
+			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {

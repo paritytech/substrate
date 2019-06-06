@@ -74,6 +74,9 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 /// The type of the Aura inherent.
 pub type InherentType = u64;
 
+/// The identifier for an Aura authority.
+pub type AuthorityId = substrate_primitives::ed25519::Public;
+
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
 	/// Get aura inherent data.
@@ -105,6 +108,33 @@ pub type Log<T> = RawLog<T>;
 pub enum RawLog<T> {
 	/// AuRa inherent digests
 	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
+	/// Authorities set has been changed. Contains the new set of authorities.
+	AuthoritiesChange(Vec<AuthorityId>),
+}
+
+impl<T> RawLog<T> {
+	/// Try to cast the log entry as AuthoritiesChange log entry.
+	pub fn as_authorities_change(&self) -> Option<&[AuthorityId]> {
+		match *self {
+			RawLog::AuthoritiesChange(ref item) => Some(item),
+			_ => None,
+		}
+	}
+}
+
+// Implementation for tests outside of this crate.
+#[cfg(any(feature = "std", test))]
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<AuthorityId> {
+	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
+		match log {
+			RawLog::AuthoritiesChange(authorities) =>
+				primitives::generic::DigestItem::AuthoritiesChange(
+					authorities.into_iter().map(Into::into).collect()
+				),
+			RawLog::PreRuntime(id, v, _) =>
+				primitives::generic::DigestItem::PreRuntime(id, v),
+		}
+	}
 }
 
 /// Provides the slot duration inherent data for `Aura`.
@@ -164,6 +194,9 @@ impl HandleReport for () {
 }
 
 pub trait Trait: timestamp::Trait {
+	/// Type for all log entries of this module.
+	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
+
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 }
@@ -172,11 +205,58 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
+
+		/// The current authorities
+		pub Authorities get(authorities) config(): Vec<AuthorityId>;
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+}
+
+impl<T: Trait> Module<T> {
+	fn change_authorities(new: Vec<AuthorityId>) {
+		<Authorities<T>>::put(&new);
+
+	}
+
+	/// Save original authorities set.
+	fn save_original_authorities(current_authorities: Option<Vec<T::SessionKey>>) {
+		if OriginalAuthorities::<T>::get().is_some() {
+			// if we have already saved original set before, do not overwrite
+			return;
+		}
+
+		<OriginalAuthorities<T>>::put(current_authorities.unwrap_or_else(||
+			AuthorityStorageVec::<T::SessionKey>::items()));
+	}
+
+	/// Deposit one of this module's logs.
+	fn deposit_log(log: Log<T>) {
+		<system::Module<T>>::deposit_log(<T as Trait>::Log::from(log).into());
+	}
+}
+
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+	type Key = AuthorityId;
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		// instant changes
+		if changed {
+			// TODO: handle case where stalled. this will presumably mean tracking the `on_stalled`
+			// TODO:    signal below and checking it here.
+			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+			let last_authorities = <Module<T>>::authorities();
+			if next_authorities != last_authorities {
+				Self::change_authorities(next_authorities);
+			}
+		}
+	}
+	fn on_disabled(_i: usize) {
+		// ignore?
+	}
 }
 
 /// A report of skipped authorities in Aura.

@@ -123,15 +123,6 @@ impl balances::Trait for Runtime {
 	type TransferPayment = ();
 }
 
-impl consensus::Trait for Runtime {
-	type Log = Log;
-	type SessionKey = AuthorityId;
-
-	// The Aura module handles offline-reports internally
-	// rather than using an explicit report system.
-	type InherentOfflineReport = ();
-}
-
 impl timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
@@ -257,10 +248,9 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{default, Log(ChangesTrieRoot)},
+		System: system::{default, Config<T>, Log(ChangesTrieRoot)},
 		Aura: aura::{Module, Inherent(Timestamp), Log(PreRuntime)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
 		Balances: balances,
 		Session: session::{Module, Call, Storage, Event},
@@ -386,12 +376,6 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
-		}
-	}
-
-	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
-			Consensus::authorities()
 		}
 	}
 }

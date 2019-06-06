@@ -18,7 +18,7 @@
 
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
-use node_runtime::{ConsensusConfig, CouncilSeatsConfig, DemocracyConfig,
+use node_runtime::{CouncilSeatsConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
@@ -79,11 +79,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const STASH: u128 = 100 * DOLLARS;
 
 	GenesisConfig {
-		consensus: Some(ConsensusConfig {
+		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
-		system: None,
 		balances: Some(BalancesConfig {
 			transaction_base_fee: 1 * CENTS,
 			transaction_byte_fee: 10 * MILLICENTS,
@@ -163,6 +161,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
+		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		})
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
@@ -257,11 +258,9 @@ pub fn testnet_genesis(
 	contract_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
-		consensus: Some(ConsensusConfig {
+		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
-		system: None,
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),
@@ -320,6 +319,9 @@ pub fn testnet_genesis(
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
+		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		})
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
