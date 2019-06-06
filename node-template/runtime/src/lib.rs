@@ -26,7 +26,6 @@ use version::NativeVersion;
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
-pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
@@ -135,15 +134,6 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = ();
-}
-
-impl consensus::Trait for Runtime {
-	/// The identifier we use to refer to authorities.
-	type SessionKey = AuthorityId;
-	// The aura module handles offline-reports internally
-	// rather than using an explicit report system.
-	type InherentOfflineReport = ();
-	/// The ubiquitous log type.
 	type Log = Log;
 }
 
@@ -199,9 +189,8 @@ construct_runtime!(
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
-		Aura: aura::{Module, Log(PreRuntime)},
-		Indices: indices,
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
+		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,
 		// Used for the module template in `./template.rs`
@@ -285,12 +274,6 @@ impl_runtime_apis! {
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(n: NumberFor<Block>) {
 			Executive::offchain_worker(n)
-		}
-	}
-
-	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-		fn authorities() -> Vec<AuthorityId> {
-			Consensus::authorities()
 		}
 	}
 }

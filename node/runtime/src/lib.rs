@@ -35,7 +35,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, /*AuthorityIdFor, */Convert,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions};
@@ -48,7 +48,6 @@ pub use session::impl_opaque_keys;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
-pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
@@ -104,6 +103,7 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
+	type Log = Log;
 }
 
 impl indices::Trait for Runtime {
@@ -134,9 +134,12 @@ parameter_types! {
 }
 
 type SessionHandlers = (Grandpa,);
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 impl_opaque_keys! {
 	pub struct SessionKeys(AuthorityId,);
 }
+
 // NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
 // The number and order of items in `SessionHandler` *MUST* be the same number and order of keys in
 // `SessionKeys`.
@@ -249,11 +252,11 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Config<T>, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Inherent(Timestamp), Log(PreRuntime)},
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Indices: indices,
 		Balances: balances,
-		Session: session::{Module, Call, Storage, Event},
+		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},

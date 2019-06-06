@@ -129,7 +129,7 @@ impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Author
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>
 				primitives::generic::DigestItem::AuthoritiesChange(
-					authorities.into_iter().map(Into::into).collect()
+					authorities
 				),
 			RawLog::PreRuntime(id, v, _) =>
 				primitives::generic::DigestItem::PreRuntime(id, v),
@@ -219,17 +219,6 @@ impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
-	}
-
-	/// Save original authorities set.
-	fn save_original_authorities(current_authorities: Option<Vec<T::SessionKey>>) {
-		if OriginalAuthorities::<T>::get().is_some() {
-			// if we have already saved original set before, do not overwrite
-			return;
-		}
-
-		<OriginalAuthorities<T>>::put(current_authorities.unwrap_or_else(||
-			AuthorityStorageVec::<T::SessionKey>::items()));
 	}
 
 	/// Deposit one of this module's logs.

@@ -18,9 +18,9 @@
 
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
-use node_runtime::{CouncilSeatsConfig, DemocracyConfig, SystemConfig,
+use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
@@ -81,6 +81,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
+			_genesis_phantom_data: Default::default(),
+			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
 			transaction_base_fee: 1 * CENTS,
@@ -101,8 +103,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			session_length: 5 * MINUTES,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -110,8 +111,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			session_reward: Perbill::from_parts(2_065),
 			current_session_reward: 0,
 			validator_count: 7,
-			sessions_per_era: 12,
-			bonding_duration: 12,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
@@ -163,7 +162,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
-		})
+			_genesis_phantom_data: Default::default(),
+		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
@@ -260,6 +260,8 @@ pub fn testnet_genesis(
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
+			_genesis_phantom_data: Default::default(),
+			changes_trie_config: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
@@ -275,15 +277,12 @@ pub fn testnet_genesis(
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			session_length: 10,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			minimum_validator_count: 1,
 			validator_count: 2,
-			sessions_per_era: 5,
-			bonding_duration: 12,
 			offline_slash: Perbill::zero(),
 			session_reward: Perbill::zero(),
 			current_session_reward: 0,
@@ -321,7 +320,8 @@ pub fn testnet_genesis(
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
-		})
+			_genesis_phantom_data: Default::default(),
+		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),

@@ -117,6 +117,8 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use parity_codec::Decode;
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 use primitives::traits::{Zero, Saturating, Member};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter};
@@ -173,8 +175,8 @@ macro_rules! impl_opaque_keys {
 		}
 	) => {
 		#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		pub struct $name($( $t ,)*);
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		pub struct $name($( pub $t ,)*);
 		impl $crate::OpaqueKeys for $name {
 			fn count() -> usize {
 				let mut c = 0;
