@@ -162,12 +162,12 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			// The contract has funds above subsistence deposit and that means it can afford to
 			// leave tombstone.
 			let p_key = prefixed_child_trie(&contract.trie_id);
-			let child_trie = runtime_io::child_trie(&p_key[..]).unwrap_or_else(|| {
-				ChildTrie::new(
-					&mut TempKeyspaceGen(&contract.trie_id[..]),
-					&p_key[..]
-				)
-			});
+			let child_trie = ChildTrie::fetch_or_new(
+				&mut TempKeyspaceGen(&contract.trie_id[..]),
+				|pk| { runtime_io::child_trie(&pk[..]) },
+				&p_key[..],
+			);
+
 
 
 			// Note: this operation is heavy.

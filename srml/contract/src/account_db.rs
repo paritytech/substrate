@@ -144,15 +144,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.code_hash = code_hash;
 				}
 				let p_key = prefixed_child_trie(&new_info.trie_id);
-				let child_trie = child::child_trie(&p_key).unwrap_or_else(|| {
-					// see issue FIXME #2744 to only use keyspace generator
-					// and remove trie_id field (replaces parameter by 
-					// `TrieIdFromParentCounter(&address),`).
-					ChildTrie::new(
-						&mut TempKeyspaceGen(&new_info.trie_id[..]),
-						&p_key[..]
-					)
-				});
+				// see issue FIXME #2744 to only use keyspace generator
+				// and remove trie_id field (replaces parameter by 
+				// `TrieIdFromParentCounter(&address),`).
+				let child_trie = ChildTrie::fetch_or_new(
+					&mut TempKeyspaceGen(&new_info.trie_id[..]),
+					|pk| { child::child_trie(pk) },
+					&p_key[..],
+				);
 
 				if !changed.storage.is_empty() {
 					new_info.last_write = Some(<system::Module<T>>::block_number());

@@ -292,7 +292,11 @@ fn genesis_storage(
 
 	let mut child_storage = ChildrenStorageOverlay::default();
 	// warning: no prefix, next child trie creation will go in same keyspace
-	let child_trie = ChildTrie::new(&mut TestKeySpaceGenerator::new(), &b"test"[..]);
+	let child_trie = ChildTrie::fetch_or_new(
+		&mut TestKeySpaceGenerator::new(),
+		|_| None,
+		&b"test"[..],
+	);
 	child_storage.insert(
 		child_trie.keyspace().clone(),
 		(vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect(), child_trie)

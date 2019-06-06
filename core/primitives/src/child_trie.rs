@@ -183,15 +183,27 @@ impl ChildTrie {
 		&p[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
 	/// Constructor to use for building a new child trie.
-	/// This does not allow setting an existing `KeySpace`.
-	pub fn new(keyspace_builder: &mut impl KeySpaceGenerator, parent: &[u8]) -> Self {
-		let parent = Self::prefix_parent_key(parent);
-		ChildTrie {
-			keyspace: keyspace_builder.generate_keyspace(),
-			root: Default::default(),
-			parent,
-			extension: Default::default(),
-		}
+	///
+	/// By using a `KeySpaceGenerator` it does not allow setting an existing `KeySpace`.
+	/// If a new trie is created (see `is_new` method), the trie is not commited and
+	/// another call to this method will create a new trie.
+	/// 
+	/// This can be quite unsafe for user, so use with care (write new trie information
+	/// as soon as possible).
+	pub fn fetch_or_new(
+		keyspace_builder: &mut impl KeySpaceGenerator,
+		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
+		parent: &[u8],
+	) -> Self {
+		parent_fetcher(parent).unwrap_or_else(|| {
+			let parent = Self::prefix_parent_key(parent);
+			ChildTrie {
+				keyspace: keyspace_builder.generate_keyspace(),
+				root: Default::default(),
+				parent,
+				extension: Default::default(),
+			}
+		})
 	}
 	/// Get a reference to the child trie information
 	/// needed for a read only query.
