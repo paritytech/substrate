@@ -12,7 +12,7 @@ executor = { package = "substrate-executor", path = "../../executor" }
 futures = { version = "0.1.17" }
 hash-db = "0.12"
 keyring = { package = "substrate-keyring", path = "../../../core/keyring" }
-parity-codec = "3.3"
+parity-codec = "3.5.1"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 state_machine = { package = "substrate-state-machine", path = "../../state-machine" }

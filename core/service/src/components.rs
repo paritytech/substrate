@@ -634,12 +634,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
-	use client::LongestChain;
-	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer, TestClientBuilder};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
-		let client = Arc::new(substrate_test_client::new());
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
 		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
 		let transaction = Transfer {
 			amount: 5,
@@ -647,9 +647,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		#[allow(deprecated)]
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
-			.best_chain().unwrap();
+		let best = longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();

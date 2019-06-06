@@ -24,7 +24,7 @@ slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.26"
 tokio = "0.1.18"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4.6"
 schnorrkel = "0.1.1"
 rand = "0.6.5"

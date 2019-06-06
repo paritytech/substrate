@@ -13,7 +13,7 @@ futures = "0.1.25"
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 parity-codec = { version = "3.3", features = ["derive"] }
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 tokio = "0.1.7"
