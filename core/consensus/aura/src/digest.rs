@@ -55,12 +55,12 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Public, P::Signatu
 	}
 
 	fn aura_pre_digest(slot_num: u64) -> Self {
-		DigestItem::Inherent(AURA_ENGINE_ID, slot_num.encode())
+		DigestItem::PreRuntime(AURA_ENGINE_ID, slot_num.encode())
 	}
 
 	fn as_aura_pre_digest(&self) -> Option<u64> {
 		match self {
-			DigestItem::Inherent(AURA_ENGINE_ID, ref buffer) => Decode::decode(&mut &buffer[..]),
+			DigestItem::PreRuntime(AURA_ENGINE_ID, ref buffer) => Decode::decode(&mut &buffer[..]),
 			_ => None,
 		}
 	}
