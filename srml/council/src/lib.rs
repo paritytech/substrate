@@ -91,6 +91,7 @@ mod tests {
 		type BadPresentation = ();
 		type BadReaper = ();
 		type BadVoterIndex = ();
+		type LoserCandidate = ();
 	}
 	impl motions::Trait for Test {
 		type Origin = Origin;
@@ -105,6 +106,8 @@ mod tests {
 		balance_factor: u64,
 		decay_ratio: u32,
 		voting_fee: u64,
+		voter_bond: u64,
+		bad_presentation_punishment: u64,
 		with_council: bool,
 	}
 
@@ -113,7 +116,9 @@ mod tests {
 			Self {
 				balance_factor: 1,
 				decay_ratio: 24,
-				voting_fee: 5,
+				voting_fee: 0,
+				voter_bond: 0,
+				bad_presentation_punishment: 1,
 				with_council: false,
 			}
 		}
@@ -136,7 +141,14 @@ mod tests {
 			self.voting_fee = fee;
 			self
 		}
-
+		pub fn bad_presentation_punishment(mut self, fee: u64) -> Self {
+			self.bad_presentation_punishment = fee;
+			self
+		}
+		pub fn voter_bond(mut self, fee: u64) -> Self {
+			self.voter_bond = fee;
+			self
+		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 			t.extend(balances::GenesisConfig::<Test>{
@@ -164,8 +176,8 @@ mod tests {
 			}.build_storage().unwrap().0);
 			t.extend(seats::GenesisConfig::<Test> {
 				candidacy_bond: 3,
-				voter_bond: 2,
-				present_slash_per_voter: 1,
+				voter_bond: self.voter_bond,
+				present_slash_per_voter: self.bad_presentation_punishment,
 				carry_count: 2,
 				inactive_grace_period: 1,
 				active_council: if self.with_council { vec![

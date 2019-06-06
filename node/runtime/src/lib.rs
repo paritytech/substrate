@@ -161,6 +161,7 @@ impl council::Trait for Runtime {
 	type BadPresentation = ();
 	type BadReaper = ();
 	type BadVoterIndex = ();
+	type LoserCandidate = ();
 }
 
 impl council::voting::Trait for Runtime {

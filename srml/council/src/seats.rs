@@ -141,6 +141,9 @@ pub trait Trait: democracy::Trait {
 
 	/// Handler for the unbalanced reduction when submitting a bad `voter_index`.
 	type BadVoterIndex: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner up)
+	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 decl_module! {
@@ -181,7 +184,7 @@ decl_module! {
 		/// must now be either unregistered or registered to a candidate that registered the slot after
 		/// the voter gave their last approval set.
 		///
-		/// Both indexes must be provided as explained in [`voter_at`] function.
+		/// Both indices must be provided as explained in [`voter_at`] function.
 		///
 		/// May be called by anyone. Returns the voter deposit to `signed`.
 		fn reap_inactive_voter(
@@ -425,7 +428,7 @@ decl_storage! {
 		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
 		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = 1000.into();
-		/// How many vote indexes need to go by after a target voter's last vote before they can be reaped if their
+		/// How many vote indices need to go by after a target voter's last vote before they can be reaped if their
 		/// approvals are moot.
 		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
 		/// How often (in blocks) to check for new votes.
@@ -434,8 +437,8 @@ decl_storage! {
 		pub TermDuration get(term_duration) config(): T::BlockNumber = 5.into();
 		/// Number of accounts that should be sitting on the council.
 		pub DesiredSeats get(desired_seats) config(): u32;
-		/// Decay factor of weight when being accumulated. It should typically be set the council size
-		/// to keep the council secure.
+		/// Decay factor of weight when being accumulated. It should typically be set to
+		/// __at least__ `council_size -1` to keep the council secure.
 		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight increment step `t`.
 		/// 0 will result in no weight being added at all (normal approval voting).
 		pub DecayRatio get(decay_ratio) config(decay_ratio): u32 = 24;
@@ -464,7 +467,7 @@ decl_storage! {
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
 		pub Voters get(voters): map SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
-		pub NextVoterSet get(next_voter_set): SetIndex = 0;
+		pub NextVoterSet get(next_nonfull_voter_set): SetIndex = 0;
 		/// Current number of Voters.
 		pub VoterCount get(voter_count): SetIndex = 0;
 		/// The present candidate list.
@@ -587,9 +590,8 @@ impl<T: Trait> Module<T> {
 		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
-		// TODO: this should be total - fee?
-		let locked_balance = T::Currency::total_balance(&who);
-		let mut pot_to_set = BalanceOf::<T>::zero();
+		let mut locked_balance = T::Currency::total_balance(&who);
+		let mut pot_to_set = Zero::zero();
 		let hint = hint as usize;
 
 		if let Some(info) = Self::voter_info(&who) {
@@ -603,20 +605,25 @@ impl<T: Trait> Module<T> {
 			let offset = Self::get_offset(info.stake, now - last_win);
 			pot_to_set = info.pot + offset;
 		} else {
-			// not yet a voter. Index _could be valid_. Fee might apply. O(1).
-			let (set_idx, vec_idx) = Self::split_index(hint, VOTER_SET_SIZE);
-			match Self::cell_status(set_idx, vec_idx) {
+			// not yet a voter. Index _could be valid_. Fee might apply. Bond will be reserved O(1).
+			ensure!(
+				T::Currency::free_balance(&who) > Self::voting_bond(),
+				"new voter must have sufficient funds to pay the bond"
+			);
+
+			let (set_index, vec_index) = Self::split_index(hint, VOTER_SET_SIZE);
+			match Self::cell_status(set_index, vec_index) {
 				CellStatus::Hole => {
 					// requested cell was a valid hole.
-					<Voters<T>>::mutate(set_idx, |set| set[vec_idx] = Some(who.clone()));
+					<Voters<T>>::mutate(set_index, |set| set[vec_index] = Some(who.clone()));
 				},
-				_ => {
+				CellStatus::Head | CellStatus::Occupied => {
 					// Either occupied or out-of-range.
-					let next = Self::next_voter_set();
+					let next = Self::next_nonfull_voter_set();
 					let mut set = Self::voters(next);
 					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
-					if set.len() == 0 {
+					if set.is_empty() {
 						let imbalance = T::Currency::withdraw(
 							&who,
 							Self::voting_fee(),
@@ -624,11 +631,10 @@ impl<T: Trait> Module<T> {
 							ExistenceRequirement::KeepAlive,
 						)?;
 						T::BadVoterIndex::on_unbalanced(imbalance);
+						// NOTE: this is safe since the `withdraw()` will check this.
+						locked_balance -= Self::voting_fee();
 					}
-					set.push(Some(who.clone()));
-					if set.len() == VOTER_SET_SIZE {
-						<NextVoterSet<T>>::put(next + 1);
-					}
+					Self::checked_push_voter(&mut set, who.clone(), next);
 					<Voters<T>>::insert(next, set);
 				}
 			}
@@ -659,7 +665,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
+	/// Close the voting, record the number of seats that are actually up for grabs.
 	fn start_tally() {
 		let active_council = Self::active_council();
 		let desired_seats = Self::desired_seats() as usize;
@@ -672,7 +678,7 @@ impl<T: Trait> Module<T> {
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + Self::carry_count() as usize;
-			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
+			<Leaderboard<T>>::put(vec![(Zero::zero(), T::AccountId::default()); leaderboard_size]);
 
 			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
 		}
@@ -754,6 +760,18 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	fn checked_push_voter(set: &mut Vec<Option<T::AccountId>>, who: T::AccountId, index: u32) {
+		let len = set.len();
+
+		// Defensive only: this should never happen. Don't push since it will break more things.
+		if len == VOTER_SET_SIZE { return; }
+
+		set.push(Some(who));
+		if len + 1 == VOTER_SET_SIZE {
+			<NextVoterSet<T>>::put(index + 1);
+		}
+	}
+
 	/// Get the set and vector index of a global voter index.
 	///
 	/// Note that this function does not take holes into account.
@@ -767,15 +785,15 @@ impl<T: Trait> Module<T> {
 	/// Return a concatenated vector over all voter sets.
 	fn all_voters() -> Vec<Option<T::AccountId>> {
 		let mut all = <Voters<T>>::get(0);
-		let mut idx = 1;
-		// NOTE: we could also use `Self::next_voter_set()` here but that might change based
+		let mut index = 1;
+		// NOTE: we could also use `Self::next_nonfull_voter_set()` here but that might change based
 		// on how we do chunking. This is more generic.
 		loop {
-			let next_set = <Voters<T>>::get(idx);
-			if next_set.len() == 0 {
+			let next_set = <Voters<T>>::get(index);
+			if next_set.is_empty() {
 				break;
 			} else {
-				idx += 1;
+				index += 1;
 				all.extend(next_set);
 			}
 		}
@@ -784,7 +802,7 @@ impl<T: Trait> Module<T> {
 
 	/// Shorthand for fetching a voter at a specific (global) index.
 	///
-	/// NOTE: this function is used for checking indexes. Yet, it does not take holes into account.
+	/// NOTE: this function is used for checking indices. Yet, it does not take holes into account.
 	/// This means that any account submitting an index at any point in time should submit:
 	/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in the
 	/// first `set_index` sets.
@@ -815,11 +833,11 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the approval of a voter in a chunked manner.
 	fn set_approvals_chunked(who: &T::AccountId, approvals: Vec<bool>) {
-		let approvals_flag_vec = Self::b2f(approvals);
+		let approvals_flag_vec = Self::bool_to_flag(approvals);
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert((who.clone(), idx as SetIndex), slice.to_vec()));
+			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert((who.clone(), index as SetIndex), slice.to_vec()));
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
@@ -833,45 +851,61 @@ impl<T: Trait> Module<T> {
 		let (set_index, vec_index) = Self::split_index(flag_index as usize, APPROVAL_SET_SIZE);
 		let set = Self::approvals_of((who.clone(), set_index));
 		if vec_index < set.len() {
-			Self::bit_at(set[vec_index], bit)
+			// This is because bit_at treats numbers in lsb -> msb order.
+			let reversed_index = set.len() - 1 - vec_index;
+			Self::bit_at(set[reversed_index], bit)
 		} else {
 			false
 		}
 	}
 
 	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
-	/// Note that the order is MSB -> LSB.
 	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
 		if n < APPROVAL_FLAG_LEN {
-			x & ( APPROVAL_FLAG_MASK >> n ) != 0
+			// x & ( APPROVAL_FLAG_MASK >> n ) != 0
+			x & ( 1 << n ) != 0
 		} else {
 			false
 		}
 	}
 
 	/// Convert a vec of boolean approval flags to a vec of integers, as denoted by
-	/// the type `ApprovalFlag`.
-	pub fn b2f(x: Vec<bool>) -> Vec<ApprovalFlag> {
-		let mut r: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
-		if x.len() == 0 {
-			return r;
+	/// the type `ApprovalFlag`. see `bool_to_flag_should_work` test for examples.
+	pub fn bool_to_flag(x: Vec<bool>) -> Vec<ApprovalFlag> {
+		let mut result: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
+		if x.is_empty() {
+			return result;
 		}
-		r.push(0);
-		let mut idx = 0;
-		let mut c = APPROVAL_FLAG_LEN;
+		result.push(0);
+		let mut index = 0;
+		let mut counter = 0;
 		loop {
-			c -= 1;
-			let i = APPROVAL_FLAG_LEN - c - 1 ;
-			let j = i + idx * APPROVAL_FLAG_LEN;
-			r[idx] += (if x[j] { 1 } else { 0 }) << c;
-			if j >= x.len() - 1 { break; }
-			if c == 0 {
-				r.push(0);
-				idx += 1;
-				c = APPROVAL_FLAG_LEN;
+			let shl_index = counter % APPROVAL_FLAG_LEN;
+			result[index] += (if x[counter] { 1 } else { 0 }) << shl_index;
+			counter += 1;
+			if counter > x.len() - 1 { break; }
+			if counter % APPROVAL_FLAG_LEN == 0 {
+				result.push(0);
+				index += 1;
 			}
 		}
-		r
+		result
+	}
+
+	/// Convert a vec of flags (u32) to boolean.
+	pub fn flag_to_bool(chunk: Vec<ApprovalFlag>) -> Vec<bool> {
+		let mut result = Vec::with_capacity(chunk.len());
+		if chunk.is_empty() { return vec![] }
+		chunk.into_iter()
+			.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
+			.for_each(|c| {
+				let last_approve = match c.iter().rposition(|n| *n) {
+					Some(index) => index + 1,
+					None => 0
+				};
+				result.extend(c.into_iter().take(last_approve));
+			});
+		result
 	}
 
 	/// Return a concatenated vector over all approvals of a voter as boolean.
@@ -881,17 +915,8 @@ impl<T: Trait> Module<T> {
 		let mut index = 0_u32;
 		loop {
 			let chunk = Self::approvals_of((who.clone(), index));
-			if chunk.len() == 0 { break; }
-			chunk.into_iter()
-				.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
-				.for_each(|c| {
-					// strip out trailing zeros.
-					let last_approve = match c.iter().rposition(|n| *n) {
-						Some(idx) => idx + 1,
-						None => 0
-					};
-					all.extend(c.into_iter().take(last_approve));
-				});
+			if chunk.is_empty() { break; }
+			all.extend(Self::flag_to_bool(chunk));
 			index += 1;
 		}
 		all
@@ -899,12 +924,12 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all approvals associated with one account.
 	fn remove_all_approvals_of(who: &T::AccountId) {
-		let mut idx = 0;
+		let mut index = 0;
 		loop {
-			let set = Self::approvals_of((who.clone(), idx));
+			let set = Self::approvals_of((who.clone(), index));
 			if set.len() > 0 {
-				<ApprovalsOf<T>>::remove((who.clone(), idx));
-				idx += 1;
+				<ApprovalsOf<T>>::remove((who.clone(), index));
+				index += 1;
 			} else {
 				break
 			}
@@ -925,7 +950,7 @@ impl<T: Trait> Module<T> {
 		let decay_ratio: BalanceOf<T> = Self::decay_ratio().into();
 		if t > 150 { return stake * decay_ratio }
 		let mut offset = stake;
-		let mut r = BalanceOf::<T>::zero();
+		let mut r = Zero::zero();
 		let decay = decay_ratio + One::one();
 		for _ in 0..t {
 			offset = offset.saturating_sub(offset / decay);
@@ -946,52 +971,65 @@ mod tests {
 	}
 
 	fn vote(i: u64, l: usize) {
-		let _ = Balances::deposit_creating(&i, bond() + fee() + 10); // voter bond = 2
+		let _ = Balances::make_free_balance_be(&i, 20);
 		assert_ok!(Council::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0, 0));
 	}
 
-	fn vote_at(i: u64, l: usize, idx: VoteIndex) {
-		let _ = Balances::deposit_creating(&i, 5); // voter bond = 2
-		assert_ok!(Council::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0, idx));
+	fn vote_at(i: u64, l: usize, index: VoteIndex) {
+		let _ = Balances::make_free_balance_be(&i, 20);
+		assert_ok!(Council::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0, index));
 	}
 
-	fn create_candidate(i: u64, idx: u32) {
-		let _ = Balances::deposit_creating(&i, 10); // candidacy bond = 3
-		assert_ok!(Council::submit_candidacy(Origin::signed(i), idx));
+	fn create_candidate(i: u64, index: u32) {
+		let _ = Balances::make_free_balance_be(&i, 20);
+		assert_ok!(Council::submit_candidacy(Origin::signed(i), index));
 	}
 
 	fn bond() -> u64 {
 		Council::voting_bond()
 	}
 
-	fn fee() -> u64 {
-		Council::voting_fee()
-	}
-
 
 	#[test]
-	fn b2f_should_work() {
+	fn bool_to_flag_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_eq!(Council::bool_to_flag(vec![]), vec![]);
+			assert_eq!(Council::bool_to_flag(vec![false]), vec![0]);
+			assert_eq!(Council::bool_to_flag(vec![true]), vec![1]);
+			assert_eq!(Council::bool_to_flag(vec![true, true, true, true]), vec![15]);
+			assert_eq!(Council::bool_to_flag(vec![true, true, true, true, true]), vec![15 + 16]);
+
+			let set_1 = vec![
+					true, false, false, false, // 0x1
+					false, true, true, true, // 0xE
+			];
 			assert_eq!(
-				Council::b2f(vec![
-					true, false, false, true, // 0x9
-					false, true, true, false, // 0x6
-				]),
-				vec![0x96_00_00_00_u32] // 32 bit.
+				Council::bool_to_flag(set_1.clone()),
+				vec![0x00_00_00_E1_u32]
 			);
 			assert_eq!(
-				Council::b2f(vec![
-					false, false, false, true, // 0x1s
-					false, true, true, false, // 0x6
-				]),
-				vec![0x16_00_00_00_u32] // 32 bit.
+				Council::flag_to_bool(vec![0x00_00_00_E1_u32]),
+				set_1
+			);
+
+			let set_2 = vec![
+					false, false, false, true, // 0x8
+					false, true, false, true, // 0xA
+			];
+			assert_eq!(
+				Council::bool_to_flag(set_2.clone()),
+				vec![0x00_00_00_A8_u32]
+			);
+			assert_eq!(
+				Council::flag_to_bool(vec![0x00_00_00_A8_u32]),
+				set_2
 			);
 
 			let mut rhs = (0..100/APPROVAL_FLAG_LEN).map(|_| 0xFFFFFFFF_u32).collect::<Vec<u32>>();
 			// NOTE: this might be need change based on `APPROVAL_FLAG_LEN`.
-			rhs.extend(vec![0xF_0000000]);
+			rhs.extend(vec![0x00_00_00_0F]);
 			assert_eq!(
-				Council::b2f((0..100).map(|_| true).collect()),
+				Council::bool_to_flag((0..100).map(|_| true).collect()),
 				rhs
 			)
 		})
@@ -1006,7 +1044,8 @@ mod tests {
 			assert_eq!(Council::next_vote_from(5), 8);
 			assert_eq!(Council::vote_index(), 0);
 			assert_eq!(Council::candidacy_bond(), 3);
-			assert_eq!(Council::voting_bond(), 2);
+			assert_eq!(Council::voting_bond(), 0);
+			assert_eq!(Council::voting_fee(), 0);
 			assert_eq!(Council::present_slash_per_voter(), 1);
 			assert_eq!(Council::presentation_duration(), 2);
 			assert_eq!(Council::inactivity_grace_period(), 1);
@@ -1038,9 +1077,9 @@ mod tests {
 
 			// create 65. 64 (set0) + 1 (set1)
 			(1..=63).for_each(|i| vote(i, 2));
-			assert_eq!(Council::next_voter_set(), 0);
+			assert_eq!(Council::next_nonfull_voter_set(), 0);
 			vote(64, 2);
-			assert_eq!(Council::next_voter_set(), 1);
+			assert_eq!(Council::next_nonfull_voter_set(), 1);
 			vote(65, 2);
 
 			let set1 = Council::voters(0);
@@ -1062,7 +1101,7 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
 
 			(1..=129).for_each(|i| vote(i, 2));
-			assert_eq!(Council::next_voter_set(), 2);
+			assert_eq!(Council::next_nonfull_voter_set(), 2);
 
 			assert_ok!(Council::retract_voter(Origin::signed(11), 10));
 
@@ -1078,7 +1117,7 @@ mod tests {
 			assert_eq!(Council::voters(1)[1], None);
 			assert_eq!(Council::voters(1)[2], None);
 			// Next set with capacity is 2.
-			assert_eq!(Council::next_voter_set(), 2);
+			assert_eq!(Council::next_nonfull_voter_set(), 2);
 
 			// But we can fill a hole.
 			vote_at(130, 2, 10);
@@ -1089,7 +1128,7 @@ mod tests {
 			assert_eq!(Council::voters(2).len(), 1);
 
 			// and the next two (scheduled) to the second set.
-			assert_eq!(Council::next_voter_set(), 2);
+			assert_eq!(Council::next_nonfull_voter_set(), 2);
 		})
 	}
 
@@ -1118,7 +1157,7 @@ mod tests {
 			if full_sets > 0 {
 				assert_eq!(
 					Council::approvals_of((180, (full_sets-1) as SetIndex )),
-					Council::b2f((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
+					Council::bool_to_flag((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
 
@@ -1126,7 +1165,7 @@ mod tests {
 			if left_over > 0 {
 				assert_eq!(
 					Council::approvals_of((180, full_sets as SetIndex)),
-					Council::b2f((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
+					Council::bool_to_flag((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
 		})
@@ -1163,27 +1202,39 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true], 0, 5));
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![true], 0, 100));
 
-			// indexes are more or less ignored. all is pushed.
+			// indices are more or less ignored. all is pushed.
 			assert_eq!(voter_ids(), vec![3, 4, 5]);
 		})
 	}
 
 	#[test]
-	fn bad_approval_index_slashes_voters() {
-		with_externalities(&mut ExtBuilder::default().voting_fee(5).build(), || {
+	fn bad_approval_index_slashes_voters_and_bond_reduces_stake() {
+		with_externalities(&mut ExtBuilder::default().voting_fee(5).voter_bond(2).build(), || {
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
 
 			(1..=63).for_each(|i| vote(i, 2));
-			assert_eq!(Balances::free_balance(&1), 10 + 10);
-			assert_eq!(Balances::free_balance(&10), 15);
-			assert_eq!(Balances::free_balance(&60), 15);
+			assert_eq!(Balances::free_balance(&1), 20 - 5 - 2); // -5 fee -2 bond
+			assert_eq!(Balances::free_balance(&10), 20 - 2);
+			assert_eq!(Balances::free_balance(&60), 20 - 2);
 
+			// still no fee
 			vote(64, 2);
-			assert_eq!(Balances::free_balance(&64), 15);
-			assert_eq!(Council::next_voter_set(), 1);
+			assert_eq!(Balances::free_balance(&64), 20 - 2); // -2 bond
+			assert_eq!(
+				Council::voter_info(&64).unwrap(),
+				VoterInfo { last_win: 0, last_active: 0, stake: 20, pot:0 }
+			);
+
+			assert_eq!(Council::next_nonfull_voter_set(), 1);
+
+			// now we charge the next voter.
 			vote(65, 2);
-			assert_eq!(Balances::free_balance(&65), 10);
+			assert_eq!(Balances::free_balance(&65), 20 - 5 - 2);
+			assert_eq!(
+				Council::voter_info(&65).unwrap(),
+				VoterInfo { last_win: 0, last_active: 0, stake: 15, pot:0 }
+			);
 		});
 	}
 
@@ -1356,7 +1407,7 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
 
-			assert_eq!(Balances::free_balance(&2), 20 - bond() - fee());
+			assert_eq!(Balances::free_balance(&2), 20 - bond() );
 			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
 
 			// deposit a bit more.
@@ -1366,19 +1417,19 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
 			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
 			assert_eq!(Balances::locks(&2).len(), 1);
-			assert_eq!(Balances::locks(&2)[0].amount, 100 + 20 - fee());
+			assert_eq!(Balances::locks(&2)[0].amount, 100 + 20);
 
 			assert_ok!(Council::retract_voter(Origin::signed(2), 0));
 
 			assert_eq!(Balances::locks(&2).len(), 0);
-			assert_eq!(Balances::free_balance(&2), 120 - 1 - fee()); // 1 ok call to .reserve() happened.
+			assert_eq!(Balances::free_balance(&2), 120 - 1); // 1 ok call to .reserve() happened.
 			assert_ok!(Balances::reserve(&2, 1)); // unlocked.
 		});
 	}
 
 	#[test]
 	fn balance_should_lock_on_submit_approvals_unlock_on_retract() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut ExtBuilder::default().voter_bond(8).voting_fee(0).build(), || {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
 			assert_eq!(Balances::free_balance(&2), 20);
@@ -1386,12 +1437,12 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
 
-			assert_eq!(Balances::free_balance(&2), 18 - fee()); // 20 - 2 (bond) - 5 (fee)
+			assert_eq!(Balances::free_balance(&2), 12); // 20 - 8 (bond)
 			assert_noop!(Balances::reserve(&2, 10), "account liquidity restrictions prevent withdrawal"); // locked.
 
 			assert_ok!(Council::retract_voter(Origin::signed(2), 0));
 
-			assert_eq!(Balances::free_balance(&2), 20 - fee());
+			assert_eq!(Balances::free_balance(&2), 20);
 			assert_ok!(Balances::reserve(&2, 10)); // unlocked.
 		});
 	}
@@ -1438,16 +1489,16 @@ mod tests {
 
 			System::set_block_number(14);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600 - fee(), 1), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 1), 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96, 1), (500, 5), (600 - fee(), 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (5, 19)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
-				VoterInfo { last_win: 2, last_active: 1, stake: 600 - fee(), pot:0 }
+				VoterInfo { last_win: 2, last_active: 1, stake: 600, pot:0 }
 			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 2, last_active: 1, stake: 500, pot:0 });
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot:0 });
@@ -1463,16 +1514,16 @@ mod tests {
 
 			System::set_block_number(22);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600 - fee(), 2), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 2), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 2), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 2), 2), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93, 1), (500, 5), (600 - fee(), 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 27), (5, 27)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
-				VoterInfo { last_win: 3, last_active: 2, stake: 600 - fee(), pot: 0}
+				VoterInfo { last_win: 3, last_active: 2, stake: 600, pot: 0}
 			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 3, last_active: 2, stake: 500, pot: 0});
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
@@ -1489,16 +1540,16 @@ mod tests {
 
 			System::set_block_number(30);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600 - fee(), 3), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 3), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 3), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 3), 3), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93 + 90, 1), (500, 5), (600 - fee(), 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93 + 90, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 35), (5, 35)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
-				VoterInfo { last_win: 4, last_active: 3, stake: 600 - fee(), pot: 0}
+				VoterInfo { last_win: 4, last_active: 3, stake: 600, pot: 0}
 			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 4, last_active: 3, stake: 500, pot: 0});
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
@@ -1543,11 +1594,11 @@ mod tests {
 
 			System::set_block_number(14);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600 - fee(), 1), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(4), 4, 400, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(3), 3, 300 + Council::get_offset(300, 1), 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(2), 2, 300 + Council::get_offset(300, 1), 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(400, 4), (588, 2), (588, 3), (600 - fee(), 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(400, 4), (588, 2), (588, 3), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (3, 19)]);
@@ -1569,8 +1620,7 @@ mod tests {
 
 	#[test]
 	fn resubmitting_approvals_stores_pot() {
-		with_externalities(&mut ExtBuilder::default().balance_factor(10).build(), || {
-			System::set_block_number(4);
+		with_externalities(&mut ExtBuilder::default().voter_bond(0).voting_fee(0).balance_factor(10).build(), || { System::set_block_number(4);
 			assert!(!Council::presentation_active());
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(6), 0));
@@ -1600,22 +1650,28 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(6), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 1));
 			assert_ok!(Council::set_approvals(Origin::signed(6), vec![true, false, false], 1, 0));
-			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true, false], 1, 0));
+			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true, false], 1, 1));
 			// give 1 some new high balance
-			let _ = Balances::make_free_balance_be(&1, 995); // + 5 reserved => 1000
-			// NOTE: this happens due to index change
+			let _ = Balances::make_free_balance_be(&1, 997);
 			assert_ok!(Council::set_approvals(Origin::signed(1), vec![false, false, true], 1, 2));
-			assert_eq!(Council::voter_info(1).unwrap().pot, Council::get_offset(100, 1));
+			assert_eq!(Council::voter_info(1).unwrap(),
+				VoterInfo {
+					stake: 1000, // 997 + 3 which is candidacy bond.
+					pot: Council::get_offset(100, 1),
+					last_active: 1,
+					last_win: 1,
+				}
+			);
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
 
 			System::set_block_number(14);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600 - fee(), 1), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 1000 + 96 /* pot */, 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (500, 5), (600 - fee(), 6), (1096, 1)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (500, 5), (600, 6), (1096, 1)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(1, 19), (6, 19)]);
@@ -1918,21 +1974,20 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (0, 0), (20, 2), (50, 5)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert!(!Council::presentation_active());
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
-			assert_eq!(Council::next_tally(), Some(12));
-
-			System::set_block_number(12);
-			assert!(!Council::presentation_active());
-			assert_ok!(Council::end_block(System::block_number()));
-			// TODO: maybe this is already a bug and we should clear old council sooner.
-			// Example: at block 12, a member exists who is valid until block 11?
-			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
-
-			System::set_block_number(14);
-			assert!(Council::presentation_active());
-			assert_ok!(Council::end_block(System::block_number()));
-			assert_eq!(Council::active_council(), vec![]);
+			let mut current = System::block_number();
+			let free_block;
+			loop {
+				current += 1;
+				System::set_block_number(current);
+				assert_ok!(Council::end_block(System::block_number()));
+				if Council::active_council().len() == 0 {
+					free_block = current;
+					break;
+				}
+			}
+			// 11 + 2 which is the next voting period.
+			assert_eq!(free_block, 14);
 		});
 	}
 
@@ -2004,8 +2059,8 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Council::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 18 - fee());
-			assert_eq!(Balances::total_balance(&5), 52);
+			assert_eq!(Balances::total_balance(&2), 20);
+			assert_eq!(Balances::total_balance(&5), 50);
 		});
 	}
 
@@ -2038,7 +2093,7 @@ mod tests {
 
 	#[test]
 	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut ExtBuilder::default().voter_bond(2).build(), || {
 			System::set_block_number(4);
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
@@ -2068,7 +2123,7 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Council::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 18 - fee());
+			assert_eq!(Balances::total_balance(&2), 18);
 			assert_eq!(Balances::total_balance(&5), 52);
 		});
 	}
@@ -2175,7 +2230,7 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![2, 3, 0, 5]);
 			assert_eq!(Council::all_approvals_of(&4).len(), 0);
-			assert_eq!(Balances::total_balance(&4), 38);
+			assert_eq!(Balances::total_balance(&4), 40);
 		});
 	}
 
@@ -2302,22 +2357,32 @@ mod tests {
 
 	#[test]
 	fn present_when_presenter_is_poor_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().voting_fee(5).build(), || {
-			System::set_block_number(4);
-			assert!(!Council::presentation_active());
+		let test_present = |p| {
+			with_externalities(&mut ExtBuilder::default().voting_fee(5).voter_bond(2).bad_presentation_punishment(p).build(), || {
+				System::set_block_number(4);
+				let _ = Balances::make_free_balance_be(&1, 15);
+				assert!(!Council::presentation_active());
 
-			assert_ok!(Council::submit_candidacy(Origin::signed(1), 0)); // -3
-			assert_ok!(Council::set_approvals(Origin::signed(1), vec![true], 0, 0)); // -2 -5
-			assert_ok!(Council::end_block(System::block_number()));
+				assert_ok!(Council::submit_candidacy(Origin::signed(1), 0)); // -3
+				assert_eq!(Balances::free_balance(&1), 12);
+				assert_ok!(Council::set_approvals(Origin::signed(1), vec![true], 0, 0)); // -2 -5
+				assert_ok!(Council::end_block(System::block_number()));
 
-			System::set_block_number(6);
-			assert_eq!(Balances::free_balance(&1), 5 - fee());
-			assert_eq!(Balances::reserved_balance(&1), 5);
-			assert_noop!(Council::present_winner(
-				Origin::signed(1), 1, 10, 0),
-				"presenter must have sufficient slashable funds"
-			);
-		});
+				System::set_block_number(6);
+				assert_eq!(Balances::free_balance(&1), 5);
+				assert_eq!(Balances::reserved_balance(&1), 5);
+				if p > 5 {
+					assert_noop!(Council::present_winner(
+						Origin::signed(1), 1, 10, 0),
+						"presenter must have sufficient slashable funds"
+					);
+				} else {
+					assert_ok!(Council::present_winner(Origin::signed(1), 1, 10, 0));
+				}
+			});
+		};
+		test_present(4);
+		test_present(6);
 	}
 
 	#[test]
@@ -2363,7 +2428,7 @@ mod tests {
 			assert!(Council::presentation_active());
 			assert_ok!(Council::present_winner(Origin::signed(4), 1, 60, 0));
 			// leaderboard length is the empty seats plus the carry count (i.e. 5 + 2), where those
-			// to be carried are the lowest and stored in lowest indexes
+			// to be carried are the lowest and stored in lowest indices
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(0, 0),
 				(0, 0),
@@ -2430,7 +2495,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30 + Council::get_offset(30, 1) + 60 - fee(), 1));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30 + Council::get_offset(30, 1) + 60, 1));
 			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40 + Council::get_offset(40, 1), 1));
 			assert_ok!(Council::end_block(System::block_number()));
 
@@ -2449,7 +2514,7 @@ mod tests {
 			assert_eq!(Council::voter_info(5), Some( VoterInfo { last_win: 1, last_active: 0, stake: 50, pot: 0}));
 			assert_eq!(
 				Council::voter_info(6),
-				Some(VoterInfo { last_win: 2, last_active: 1, stake: 60 - fee(), pot: 0})
+				Some(VoterInfo { last_win: 2, last_active: 1, stake: 60, pot: 0})
 			);
 
 			assert_eq!(Council::candidate_reg_info(4), Some((0, 3)));
