@@ -21,7 +21,10 @@ use assert_matches::assert_matches;
 use consensus::BlockOrigin;
 use primitives::storage::well_known_keys;
 use sr_io::blake2_256;
-use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor, TestClientBuilder};
+use test_client::{
+	prelude::*,
+	runtime,
+};
 use substrate_executor::NativeExecutionDispatch;
 
 #[test]
@@ -156,13 +159,6 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	type TestClient = test_client::client::Client<
-		test_client::Backend,
-		test_client::Executor,
-		runtime::Block,
-		runtime::RuntimeApi
-	>;
-
 	fn run_tests(client: Arc<TestClient>) {
 		let core = tokio::runtime::Runtime::new().unwrap();
 		let api = State::new(client.clone(), Subscriptions::new(core.executor()));

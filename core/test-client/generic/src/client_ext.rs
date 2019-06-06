@@ -29,7 +29,7 @@ use primitives::Blake2Hasher;
 use parity_codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
-pub trait TestClient<Block: BlockT>: Sized {
+pub trait ClientExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
 	fn import(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
@@ -53,7 +53,7 @@ pub trait TestClient<Block: BlockT>: Sized {
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash;
 }
 
-impl<B, E, RA, Block> TestClient<Block> for Client<B, E, Block, RA>
+impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
 		B: client::backend::Backend<Block, Blake2Hasher>,
 		E: client::CallExecutor<Block, Blake2Hasher>,

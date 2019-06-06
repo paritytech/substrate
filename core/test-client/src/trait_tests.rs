@@ -24,7 +24,7 @@ use std::sync::Arc;
 use crate::backend;
 use crate::block_builder_ext::BlockBuilderExt;
 use crate::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
-use crate::{AccountKeyring, TestClient, TestClientBuilder, TestClientBuilderExt};
+use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
 use generic_test_client::consensus::BlockOrigin;
 use primitives::Blake2Hasher;
 use runtime::{self, Transfer};

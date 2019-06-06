@@ -22,7 +22,7 @@ pub mod client_ext;
 
 pub use client::{ExecutionStrategies, blockchain, backend, self};
 pub use client_db::{Backend, self};
-pub use client_ext::TestClient;
+pub use client_ext::ClientExt;
 pub use consensus;
 pub use executor::{NativeExecutor, self};
 pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
@@ -69,15 +69,14 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
 	_executor: std::marker::PhantomData<Executor>,
 }
 
-impl<Block, Executor, G: GenesisInit> TestClientBuilder<
+impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
 	Executor,
 	Backend<Block>,
 	G,
 > where
 	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
-	/// Create a new `TestClientBuilder` with test backend.
-	pub fn new() -> Self {
+	fn default() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		Self::with_backend(backend)
 	}

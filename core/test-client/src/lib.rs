@@ -27,9 +27,21 @@ pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
 
-use std::sync::Arc;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+
+/// A prelude to import in tests.
+pub mod prelude {
+	// Trait extensions
+	pub use super::{BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt};
+	// Client structs
+	pub use super::{
+		TestClient, TestClientBuilder, Backend, LightBackend,
+		Executor, LightExecutor, LocalExecutor, NativeExecutor,
+	};
+	// Keyring
+	pub use super::{AccountKeyring, AuthorityKeyring};
+}
 
 #[cfg(feature = "include-wasm-blob")]
 mod local_executor {
@@ -107,79 +119,45 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 /// A `TestClient` with `test-runtime` builder.
 pub type TestClientBuilder<E, B> = generic_test_client::TestClientBuilder<E, B, GenesisParameters>;
 
+/// Test client type with `LocalExecutor` and generic Backend.
+pub type Client<B> = client::Client<
+	B,
+	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+	runtime::Block,
+	runtime::RuntimeApi,
+>;
+
+/// A test client with default backend.
+pub type TestClient = Client<Backend>;
+
+/// A `TestClientBuilder` with default backend and executor.
+pub trait DefaultTestClientBuilderExt: Sized {
+	/// Create new `TestClientBuilder`
+	fn new() -> Self;
+}
+
+impl DefaultTestClientBuilderExt for TestClientBuilder<
+	Executor,
+	Backend,
+> {
+	fn new() -> Self {
+		Self::default()
+	}
+}
+
 /// A `test-runtime` extensions to `TestClientBuilder`.
 pub trait TestClientBuilderExt<B>: Sized {
 	/// Enable or disable support for changes trie in genesis.
 	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
 
 	/// Build the test client.
-	fn build(self) -> client::Client<
-		B,
-		client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
-		runtime::Block,
-		runtime::RuntimeApi,
-	>;
+	fn build(self) -> Client<B> {
+		self.build_with_longest_chain().0
+	}
+
+	/// Build the test client and longest chain selector.
+	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>);
 }
-
-// #[cfg(feature = "include-wasm-blob")]
-// impl<B> TestClientBuilder<LocalExecutor, B> where
-// 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
-// {
-// 	/// Create a new instance of the test client builder using the given backend.
-// 	pub fn new_with_backend(backend: Arc<B>) -> Self {
-// 		TestClientBuilder {
-// 			execution_strategies: ExecutionStrategies::default(),
-// 			genesis_extension: HashMap::default(),
-// 			support_changes_trie: false,
-// 			backend,
-// 			_phantom: Default::default(),
-// 		}
-// 	}
-// }
-//
-// #[cfg(feature = "include-wasm-blob")]
-// impl TestClientBuilder<LocalExecutor, Backend> {
-// 	/// Create a new instance of the test client builder.
-// 	pub fn new() -> Self {
-// 		TestClientBuilder {
-// 			execution_strategies: ExecutionStrategies::default(),
-// 			genesis_extension: HashMap::default(),
-// 			support_changes_trie: false,
-// 			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
-// 			_phantom: Default::default(),
-// 		}
-// 	}
-// }
-
-// #[cfg(not(feature = "include-wasm-blob"))]
-// impl<E, B> TestClientBuilder<E, B> where
-// 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
-// {
-// 	/// Create a new instance of the test client builder using the given backend.
-// 	pub fn new_with_backend(backend: Arc<B>) -> Self {
-// 		TestClientBuilder {
-// 			execution_strategies: ExecutionStrategies::default(),
-// 			genesis_extension: HashMap::default(),
-// 			support_changes_trie: false,
-// 			backend,
-// 			_phantom: Default::default(),
-// 		}
-// 	}
-// }
-//
-// #[cfg(not(feature = "include-wasm-blob"))]
-// impl<E> TestClientBuilder<E, Backend> {
-// 	/// Create a new instance of the test client builder.
-// 	pub fn new() -> Self {
-// 		TestClientBuilder {
-// 			execution_strategies: ExecutionStrategies::default(),
-// 			genesis_extension: HashMap::default(),
-// 			support_changes_trie: false,
-// 			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
-// 			_phantom: Default::default(),
-// 		}
-// 	}
-// }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
@@ -187,19 +165,13 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 > where
 	B: client::backend::Backend<runtime::Block, Blake2Hasher>,
 {
-
 	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
 		self.genesis_init_mut().support_changes_trie = support_changes_trie;
 		self
 	}
 
-	fn build(self) -> client::Client<
-		B,
-		client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
-		runtime::Block,
-		runtime::RuntimeApi,
-	> {
-		self.build_with_native_executor(None).0
+	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>) {
+		self.build_with_native_executor(None)
 	}
 }
 
@@ -219,13 +191,15 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 
 /// Creates new client instance used for tests.
 #[cfg(feature = "include-wasm-blob")]
-pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
+pub fn new() -> Client<Backend> {
 	TestClientBuilder::new().build()
 }
 
 /// Creates new light client instance used for tests.
 #[cfg(feature = "include-wasm-blob")]
 pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi> {
+	use std::sync::Arc;
+
 	let storage = client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));

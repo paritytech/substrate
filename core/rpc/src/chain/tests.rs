@@ -16,7 +16,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_client::{self, TestClient};
+use test_client::{self, ClientExt};
 use test_client::runtime::{H256, Block, Header};
 use consensus::BlockOrigin;
 
