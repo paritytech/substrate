@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-//! `TrieStream` implementation for Substrate's trie format. 
+//! `TrieStream` implementation for Substrate's trie format.
 
 use hash_db::Hasher;
 use trie_root;
@@ -107,7 +107,7 @@ impl trie_root::TrieStream for TrieStream {
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
 		let data = other.out();
 		match data.len() {
-			0...31 => data.encode_to(&mut self.buffer),
+			0..=31 => data.encode_to(&mut self.buffer),
 			_ => H::hash(&data).as_ref().encode_to(&mut self.buffer),
 		}
 	}

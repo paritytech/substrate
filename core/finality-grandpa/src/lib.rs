@@ -316,7 +316,7 @@ where
 {
 	use runtime_primitives::traits::Zero;
 
-	let chain_info = client.info()?;
+	let chain_info = client.info();
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
@@ -431,15 +431,13 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 		inherent_data_providers
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
-				match client.backend().blockchain().info() {
-					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
-					Ok(info) => {
-						telemetry!(CONSENSUS_INFO; "afg.finalized";
-							"finalized_number" => ?info.finalized_number,
-							"finalized_hash" => ?info.finalized_hash,
-						);
-						Ok(info.finalized_number)
-					},
+				{
+					let info = client.backend().blockchain().info();
+					telemetry!(CONSENSUS_INFO; "afg.finalized";
+						"finalized_number" => ?info.finalized_number,
+						"finalized_hash" => ?info.finalized_hash,
+					);
+					Ok(info.finalized_number)
 				}
 			}))
 			.map_err(|err| consensus_common::Error::InherentData(err.into()))
@@ -579,10 +577,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		let mut maybe_voter = match &*env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
-				let chain_info = match client.info() {
-					Ok(i) => i,
-					Err(e) => return future::Either::B(future::err(Error::Client(e))),
-				};
+				let chain_info = client.info();
 
 				let last_finalized = (
 					chain_info.chain.finalized_hash,
@@ -691,7 +686,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 			}
 		};
 
-		future::Either::A(poll_voter.select2(voter_commands_rx).then(move |res| match res {
+		poll_voter.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A(((), _))) => {
 				// voters don't conclude naturally; this could reasonably be an error.
 				Ok(FutureLoop::Break(()))
@@ -716,7 +711,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				// some command issued internally.
 				handle_voter_command(command, voter_commands_rx)
 			},
-		}))
+		})
 	});
 
 	let voter_work = voter_work

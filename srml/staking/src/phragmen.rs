@@ -19,7 +19,6 @@
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use primitives::{PerU128};
 use primitives::traits::{Zero, Convert, Saturating};
-use parity_codec::{Encode, Decode};
 use crate::{BalanceOf, Assignment, RawAssignment, ExpoMap, Trait, ValidatorPrefs};
 
 type Fraction = PerU128;
@@ -35,7 +34,7 @@ const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 
 /// Wrapper around validation candidates some metadata.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId> {
 	/// The validator's account
@@ -49,7 +48,7 @@ pub struct Candidate<AccountId> {
 }
 
 /// Wrapper around the nomination info of a single nominator for a group of validators.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominator<AccountId> {
 	/// The nominator's account.
@@ -63,7 +62,7 @@ pub struct Nominator<AccountId> {
 }
 
 /// Wrapper around a nominator vote and the load of that vote.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId> {
 	/// Account being voted for

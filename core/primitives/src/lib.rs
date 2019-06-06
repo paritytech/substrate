@@ -56,6 +56,7 @@ pub mod ed25519;
 pub mod sr25519;
 pub mod hash;
 mod hasher;
+pub mod offchain;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
@@ -85,23 +86,9 @@ pub enum ExecutionContext {
 	/// Context used for block construction.
 	BlockConstruction,
 	/// Offchain worker context.
-	OffchainWorker(Box<OffchainExt>),
+	OffchainWorker(Box<dyn offchain::Externalities>),
 	/// Context used for other calls.
 	Other,
-}
-
-/// An extended externalities for offchain workers.
-pub trait OffchainExt {
-	/// Submits an extrinsics.
-	///
-	/// The extrinsic will either go to the pool (signed)
-	/// or to the next produced block (inherent).
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
-}
-impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
-	fn submit_extrinsic(&mut self, ex: Vec<u8>) {
-		(&mut **self).submit_extrinsic(ex)
-	}
 }
 
 /// Hex-serialized shim for `Vec<u8>`.

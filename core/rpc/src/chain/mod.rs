@@ -16,26 +16,27 @@
 
 //! Substrate blockchain API.
 
-use std::sync::Arc;
+pub mod error;
+pub mod number;
 
-use log::warn;
-use client::{self, Client, BlockchainEvents};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{H256, Blake2Hasher};
-use crate::rpc::Result as RpcResult;
-use crate::rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::{BlockId, SignedBlock};
-use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
-
-use crate::subscriptions::Subscriptions;
-
-mod error;
 #[cfg(test)]
 mod tests;
-mod number;
 
+use std::sync::Arc;
+
+use client::{self, Client, BlockchainEvents};
+use crate::rpc::Result as RpcResult;
+use crate::rpc::futures::{stream, Future, Sink, Stream};
+use crate::subscriptions::Subscriptions;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use log::warn;
+use primitives::{H256, Blake2Hasher};
+use runtime_primitives::generic::{BlockId, SignedBlock};
+use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use self::error::Result;
+
+pub use self::gen_client::Client as ChainClient;
 
 /// Substrate blockchain API
 #[rpc]
@@ -124,7 +125,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 {
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
-			None => self.client.info()?.chain.best_hash,
+			None => self.client.info().chain.best_hash,
 			Some(hash) => hash,
 		})
 	}
@@ -188,13 +189,13 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 
 	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
 		Ok(match number {
-			None => Some(self.client.info()?.chain.best_hash),
+			None => Some(self.client.info().chain.best_hash),
 			Some(num_or_hex) => self.client.header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),
 		})
 	}
 
 	fn finalized_head(&self) -> Result<Block::Hash> {
-		Ok(self.client.info()?.chain.finalized_hash)
+		Ok(self.client.info().chain.finalized_hash)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
@@ -214,7 +215,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 	fn subscribe_finalized_heads(&self, _meta: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.subscribe_headers(
 			subscriber,
-			|| Ok(Some(self.client.info()?.chain.finalized_hash)),
+			|| Ok(Some(self.client.info().chain.finalized_hash)),
 			|| self.client.finality_notification_stream()
 				.map(|notification| notification.header),
 		)

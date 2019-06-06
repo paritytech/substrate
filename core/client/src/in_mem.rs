@@ -297,15 +297,15 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info<Block>> {
+	fn info(&self) -> blockchain::Info<Block> {
 		let storage = self.storage.read();
-		Ok(blockchain::Info {
+		blockchain::Info {
 			best_hash: storage.best_hash,
 			best_number: storage.best_number,
 			genesis_hash: storage.genesis_hash,
 			finalized_hash: storage.finalized_hash,
 			finalized_number: storage.finalized_number,
-		})
+		}
 	}
 
 	fn status(&self, id: BlockId<Block>) -> error::Result<BlockStatus> {
@@ -343,7 +343,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -357,7 +357,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 }
 
 impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -433,7 +433,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}
 
-	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
 		None
 	}
 }
