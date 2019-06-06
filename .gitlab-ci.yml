@@ -148,6 +148,7 @@ check-web-wasm:
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
+    - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
     - sccache -s
   tags:
