@@ -1,4 +1,4 @@
-use serde_derive::Serialize;
+use serde::Serialize;
 use srml_support::runtime_primitives::traits::Digest;
 use srml_support::codec::{Encode, Decode};
 use primitives::H256;

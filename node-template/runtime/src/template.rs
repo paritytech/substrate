@@ -46,7 +46,7 @@ decl_module! {
 
 			// TODO: Code to execute when something calls this.
 			// For example: the following line stores the passed in u32 in the storage
-			<Something<T>>::put(something);
+			Something::put(something);
 
 			// here we are raising the Something event
 			Self::deposit_event(RawEvent::SomethingStored(something, who));

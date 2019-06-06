@@ -369,7 +369,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					pub _data: #phantom_data<V>,
 				}
 
-				impl<'a, S: #scrate::HashedStorage<#scrate::#hasher>, #struct_trait>
+				impl<'a, S: #scrate::HashedStorage<#scrate::#hasher>, #impl_trait>
 					Iterator for Enumerator<'a, S, #kty, (#typ, #trait_and_instance)>
 				{
 					type Item = (#kty, #typ);

@@ -210,7 +210,7 @@ decl_module! {
 				candidates[slot] = who;
 			}
 			<Candidates<T>>::put(candidates);
-			<CandidateCount<T>>::put(count as u32 + 1);
+			CandidateCount::put(count as u32 + 1);
 		}
 
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
@@ -272,7 +272,7 @@ decl_module! {
 		/// election when they expire. If more, then a new vote will be started if one is not already
 		/// in progress.
 		fn set_desired_seats(#[compact] count: u32) {
-			<DesiredSeats<T>>::put(count);
+			DesiredSeats::put(count);
 		}
 
 		/// Remove a particular member. A tally will happen instantly (if not already in a presentation
@@ -561,8 +561,8 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
-		<CandidateCount<T>>::put(count);
-		<VoteCount<T>>::put(Self::vote_index() + 1);
+		CandidateCount::put(count);
+		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
 	}
 }

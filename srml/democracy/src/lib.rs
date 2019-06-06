@@ -97,7 +97,7 @@ decl_module! {
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
-			<PublicPropCount<T>>::put(index + 1);
+			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
 			let mut props = Self::public_props();
@@ -410,7 +410,7 @@ impl<T: Trait> Module<T> {
 			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
 		}
 
-		<ReferendumCount<T>>::put(ref_index + 1);
+		ReferendumCount::put(ref_index + 1);
 		<ReferendumInfoOf<T>>::insert(ref_index, ReferendumInfo { end, proposal, threshold, delay });
 		Self::deposit_event(RawEvent::Started(ref_index, threshold));
 		Ok(ref_index)
@@ -485,7 +485,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
-		<NextTally<T>>::put(index + 1);
+		NextTally::put(index + 1);
 
 		Ok(())
 	}

@@ -238,7 +238,7 @@ impl<T: Trait> Module<T> {
 	// INTERNAL API (available to other runtime modules)
 	/// Forces a new session, no origin.
 	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
-		<ForcingNewSession<T>>::put(apply_rewards);
+		ForcingNewSession::put(apply_rewards);
 		Ok(())
 	}
 
@@ -256,7 +256,7 @@ impl<T: Trait> Module<T> {
 		// new set.
 		// Check block number and call `rotate_session` if necessary.
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
+		let (should_end_session, apply_rewards) = ForcingNewSession::take()
 			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
 		if should_end_session {
 			Self::rotate_session(is_final_block, apply_rewards);

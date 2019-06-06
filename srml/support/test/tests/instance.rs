@@ -15,15 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![recursion_limit="128"]
+#![feature(trace_macros)]
 
-#[cfg(feature = "std")]
-use serde::Serialize;
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::rstd::prelude::*;
-use srml_support::rstd as rstd;
-use srml_support::runtime_primitives::{generic, BuildStorage};
-use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify};
-use srml_support::Parameter;
+use srml_support::{
+	Parameter,
+	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
+};
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
@@ -74,7 +72,7 @@ mod module1 {
 	}
 
 	srml_support::decl_event! {
-		pub enum Event<T, I> where Phantom = rstd::marker::PhantomData<T> {
+		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
 		}
@@ -84,7 +82,7 @@ mod module1 {
 	#[cfg_attr(feature = "std", derive(Debug))]
 	pub enum Origin<T: Trait<I>, I> {
 		Members(u32),
-		_Phantom(rstd::marker::PhantomData<(T, I)>),
+		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub type Log<T, I> = RawLog<
@@ -96,7 +94,7 @@ mod module1 {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
 	pub enum RawLog<T, I> {
-		_Phantom(rstd::marker::PhantomData<(T, I)>),
+		_Phantom(std::marker::PhantomData<(T, I)>),
 		AmountChange(u32),
 	}
 
@@ -111,7 +109,7 @@ mod module1 {
 			unimplemented!();
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
+		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 	}
@@ -157,7 +155,7 @@ mod module2 {
 	#[cfg_attr(feature = "std", derive(Debug))]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
-		_Phantom(rstd::marker::PhantomData<(T, I)>),
+		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub type Log<T, I=DefaultInstance> = RawLog<
@@ -169,7 +167,7 @@ mod module2 {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
 	pub enum RawLog<T, I=DefaultInstance> {
-		_Phantom(rstd::marker::PhantomData<(T, I)>),
+		_Phantom(std::marker::PhantomData<(T, I)>),
 		AmountChange(u32),
 	}
 
@@ -184,7 +182,7 @@ mod module2 {
 			unimplemented!();
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
+		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 	}
@@ -260,6 +258,7 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
+trace_macros!(true);
 srml_support::construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
 		Block = Block,
@@ -267,15 +266,16 @@ srml_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T>, Config, Origin<T>, Log(), Inherent},
+		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T>, Config, Origin<T>, Log(), Inherent},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
-		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
+		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
+		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
 		Module3: module3::{Module, Call},
 	}
 );
+trace_macros!(false);
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
@@ -285,11 +285,9 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,
-			.. Default::default()
 		}),
 		module1_Instance2: Some(module1::GenesisConfig {
 			value: 4,
-			_genesis_phantom_data: Default::default(),
 		}),
 		module2: Some(module2::GenesisConfig {
 			value: 4,
@@ -311,48 +309,48 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 #[test]
 fn storage_instance_independance() {
 	with_externalities(&mut new_test_ext(), || {
-		let mut map = rstd::collections::btree_map::BTreeMap::new();
+		let mut map = std::collections::btree_map::BTreeMap::new();
 		for key in [
 			module2::Value::<Runtime>::key().to_vec(),
 			module2::Value::<Runtime, module2::Instance1>::key().to_vec(),
 			module2::Value::<Runtime, module2::Instance2>::key().to_vec(),
 			module2::Value::<Runtime, module2::Instance3>::key().to_vec(),
-			module2::Map::<Runtime>::prefix().to_vec(),
-			module2::Map::<Runtime, module2::Instance1>::prefix().to_vec(),
-			module2::Map::<Runtime, module2::Instance2>::prefix().to_vec(),
-			module2::Map::<Runtime, module2::Instance3>::prefix().to_vec(),
-			module2::LinkedMap::<Runtime>::prefix().to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance1>::prefix().to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance2>::prefix().to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance3>::prefix().to_vec(),
-			module2::DoubleMap::<Runtime>::prefix().to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance1>::prefix().to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance2>::prefix().to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance3>::prefix().to_vec(),
-			module2::Map::<Runtime>::key_for(0),
-			module2::Map::<Runtime, module2::Instance1>::key_for(0).to_vec(),
-			module2::Map::<Runtime, module2::Instance2>::key_for(0).to_vec(),
-			module2::Map::<Runtime, module2::Instance3>::key_for(0).to_vec(),
-			module2::LinkedMap::<Runtime>::key_for(0),
-			module2::LinkedMap::<Runtime, module2::Instance1>::key_for(0).to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance2>::key_for(0).to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance3>::key_for(0).to_vec(),
-			module2::Map::<Runtime>::key_for(1),
-			module2::Map::<Runtime, module2::Instance1>::key_for(1).to_vec(),
-			module2::Map::<Runtime, module2::Instance2>::key_for(1).to_vec(),
-			module2::Map::<Runtime, module2::Instance3>::key_for(1).to_vec(),
-			module2::LinkedMap::<Runtime>::key_for(1),
-			module2::LinkedMap::<Runtime, module2::Instance1>::key_for(1).to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance2>::key_for(1).to_vec(),
-			module2::LinkedMap::<Runtime, module2::Instance3>::key_for(1).to_vec(),
-			module2::DoubleMap::<Runtime>::prefix_for(1),
-			module2::DoubleMap::<Runtime, module2::Instance1>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance2>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance3>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<Runtime>::key_for(1, 1),
-			module2::DoubleMap::<Runtime, module2::Instance1>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance2>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<Runtime, module2::Instance3>::key_for(1, 1).to_vec(),
+			module2::Map::<module2::DefaultInstance>::prefix().to_vec(),
+			module2::Map::<module2::Instance1>::prefix().to_vec(),
+			module2::Map::<module2::Instance2>::prefix().to_vec(),
+			module2::Map::<module2::Instance3>::prefix().to_vec(),
+			module2::LinkedMap::<module2::DefaultInstance>::prefix().to_vec(),
+			module2::LinkedMap::<module2::Instance1>::prefix().to_vec(),
+			module2::LinkedMap::<module2::Instance2>::prefix().to_vec(),
+			module2::LinkedMap::<module2::Instance3>::prefix().to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::prefix().to_vec(),
+			module2::DoubleMap::<module2::Instance1>::prefix().to_vec(),
+			module2::DoubleMap::<module2::Instance2>::prefix().to_vec(),
+			module2::DoubleMap::<module2::Instance3>::prefix().to_vec(),
+			module2::Map::<module2::DefaultInstance>::key_for(0),
+			module2::Map::<module2::Instance1>::key_for(0).to_vec(),
+			module2::Map::<module2::Instance2>::key_for(0).to_vec(),
+			module2::Map::<module2::Instance3>::key_for(0).to_vec(),
+			module2::LinkedMap::<module2::DefaultInstance>::key_for(0),
+			module2::LinkedMap::<module2::Instance1>::key_for(0).to_vec(),
+			module2::LinkedMap::<module2::Instance2>::key_for(0).to_vec(),
+			module2::LinkedMap::<module2::Instance3>::key_for(0).to_vec(),
+			module2::Map::<module2::DefaultInstance>::key_for(1),
+			module2::Map::<module2::Instance1>::key_for(1).to_vec(),
+			module2::Map::<module2::Instance2>::key_for(1).to_vec(),
+			module2::Map::<module2::Instance3>::key_for(1).to_vec(),
+			module2::LinkedMap::<module2::DefaultInstance>::key_for(1),
+			module2::LinkedMap::<module2::Instance1>::key_for(1).to_vec(),
+			module2::LinkedMap::<module2::Instance2>::key_for(1).to_vec(),
+			module2::LinkedMap::<module2::Instance3>::key_for(1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(1),
+			module2::DoubleMap::<module2::Instance1>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::key_for(1, 1),
+			module2::DoubleMap::<module2::Instance1>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::key_for(1, 1).to_vec(),
 		].iter() {
 			assert!(map.insert(key, ()).is_none())
 		}
@@ -363,9 +361,9 @@ fn storage_instance_independance() {
 fn storage_with_instance_basic_operation() {
 	with_externalities(&mut new_test_ext(), || {
 		type Value = module2::Value<Runtime, module2::Instance1>;
-		type Map = module2::Map<Runtime, module2::Instance1>;
-		type LinkedMap = module2::LinkedMap<Runtime, module2::Instance1>;
-		type DoubleMap = module2::DoubleMap<Runtime, module2::Instance1>;
+		type Map = module2::Map<module2::Instance1>;
+		type LinkedMap = module2::LinkedMap<module2::Instance1>;
+		type DoubleMap = module2::DoubleMap<module2::Instance1>;
 
 		assert_eq!(Value::exists(), true);
 		assert_eq!(Value::get(), 4);

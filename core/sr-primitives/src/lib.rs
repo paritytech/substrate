@@ -27,6 +27,10 @@ pub use parity_codec as codec;
 pub use serde;
 
 #[cfg(feature = "std")]
+#[doc(hidden)]
+pub use paste;
+
+#[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
@@ -96,13 +100,21 @@ pub trait BuildStorage: Sized {
 		Ok((storage, child_storage))
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-pub trait CreateModuleGenesisStorage<T>: Sized {
+pub trait CreateModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
-	fn create_module_genesis_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+	fn create_module_genesis_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
@@ -110,7 +122,12 @@ impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
-	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		_child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String> {
 		storage.extend(self);
 		Ok(())
 	}
@@ -485,26 +502,32 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 /// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
+	// Generic + Instance
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// Generic
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// No Generic and maybe Instance
 	(
-		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
 	($concrete:ident) => ()
 }
@@ -519,30 +542,76 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
+			$( $config:ident =>
+				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
-		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		pub struct $main {
-			$(
-				pub $snake: Option<$config>,
-			)*
+		$crate::__impl_outer_config_types! {
+			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
 		}
-		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildStorage for $main {
-			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+
+		$crate::paste::item! {
+			#[cfg(any(feature = "std", test))]
+			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+			#[serde(rename_all = "camelCase")]
+			#[serde(deny_unknown_fields)]
+			pub struct $main {
 				$(
-					if let Some(extra) = self.$snake {
-						extra.assimilate_storage(top, children)?;
-					}
+					pub [< $snake $(_ $instance )? >]: Option<$config>,
 				)*
-				Ok(())
+			}
+			#[cfg(any(feature = "std", test))]
+			impl $crate::BuildStorage for $main {
+				fn assimilate_storage(
+					self,
+					top: &mut $crate::StorageOverlay,
+					children: &mut $crate::ChildrenStorageOverlay
+				) -> std::result::Result<(), String> {
+					$(
+						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
+							$crate::impl_outer_config! {
+								@CALL_FN
+								$concrete;
+								$snake;
+								$( $instance )?;
+								extra;
+								top;
+								children;
+							}
+						}
+					)*
+					Ok(())
+				}
 			}
 		}
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		$instance:ident;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::CreateModuleGenesisStorage::<$runtime, $module::$instance>::create_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::CreateModuleGenesisStorage::<$runtime, $module::DefaultInstance>::create_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
 	}
 }
 
@@ -566,7 +635,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
+			$( $module:ident $( <$instance:ident> )? ( $( $sitem:ident ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -577,107 +646,190 @@ macro_rules! impl_outer_log {
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
 
-		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
-		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum InternalLog {
+		$crate::paste::item! {
+			/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
+			/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
+			#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
+			#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
+			$(#[$attr])*
+			#[allow(non_camel_case_types)]
+			pub enum InternalLog {
+				$(
+					[< $module $( _ $instance )? >] ($module::Log<$trait $(, $module::$instance)? >),
+				)*
+			}
+
+			impl $name {
+				/// Try to convert `$name` into `generic::DigestItemRef`. Returns Some when
+				/// `self` is a 'system' log && it has been marked as 'system' in macro call.
+				/// Otherwise, None is returned.
+				#[allow(unreachable_patterns)]
+				fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
+					match &self.0 {
+						$(
+							$internal::[< $module $( _ $instance )? >] (item) => {
+								match item {
+									$(
+										$module::RawLog::$sitem(ref v) =>
+											Some($crate::generic::DigestItemRef::$sitem(v)),
+									)*
+									_ => None,
+								}
+							}
+						)*
+						_ => None,
+					}
+				}
+			}
+
+			impl $crate::traits::DigestItem for $name {
+				type Hash = <$crate::generic::DigestItem<$($genarg),*>
+					as $crate::traits::DigestItem>::Hash;
+				type AuthorityId = <$crate::generic::DigestItem<$($genarg),*>
+					as $crate::traits::DigestItem>::AuthorityId;
+
+				fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+					self.dref().and_then(|dref| dref.as_authorities_change())
+				}
+
+				fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+					self.dref().and_then(|dref| dref.as_changes_trie_root())
+				}
+			}
+
+			impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
+				/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
+				/// a system item which is supported by the runtime, it is returned.
+				/// Otherwise we expect a `Other` log item. Trying to convert from anything other
+				/// will lead to panic in runtime, since the runtime does not supports this 'system'
+				/// log item.
+				#[allow(unreachable_patterns)]
+				fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
+					$crate::impl_outer_log! {
+						@GEN_FROM_DIGESTITEM_MATCH
+						gen
+						$name
+						$internal
+						{}
+						$(
+							$module $( $instance )? { $( $sitem ),* };
+						)*
+					}
+				}
+			}
+
+			impl $crate::codec::Decode for $name {
+				/// `generic::DigestItem` binary compatible decode.
+				fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
+					let gen: $crate::generic::DigestItem<$($genarg),*> =
+						$crate::codec::Decode::decode(input)?;
+					Some($name::from(gen))
+				}
+			}
+
+			impl $crate::codec::Encode for $name {
+				/// `generic::DigestItem` binary compatible encode.
+				fn encode(&self) -> Vec<u8> {
+					match self.dref() {
+						Some(dref) => dref.encode(),
+						None => {
+							let gen: $crate::generic::DigestItem<$($genarg),*> =
+								$crate::generic::DigestItem::Other(self.0.encode());
+							gen.encode()
+						},
+					}
+				}
+			}
+
 			$(
-				$module($module::Log<$trait $(, $instance)? >),
+				impl From<$module::Log<$trait $(, $module::$instance )? >> for $name {
+					/// Converts single module log item into `$name`.
+					fn from(x: $module::Log<$trait $(, $module::$instance )? >) -> Self {
+						$name(x.into())
+					}
+				}
+
+				impl From<$module::Log<$trait $(, $module::$instance )? >> for InternalLog {
+					/// Converts single module log item into `$internal`.
+					fn from(x: $module::Log<$trait $(, $module::$instance )? >) -> Self {
+						InternalLog::[< $module $( _ $instance )? >](x)
+					}
+				}
 			)*
 		}
-
-		impl $name {
-			/// Try to convert `$name` into `generic::DigestItemRef`. Returns Some when
-			/// `self` is a 'system' log && it has been marked as 'system' in macro call.
-			/// Otherwise, None is returned.
-			#[allow(unreachable_patterns)]
-			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
-				match self.0 {
-					$($(
-					$internal::$module($module::RawLog::$sitem(ref v)) =>
-						Some($crate::generic::DigestItemRef::$sitem(v)),
-					)*)*
-					_ => None,
-				}
-			}
-		}
-
-		impl $crate::traits::DigestItem for $name {
-			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
-			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
-
-			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-				self.dref().and_then(|dref| dref.as_authorities_change())
-			}
-
-			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-				self.dref().and_then(|dref| dref.as_changes_trie_root())
-			}
-		}
-
-		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-			/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
-			/// a system item which is supported by the runtime, it is returned.
-			/// Otherwise we expect a `Other` log item. Trying to convert from anything other
-			/// will lead to panic in runtime, since the runtime does not supports this 'system'
-			/// log item.
-			#[allow(unreachable_patterns)]
-			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
-				match gen {
-					$($(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name($internal::$module($module::RawLog::$sitem(value))),
-					)*)*
-					_ => gen.as_other()
-						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name)
-						.expect("not allowed to fail in runtime"),
-				}
-			}
-		}
-
-		impl $crate::codec::Decode for $name {
-			/// `generic::DigestItem` binary compatible decode.
-			fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
-				let gen: $crate::generic::DigestItem<$($genarg),*> =
-					$crate::codec::Decode::decode(input)?;
-				Some($name::from(gen))
-			}
-		}
-
-		impl $crate::codec::Encode for $name {
-			/// `generic::DigestItem` binary compatible encode.
-			fn encode(&self) -> Vec<u8> {
-				match self.dref() {
-					Some(dref) => dref.encode(),
-					None => {
-						let gen: $crate::generic::DigestItem<$($genarg),*> =
-							$crate::generic::DigestItem::Other(self.0.encode());
-						gen.encode()
-					},
-				}
-			}
-		}
-
-		$(
-			impl From<$module::Log<$trait $(, $instance)? >> for $name {
-				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
-					$name(x.into())
-				}
-			}
-
-			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
-				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
-					InternalLog::$module(x)
-				}
-			}
-		)*
 	};
+	// With Instance
+	(@GEN_FROM_DIGESTITEM_MATCH
+		$gen:ident
+		$name:ident
+		$internal:ident
+		{ $( $generated:tt )* }
+		$module:ident $instance:ident { $( $sitem:ident ),* };
+		$( $impl_outer_log_match_instance_rest:tt )*
+	) => {
+		$crate::impl_outer_log! {
+			@GEN_FROM_DIGESTITEM_MATCH
+			$gen
+			$name
+			$internal
+			{
+				$( $generated )*
+				$(
+					$crate::generic::DigestItem::$sitem(value) =>
+						$name(
+							$internal::[< $module _ $instance >](
+								$module::RawLog::$sitem(value)
+							)
+						),
+				)*
+			}
+			$( $impl_outer_log_match_instance_rest )*
+		}
+	};
+	// Without Instance
+	(@GEN_FROM_DIGESTITEM_MATCH
+		$gen:ident
+		$name:ident
+		$internal:ident
+		{ $( $generated:tt )* }
+		$module:ident { $( $sitem:ident ),* };
+		$( $impl_outer_log_match_rest:tt )*
+	) => {
+		$crate::impl_outer_log! {
+			@GEN_FROM_DIGESTITEM_MATCH
+			$gen
+			$name
+			$internal
+			{
+				$( $generated )*
+				$(
+					$crate::generic::DigestItem::$sitem(value) =>
+						$name(
+							$internal::$module(
+								$module::RawLog::$sitem(value)
+							)
+						),
+				)*
+			}
+			$( $impl_outer_log_match_rest )*
+		}
+	};
+	// Final step, generate match
+	(@GEN_FROM_DIGESTITEM_MATCH
+		$gen:ident
+		$name:ident
+		$internal:ident
+		{ $( $generated:tt )* }
+	) => {
+		match $gen {
+			$( $generated )*
+			_ => $gen.as_other()
+				.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
+				.map($name)
+				.expect("not allowed to fail in runtime"),
+		}
+	};
+
 }
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized

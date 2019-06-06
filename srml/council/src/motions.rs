@@ -80,7 +80,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
 				let index = Self::proposal_count();
-				<ProposalCount<T>>::mutate(|i| *i += 1);
+				ProposalCount::mutate(|i| *i += 1);
 				<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
 				<ProposalOf<T>>::insert(proposal_hash, *proposal);
 				<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));

@@ -179,8 +179,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		#extra_genesis
 	};
 
-	println!("{}", expanded);
-
 	expanded.into()
 }
 
@@ -428,7 +426,7 @@ fn decl_store_extra_genesis(
 				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
 				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
 				quote!(<#traitinstance, #instance>),
-				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
 			)
 		} else {
 			// do not even need type parameter
@@ -436,15 +434,20 @@ fn decl_store_extra_genesis(
 				quote!(),
 				quote!(),
 				quote!(),
-				quote!(<#traitinstance: #traittype>),
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
 			)
 		};
 
 		let (fn_generic, fn_traitinstance) = if !is_trait_needed && assimilate_require_generic {
-			(quote!( <#traitinstance: #traittype> ), quote!( #traitinstance ))
+			(
+				quote!( <#traitinstance: #traittype, #instance #bound_instantiable> ),
+				quote!( #traitinstance, #instance )
+			)
 		} else {
 			(quote!(), quote!())
 		};
+
+		let impl_trait = quote!(CreateModuleGenesisStorage<#traitinstance, #instance>);
 
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
@@ -501,7 +504,9 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#build_storage_impl #scrate::runtime_primitives::CreateModuleGenesisStorage<#traitinstance> for GenesisConfig#sparam {
+			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
+				for GenesisConfig#sparam
+			{
 				fn create_module_genesis_storage(
 					self,
 					r: &mut #scrate::runtime_primitives::StorageOverlay,

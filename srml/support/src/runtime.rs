@@ -59,9 +59,9 @@
 /// - `Module`
 /// - `Call`
 /// - `Storage`
-/// - `Event` or `Event<T>` (if the event is generic) or `Event<T, I>` (if also over instance)
-/// - `Origin` or `Origin<T>` (if the origin is generic) or `Origin<T, I>` (if also over instance)
-/// - `Config` or `Config<T>` (if the config is generic) or `Config<T, I>` (if also over instance)
+/// - `Event` or `Event<T>` (if the event is generic)
+/// - `Origin` or `Origin<T>` (if the origin is generic)
+/// - `Config` or `Config<T>` (if the config is generic)
 /// - `Log( $(IDENT),* )`
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
@@ -99,6 +99,7 @@ macro_rules! construct_runtime {
 			$( $rest )*
 		);
 	};
+	// No modules given, expand to the default module set.
 	(
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
@@ -107,42 +108,19 @@ macro_rules! construct_runtime {
 	) => {
 		$crate::construct_runtime!(
 			{ $( $preset )* };
-			{ $( $expanded )* $name: $module::{Module, Call, Storage, Event<T>, Config<T>}, };
+			{
+				$( $expanded )*
+				$name: $module::{Module, Call, Storage, Event<T>, Config<T>},
+			};
 			$( $rest )*
 		);
 	};
+	// `default` identifier given, expand to default + given extra modules
 	(
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
 		$name:ident: $module:ident::{
 			default,
-			$(
-				$modules:ident
-					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
-					$( ( $( $modules_args:ident ),* ) )*
-			),*
-		},
-		$( $rest:tt )*
-	) => {
-		$crate::construct_runtime!(
-			{ $( $preset )* };
-			{
-				$( $expanded )*
-				$name: $module::{
-					Module, Call, Storage, Event<T>, Config<T>,
-					$(
-						$modules $( <$modules_generic $(, $modules_instance)?> )*
-						$( ( $( $modules_args ),* ) )*
-					),*
-				},
-			};
-			$( $rest )*
-		);
-	};
-	(
-		{ $( $preset:tt )* };
-		{ $( $expanded:tt )* };
-		$name:ident: $module:ident::{
 			$(
 				$modules:ident
 					$( <$modules_generic:ident> )*
@@ -156,6 +134,7 @@ macro_rules! construct_runtime {
 			{
 				$( $expanded )*
 				$name: $module::{
+					Module, Call, Storage, Event<T>, Config<T>,
 					$(
 						$modules $( <$modules_generic> )*
 						$( ( $( $modules_args ),* ) )*
@@ -165,13 +144,14 @@ macro_rules! construct_runtime {
 			$( $rest )*
 		);
 	};
-	( // Instance module: we indicate the generic instance `I` with the full instance path
+	// Take all modules as given by the user.
+	(
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
-		$name:ident: $module:ident ::< $module_instance:ident >::{
+		$name:ident: $module:ident :: $( < $module_instance:ident >:: )? {
 			$(
 				$modules:ident
-					$( <$modules_generic:ident $(, $modules_instance:ident )?> )*
+					$( <$modules_generic:ident> )*
 					$( ( $( $modules_args:ident ),* ) )*
 			),*
 		},
@@ -181,9 +161,9 @@ macro_rules! construct_runtime {
 			{ $( $preset )* };
 			{
 				$( $expanded )*
-				$name: $module::<$module_instance>::{
+				$name: $module:: $( < $module_instance >:: )? {
 					$(
-						$modules $( <$modules_generic $(, $modules_instance=$module::$module_instance)?> )*
+						$modules $( <$modules_generic> )*
 						$( ( $( $modules_args ),* ) )*
 					),*
 				},
@@ -191,9 +171,7 @@ macro_rules! construct_runtime {
 			$( $rest )*
 		);
 	};
-
 	// The main macro expansion that actually renders the Runtime code.
-
 	(
 		{
 			$runtime:ident;
@@ -207,7 +185,7 @@ macro_rules! construct_runtime {
 				$name:ident: $module:ident :: $( < $module_instance:ident >:: )? {
 					$(
 						$modules:ident
-							$( <$modules_generic:ident $(, I=$modules_instance:path)?> )*
+							$( <$modules_generic:ident> )*
 							$( ( $( $modules_args:ident ),* ) )*
 					),*
 				},
@@ -223,19 +201,20 @@ macro_rules! construct_runtime {
 		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
 			type RuntimeBlock = $block;
 		}
-		$crate::__decl_instance_import!(
-			$( $( $module < $module_instance > )? )*
-		);
 		$crate::__decl_outer_event!(
 			$runtime;
 			$(
-				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
+				$name: $module:: $( < $module_instance >:: )? {
+					$( $modules $( <$modules_generic> )* ),*
+				}
 			),*
 		);
 		$crate::__decl_outer_origin!(
 			$runtime;
 			$(
-				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
+				$name: $module:: $( < $module_instance >:: )? {
+					$( $modules $( <$modules_generic> )* ),*
+				}
 			),*
 		);
 		$crate::__decl_all_modules!(
@@ -273,7 +252,7 @@ macro_rules! construct_runtime {
 			{};
 			$(
 				$name: $module:: $( < $module_instance >:: )? {
-					$( $modules $( <$modules_generic $(, $modules_instance)?> )* ),*
+					$( $modules $( <$modules_generic> )* ),*
 				},
 			)*
 		);
@@ -308,7 +287,7 @@ macro_rules! __create_decl_macro {
 			(
 				$runtime:ident;
 				$d( $name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
-					$d( $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> ),* ),*
+					$d( $modules:ident $d( <$modules_generic:ident> ),* ),*
 				}),*
 			) => {
 				$d crate::$macro_name!(@inner
@@ -317,7 +296,7 @@ macro_rules! __create_decl_macro {
 					{};
 					$d(
 						$name: $module:: $d( < $module_instance >:: )? {
-							$d( $modules $d( <$modules_generic $d(, $modules_instance)?> )* ),*
+							$d( $modules $d( <$modules_generic> )* ),*
 						},
 					)*
 				);
@@ -343,7 +322,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name <$event_generic:ident> $d(, $ingore:ident $d( <$ignor:ident> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -352,7 +331,7 @@ macro_rules! __create_decl_macro {
 					$d( $system )?;
 					{
 						$d( $parsed )*
-						$module $module_instance <$event_generic, $event_instance>,
+						$module $module_instance <$event_generic>,
 					};
 					$d( $rest )*
 				);
@@ -361,24 +340,8 @@ macro_rules! __create_decl_macro {
 				$runtime:ident;
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
-				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
-				},
-				$d( $rest:tt )*
-			) => {
-				compile_error!{concat!{
-					"Module `", stringify!{$name}, "` must have `", stringify!{$macro_enum_name}, "<T, I>`",
-					" but has `", stringify!{$macro_enum_name} $d(, "<", stringify!{$event_generic}, ">")*, "`",
-					": Instantiated modules must have ", stringify!{$macro_enum_name},
-					" generic over instance to be able to convert to outer ", stringify!{$macro_enum_name}
-				}}
-			};
-			(@inner
-				$runtime:ident;
-				$d( $system:ident )?;
-				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: {
-					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ingore:ident $d( <$ignor:ident> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -387,7 +350,7 @@ macro_rules! __create_decl_macro {
 					$d( $system )?;
 					{
 						$d( $parsed )*
-						$module $d( <$event_generic $d(, $event_instance)?> )*,
+						$module $d( <$event_generic> )*,
 					};
 					$d( $rest )*
 				);
@@ -397,7 +360,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
-					$ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
+					$ingore:ident $d( <$ignor:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -405,7 +368,7 @@ macro_rules! __create_decl_macro {
 					$runtime;
 					$d( $system )?;
 					{ $d( $parsed )* };
-					$name: $module:: $d( < $module_instance >:: )? { $d( $modules $d( <$modules_generic $d(, $modules_instance)?> )* ),* },
+					$name: $module:: $d( < $module_instance >:: )? { $d( $modules $d( <$modules_generic> )* ),* },
 					$d( $rest )*
 				);
 			};
@@ -426,16 +389,13 @@ macro_rules! __create_decl_macro {
 			(@inner
 				$runtime:ident;
 				$system:ident;
-				{ $d( $parsed_modules:ident $d( $instance:ident )? $d( <$parsed_generic:ident $d(, $parsed_instance_full_path:path)?> )* ,)* };
+				{ $d( $parsed_modules:ident $d( $instance:ident )? $d( <$parsed_generic:ident> )? ,)* };
 			) => {
-				$d crate::paste::item! {
-					$d crate::$macro_outer_name! {
-
-						pub enum $macro_enum_name for $runtime where system = $system {
-							$d(
-								[< $parsed_modules $d(_ $instance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
-							)*
-						}
+				$d crate::$macro_outer_name! {
+					pub enum $macro_enum_name for $runtime where system = $system {
+						$d(
+							$parsed_modules $d( $instance )? $d( <$parsed_generic> )?,
+						)*
 					}
 				}
 			}
@@ -748,17 +708,15 @@ macro_rules! __decl_outer_log {
 			$parsed_modules:ident $(< $parsed_instance:ident >)? ( $( $parsed_args:ident )* )
 		)* };
 	) => {
-		$crate::paste::item! {
-			$crate::runtime_primitives::impl_outer_log!(
-				pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
-					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
-				}
-			);
-		}
+		$crate::runtime_primitives::impl_outer_log!(
+			pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
+				$( $parsed_modules $(< $parsed_instance >)? ( $( $parsed_args ),* ) ),*
+			}
+		);
 	};
 }
 
-/// A private macro that generates GenesisConfig for the runtime. See impl_outer_config macro.
+/// A private macro that generates GenesisConfig for the runtime. See `impl_outer_config!` macro.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_outer_config {
@@ -766,7 +724,8 @@ macro_rules! __decl_outer_config {
 		$runtime:ident;
 		{ $( $parsed:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
-			Config $(< $config_generic:ident $(, $config_instance:path)?>)? $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+			Config $( <$config_generic:ident> )?
+			$(, $modules:ident $( <$modules_generic:ident> )* )*
 		},
 		$( $rest:tt )*
 	) => {
@@ -774,7 +733,7 @@ macro_rules! __decl_outer_config {
 			$runtime;
 			{
 				$( $parsed )*
-				$module::$name $( $module_instance )?  $(<$config_generic $(, $config_instance)?>)?,
+				$module::$name $( $module_instance )? $( <$config_generic> )?,
 			};
 			$( $rest )*
 		);
@@ -783,14 +742,15 @@ macro_rules! __decl_outer_config {
 		$runtime:ident;
 		{ $( $parsed:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
-			$ingore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+			$ingore:ident $( <$ignore_gen:ident> )*
+			$(, $modules:ident $( <$modules_generic:ident> )* )*
 		},
 		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_config!(
 			$runtime;
 			{ $( $parsed )* };
-			$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* },
+			$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic> )* ),* },
 			$( $rest )*
 		);
 	};
@@ -808,13 +768,21 @@ macro_rules! __decl_outer_config {
 	};
 	(
 		$runtime:ident;
-		{$( $parsed_modules:ident :: $parsed_name:ident $( $parsed_instance:ident )?  $( < $parsed_generic:ident $(, $parsed_instance_full_path:path)? > )* ,)* };
+		{
+			$(
+				$parsed_modules:ident :: $parsed_name:ident $( $parsed_instance:ident )?
+				$(
+					<$parsed_generic:ident>
+				)*
+			,)*
+		};
 	) => {
 		$crate::paste::item! {
 			$crate::runtime_primitives::impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
-						[< $parsed_name Config >] => [< $parsed_modules $( _ $parsed_instance)? >] $( < $parsed_generic $(, $parsed_instance_full_path)? > )*,
+						[< $parsed_name Config >] =>
+							$parsed_modules $( $parsed_instance )? $( <$parsed_generic> )*,
 					)*
 				}
 			);

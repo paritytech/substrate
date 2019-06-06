@@ -1,8 +1,25 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+/*
 use srml_support::runtime_primitives::generic;
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify};
 use srml_support::codec::{Encode, Decode};
 use primitives::{H256, sr25519};
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 mod system;
 
@@ -86,7 +103,7 @@ mod module {
 	srml_support::decl_storage! {
 		trait Store for Module<T: Trait> as Actors {
 			/// requirements to enter and maintain status in roles
-			pub Parameters get(parameters) build(|config: &GenesisConfig<T>| {
+			pub Parameters get(parameters) build(|config: &GenesisConfig| {
 				if config.enable_storage_role {
 					let storage_params: RoleParameters<T> = Default::default();
 					vec![(Role::Storage, storage_params)]
@@ -96,7 +113,7 @@ mod module {
 			}): map Role => Option<RoleParameters<T>>;
 
 			/// the roles members can enter into
-			pub AvailableRoles get(available_roles) build(|config: &GenesisConfig<T>| {
+			pub AvailableRoles get(available_roles) build(|config: &GenesisConfig| {
 				if config.enable_storage_role {
 					vec![(Role::Storage)]
 				} else {
@@ -157,10 +174,9 @@ srml_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module: module::{Module, Call, Storage, Config<T>},
+		Module: module::{Module, Call, Storage, Config},
 	}
 );
-
 
 #[test]
 fn create_genesis_config() {
@@ -171,3 +187,4 @@ fn create_genesis_config() {
 		})
 	};
 }
+*/

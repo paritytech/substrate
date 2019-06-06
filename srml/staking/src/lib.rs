@@ -721,7 +721,7 @@ decl_module! {
 
 		/// The ideal number of validators.
 		fn set_validator_count(#[compact] new: u32) {
-			<ValidatorCount<T>>::put(new);
+			ValidatorCount::put(new);
 		}
 
 		/// Force there to be a new era. This also forces a new session immediately after.
@@ -732,7 +732,7 @@ decl_module! {
 
 		/// Set the offline slash grace period.
 		fn set_offline_slash_grace(#[compact] new: u32) {
-			<OfflineSlashGrace<T>>::put(new);
+			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
@@ -757,7 +757,7 @@ decl_event!(
 impl<T: Trait> Module<T> {
 	/// Just force_new_era without origin check.
 	fn apply_force_new_era(apply_rewards: bool) -> Result {
-		<ForcingNewEra<T>>::put(());
+		ForcingNewEra::put(());
 		<session::Module<T>>::apply_force_new_session(apply_rewards)
 	}
 
@@ -874,7 +874,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <session::Module<T>>::current_index();
-		if <ForcingNewEra<T>>::take().is_some()
+		if ForcingNewEra::take().is_some()
 			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
 		{
 			Self::new_era();
