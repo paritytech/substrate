@@ -25,6 +25,7 @@ use crate::changes_trie::{
 	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage,
 	BlockNumber as ChangesTrieBlockNumber,
 };
+use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -36,6 +37,7 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
+	offchain: Option<Box<dyn offchain::Externalities>>,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
@@ -61,6 +63,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: inner.into(),
+			offchain: None,
 		}
 	}
 
@@ -78,6 +81,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			.collect::<BTreeMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+	}
+
+	/// Set offchain externaltiies.
+	pub fn set_offchain_externalities(&mut self, offchain: impl offchain::Externalities + 'static) {
+		self.offchain = Some(Box::new(offchain));
 	}
 
 	/// Get mutable reference to changes trie storage.
@@ -226,8 +234,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		)?.map(|(root, _)| root.clone()))
 	}
 
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
-		unimplemented!()
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
+		self.offchain
+			.as_mut()
+			.map(|x| &mut **x as _)
 	}
 }
 

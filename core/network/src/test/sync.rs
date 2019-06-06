@@ -320,8 +320,8 @@ fn own_blocks_are_announced() {
 	net.peer(0).on_block_imported(header.hash(), &header);
 	net.sync();
 
-	assert_eq!(net.peer(0).client.as_in_memory_backend().blockchain().info().unwrap().best_number, 1);
-	assert_eq!(net.peer(1).client.as_in_memory_backend().blockchain().info().unwrap().best_number, 1);
+	assert_eq!(net.peer(0).client.as_in_memory_backend().blockchain().info().best_number, 1);
+	assert_eq!(net.peer(1).client.as_in_memory_backend().blockchain().info().best_number, 1);
 	let peer0_chain = net.peer(0).client.as_in_memory_backend().blockchain().clone();
 	assert!(net.peer(1).client.as_in_memory_backend().blockchain().canon_equals_to(&peer0_chain));
 	assert!(net.peer(2).client.as_in_memory_backend().blockchain().canon_equals_to(&peer0_chain));
@@ -356,9 +356,9 @@ fn blocks_are_not_announced_by_light_nodes() {
 	// peer 0 has the best chain
 	// peer 1 has the best chain
 	// peer 2 has genesis-chain only
-	assert_eq!(net.peer(0).client.info().unwrap().chain.best_number, 1);
-	assert_eq!(net.peer(1).client.info().unwrap().chain.best_number, 1);
-	assert_eq!(net.peer(2).client.info().unwrap().chain.best_number, 0);
+	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
 }
 
 #[test]
@@ -371,13 +371,13 @@ fn can_sync_small_non_best_forks() {
 
 	// small fork + reorg on peer 1.
 	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
-	let small_hash = net.peer(0).client().info().unwrap().chain.best_hash;
+	let small_hash = net.peer(0).client().info().chain.best_hash;
 	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
-	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
 
 	// peer 1 only ever had the long fork.
 	net.peer(1).push_blocks(10, false);
-	assert_eq!(net.peer(1).client().info().unwrap().chain.best_number, 40);
+	assert_eq!(net.peer(1).client().info().chain.best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
@@ -386,7 +386,7 @@ fn can_sync_small_non_best_forks() {
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
-	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -416,8 +416,8 @@ fn can_not_sync_from_light_peer() {
 	net.sync();
 
 	// ensure #0 && #1 have the same best block
-	let full0_info = net.peer(0).client.info().unwrap().chain;
-	let light_info = net.peer(1).client.info().unwrap().chain;
+	let full0_info = net.peer(0).client.info().chain;
+	let light_info = net.peer(1).client.info().chain;
 	assert_eq!(full0_info.best_number, 1);
 	assert_eq!(light_info.best_number, 1);
 	assert_eq!(light_info.best_hash, full0_info.best_hash);
@@ -430,7 +430,7 @@ fn can_not_sync_from_light_peer() {
 	net.sync_with(true, Some(vec![0].into_iter().collect()));
 
 	// ensure that the #2 has failed to sync block #1
-	assert_eq!(net.peer(2).client.info().unwrap().chain.best_number, 0);
+	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
 	// and that the #1 is still connected to #2
 	// (because #2 has not tried to fetch block data from the #1 light node)
 	assert_eq!(net.peer(1).protocol_status().num_peers, 2);
@@ -451,4 +451,37 @@ fn can_not_sync_from_light_peer() {
 	net.sync();
 	// check that light #1 has disconnected from #2
 	assert_eq!(net.peer(1).protocol_status().num_peers, 1);
+}
+
+#[test]
+fn light_peer_imports_header_from_announce() {
+	let _ = ::env_logger::try_init();
+
+	fn import_with_announce(net: &mut TestNet, hash: H256) {
+		let header = net.peer(0).client().header(&BlockId::Hash(hash)).unwrap().unwrap();
+		net.peer(1).receive_message(
+			&net.peer(0).peer_id,
+			message::generic::Message::BlockAnnounce(message::generic::BlockAnnounce {
+				header,
+			}),
+		);
+
+		net.peer(1).import_queue_sync();
+		assert!(net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some());
+	}
+
+	// given the network with 1 full nodes (#0) and 1 light node (#1)
+	let mut net = TestNet::new(1);
+	net.add_light_peer(&Default::default());
+
+	// let them connect to each other
+	net.sync();
+
+	// check that NEW block is imported from announce message
+	let new_hash = net.peer(0).push_blocks(1, false);
+	import_with_announce(&mut net, new_hash);
+
+	// check that KNOWN STALE block is imported from announce message
+	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
+	import_with_announce(&mut net, known_stale_hash);
 }

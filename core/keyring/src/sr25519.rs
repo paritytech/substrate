@@ -68,7 +68,7 @@ impl Keyring {
 	}
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
-		Public::from(self).to_raw_vec()
+		Public::from(self).into_raw_vec()
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {

@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug, warn, trace};
+use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -36,7 +36,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use inherents::{InherentData, pool::InherentsPool};
+use inherents::InherentData;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Build new blocks.
@@ -56,7 +56,7 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 
 	/// Build a block on top of the given block, with inherent extrinsics and
 	/// inherent digests pre-pushed.
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -91,7 +91,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	type Block = Block;
 	type Error = client::error::Error;
 
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -119,8 +119,6 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
-	/// The inherents pool
-	pub inherents_pool: Arc<InherentsPool<<A::Block as BlockT>::Extrinsic>>,
 }
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
@@ -150,7 +148,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
-			inherents_pool: self.inherents_pool.clone(),
 			now: Box::new(time::Instant::now),
 		};
 
@@ -165,8 +162,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	inherents_pool: Arc<InherentsPool<<Block as BlockT>::Extrinsic>>,
-	now: Box<Fn() -> time::Instant>,
+	now: Box<dyn Fn() -> time::Instant>,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
@@ -218,14 +214,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			inherent_data,
 			inherent_digests.clone(),
 			|block_builder| {
-				// Add inherents from the internal pool
-				let inherents = self.inherents_pool.drain();
-				debug!("Pushing {} queued inherent extrinsics.", inherents.len());
-				for i in inherents {
-					if let Err(e) = block_builder.push_extrinsic(i) {
-						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
-					}
-				}
 				// proceed with transactions
 				let mut is_first = true;
 				let mut skipped = 0;
@@ -328,7 +316,6 @@ mod tests {
 		let proposer_factory = ProposerFactory {
 			client: client.clone(),
 			transaction_pool: txpool.clone(),
-			inherents_pool: Default::default(),
 		};
 
 		let mut proposer = proposer_factory.init(
@@ -349,34 +336,5 @@ mod tests {
 		// block should have some extrinsics although we have some more in the pool.
 		assert_eq!(block.extrinsics().len(), 1);
 		assert_eq!(txpool.ready().count(), 2);
-	}
-
-	#[test]
-	fn should_include_inherents_from_the_pool() {
-		// given
-		let client = Arc::new(test_client::new());
-		let chain_api = transaction_pool::ChainApi::new(client.clone());
-		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
-		let inpool = Arc::new(InherentsPool::default());
-
-		let proposer_factory = ProposerFactory {
-			client: client.clone(),
-			transaction_pool: txpool.clone(),
-			inherents_pool: inpool.clone(),
-		};
-
-		inpool.add(extrinsic(0));
-
-		let proposer = proposer_factory.init(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			&[]
-		).unwrap();
-
-		// when
-		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), Default::default(), deadline).unwrap();
-
-		// then
-		assert_eq!(block.extrinsics().len(), 1);
 	}
 }

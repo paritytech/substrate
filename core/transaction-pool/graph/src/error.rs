@@ -35,7 +35,7 @@ pub enum Error {
 	TemporarilyBanned,
 	/// The transaction is already in the pool.
 	#[display(fmt="[{:?}] Already imported", _0)]
-	AlreadyImported(Box<std::any::Any + Send>),
+	AlreadyImported(Box<dyn std::any::Any + Send>),
 	/// The transaction cannot be imported cause it's a replacement and has too low priority.
 	#[display(fmt="Too low priority ({} > {})", old, new)]
 	TooLowPriority {

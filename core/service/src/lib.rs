@@ -34,7 +34,6 @@ use parking_lot::Mutex;
 use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
-use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
@@ -76,13 +75,12 @@ pub struct Service<Components: components::Components> {
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
@@ -106,7 +104,7 @@ pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 /// Used to hook on telemetry connection established events.
 pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 	/// Executor to which the hook is spawned.
@@ -158,7 +156,7 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let chain_info = client.info()?.chain;
+		let chain_info = client.info().chain;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -211,11 +209,9 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(())));
 
-		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
-				inherents_pool.clone(),
 				task_executor.clone(),
 			)))
 		} else {
@@ -381,7 +377,6 @@ impl<Components: components::Components> Service<Components> {
 			network: Some(network),
 			select_chain,
 			transaction_pool,
-			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -431,11 +426,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -489,26 +479,36 @@ pub struct TransactionPoolAdapter<C: Components> {
 
 impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
+		Some(BlockId::hash(self.client.info().chain.best_hash))
 	}
+}
+
+/// Get transactions for propagation.
+///
+/// Function extracted to simplify the test and prevent creating `ServiceFactory`.
+fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+	-> Vec<(H, B::Extrinsic)>
+where
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+{
+	pool.ready()
+		.filter(|t| t.is_propagateable())
+		.map(|t| {
+			let hash = t.hash.clone();
+			let ex: B::Extrinsic = t.data.clone();
+			(hash, ex)
+		})
+		.collect()
 }
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
 	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
 {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready()
-			.map(|t| {
-				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.clone();
-				(hash, ex)
-			})
-			.collect()
+		transactions_to_propagate(&self.pool)
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -622,7 +622,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 				#[allow(deprecated)]
+/// 				Ok(LongestChain::new(client.backend().clone()))
 /// 			}},
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
@@ -743,5 +744,43 @@ macro_rules! construct_service_factory {
 				})
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use consensus_common::SelectChain;
+	use runtime_primitives::traits::BlindCheckable;
+	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}, TestClientBuilder};
+
+	#[test]
+	fn should_not_propagate_transactions_that_are_marked_as_such() {
+		// given
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = Arc::new(TransactionPool::new(
+			Default::default(),
+			transaction_pool::ChainApi::new(client.clone())
+		));
+		let best = longest_chain.best_chain().unwrap();
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		assert_eq!(pool.status().ready, 2);
+
+		// when
+		let transactions = transactions_to_propagate(&pool);
+
+		// then
+		assert_eq!(transactions.len(), 1);
+		assert!(transactions[0].1.clone().check().is_ok());
+		// this should not panic
+		let _ = transactions[0].1.transfer();
 	}
 }

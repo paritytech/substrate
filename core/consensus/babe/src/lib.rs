@@ -82,7 +82,7 @@ use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
 
 /// A slot duration. Create with `get_or_compute`.
@@ -134,7 +134,7 @@ impl SlotCompatible for BabeSlotCompatible {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<C, E, I, SO, SC, OnExit> {
+pub struct BabeParams<C, E, I, SO, SC> {
 
 	/// The configuration for BABE.  Includes the slot duration, threshold, and
 	/// other parameters.
@@ -158,9 +158,6 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
-	/// Exit callback.
-	pub on_exit: OnExit,
-
 	/// Providers for inherent data.
 	pub inherent_data_providers: InherentDataProviders,
 
@@ -169,7 +166,7 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	config,
 	local_key,
 	client,
@@ -177,10 +174,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	block_import,
 	env,
 	sync_oracle,
-	on_exit,
 	inherent_data_providers,
 	force_authoring,
-}: BabeParams<C, E, I, SO, SC, OnExit>) -> Result<
+}: BabeParams<C, E, I, SO, SC>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
@@ -200,26 +196,24 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = BabeWorker {
 		client: client.clone(),
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
 	};
-	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
+	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
+	Ok(slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible>(
 		config.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
-		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct BabeWorker<C, E, I, SO> {
@@ -228,7 +222,6 @@ struct BabeWorker<C, E, I, SO> {
 	env: Arc<E>,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	threshold: u64,
 }
@@ -251,14 +244,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_babe_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
+	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
 
 	fn on_slot(
 		&self,
@@ -461,7 +447,7 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
-	client: &Arc<C>,
+	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -508,28 +494,27 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 
 			if !check(&inout, threshold) {
 				return Err(babe_err!("VRF verification of block by author {:?} failed: \
-									threshold {} exceeded", author, threshold))
+									  threshold {} exceeded", author, threshold));
 			}
-			match check_equivocation(&client, slot_now, slot_num, header.clone(), author.clone()) {
-				Ok(Some(equivocation_proof)) => {
-					let log_str = format!(
-						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-						author,
-						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					);
-					info!(target: "babe", "{}", log_str);
-					Err(log_str)
-				},
-				Ok(None) => {
-					let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-					Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
-				},
-				Err(e) => {
-					Err(e.to_string())
-				},
+
+			if let Some(equivocation_proof) = check_equivocation(
+				client,
+				slot_now,
+				slot_num,
+				&header,
+				author,
+			).map_err(|e| e.to_string())? {
+				info!(
+					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+					author,
+					slot_num,
+					equivocation_proof.fst_header().hash(),
+					equivocation_proof.snd_header().hash(),
+				);
 			}
+
+			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
+			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
 		}
@@ -716,7 +701,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
+			if client.runtime_api().has_api::<dyn AuthoritiesApi<B>>(at).unwrap_or(false) {
 				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \
@@ -823,9 +808,6 @@ mod tests {
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash, Public, Signature>;
 	use test_client::AuthorityKeyring;
-	use primitives::hash::H256;
-	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
-	use slots::{MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 	type Error = client::error::Error;
 
@@ -934,44 +916,6 @@ mod tests {
 		}
 	}
 
-	fn create_header(slot_num: u64, number: u64, pair: &sr25519::Pair) -> (HeaderTest, H256) {
-		let mut header = HeaderTest {
-			parent_hash: Default::default(),
-			number,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: DigestTest { logs: vec![], },
-		};
-
-		let transcript = make_transcript(
-			Default::default(),
-			slot_num,
-			Default::default(),
-			0,
-		);
-
-		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
-		let pre_hash: H256 = header.hash();
-		let pre_digest = BabePreDigest {
-			proof,
-			author: pair.public(),
-			slot_num,
-			vrf_output: inout.to_output(),
-		};
-		assert_eq!(
-			Decode::decode(&mut &pre_digest.encode()[..]).as_ref(),
-			Some(&pre_digest),
-			"Pre-digest encoding and decoding did not round-trip",
-		);
-		let item = generic::DigestItem::babe_pre_digest(pre_digest);
-		header.digest_mut().push(item);
-
-		let to_sign = header.hash();
-		let signature = pair.sign(&to_sign[..]);
-		header.digest_mut().push(generic::DigestItem::babe_seal(signature));
-		(header, pre_hash)
-	}
-
 	#[test]
 	fn can_serialize_block() {
 		drop(env_logger::try_init());
@@ -1017,7 +961,7 @@ mod tests {
 
 
 			#[allow(deprecated)]
-			let select_chain = LongestChain::new(client.backend().clone(), client.import_lock().clone());
+			let select_chain = LongestChain::new(client.backend().clone());
 
 			let babe = start_babe(BabeParams {
 				config,
@@ -1027,7 +971,6 @@ mod tests {
 				client,
 				env: environ.clone(),
 				sync_oracle: DummyOracle,
-				on_exit: futures::empty(),
 				inherent_data_providers,
 				force_authoring: false,
 			}).expect("Starts babe");
@@ -1100,52 +1043,11 @@ mod tests {
 		drop(env_logger::try_init());
 		let client = test_client::new();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
-	}
-
-	#[test]
-	fn check_header_works_with_equivocation() {
-		drop(env_logger::try_init());
-		let client = test_client::new();
-		let pair = sr25519::Pair::generate();
-		let public = pair.public();
-		let authorities = vec![public.clone(), sr25519::Pair::generate().public()];
-
-		let (header1, header1_hash) = create_header(2, 1, &pair);
-		let (header2, header2_hash) = create_header(2, 2, &pair);
-		let (header3, header3_hash) = create_header(4, 2, &pair);
-		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 4, 3, &pair);
-		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 4, 4, &pair);
-		let (header6, header6_hash) = create_header(4, 3, &pair);
-
-		let c = Arc::new(client);
-		let max = u64::MAX;
-
-		type B = RawBlock<ExtrinsicWrapper<u64>>;
-		type P = sr25519::Pair;
-
-		// It's ok to sign same headers.
-		assert!(check_header::<B, _>(&c, 2, header1.clone(), header1_hash, &authorities, max).is_ok());
-		assert!(check_header::<B, _>(&c, 3, header1, header1_hash, &authorities, max).is_ok());
-
-		// But not two different headers at the same slot.
-		assert!(check_header::<B, _>(&c, 4, header2, header2_hash, &authorities, max).is_err());
-
-		// Different slot is ok.
-		assert!(check_header::<B, _>(&c, 5, header3, header3_hash, &authorities, max).is_ok());
-
-		// Here we trigger pruning and save header 4.
-		assert!(check_header::<B, _>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities, max).is_ok());
-
-		// This fails because header 5 is an equivocation of header 4.
-		assert!(check_header::<B, _>(&c, PRUNING_BOUND + 3, header5, header5_hash, &authorities, max).is_err());
-
-		// This is ok because we pruned the corresponding header. Shows that we are pruning.
-		assert!(check_header::<B, _>(&c, PRUNING_BOUND + 4, header6, header6_hash, &authorities, max).is_ok());
 	}
 }

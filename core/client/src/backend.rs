@@ -26,6 +26,7 @@ use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
+use parking_lot::Mutex;
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +175,13 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
+
+	/// Gain access to the import lock around this backend.
+	/// _Note_ Backend isn't expected to acquire the lock by itself ever. Rather
+	/// the using components should acquire and hold the lock whenever they do
+	/// something that the import of a block would interfere with, e.g. importing
+	/// a new block or calculating the best head.
+	fn get_import_lock(&self) -> &Mutex<()>;
 }
 
 /// Changes trie storage that supports pruning.

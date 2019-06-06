@@ -65,13 +65,13 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
+use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
+pub use digest::CompatibleDigestItem;
 
 mod digest;
-use digest::CompatibleDigestItem;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -125,7 +125,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -133,7 +133,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
-	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
@@ -156,25 +155,26 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	register_aura_inherent_data_provider(
+		&inherent_data_providers,
+		slot_duration.0.slot_duration()
+	)?;
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible>(
 		slot_duration.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
-		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
@@ -183,7 +183,6 @@ struct AuraWorker<C, E, I, P, SO> {
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 }
 
@@ -206,14 +205,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_aura_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
+	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
 
 	fn on_slot(
 		&self,
@@ -395,7 +387,7 @@ fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
 //
 // FIXME #1018 needs misbehavior types
 fn check_header<C, B: Block, P: Pair>(
-	client: &Arc<C>,
+	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -431,26 +423,22 @@ fn check_header<C, B: Block, P: Pair>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			match check_equivocation::<_, _, <P as Pair>::Public>(
+			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
 				slot_num,
-				header.clone(),
-				expected_author.clone(),
-			) {
-				Ok(Some(equivocation_proof)) => {
-					let log_str = format!(
-						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					);
-					info!("{}", log_str);
-					Err(log_str)
-				},
-				Ok(None) => Ok(CheckedHeader::Checked(header, (slot_num, seal))),
-				Err(e) => Err(e.to_string()),
+				&header,
+				expected_author,
+			).map_err(|e| e.to_string())? {
+				info!(
+					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+					slot_num,
+					equivocation_proof.fst_header().hash(),
+					equivocation_proof.snd_header().hash(),
+				);
 			}
+
+			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -582,7 +570,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
 						.map_err(|e| format!("{:?}", e))?
 					{
 						self.check_inherents(
@@ -682,15 +670,12 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
-		.or_else(|| {
-			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
-				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
-			} else {
-				CoreApi::authorities(&*client.runtime_api(), at).ok()
-			}
-		}).ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
+		.or_else(|| AuthoritiesApi::authorities(&*client.runtime_api(), at).ok())
+		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.
@@ -766,9 +751,6 @@ mod tests {
 	use primitives::sr25519;
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
-	use primitives::hash::H256;
-	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
-	use slots::{MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 	type Error = client::error::Error;
 
@@ -873,24 +855,6 @@ mod tests {
 		}
 	}
 
-	fn create_header(slot_num: u64, number: u64, pair: &sr25519::Pair) -> (HeaderTest, H256) {
-		let mut header = HeaderTest {
-			parent_hash: Default::default(),
-			number,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: DigestTest { logs: vec![], },
-		};
-		let item = <DigestItemFor<TestBlock> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
-		header.digest_mut().push(item);
-		let header_hash: H256 = header.hash();
-		let signature = pair.sign(&header_hash[..]);
-
-		let item = CompatibleDigestItem::<sr25519::Pair>::aura_seal(signature);
-		header.digest_mut().push(item);
-		(header, header_hash)
-	}
-
 	#[test]
 	#[allow(deprecated)]
 	fn authoring_blocks() {
@@ -914,7 +878,6 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
-				client.import_lock().clone(),
 			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
@@ -931,7 +894,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
@@ -939,7 +902,6 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
-				futures::empty(),
 				inherent_data_providers,
 				false,
 			).expect("Starts aura");
@@ -968,50 +930,11 @@ mod tests {
 	fn authorities_call_works() {
 		let client = test_client::new();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
-	}
-
-	#[test]
-	fn check_header_works_with_equivocation() {
-		let client = test_client::new();
-		let pair = sr25519::Pair::generate();
-		let public = pair.public();
-		let authorities = vec![public.clone(), sr25519::Pair::generate().public()];
-
-		let (header1, header1_hash) = create_header(2, 1, &pair);
-		let (header2, header2_hash) = create_header(2, 2, &pair);
-		let (header3, header3_hash) = create_header(4, 2, &pair);
-		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 4, 3, &pair);
-		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 4, 4, &pair);
-		let (header6, header6_hash) = create_header(4, 3, &pair);
-
-		type B = RawBlock<ExtrinsicWrapper<u64>>;
-		type P = sr25519::Pair;
-
-		let c = Arc::new(client);
-
-		// It's ok to sign same headers.
-		check_header::<_, B, P>(&c, 2, header1.clone(), header1_hash, &authorities).unwrap();
-		assert!(check_header::<_, B, P>(&c, 3, header1, header1_hash, &authorities).is_ok());
-
-		// But not two different headers at the same slot.
-		assert!(check_header::<_, B, P>(&c, 4, header2, header2_hash, &authorities).is_err());
-
-		// Different slot is ok.
-		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities).is_ok());
-
-		// Here we trigger pruning and save header 4.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities).is_ok());
-
-		// This fails because header 5 is an equivocation of header 4.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 3, header5, header5_hash, &authorities).is_err());
-
-		// This is ok because we pruned the corresponding header. Shows that we are pruning.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 4, header6, header6_hash, &authorities).is_ok());
 	}
 }
