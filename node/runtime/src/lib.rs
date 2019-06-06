@@ -21,6 +21,7 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
+use parity_codec::{Encode, Decode};
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -135,10 +136,30 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
+parameter_types! {
+	pub const Period: BlockNumber = 10 * MINUTES;
+	pub const Offset: BlockNumber = 0;
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct SessionKeys(AuthorityId);
+impl session::OpaqueKeys for SessionKeys {
+	fn count() -> usize { 1 }
+	fn get_raw(&self, i: usize) -> &[u8] { if i == 0 { self.0.as_ref() } else { &[] } }
+}
+
 impl session::Trait for Runtime {
-	type ConvertAccountIdToSessionKey = ();
-	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
+	type OnSessionEnding = Staking;
+	type SessionHandler = (Grandpa,);
+	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
+	type Keys = SessionKeys;
+}
+
+parameter_types! {
+	pub const SessionsPerEra: session::SessionIndex = 6;
+	pub const BondingDuration: staking::EraIndex = 24 * 28;
 }
 
 impl staking::Trait for Runtime {
@@ -148,6 +169,8 @@ impl staking::Trait for Runtime {
 	type Event = Event;
 	type Slash = ();
 	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
 }
 
 const MINUTES: BlockNumber = 6;
@@ -223,7 +246,7 @@ impl grandpa::Trait for Runtime {
 }
 
 impl finality_tracker::Trait for Runtime {
-	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
+	type OnFinalizationStalled = ();// TODO: should record this for next time the session changes.
 }
 
 construct_runtime!(
@@ -238,7 +261,7 @@ construct_runtime!(
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
 		Balances: balances,
-		Session: session,
+		Session: session::{Module, Call, Storage, Event},
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
