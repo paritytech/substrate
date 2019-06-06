@@ -16,7 +16,7 @@
 
 //! On-demand requests service.
 
-use crate::on_demand::RequestData;
+use crate::protocol::on_demand::RequestData;
 use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use parking_lot::Mutex;

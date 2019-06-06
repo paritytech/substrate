@@ -39,8 +39,8 @@ use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
-use crate::blocks::BlockCollection;
-use crate::sync::extra_requests::ExtraRequestsAggregator;
+use blocks::BlockCollection;
+use extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
 	CheckedSub, SaturatedConversion
@@ -50,6 +50,7 @@ use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
 
+mod blocks;
 mod extra_requests;
 
 // Maximum blocks to request in a single packet.
