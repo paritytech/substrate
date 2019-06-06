@@ -176,21 +176,37 @@ Assuming marshaled size of a balance value is of the constant size we can neglec
 
 This function receives input data for the contract execution. The execution consists of the following steps:
 
-1. Loading code from the DB.
-2. `transfer`-ing funds between the caller and the destination account.
-3. Executing the code of the destination account.
-4. Committing overlayed changed to the underlying `AccountDb`.
+1. Checking rent payment.
+2. Loading code from the DB.
+3. `transfer`-ing funds between the caller and the destination account.
+4. Executing the code of the destination account.
+5. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
-Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
+Checking for rent involves an unconditional DB read of `ContractInfoOf`
+and at most once per block:
+
+- DB read to `block_number` and
+- `free_balance` and
+- `rent_deposit_offset` and
+- `rent_byte_price` and
+- `Currency::minimum_balance` and
+- `tobmstone_deposit`.
+- Calls to `ensure_can_withdraw`, `withdraw`, `make_free_balance_be` can perform arbitrary logic and should be considered separately,
+- `child_storage_root`
+- `kill_child_storage`
+- mutation of `ContractInfoOf`
+
 Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 3 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
+**complexity**:
+- Only for the first invocation of the contract: up to 6 DB reads and logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
+- On top of that for every invocation: Up to 4 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
 
@@ -263,7 +279,7 @@ It consists of the following steps:
 1. Loading `callee` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
 2. Loading `value` buffer from the sandbox memory and then decoding it.
 3. Loading `input_data` buffer from the sandbox memory.
-4. Invoking `call` executive function.
+4. Invoking the executive function `call`.
 
 Loading of `callee` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
