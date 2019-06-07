@@ -42,7 +42,7 @@ use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImpor
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
 use crate::message::Message;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};

@@ -20,7 +20,7 @@ use crate::{
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage, RegisteredProtocol};
-use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
+use crate::{config::NetworkConfiguration, config::NonReservedPeerMode, parse_str_addr};
 use futures::{prelude::*, Stream};
 use libp2p::{Multiaddr, core::swarm::NetworkBehaviour, PeerId};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
@@ -37,7 +37,7 @@ use std::sync::Arc;
 pub fn start_service<TMessage>(
 	config: NetworkConfiguration,
 	registered_custom: RegisteredProtocol<TMessage>,
-) -> Result<(Service<TMessage>, substrate_peerset::PeersetHandle), IoError>
+) -> Result<(Service<TMessage>, peerset::PeersetHandle), IoError>
 where TMessage: CustomMessage + Send + 'static {
 
 	if let Some(ref path) = config.net_config_path {
@@ -71,7 +71,7 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 
 	// Build the peerset.
-	let (peerset, peerset_handle) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
+	let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset::PeersetConfig {
 		in_peers: config.in_peers,
 		out_peers: config.out_peers,
 		bootnodes,

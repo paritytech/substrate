@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::DiscoveryNetBehaviour;
+use crate::{debug_info, DiscoveryNetBehaviour};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, protocols_handler::IntoProtocolsHandler, PublicKey};
@@ -31,8 +31,6 @@ use std::{cmp, iter, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void;
-
-mod debug_info;
 
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]

@@ -14,17 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg(test)]
+
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
-use substrate_network_libp2p::{CustomMessage, Multiaddr, multiaddr::Protocol, ServiceEvent, build_multiaddr};
+use crate::{Multiaddr, multiaddr::Protocol, build_multiaddr};
+use crate::libp2p_service::ServiceEvent;
+use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p::Service<TMsg>>
+fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<crate::libp2p_service::Service<TMsg>>
 	where TMsg: CustomMessage + Send + 'static
 {
-	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
+	let mut result: Vec<crate::libp2p_service::Service<_>> = Vec::with_capacity(num);
 	let mut first_addr = None::<Multiaddr>;
 
 	for index in 0 .. num {
@@ -36,18 +40,18 @@ fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p
 				.to_string());
 		}
 
-		let config = substrate_network_libp2p::NetworkConfiguration {
+		let config = crate::config::NetworkConfiguration {
 			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(base_port + index as u16)]],
 			boot_nodes,
-			..substrate_network_libp2p::NetworkConfiguration::default()
+			..crate::config::NetworkConfiguration::default()
 		};
 
 		if first_addr.is_none() {
 			first_addr = Some(config.listen_addresses.iter().next().unwrap().clone());
 		}
 
-		let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"tst"[..], &[1]);
-		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
+		let proto = crate::custom_proto::RegisteredProtocol::new(&b"tst"[..], &[1]);
+		result.push(crate::libp2p_service::start_service(config, proto).unwrap().0);
 	}
 
 	result

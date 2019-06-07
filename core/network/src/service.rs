@@ -23,8 +23,9 @@ use std::time::Duration;
 use log::{warn, debug, error, info};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{start_service, parse_str_addr, Service as Libp2pNetService, ServiceEvent as Libp2pNetServiceEvent};
-use network_libp2p::{RegisteredProtocol, NetworkState};
+use crate::libp2p_service::{start_service, Service as Libp2pNetService, ServiceEvent as Libp2pNetServiceEvent};
+use crate::custom_proto::RegisteredProtocol;
+use crate::{parse_str_addr, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -45,7 +46,7 @@ const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
-pub use network_libp2p::PeerId;
+pub use libp2p::PeerId;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
