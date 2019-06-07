@@ -627,7 +627,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 		LightService = LightComponents<Self>
 /// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client, _, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>

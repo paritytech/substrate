@@ -830,7 +830,7 @@ mod tests {
 			_at: &BlockId<<Self::Api as ChainApi>::Block>,
 			_xt: ExtrinsicFor<Self::Api>,
 		) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error> {
-			unimplemented!()
+			Ok(ExHash::<Self::Api>::default())
 		}
 	}
 
@@ -839,7 +839,7 @@ mod tests {
 	}
 
 	impl txpool::ChainApi for TestPoolApi {
-		type Block = Block;
+		type Block = TestBlock;
 		type Hash = u64;
 		type Error = error::Error;
 

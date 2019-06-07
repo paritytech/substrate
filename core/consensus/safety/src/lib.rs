@@ -47,6 +47,6 @@ pub fn submit_report_call<C, T, Block>(
 			info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
 		}
 	} else {
-		println!("Error decoding report call");
+		info!(target: "accountable-safety", "Error decoding report call");
 	}
 }
