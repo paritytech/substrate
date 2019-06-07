@@ -520,10 +520,8 @@ mod test {
 			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
 		));
 		let message = b"";
-		let signature = Signature::from_raw(
-			hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155\
-				5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
-		);
+		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
+		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -539,10 +537,8 @@ mod test {
 			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
 		));
 		let message = b"";
-		let signature = Signature::from_raw(
-			hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155\
-				5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
-		);
+		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
+		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -564,9 +560,7 @@ mod test {
 		assert_eq!(public, Public::from_raw(
 			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
 		));
-		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee0000000\
-			0000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000\
-			000000");
+		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {:?}", signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
