@@ -485,7 +485,7 @@ decl_module! {
 			}
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				runtime_io::print(e);
 			}
