@@ -409,7 +409,13 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Pair, SecretStringError> {
+	fn from_standard_components<
+		I: Iterator<Item=DeriveJunction>
+	>(
+		phrase: &str,
+		password: Option<&str>,
+		path: I
+	) -> Result<Pair, SecretStringError> {
 		Self::from_phrase(phrase, password)?.0
 			.derive(path)
 			.map_err(|_| SecretStringError::InvalidPath)
@@ -610,7 +616,9 @@ mod test {
 				"741c08a06f41c596608f6774259bd9043304adfa5d3eea62760bd9be97634d63"
 			))
 		);
-		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
+		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee0000000\
+			0000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000\
+			000000");
 		let signature = pair.sign(&message[..]);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -630,9 +638,14 @@ mod test {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
 		//
 		// This is to make sure that the wasm library is compatible.
-		let pk = Pair::from_seed(&hex!("0000000000000000000000000000000000000000000000000000000000000000"));
+		let pk = Pair::from_seed(
+			&hex!("0000000000000000000000000000000000000000000000000000000000000000")
+		);
 		let public = pk.public();
-		let js_signature = Signature::from_raw(hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"));
+		let js_signature = Signature::from_raw(
+			hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902\
+			028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00")
+		);
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }

@@ -411,8 +411,16 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0.derive(path).map_err(|_| SecretStringError::InvalidPath)
+	fn from_standard_components<
+		I: Iterator<Item=DeriveJunction>
+	>(
+		phrase: &str,
+		password: Option<&str>,
+		path: I
+	) -> Result<Pair, SecretStringError> {
+		Self::from_phrase(phrase, password)?.0
+			.derive(path)
+			.map_err(|_| SecretStringError::InvalidPath)
 	}
 
 	/// Get the public key.
@@ -496,27 +504,45 @@ mod test {
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter()).ok().unwrap();
-		assert_eq!(derived.seed(), &hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"));
+		assert_eq!(
+			derived.seed(),
+			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
+		);
 	}
 
 	#[test]
 	fn test_vector_should_work() {
-		let pair = Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
+		let pair = Pair::from_seed(
+			&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+		);
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
+		assert_eq!(public, Public::from_raw(
+			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+		));
 		let message = b"";
-		let signature = Signature::from_raw(hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"));
+		let signature = Signature::from_raw(
+			hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155\
+				5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
+		);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
 	#[test]
 	fn test_vector_by_string_should_work() {
-		let pair = Pair::from_string("0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", None).unwrap();
+		let pair = Pair::from_string(
+			"0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+			None
+		).unwrap();
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
+		assert_eq!(public, Public::from_raw(
+			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+		));
 		let message = b"";
-		let signature = Signature::from_raw(hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"));
+		let signature = Signature::from_raw(
+			hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155\
+				5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
+		);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -535,8 +561,12 @@ mod test {
 	fn seeded_pair_should_work() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		assert_eq!(public, Public::from_raw(hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")));
-		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
+		assert_eq!(public, Public::from_raw(
+			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
+		));
+		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee0000000\
+			0000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000\
+			000000");
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {:?}", signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
