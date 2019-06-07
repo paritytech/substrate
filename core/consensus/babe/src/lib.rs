@@ -676,12 +676,9 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				// Remainder of this block is a critical section.
 				let num_timestamps = timestamps.len();
 				if num_timestamps >= self.config.minimum_tmestamps {
-					let new_list = timestamps.iter().map(|(t, sl)| {
-						let a = slot_now
-							.checked_sub(sl)
-							.expect("slot numbers are monotonically increasing; qed")
-						let new_duration = a
-							.checked_mul(slot_num)
+					let new_list = timestamps.iter().enumerate().map(|(t: Duration, a: usize)| {
+						let new_duration = t + Duration::from_seconds(self.config.get())
+							.checked_mul(a)
 							.expect("we assume duration cannot overflow; qed");
 					})
 				} else {
