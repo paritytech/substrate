@@ -184,11 +184,10 @@ This function receives input data for the contract execution. The execution cons
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
-Checking for rent involves an unconditional DB read of `ContractInfoOf`
-and at most once per block:
+Checking for rent involves 2 unconditional DB reads: `ContractInfoOf` and `block_number`
+and on top of that at most once per block:
 
-- DB read to `block_number` and
-- `free_balance` and
+- DB read to `free_balance` and
 - `rent_deposit_offset` and
 - `rent_byte_price` and
 - `Currency::minimum_balance` and
@@ -205,7 +204,7 @@ Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
 **complexity**:
-- Only for the first invocation of the contract: up to 5 DB reads and logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
+- Only for the first invocation of the contract: up to 5 DB reads and one DB write as well as logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
 - On top of that for every invocation: Up to 5 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
