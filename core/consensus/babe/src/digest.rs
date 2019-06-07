@@ -89,7 +89,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<Signature>;
 }
 
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
+impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Vec<u8>>
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
@@ -123,7 +123,7 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
 	}
 }
 
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
+impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Signature>
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())

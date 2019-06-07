@@ -142,15 +142,15 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash, P::Public, P::Signature>: DigestItem<Hash=B::Hash>,
+	generic::DigestItem<B::Hash, P::Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	DigestItemFor<B>: CompatibleDigestItem<P>,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Signature>>,
 		Hash=B::Hash,
 	>,
 	E: Environment<B, Error=Error>,
@@ -196,7 +196,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Signature>>,
 		Hash=B::Hash,
 	>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -204,7 +204,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -259,7 +259,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				);
 
 				// we are the slot author. make a block and sign it.
-				let proposer = match env.init(&chain_head, &authorities) {
+				let proposer = match env.init(&chain_head) {
 					Ok(p) => p,
 					Err(e) => {
 						warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -523,7 +523,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	DigestItemFor<B>: CompatibleDigestItem<P>,
 	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
@@ -591,11 +591,12 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 				extra_verification.into_future().wait()?;
 
-				let maybe_keys = pre_header.digest()
+				// TODO: make this work with the Aura-specific authorities change log.
+				let maybe_keys = None;/*pre_header.digest()
 					.log(DigestItem::as_authorities_change)
 					.map(|digest| digest.to_vec())
 					.map(Encode::encode)
-					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);
+					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);*/
 
 				let import_block = ImportBlock {
 					origin,
@@ -703,7 +704,7 @@ pub fn import_queue<B, C, E, P>(
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	DigestItemFor<B>: CompatibleDigestItem<P>,
 	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,

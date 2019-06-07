@@ -183,12 +183,12 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B, Public>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash, Public, Signature>: DigestItem<Hash=B::Hash>,
+	generic::DigestItem<B::Hash, Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
+	DigestItemFor<B>: CompatibleDigestItem,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Signature>>,
 		Hash=B::Hash,
 	>,
 	E: Environment<B, Error=Error>,
@@ -236,7 +236,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Signature>>,
 		Hash=B::Hash,
 	>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -304,7 +304,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let proposer = match env.init(&chain_head, &authorities) {
+			let proposer = match env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -568,7 +568,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B, Public>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
+	DigestItemFor<B>: CompatibleDigestItem,// + DigestItem<AuthorityId=Public>,
 	E: ExtraVerification<B>,
 {
 	fn verify(
@@ -645,11 +645,14 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 
 				extra_verification.into_future().wait()?;
 
-				let maybe_keys = pre_header.digest()
+				let maybe_keys = None;
+				/* TODO: make this work:
+					pre_header.digest()
 					.log(DigestItem::as_authorities_change)
 					.map(|digest| digest.to_vec())
 					.map(Encode::encode)
 					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);
+				*/
 
 				let import_block = ImportBlock {
 					origin,

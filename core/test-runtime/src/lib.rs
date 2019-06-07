@@ -39,7 +39,7 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, DigestFor
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -161,7 +161,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, AuthorityId, AuthoritySignature>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, AuthoritySignature>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
@@ -458,6 +458,12 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block, consensus_aura::AuthorityId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
+				// TODO: make work.
+				fn authorities_change(_digest: &DigestFor<Block>)
+					-> Option<Vec<consensus_aura::AuthorityId>>
+				{
+					None
+				}
 			}
 
 			impl consensus_babe::BabeApi<Block, consensus_aura::AuthorityId> for Runtime {

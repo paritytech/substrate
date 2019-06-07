@@ -97,9 +97,11 @@ pub fn polish_block(block: &mut Block) {
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+
+	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
+/*	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}
+	}*/
 }
 
 pub fn execute_block(mut block: Block) {
@@ -129,9 +131,10 @@ pub fn execute_block(mut block: Block) {
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
+	/*if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}
+	}*/
 }
 
 /// The block executor.
@@ -215,9 +218,10 @@ pub fn finalize_block() -> Header {
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
+	/*if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}
+	}*/
 
 	Header {
 		number,

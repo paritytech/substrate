@@ -40,7 +40,7 @@ pub trait CompatibleDigestItem<T: Pair>: Sized {
 	fn as_aura_pre_digest(&self) -> Option<u64>;
 }
 
-impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Public, P::Signature>
+impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Signature>
 	where P: Pair, P::Signature: Clone + Encode + Decode,
 {
 	fn aura_seal(signature: Signature<P>) -> Self {

@@ -21,7 +21,7 @@
 use parity_codec::Codec;
 use substrate_client::decl_runtime_apis;
 use substrate_primitives::ed25519;
-use runtime_primitives::ConsensusEngineId;
+use runtime_primitives::{ConsensusEngineId, traits::DigestFor};
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
@@ -32,6 +32,10 @@ pub type AuthorityId = ed25519::Public;
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
 	pub trait AuraApi<AuthorityId: Codec> {
+		/// Returns the new authorities set, if it changed in this block according to the digest.
+		fn authorities_change(digest: &DigestFor<Block>)
+			-> Option<Vec<AuthorityId>>;
+
 		/// Return the slot duration in seconds for Aura.
 		/// Currently, only the value provided by this type at genesis
 		/// will be used.

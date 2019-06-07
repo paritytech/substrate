@@ -246,7 +246,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthoritySignature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -377,6 +377,12 @@ impl_runtime_apis! {
 	}
 
 	impl consensus_aura::AuraApi<Block, aura::AuthorityId> for Runtime {
+		// TODO: make work.
+		fn authorities_change(digest: &DigestFor<Block>)
+			-> Option<Vec<aura::AuthorityId>>
+		{
+			None
+		}
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

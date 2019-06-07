@@ -58,7 +58,7 @@ pub type Hash = primitives::H256;
 pub type Timestamp = u64;
 
 /// Digest item type.
-pub type DigestItem = generic::DigestItem<Hash, AuthorityId, AuthoritySignature>;
+pub type DigestItem = generic::DigestItem<Hash, AuthoritySignature>;
 /// Header type.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, DigestItem>;
 /// Block type.

@@ -44,7 +44,7 @@ impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
 	}
 }
 /// Digest item
-pub type DigestItem = GenDigestItem<H256, AuthorityId, AuthoritySignature>;
+pub type DigestItem = GenDigestItem<H256, AuthoritySignature>;
 
 /// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]

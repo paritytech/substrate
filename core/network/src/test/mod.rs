@@ -37,7 +37,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError};
+use consensus::{Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
@@ -47,7 +47,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Digest, DigestItem, Header, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Digest, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;
@@ -73,9 +73,12 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
-		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
-			.map(|auth| auth.iter().cloned().collect());
+	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+/*		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
+			.map(|auth| auth.iter().cloned().collect());*/
+		// TODO: should grab the new authorities from the digest (if any) and put in the new cache
+		// key that the consensus algo expects.
+		let maybe_keys = None;
 
 		Ok((ImportBlock {
 			origin,
@@ -86,7 +89,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
-		}, new_authorities))
+		}, maybe_keys))
 	}
 }
 

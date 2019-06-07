@@ -62,10 +62,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum DigestItem<Hash, AuthorityId, SealSignature> {
-	/// System digest item announcing that authorities set has been changed
-	/// in the block. Contains the new set of authorities.
-	AuthoritiesChange(Vec<AuthorityId>),
+pub enum DigestItem<Hash, SealSignature> {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
 	/// trie creation.
@@ -89,7 +86,7 @@ pub enum DigestItem<Hash, AuthorityId, SealSignature> {
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> ::serde::Serialize for DigestItem<Hash, AuthorityId, SealSignature> {
+impl<Hash: Encode, SealSignature: Encode> ::serde::Serialize for DigestItem<Hash, SealSignature> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| {
 			::substrate_primitives::bytes::serialize(bytes, seq)
@@ -102,9 +99,7 @@ impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> ::serde::Serializ
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
-	/// Reference to `DigestItem::AuthoritiesChange`.
-	AuthoritiesChange(&'a [AuthorityId]),
+pub enum DigestItemRef<'a, Hash: 'a, SealSignature: 'a> {
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
 	/// A message from the runtime to the consensus engine. This should *never*
@@ -133,14 +128,13 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
 #[derive(Encode, Decode)]
 enum DigestItemType {
 	Other = 0,
-	AuthoritiesChange = 1,
 	ChangesTrieRoot = 2,
 	Consensus = 4,
 	Seal = 5,
 	PreRuntime = 6,
 }
 
-impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignature> {
+impl<Hash, SealSignature> DigestItem<Hash, SealSignature> {
 	/// Returns Some if `self` is a `DigestItem::Other`.
 	pub fn as_other(&self) -> Option<&Vec<u8>> {
 		match *self {
@@ -150,9 +144,8 @@ impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignatu
 	}
 
 	/// Returns a 'referencing view' for this digest item.
-	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
+	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash, SealSignature> {
 		match *self {
-			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
 			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
@@ -164,16 +157,10 @@ impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignatu
 
 impl<
 	Hash: Codec + Member,
-	AuthorityId: Codec + Member + MaybeHash,
 	SealSignature: Codec + Member,
-> traits::DigestItem for DigestItem<Hash, AuthorityId, SealSignature> {
+> traits::DigestItem for DigestItem<Hash, SealSignature> {
 	type Hash = Hash;
-/*	type AuthorityId = AuthorityId;
 
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		self.dref().as_authorities_change()
-	}
-*/
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		self.dref().as_changes_trie_root()
 	}
@@ -183,20 +170,17 @@ impl<
 	}
 }
 
-impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for DigestItem<Hash, AuthorityId, SealSignature> {
+impl<Hash: Encode, SealSignature: Encode> Encode for DigestItem<Hash, SealSignature> {
 	fn encode(&self) -> Vec<u8> {
 		self.dref().encode()
 	}
 }
 
-impl<Hash: Decode, AuthorityId: Decode, SealSignature: Decode> Decode for DigestItem<Hash, AuthorityId, SealSignature> {
+impl<Hash: Decode, SealSignature: Decode> Decode for DigestItem<Hash, SealSignature> {
 	#[allow(deprecated)]
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
-			DigestItemType::AuthoritiesChange => Some(DigestItem::AuthoritiesChange(
-				Decode::decode(input)?,
-			)),
 			DigestItemType::ChangesTrieRoot => Some(DigestItem::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
@@ -219,15 +203,7 @@ impl<Hash: Decode, AuthorityId: Decode, SealSignature: Decode> Decode for Digest
 	}
 }
 
-impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member, SealSignature: Codec + Member> DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
-	/// Cast this digest item into `AuthoritiesChange`.
-	pub fn as_authorities_change(&self) -> Option<&'a [AuthorityId]> {
-		match *self {
-			DigestItemRef::AuthoritiesChange(ref authorities) => Some(authorities),
-			_ => None,
-		}
-	}
-
+impl<'a, Hash: Codec + Member, SealSignature: Codec + Member> DigestItemRef<'a, Hash, SealSignature> {
 	/// Cast this digest item into `ChangesTrieRoot`.
 	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
 		match *self {
@@ -245,15 +221,11 @@ impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member, SealSignature: Codec
 	}
 }
 
-impl<'a, Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
+impl<'a, Hash: Encode, SealSignature: Encode> Encode for DigestItemRef<'a, Hash, SealSignature> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
 		match *self {
-			DigestItemRef::AuthoritiesChange(authorities) => {
-				DigestItemType::AuthoritiesChange.encode_to(&mut v);
-				authorities.encode_to(&mut v);
-			},
 			DigestItemRef::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
@@ -289,7 +261,6 @@ mod tests {
 	fn should_serialize_digest() {
 		let digest = Digest {
 			logs: vec![
-				DigestItem::AuthoritiesChange(vec![1]),
 				DigestItem::ChangesTrieRoot(4),
 				DigestItem::Other(vec![1, 2, 3]),
 				DigestItem::Seal(Default::default(), Signature::default())
@@ -298,7 +269,7 @@ mod tests {
 
 		assert_eq!(
 			::serde_json::to_string(&digest).unwrap(),
-			"{\"logs\":[\"0x010401000000\",\"0x0204000000\",\"0x000c010203\",\"0x050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"]}",
+			"{\"logs\":[\"0x010401000000\",\"0x000c010203\",\"0x050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\"]}",
 		);
 	}
 }

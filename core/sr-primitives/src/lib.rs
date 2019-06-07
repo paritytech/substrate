@@ -737,11 +737,6 @@ macro_rules! impl_outer_log {
 
 		impl $crate::traits::DigestItem for $name {
 			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
-			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
-
-			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-				self.dref().and_then(|dref| dref.as_authorities_change())
-			}
 
 			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 				self.dref().and_then(|dref| dref.as_changes_trie_root())
