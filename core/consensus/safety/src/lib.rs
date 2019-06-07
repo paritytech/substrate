@@ -19,7 +19,7 @@
 #![forbid(missing_docs, unsafe_code)]
 
 use client;
-use transaction_pool::txpool::{self, Pool as TransactionPool, PoolApi};
+use transaction_pool::txpool::{self, PoolApi};
 use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
 use std::sync::Arc;

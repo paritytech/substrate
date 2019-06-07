@@ -34,7 +34,7 @@ use substrate_service::{
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
 	error::{Error as ServiceError},
 };
-use transaction_pool::{self, txpool::{Pool as TransactionPool, PoolApi}};
+use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;

@@ -58,7 +58,7 @@ use authorities::AuthoritiesApi;
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
-use transaction_pool::txpool::{self, Pool as TransactionPool, PoolApi};
+use transaction_pool::txpool::{self, PoolApi};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -76,9 +76,6 @@ use slots::{
 	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now,
 	check_equivocation, SlotData,
 };
-
-use node_runtime::{Call, AuraCall};
-use consensus_safety::submit_report_call;
 use safety_primitives::EquivocationProof;
 
 pub use aura_primitives::*;

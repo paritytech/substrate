@@ -103,8 +103,12 @@ impl Default for Options {
 	}
 }
 
+/// Something that can submit an extrinsic.
 pub trait PoolApi {
+	/// Concrete extrinsic validation and query logic.
 	type Api: ChainApi;
+
+	/// Imports one unverified extrinsic to the pool
 	fn submit_one(
 		&self,
 		at: &BlockId<<Self::Api as ChainApi>::Block>,
@@ -127,7 +131,7 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> PoolApi for Pool<B> {
 	type Api = B;
-	/// Imports one unverified extrinsic to the pool
+
 	fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
 		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
