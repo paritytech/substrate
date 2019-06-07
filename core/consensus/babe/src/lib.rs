@@ -806,7 +806,7 @@ fn claim_slot(
 	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
 
-/// Start an import queue for the Aura consensus algorithm.
+/// Start an import queue for the Babe consensus algorithm.
 pub fn import_queue<B, C, E>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
