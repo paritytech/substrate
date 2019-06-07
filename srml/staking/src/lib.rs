@@ -274,6 +274,7 @@ mod benches;
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
+use rstd::convert::TryInto;
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
@@ -443,7 +444,7 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait + session::Trait + timestamp::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -529,12 +530,14 @@ decl_storage! {
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): EraIndex;
 
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward) config(): BalanceOf<T>;
+		/// The accumulated reward for the current era. Reset to zero at the beginning of the era and
+		/// increased for every successfully finished session.
+		pub CurrentEraStart get(current_era_start): T::Moment;
 
-		/// The accumulated reward for the current era. Reset to zero at the beginning of the era
-		/// and increased for every successfully finished session.
-		pub CurrentEraReward get(current_era_reward): BalanceOf<T>;
+		/// A vec of validator to reward and their associated number of points.
+		/// A validator can appear in many elements of this vec.
+		// TODO TODO: should we use such a structure ? aggregate with an existing one ? use a map ?
+		pub CurrentEraRewards: Vec<(T::AccountId, u32)>;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -563,6 +566,9 @@ decl_storage! {
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
+				assert!(<timestamp::Now<T>>::exists());
+				<CurrentEraStart<T>>::put(<timestamp::Module<T>>::now());
+
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					assert!(T::Currency::free_balance(&stash) >= balance);
 					let _ = <Module<T>>::bond(
@@ -586,7 +592,7 @@ decl_storage! {
 					};
 				}
 
-				if let (_, Some(validators)) = <Module<T>>::select_validators() {
+				if let Some(validators) = <Module<T>>::select_validators() {
 					<session::Validators<T>>::put(&validators);
 				}
 			});
@@ -893,6 +899,14 @@ decl_module! {
 		fn set_invulnerables(validators: Vec<T::AccountId>) {
 			<Invulnerables<T>>::put(validators);
 		}
+
+		/// Add reward points to validator.
+		///
+		/// At the end of the era each the total payout will be distributed among validator
+		/// relatively to their points.
+		fn add_reward_points_to_validators(add: Vec<(T::AccountId, u32)>) {
+			<CurrentEraRewards<T>>::append(&add[..]).unwrap();
+		}
 	}
 }
 
@@ -978,7 +992,7 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to the validator's, and its
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
-	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) {
+	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
 		let off_the_table = reward.min(Self::validators(stash).validator_payment);
 		let reward = reward - off_the_table;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
@@ -995,16 +1009,16 @@ impl<T: Trait> Module<T> {
 			}
 			safe_mul_rational(exposure.own)
 		};
+
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
-		T::Reward::on_unbalanced(imbalance);
+
+		imbalance
 	}
 
 	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// accumulate good session reward
-		let reward = Self::current_session_reward();
-		<CurrentEraReward<T>>::mutate(|r| *r += reward);
-
+		// TODO TODO: previous implementation was accumulating reward here, should we accumulate
+		// duration in a way ?
 		if <ForceNewEra<T>>::take() || session_index % T::SessionsPerEra::get() == 0 {
 			Self::new_era()
 		} else {
@@ -1018,30 +1032,58 @@ impl<T: Trait> Module<T> {
 	/// get a chance to set their session keys.
 	fn new_era() -> Option<Vec<T::AccountId>> {
 		// Payout
-		let reward = <CurrentEraReward<T>>::take();
-		if !reward.is_zero() {
+		let rewards = <CurrentEraRewards<T>>::take();
+		let now = <timestamp::Module<T>>::now();
+		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
+			rstd::mem::replace(v, now.clone())
+		});
+		let era_duration = now - previous_era_start;
+		if !era_duration.is_zero() {
 			let validators = Self::current_elected();
+
+			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
+			let total_rewarded_stake = Self::slot_stake() * validator_len;
+
+			let (reward_map, total_points) = rewards.into_iter().fold(
+				(BTreeMap::new(), 0u32),
+				|(mut map, mut points), (validator, reward)| {
+					*map.entry(validator).or_insert(0) += reward;
+					points += reward;
+					(map, points)
+				}
+			);
+
+			// TODO TODO: this should be generic
+			let total_payout = inflation::compute_total_payout(
+				total_rewarded_stake.clone(),
+				T::Currency::total_issuance(),
+				<BalanceOf<T>>::from(
+					// TODO TODO: This is fine as an era duration of u32::max seconds must not happen
+					TryInto::<u32>::try_into(era_duration).unwrap_or(u32::max_value())
+				),
+			);
+
+			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
+
 			for v in validators.iter() {
-				Self::reward_validator(v, reward);
+				if let Some(&points) = reward_map.get(v) {
+					// TODO TODO: do not overflow by converting points/total_points into a Per*
+					let reward = total_payout * points.into() / total_points.into();
+					total_imbalance.subsume(Self::reward_validator(v, reward));
+				}
 			}
-			Self::deposit_event(RawEvent::Reward(reward));
-			let len = validators.len() as u32; // validators length can never overflow u64
-			let len: BalanceOf<T> = len.into();
-			let total_minted = reward * len;
-			let total_rewarded_stake = Self::slot_stake() * len;
-			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
+
+			let total_reward = total_imbalance.peek();
+			Self::deposit_event(RawEvent::Reward(total_reward));
+			T::Reward::on_unbalanced(total_imbalance);
+			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
 		}
 
 		// Increment current era.
 		<CurrentEra<T>>::mutate(|s| *s += 1);
 
 		// Reassign all Stakers.
-		let (slot_stake, maybe_new_validators) = Self::select_validators();
-
-		// Update the balances for rewarding according to the stakes.
-		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
-
-		maybe_new_validators
+		Self::select_validators()
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
@@ -1050,8 +1092,8 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// Returns the new `SlotStake` value.
-	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+	/// Returns the optional new validator set.
+	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
@@ -1149,7 +1191,7 @@ impl<T: Trait> Module<T> {
 			let validators = elected_stashes.into_iter()
 				.map(|s| Self::bonded(s).unwrap_or_default())
 				.collect::<Vec<_>>();
-			(slot_stake, Some(validators))
+			Some(validators)
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
 			// This is bad.
@@ -1157,7 +1199,7 @@ impl<T: Trait> Module<T> {
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
 			// TODO: #2494
-			(Self::slot_stake(), None)
+			None
 		}
 	}
 
