@@ -67,7 +67,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 
 		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
 		for (peer_id, addr) in &known_addresses {
-			kademlia.add_connected_address(peer_id, addr.clone());
+			kademlia.add_address(peer_id, addr.clone());
 		}
 
 		if enable_mdns {
@@ -104,7 +104,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	}
 
 	/// Returns the list of nodes that we know exist in the network.
-	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
+	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
 		self.discovery.kademlia.kbuckets_entries()
 	}
 
@@ -165,7 +165,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<debug_in
 			info.listen_addrs.truncate(30);
 		}
 		for addr in &info.listen_addrs {
-			self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
+			self.discovery.kademlia.add_address(&peer_id, addr.clone());
 		}
 		self.user_protocol.0.add_discovered_nodes(iter::once(peer_id.clone()));
 	}
@@ -188,8 +188,10 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<Kademlia
 						results");
 				}
 			}
-			// We never start any GET_PROVIDERS query.
-			KademliaOut::GetProvidersResult { .. } => ()
+			// We never start any other type of query.
+			KademliaOut::GetProvidersResult { .. } => {}
+			KademliaOut::GetValueResult(_) => {}
+			KademliaOut::PutValueResult(_) => {}
 		}
 	}
 }

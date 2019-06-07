@@ -25,6 +25,7 @@ use srml_support::{
 };
 use democracy;
 use system::{self, ensure_signed};
+use super::OnMembersChanged;
 
 // no polynomial attacks:
 //
@@ -95,6 +96,9 @@ pub trait Trait: democracy::Trait {
 
 	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
 	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// What to do when the members change.
+	type OnMembersChanged: OnMembersChanged<Self::AccountId>;
 }
 
 decl_module! {
@@ -299,15 +303,16 @@ decl_module! {
 		}
 
 		/// Set the desired member count; if lower than the current count, then seats will not be up
-		/// election when they expire. If more, then a new vote will be started if one is not already
-		/// in progress.
+		/// election when they expire. If more, then a new vote will be started if one is not
+		/// already in progress.
 		fn set_desired_seats(#[compact] count: u32) {
 			<DesiredSeats<T>>::put(count);
 		}
 
-		/// Remove a particular member. A tally will happen instantly (if not already in a presentation
+		/// Remove a particular member from the council. This is effective immediately.
+		///
+		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		/// This is effective immediately.
 		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
 			let who = T::Lookup::lookup(who)?;
 			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
@@ -315,6 +320,7 @@ decl_module! {
 				.filter(|i| i.0 != who)
 				.collect();
 			<ActiveCouncil<T>>::put(new_council);
+			T::OnMembersChanged::on_members_changed(&[], &[who]);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -329,7 +335,7 @@ decl_module! {
 			<TermDuration<T>>::put(count);
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
@@ -420,6 +426,14 @@ impl<T: Trait> Module<T> {
 	/// If `who` a candidate at the moment?
 	pub fn is_a_candidate(who: &T::AccountId) -> bool {
 		<RegisterInfoOf<T>>::exists(who)
+	}
+
+	/// Iff the councillor `who` still has a seat at blocknumber `n` returns `true`.
+	pub fn will_still_be_councillor_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
+		Self::active_council().iter()
+			.find(|&&(ref a, _)| a == who)
+			.map(|&(_, expires)| expires > n)
+			.unwrap_or(false)
 	}
 
 	/// Determine the block that a vote can happen on which is no less than `n`.
@@ -544,7 +558,7 @@ impl<T: Trait> Module<T> {
 
 		// return bond to winners.
 		let candidacy_bond = Self::candidacy_bond();
-		let incoming: Vec<T::AccountId> = leaderboard.iter()
+		let incoming: Vec<_> = leaderboard.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
@@ -553,7 +567,9 @@ impl<T: Trait> Module<T> {
 			.inspect(|a| {T::Currency::unreserve(a, candidacy_bond);})
 			.collect();
 		let active_council = Self::active_council();
-		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
+		let outgoing: Vec<_> = active_council.iter()
+			.take(expiring.len())
+			.map(|a| a.0.clone()).collect();
 
 		// set the new council.
 		let mut new_council: Vec<_> = active_council
@@ -563,6 +579,8 @@ impl<T: Trait> Module<T> {
 			.collect();
 		new_council.sort_by_key(|&(_, expiry)| expiry);
 		<ActiveCouncil<T>>::put(new_council);
+
+		T::OnMembersChanged::on_members_changed(&incoming, &outgoing);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();

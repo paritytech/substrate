@@ -177,10 +177,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 }
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
-	underlying: &'a AccountDb<T>,
+	underlying: &'a dyn AccountDb<T>,
 }
 impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	pub fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
+	pub fn new(underlying: &'a dyn AccountDb<T>) -> OverlayAccountDb<'a, T> {
 		OverlayAccountDb {
 			local: RefCell::new(ChangeSet::new()),
 			underlying,

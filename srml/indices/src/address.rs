@@ -64,7 +64,7 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
-			x @ 0x00...0xef => Address::Index(AccountIndex::from(x as u32)),
+			x @ 0x00..=0xef => Address::Index(AccountIndex::from(x as u32)),
 			0xfc => Address::Index(AccountIndex::from(
 				need_more_than(0xef, u16::decode(input)?)? as u32
 			)),

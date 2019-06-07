@@ -52,7 +52,7 @@ pub fn export_blocks<F, E, W>(
 	let last = match to {
 		Some(v) if v.is_zero() => One::one(),
 		Some(v) => v,
-		None => client.info()?.chain.best_number,
+		None => client.info().chain.best_number,
 	};
 
 	if last < block {
@@ -151,7 +151,7 @@ pub fn import_blocks<F, E, R>(
 			let (header, extrinsics) = signed.block.deconstruct();
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
-				hash: hash,
+				hash,
 				justification: signed.justification,
 				header: Some(header),
 				body: Some(extrinsics),
@@ -186,7 +186,7 @@ pub fn import_blocks<F, E, R>(
 		blocks_imported += 1;
 	}
 
-	info!("Imported {} blocks. Best: #{}", block_count, client.info()?.chain.best_number);
+	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
 
 	Ok(())
 }
@@ -200,7 +200,7 @@ pub fn revert_chain<F>(
 {
 	let client = new_client::<F>(&config)?;
 	let reverted = client.revert(blocks)?;
-	let info = client.info()?.chain;
+	let info = client.info().chain;
 
 	if reverted.is_zero() {
 		info!("There aren't any non-finalized blocks to revert.");

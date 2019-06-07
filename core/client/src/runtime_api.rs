@@ -31,7 +31,7 @@ pub use runtime_primitives::{
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
 #[doc(hidden)]
-pub use primitives::{ExecutionContext, OffchainExt};
+pub use primitives::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
@@ -171,9 +171,6 @@ decl_runtime_apis! {
 		#[skip_initialize_block]
 		#[initialize_block]
 		fn initialize_block(header: &<Block as BlockT>::Header);
-		/// Returns the authorities.
-		#[deprecated(since = "1.0", note = "Please switch to `AuthoritiesApi`.")]
-		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

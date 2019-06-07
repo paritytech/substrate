@@ -76,11 +76,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
-		let chain_info = match self.inner.info() {
-			Ok(info) => info.chain,
-			_ => return,
-		};
+	fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+		let chain_info = self.inner.info().chain;
 
 		// request justifications for all pending changes for which change blocks have already been imported
 		let authorities = self.authority_set.inner().read();
@@ -186,7 +183,7 @@ where
 			);
 
 			match maybe_change {
-				Err(e) => match api.has_api_with::<GrandpaApi<Block>, _>(&at, |v| v >= 2) {
+				Err(e) => match api.has_api_with::<dyn GrandpaApi<Block>, _>(&at, |v| v >= 2) {
 					Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 					Ok(true) => {
 						// API version is high enough to support forced changes
@@ -320,7 +317,6 @@ where
 
 					#[allow(deprecated)]
 					let best_finalized_number = self.inner.backend().blockchain().info()
-						.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 						.finalized_number;
 
 					let canon_number = best_finalized_number.min(median_last_finalized_number);

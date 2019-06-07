@@ -352,10 +352,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -476,7 +472,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap();
 				}
 			}
 
@@ -499,10 +495,6 @@ cfg_if! {
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
-				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
 				}
 			}
 
@@ -628,7 +620,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
+					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
 
