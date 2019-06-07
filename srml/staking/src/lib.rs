@@ -116,7 +116,7 @@
 //!
 //! Finally, any of the roles above can choose to step back temporarily and just chill for a while.
 //! This means that if they are a nominator, they will not be considered as voters anymore and if
-//! they are validators, they will no longermbe a candidate for the next election.
+//! they are validators, they will no longer be a candidate for the next election.
 //!
 //! An account can step back via the [`chill`](enum.Call.html#variant.chill) call.
 //!
