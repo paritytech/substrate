@@ -720,10 +720,10 @@ where
 		<FreeBalance<T, I>>::get(who)
 	}
 
-	/// # <weight>
-	/// Despite iterating over a list of locks, they are limited by the number of
-	/// lock IDs, which means the number of runtime modules that intend to use and create locks.
-	/// # </weight>
+	// # <weight>
+	// Despite iterating over a list of locks, they are limited by the number of
+	// lock IDs, which means the number of runtime modules that intend to use and create locks.
+	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
