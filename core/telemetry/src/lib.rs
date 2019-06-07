@@ -14,38 +14,95 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Telemetry utils.
+//! Telemetry utilities.
 //!
-//! `telemetry` macro may be used anywhere in the Substrate codebase
-//! in order to send real-time logging information to the telemetry
-//! server (if there is one). We use the async drain adapter of `slog`
-//! so that the logging thread doesn't get held up at all.
+//! Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.
+//! After that, calling `slog_scope::with_logger` will return a logger that sends information to
+//! the telemetry endpoints. The `telemetry!` macro is a short-cut for calling
+//! `slog_scope::with_logger` followed with `slog_log!`.
+//!
+//! Note that you are supposed to only ever use `telemetry!` and not `slog_scope::with_logger` at
+//! the moment. Substate may eventually be reworked to get proper `slog` support, including sending
+//! information to the telemetry.
+//!
+//! The `Telemetry` struct implements `Future` and must be polled regularly (or sent to a
+//! background thread/task) in order for the telemetry to properly function. Dropping the object
+//! will also deregister the global logger and replace it with a logger that discards messages.
+//!
+//! # Example
+//!
+//! ```no_run
+//! let telemetry = substrate_telemetry::init_telemetry(substrate_telemetry::TelemetryConfig {
+//! 	endpoints: substrate_telemetry::TelemetryEndpoints::new(vec![
+//! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
+//! 		("wss://example.com".into(), 0)
+//! 	]),
+//! 	on_connect: Box::new(|| {}),
+//! 	// Can be used to pass an external implementation of WebSockets.
+//! 	wasm_external_transport: None,
+//! });
+//!
+//! // The `telemetry` object implements `Future` and must be processed.
+//! std::thread::spawn(move || {
+//! 	tokio::run(telemetry);
+//! });
+//!
+//! // Sends a message on the telemetry.
+//! substrate_telemetry::telemetry!(substrate_telemetry::SUBSTRATE_INFO; "test";
+//! 	"foo" => "bar",
+//! )
+//! ```
+//!
 
-use std::{io, time, thread};
-use std::sync::Arc;
+use futures::{prelude::*, task::AtomicTask};
+use libp2p::{Multiaddr, wasm_ext};
+use log::{trace, warn};
 use parking_lot::Mutex;
-use slog::{Drain, o, OwnedKVList, Record};
-use log::trace;
-use rand::{thread_rng, Rng};
+use serde::{Serialize, Deserialize};
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
+
 pub use slog_scope::with_logger;
 pub use slog;
-use serde::{Serialize, Deserialize};
-use core::result;
+
+mod worker;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
 	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
 	pub endpoints: TelemetryEndpoints,
-	/// What do do when we connect to the servers.
-	/// Note that this closure is executed each time we connect to a telemetry endpoint.
+
+	/// What to do when we connect to a server.
+	///
+	/// This closure is executed each time we connect to a telemetry endpoint, either for the first
+	/// time or after being disconnected.
 	pub on_connect: Box<dyn Fn() + Send + Sync + 'static>,
+
+	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
+	/// some binding between the networking provided by the operating system or environment and
+	/// libp2p.
+	///
+	/// This parameter exists whatever the target platform is, but it is expected to be set to
+	/// `Some` only when compiling for WASM.
+	///
+	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
+	/// >                internal buffering going on. In the context of WebSockets, each `write`
+	/// >                must be one individual WebSockets frame.
+	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
-/// Telemetry service guard.
-pub type Telemetry = slog_scope::GlobalLoggerGuard;
+/// List of telemetry servers we want to talk to. Contains the URL of the server, and the
+/// maximum verbosity level.
+///
+/// The URL string can be either a URL or a multiaddress.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryEndpoints(Vec<(String, u8)>);
 
-/// Size of the channel for passing messages to telemetry thread.
-const CHANNEL_SIZE: usize = 262_144;
+impl TelemetryEndpoints {
+	pub fn new(endpoints: Vec<(String, u8)>) -> Self {
+		TelemetryEndpoints(endpoints)
+	}
+}
 
 /// Log levels.
 pub const SUBSTRATE_DEBUG: &str = "9";
@@ -56,105 +113,135 @@ pub const CONSENSUS_DEBUG: &str = "5";
 pub const CONSENSUS_WARN: &str = "4";
 pub const CONSENSUS_INFO: &str = "0";
 
-/// Multiply logging to all drains. This is similar to `slog::Duplicate`, which is
-/// limited to two drains though and doesn't support dynamic nesting at runtime.
-#[derive(Debug, Clone)]
-pub struct Multiply<D: Drain> (pub Vec<D>);
+/// Telemetry object. Implements `Future` and must be polled regularly.
+/// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
+/// regularly.
+/// Dropping all the clones unregisters the telemetry.
+#[derive(Clone)]
+pub struct Telemetry {
+	inner: Arc<TelemetryInner>,
+	/// Slog guard so that we don't get deregistered.
+	_guard: Arc<slog_scope::GlobalLoggerGuard>,
+}
 
-impl<D: Drain> Multiply<D> {
-	pub fn new(v: Vec<D>) -> Self {
-		Multiply(v)
+// Implementation notes: considering that logging can happen at any moment, we only have two
+// options: locking a mutex (which we currently do), or using a channel (which we should do).
+// At the moment, `slog` doesn't provide any easy way to serialize records in order to send them
+// over a channel, but ideally that's what should be done.
+
+/// Shared between `Telemetry` and `TelemetryDrain`.
+struct TelemetryInner {
+	/// Worker for the telemetry.
+	worker: Mutex<worker::TelemetryWorker>,
+	/// Same field as in the configuration. Called when we connected to an endpoint.
+	on_connect: Box<dyn Fn() + Send + Sync + 'static>,
+	/// Task to wake up when we add a log entry to the worker.
+	polling_task: AtomicTask,
+}
+
+/// Implements `slog::Drain`.
+struct TelemetryDrain {
+	inner: std::panic::AssertUnwindSafe<Weak<TelemetryInner>>,
+}
+
+/// Initializes the telemetry. See the crate root documentation for more information.
+///
+/// Please be careful to not call this function twice in the same program. The `slog` crate
+/// doesn't provide any way of knowing whether a global logger has already been registered.
+pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
+	// Build the list of telemetry endpoints.
+	let mut endpoints = Vec::new();
+	for &(ref url, verbosity) in &config.endpoints.0 {
+		match url_to_multiaddr(url) {
+			Ok(addr) => endpoints.push((addr, verbosity)),
+			Err(err) => warn!(target: "telemetry", "Invalid telemetry URL {}: {}", url, err),
+		}
+	}
+
+	let inner = Arc::new(TelemetryInner {
+		worker: Mutex::new(worker::TelemetryWorker::new(endpoints, config.wasm_external_transport)),
+		on_connect: config.on_connect,
+		polling_task: AtomicTask::new(),
+	});
+
+	let guard = {
+		let logger = TelemetryDrain { inner: std::panic::AssertUnwindSafe(Arc::downgrade(&inner)) };
+		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
+		slog_scope::set_global_logger(root)
+	};
+
+	Telemetry {
+		inner,
+		_guard: Arc::new(guard),
 	}
 }
 
-impl<D: Drain> Drain for Multiply<D> {
-	type Ok = Vec<D::Ok>;
-	type Err = Vec<D::Err>;
+impl Future for Telemetry {
+	type Item = ();
+	type Error = ();
 
-	fn log(&self, record: &Record, logger_values: &OwnedKVList) -> result::Result<Self::Ok, Self::Err> {
-		let mut oks = Vec::new();
-		let mut errs = Vec::new();
+	fn poll(&mut self) -> Poll<(), ()> {
+		let before = Instant::now();
 
-		self.0.iter().for_each(|l| {
-			let res: Result<<D as Drain>::Ok, <D as Drain>::Err> = (*l).log(record, logger_values);
-			match res {
-				Ok(o) => oks.push(o),
-				Err(e) => errs.push(e),
+		let mut has_connected = false;
+		while let Async::Ready(event) = self.inner.worker.lock().poll() {
+			// Right now we only have one possible event. This line is here in order to not
+			// forget to handle any possible new event type.
+			let worker::TelemetryWorkerEvent::Connected = event;
+			has_connected = true;
+		}
+
+		if before.elapsed() > Duration::from_millis(200) {
+			warn!(target: "telemetry", "Polling the telemetry took more than 200ms");
+		}
+
+		// We use an intermediary variable `has_connected` so that the lock is released when we
+		// call `on_connect`.
+		if has_connected {
+			trace!(target: "telemetry", "Running on_connect handlers");
+			(self.inner.on_connect)();
+		}
+
+		self.inner.polling_task.register();
+		Ok(Async::NotReady)
+	}
+}
+
+impl slog::Drain for TelemetryDrain {
+	type Ok = ();
+	type Err = ();
+
+	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
+		if let Some(inner) = self.inner.0.upgrade() {
+			let before = Instant::now();
+			let result = inner.worker.lock().log(record, values);
+			inner.polling_task.notify();
+			if before.elapsed() > Duration::from_millis(50) {
+				warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
 			}
-		});
-
-		if !errs.is_empty() {
-			result::Result::Err(errs)
+			result
 		} else {
-			result::Result::Ok(oks)
+			Ok(())
 		}
 	}
 }
 
-/// Initialize telemetry.
-pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
-	let mut endpoint_drains: Vec<Box<slog::Filter<_, _>>> = Vec::new();
-	let mut out_syncs = Vec::new();
+/// Parses a WebSocket URL into a libp2p `Multiaddr`.
+fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
+	// First, assume that we have a `Multiaddr`.
+	let parse_error = match url.parse() {
+		Ok(ma) => return Ok(ma),
+		Err(err) => err,
+	};
 
-	// Set up a filter/drain for each endpoint
-	config.endpoints.0.iter().for_each(|(url, verbosity)| {
-		let writer = TelemetryWriter::new(Arc::new(url.to_owned()));
-		let out_sync = writer.out.clone();
-		out_syncs.push(out_sync);
+	// If not, try the `ws://path/url` format.
+	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
+		return Ok(ma)
+	}
 
-		let until_verbosity = *verbosity;
-		let filter = slog::Filter(
-			slog_json::Json::default(writer).fuse(),
-			move |rec| {
-				let tag = rec.tag().parse::<u8>()
-					.expect("`telemetry!` macro requires tag.");
-				tag <= until_verbosity
-			});
-
-		let filter = Box::new(filter) as Box<slog::Filter<_, _>>;
-		endpoint_drains.push(filter);
-	});
-
-	// Set up logging to all endpoints
-	let drain = slog_async::Async::new(Multiply::new(endpoint_drains).fuse());
-	let root = slog::Logger::root(drain.chan_size(CHANNEL_SIZE)
-		.overflow_strategy(slog_async::OverflowStrategy::DropAndReport)
-		.build().fuse(), o!()
-	);
-	let logger_guard = slog_scope::set_global_logger(root);
-
-	// Spawn a thread for each endpoint
-	let on_connect = Arc::new(config.on_connect);
-	config.endpoints.0.into_iter().for_each(|(url, verbosity)| {
-		let inner_verbosity = Arc::new(verbosity.to_owned());
-		let inner_on_connect = Arc::clone(&on_connect);
-
-		let out_sync = out_syncs.remove(0);
-		let out_sync = Arc::clone(&out_sync);
-
-		thread::spawn(move || {
-			loop {
-				let on_connect = Arc::clone(&inner_on_connect);
-				let out_sync = Arc::clone(&out_sync);
-				let verbosity = Arc::clone(&inner_verbosity);
-
-				trace!(target: "telemetry",
-					"Connecting to Telemetry at {} with verbosity {}", url, Arc::clone(&verbosity));
-
-				let _ = ws::connect(url.to_owned(),
-					|out| {
-						Connection::new(out, Arc::clone(&out_sync), Arc::clone(&on_connect), url.clone())
-					});
-
-				// Sleep for a random time between 5-10 secs. If there are general connection
-				// issues not all threads should be synchronized in their re-connection time.
-				let random_sleep = thread_rng().gen_range(0, 5);
-				thread::sleep(time::Duration::from_secs(5) + time::Duration::from_secs(random_sleep));
-			}
-		});
-	});
-
-	logger_guard
+	// If we have no clue about the format of that string, assume that we were expecting a
+	// `Multiaddr`.
+	Err(parse_error)
 }
 
 /// Translates to `slog_scope::info`, but contains an additional verbosity
@@ -166,122 +253,5 @@ macro_rules! telemetry {
 		$crate::with_logger(|l| {
 			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		})
-    }
-}
-
-struct Connection {
-	out: ws::Sender,
-	out_sync: Arc<Mutex<Option<ws::Sender>>>,
-	on_connect: Arc<Box<dyn Fn() + Send + Sync + 'static>>,
-	url: String,
-}
-
-impl Connection {
-	fn new(
-		out: ws::Sender,
-		out_sync: Arc<Mutex<Option<ws::Sender>>>,
-		on_connect: Arc<Box<dyn Fn() + Send + Sync + 'static>>,
-		url: String
-	) -> Self {
-		Connection {
-			out,
-			out_sync,
-			on_connect,
-			url,
-		}
-	}
-}
-
-impl ws::Handler for Connection {
-	fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
-		trace!(target: "telemetry", "Connected to {}!", self.url);
-
-		*self.out_sync.lock() = Some(self.out.clone());
-		(self.on_connect)();
-		Ok(())
-	}
-
-    fn on_close(&mut self, code: ws::CloseCode, reason: &str) {
-		*self.out_sync.lock() = None;
-
-		trace!(target: "telemetry", "Connection to {} closing due to ({:?}) {}",
-			self.url, code, reason);
-    }
-
-	fn on_error(&mut self, _: ws::Error) {
-		*self.out_sync.lock() = None;
-
-		// Sleep to ensure that reconnecting isn't spamming logs.
-		// This happens in it's own thread so it won't block anything.
-		thread::sleep(time::Duration::from_millis(1000));
-	}
-}
-
-struct TelemetryWriter {
-	buffer: Vec<u8>,
-	out: Arc<Mutex<Option<ws::Sender>>>,
-	url: Arc<String>,
-}
-
-impl TelemetryWriter {
-	fn new(url: Arc<String>) -> Self {
-		let out = Arc::new(Mutex::new(None));
-
-		TelemetryWriter {
-			buffer: Vec::new(),
-			out,
-			url,
-		}
-	}
-}
-
-impl io::Write for TelemetryWriter {
-	fn write(&mut self, msg: &[u8]) -> io::Result<usize> {
-		let mut iter = msg.split(|x| *x == b'\n');
-		let first = iter.next().expect("Split iterator always has at least one element; qed");
-
-		self.buffer.extend_from_slice(first);
-
-		// Flush for each occurrence of new line character
-		for continued in iter {
-			let _ = self.flush();
-			self.buffer.extend_from_slice(continued);
-		}
-
-		Ok(msg.len())
-	}
-
-	fn flush(&mut self) -> io::Result<()> {
-		if self.buffer.is_empty() {
-			return Ok(());
-		}
-		if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-			let mut out = self.out.lock();
-
-			let error = if let Some(ref mut o) = *out {
-				let r = o.send(s);
-				trace!(target: "telemetry", "Sent to telemetry {}: {} -> {:?}", self.url, s, r);
-
-				r.is_err()
-			} else {
-				trace!(target: "telemetry", "Telemetry socket closed to {}, failed to send: {}", self.url, s);
-				false
-			};
-
-			if error {
-				*out = None;
-			}
-		}
-		self.buffer.clear();
-		Ok(())
-	}
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TelemetryEndpoints (Vec<(String, u8)>);
-
-impl TelemetryEndpoints {
-	pub fn new(endpoints: Vec<(String, u8)>) -> Self {
-		TelemetryEndpoints(endpoints)
 	}
 }
