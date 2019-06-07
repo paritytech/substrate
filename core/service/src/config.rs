@@ -50,8 +50,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
-	/// Size in percent of cache size dedicated to hashes
-	pub state_cache_hash_ratio: Option<usize>, 
 	/// Size in percent of cache size dedicated to child tries 
 	pub state_cache_child_ratio: Option<usize>, 
 	/// Pruning settings.
@@ -104,7 +102,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			database_path: Default::default(),
 			database_cache_size: Default::default(),
 			state_cache_size: Default::default(),
-			state_cache_hash_ratio: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			keys: Default::default(),
 			custom: Default::default(),

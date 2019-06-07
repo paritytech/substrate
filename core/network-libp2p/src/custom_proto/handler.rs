@@ -118,10 +118,11 @@ where
 		self.protocol.clone()
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		let clock = Clock::new();
 		CustomProtoHandler {
 			protocol: self.protocol,
+			endpoint: connected_point.to_endpoint(),
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
@@ -144,6 +145,10 @@ pub struct CustomProtoHandler<TMessage, TSubstream> {
 	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
 	/// any influence on the behaviour.
 	remote_peer_id: PeerId,
+
+	/// Whether we are the connection dialer or listener. Used to determine who, between the local
+	/// node and the remote node, has priority.
+	endpoint: Endpoint,
 
 	/// Queue of events to send to the outside.
 	///
@@ -208,9 +213,8 @@ enum ProtocolState<TMessage, TSubstream> {
 /// Event that can be received by a `CustomProtoHandler`.
 #[derive(Debug)]
 pub enum CustomProtoHandlerIn<TMessage> {
-	/// The node should start using custom protocols. Contains whether we are the dialer or the
-	/// listener of the connection.
-	Enable(Endpoint),
+	/// The node should start using custom protocols.
+	Enable,
 
 	/// The node should stop using custom protocols.
 	Disable,
@@ -265,7 +269,7 @@ where
 	TMessage: CustomMessage,
 {
 	/// Enables the handler.
-	fn enable(&mut self, endpoint: Endpoint) {
+	fn enable(&mut self) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
@@ -275,7 +279,7 @@ where
 
 			ProtocolState::Init { substreams: incoming, .. } => {
 				if incoming.is_empty() {
-					if let Endpoint::Dialer = endpoint {
+					if let Endpoint::Dialer = self.endpoint {
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(self.protocol.clone()),
 							info: (),
@@ -557,7 +561,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	fn inject_event(&mut self, message: CustomProtoHandlerIn<TMessage>) {
 		match message {
 			CustomProtoHandlerIn::Disable => self.disable(),
-			CustomProtoHandlerIn::Enable(endpoint) => self.enable(endpoint),
+			CustomProtoHandlerIn::Enable => self.enable(),
 			CustomProtoHandlerIn::SendCustomMessage { message } =>
 				self.send_message(message),
 		}

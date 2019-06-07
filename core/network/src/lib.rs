@@ -46,8 +46,7 @@ pub use service::{
 	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork,
 	NetworkMsg, SyncProvider, ExHashT, ReportHandle,
 };
-pub use protocol::{ProtocolStatus, PeerInfo};
-pub use specialization::Context;
+pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
 	identity, multiaddr,

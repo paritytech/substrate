@@ -70,13 +70,11 @@ use client::in_mem::Backend as InMemoryBackend;
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 
-/// Default value for storage cache hash ratio.
-const DEFAULT_HASH_RATIO: (usize, usize) = (1, 10);
 /// Default value for storage cache child ratio.
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState,
@@ -175,8 +173,6 @@ pub struct DatabaseSettings {
 	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
-	/// Ratio of cache size dedicated to hashes.
-	pub state_cache_hash_ratio: Option<(usize, usize)>,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
 	/// Path to the database.
@@ -226,7 +222,7 @@ struct PendingBlock<Block: BlockT> {
 }
 
 // wrapper that implements trait required for state_db
-struct StateMetaDb<'a>(&'a KeyValueDB);
+struct StateMetaDb<'a>(&'a dyn KeyValueDB);
 
 impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 	type Error = io::Error;
@@ -238,13 +234,13 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
+	fn new(db: Arc<dyn KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -284,15 +280,15 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
-	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
+	fn info(&self) -> client::blockchain::Info<Block> {
 		let meta = self.meta.read();
-		Ok(client::blockchain::Info {
+		client::blockchain::Info {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
-		})
+		}
 	}
 
 	fn status(&self, id: BlockId<Block>) -> Result<client::blockchain::BlockStatus, client::error::Error> {
@@ -353,7 +349,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -367,7 +363,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 }
 
 impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
-	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn client::blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -492,7 +488,7 @@ where Block: BlockT<Hash=H256>,
 }
 
 struct StorageDb<Block: BlockT> {
-	pub db: Arc<KeyValueDB>,
+	pub db: Arc<dyn KeyValueDB>,
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
@@ -531,7 +527,7 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 }
 
 pub struct DbChangesTrieStorage<Block: BlockT> {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	min_blocks_to_keep: Option<u32>,
 	_phantom: ::std::marker::PhantomData<Block>,
@@ -675,6 +671,7 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
+	import_lock: Mutex<()>,
 }
 
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
@@ -712,7 +709,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let db_setting = DatabaseSettings {
 			cache_size: None,
 			state_cache_size: 16777216,
-			state_cache_hash_ratio: Some((10, 100)),
 			state_cache_child_ratio: Some((50, 100)),
 			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
@@ -725,7 +721,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 
 	fn from_kvdb(
-		db: Arc<KeyValueDB>,
+		db: Arc<dyn KeyValueDB>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings
 	) -> Result<Self, client::error::Error> {
@@ -753,9 +749,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			canonicalization_delay,
 			shared_cache: new_shared_cache(
 				config.state_cache_size,
-				config.state_cache_hash_ratio.unwrap_or(DEFAULT_HASH_RATIO),
 				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
 			),
+			import_lock: Default::default(),
 		})
 	}
 
@@ -781,7 +777,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		}
 
 		// insert all other headers + bodies + justifications
-		let info = self.blockchain.info().unwrap();
+		let info = self.blockchain.info();
 		for (number, hash, header) in headers {
 			let id = BlockId::Hash(hash);
 			let justification = self.blockchain.justification(id).unwrap();
@@ -1299,8 +1295,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
-		let mut best = self.blockchain.info()?.best_number;
-		let finalized = self.blockchain.info()?.finalized_number;
+		let mut best = self.blockchain.info().best_number;
+		let finalized = self.blockchain.info().finalized_number;
 		let revertible = best - finalized;
 		let n = if revertible < n { revertible } else { n };
 
@@ -1385,6 +1381,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 		}
 		Ok(())
+	}
+
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
 	}
 }
 
@@ -1504,7 +1504,7 @@ mod tests {
 		};
 
 		let backend = Backend::<Block>::new_test_db(1, 0, backing);
-		assert_eq!(backend.blockchain().info().unwrap().best_number, 9);
+		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
 		}

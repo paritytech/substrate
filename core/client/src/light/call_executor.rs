@@ -400,7 +400,7 @@ pub fn prove_execution<Block, S, E>(
 		E: CallExecutor<Block, Blake2Hasher>,
 {
 	let trie_state = state.as_trie_backend()
-		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();

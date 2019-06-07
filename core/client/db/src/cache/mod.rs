@@ -77,7 +77,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
 	authorities_column: Option<u32>,
@@ -88,7 +88,7 @@ pub struct DbCache<Block: BlockT> {
 impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
-		db: Arc<KeyValueDB>,
+		db: Arc<dyn KeyValueDB>,
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
@@ -150,7 +150,7 @@ impl<Block: BlockT> DbCache<Block> {
 fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: CacheKeyId,
-	db: &Arc<KeyValueDB>,
+	db: &Arc<dyn KeyValueDB>,
 	key_lookup: Option<u32>,
 	header: Option<u32>,
 	cache: Option<u32>,

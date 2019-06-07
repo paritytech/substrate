@@ -9,7 +9,7 @@ derive_more = "0.14.0"
 futures = "0.1"
 log = "0.4"
 parity-codec = "3.3"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 sr-primitives = { path = "../sr-primitives" }
 client = { package = "substrate-client", path = "../client" }
 substrate-primitives = { path = "../primitives" }

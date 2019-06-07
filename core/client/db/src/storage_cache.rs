@@ -40,8 +40,6 @@ pub struct Cache<B: Block, H: Hasher> {
 	lru_hashes: LRUMap<StorageKey, OptionHOut<H::Out>>,
 	/// Storage cache for child trie. `None` indicates that key is known to be missing.
 	lru_child_storage: LRUMap<ChildStorageKey, Option<StorageValue>>,
-	/// Storage hashes cache for chid trie. `None` indicates that key is known to be missing.
-	lru_child_hashes: LRUMap<ChildStorageKey, OptionHOut<H::Out>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
@@ -51,6 +49,10 @@ struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
 /// Internal trait similar to `heapsize` but using
 /// a simply estimation.
+///
+/// This should not be made public, it is implementation
+/// detail trait. If it need to become public please
+/// consider using `malloc_size_of`.
 trait EstimateSize {
 	/// Return a size estimation of additional size needed
 	/// to cache this struct (in bytes).
@@ -90,6 +92,10 @@ impl<T: EstimateSize> EstimateSize for (T, T) {
 // only the key hash.
 // Current hash is `RandomState` `SipHasher13` so u64.
 // Do not account for std hashmap inner implementation details.
+//
+// This is higly dependant on std or foreing libreary implementation
+// and should be considered as a small fix cost to account for when
+// spaming small key value. (the value is rather low).
 const LINKED_HASHMAP_ENTRY_OVERHEAD:	usize = 64 / 8; 
 
 impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
@@ -157,31 +163,28 @@ impl<B: Block, H: Hasher> Cache<B, H> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
 		self.lru_storage.used_size()
-			+ self.lru_hashes.used_size()
 			+ self.lru_child_storage.used_size()
-			+ self.lru_child_hashes.used_size()
+			//  ignero small hashes storage + self.lru_hashes.used_size()
 	}
 }
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
+/// Fix lru storage size for hash (small 64ko).
+const FIX_LRU_HASH_SIZE: usize = 65_536;
+
 /// Create a new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(
 	shared_cache_size: usize,
-	hash_ratio: (usize, usize),
 	child_ratio: (usize, usize),
 ) -> SharedCache<B, H> {
-	let non_hash = hash_ratio.1.saturating_sub(hash_ratio.0);
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
 	Arc::new(Mutex::new(Cache {
 		lru_storage: LRUMap(LinkedHashMap::new(), 0,
-			shared_cache_size * non_hash * top / hash_ratio.1 / child_ratio.1),
-		lru_hashes: LRUMap(LinkedHashMap::new(), 0,
-			shared_cache_size * hash_ratio.0 * top / hash_ratio.1 / child_ratio.1),
+			shared_cache_size * top / child_ratio.1),
+		lru_hashes: LRUMap(LinkedHashMap::new(), 0, FIX_LRU_HASH_SIZE),
 		lru_child_storage: LRUMap(LinkedHashMap::new(), 0,
-			shared_cache_size * non_hash * child_ratio.0 / hash_ratio.1 / child_ratio.1),
-		lru_child_hashes: LRUMap(LinkedHashMap::new(), 0,
-			shared_cache_size * hash_ratio.0 * child_ratio.0 / hash_ratio.1 / child_ratio.1),
+			shared_cache_size * child_ratio.0 / child_ratio.1),
 		modifications: VecDeque::new(),
 	}))
 }
@@ -211,8 +214,6 @@ struct LocalCache<H: Hasher> {
 	hashes: HashMap<StorageKey, Option<H::Out>>,
 	/// Child storage cache. `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, Option<StorageValue>>,
-	/// Child storage hashes cache. `None` indicates that key is known to be missing.
-	child_hashes: HashMap<ChildStorageKey, Option<H::Out>>,
 }
 
 /// Cache changes.
@@ -310,7 +311,6 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 			cache.lru_storage.clear();
 			cache.lru_child_storage.clear();
 			cache.lru_hashes.clear();
-			cache.lru_child_hashes.clear();
 			cache.modifications.clear();
 		}
 
@@ -336,9 +336,6 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 				for (k, v) in local_cache.hashes.drain() {
 					cache.lru_hashes.add(k, OptionHOut(v));
 				}
-				for (k, v) in local_cache.child_hashes.drain() {
-					cache.lru_child_hashes.add(k, OptionHOut(v));
-				}
 			}
 		}
 
@@ -355,7 +352,6 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
-						cache.lru_child_hashes.remove(&k);
 						cache.lru_child_storage.add(k.clone(), v);
 					}
 					child_modifications.insert(k);
@@ -404,7 +400,6 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					storage: Default::default(),
 					hashes: Default::default(),
 					child_storage: Default::default(),
-					child_hashes: Default::default(),
 				}),
 				parent_hash: parent_hash,
 			},
@@ -531,26 +526,6 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(value)
 	}
 
-	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		let key = (storage_key.to_vec(), key.to_vec());
-		let local_cache = self.cache.local_cache.upgradable_read();
-		if let Some(entry) = local_cache.child_hashes.get(&key).cloned() {
-			trace!("Found in local cache: {:?}", key);
-			return Ok(entry)
-		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_hashes.get(&key).map(|a| a.0.clone()) {
-				trace!("Found in shared cache: {:?}", key);
-				return Ok(entry)
-			}
-		}
-		trace!("Cache miss: {:?}", key);
-		let value = self.state.child_storage_hash(storage_key, &key.1[..])?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).child_hashes.insert(key, value.clone());
-		Ok(value)
-	}
-
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
@@ -621,7 +596,7 @@ mod tests {
 		let h3a = H256::random();
 		let h3b = H256::random();
 
-		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1), (0,1));
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
@@ -674,7 +649,7 @@ mod tests {
 	#[test]
 	fn should_track_used_size_correctly() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(117, (0,1), ((117-43), 117));
+		let shared = new_shared_cache::<Block, Blake2Hasher>(117, ((117-43), 117));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
@@ -710,7 +685,7 @@ mod tests {
 	#[test]
 	fn should_remove_lru_items_based_on_tracking_used_size() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(45*3, (0,1), (2,3));
+		let shared = new_shared_cache::<Block, Blake2Hasher>(45*3, (2,3));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));

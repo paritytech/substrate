@@ -221,6 +221,7 @@ impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityRepo
 	}
 }
 
+/// Logs in this module.
 pub type Log<T> = RawLog<
 	<T as Trait>::SessionKey,
 >;
