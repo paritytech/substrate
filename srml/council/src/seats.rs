@@ -1637,7 +1637,12 @@ mod tests {
 
 	#[test]
 	fn resubmitting_approvals_stores_pot() {
-		with_externalities(&mut ExtBuilder::default().voter_bond(0).voting_fee(0).balance_factor(10).build(), || { System::set_block_number(4);
+		with_externalities(&mut ExtBuilder::default()
+			.voter_bond(0)
+			.voting_fee(0)
+			.balance_factor(10)
+			.build(),
+		|| { System::set_block_number(4);
 			assert!(!Council::presentation_active());
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(6), 0));
@@ -2375,7 +2380,12 @@ mod tests {
 	#[test]
 	fn present_when_presenter_is_poor_should_not_work() {
 		let test_present = |p| {
-			with_externalities(&mut ExtBuilder::default().voting_fee(5).voter_bond(2).bad_presentation_punishment(p).build(), || {
+			with_externalities(&mut ExtBuilder::default()
+				.voting_fee(5)
+				.voter_bond(2)
+				.bad_presentation_punishment(p)
+				.build(),
+			|| {
 				System::set_block_number(4);
 				let _ = Balances::make_free_balance_be(&1, 15);
 				assert!(!Council::presentation_active());
