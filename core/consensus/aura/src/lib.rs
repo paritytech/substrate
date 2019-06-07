@@ -425,20 +425,20 @@ where
 					equivocation_proof.second_header().hash(),
 				);
 			} else {
-				transaction_pool.as_ref().map(|txpool|
-					submit_report_call(
-						client,
-						txpool,
-						Call::Aura(AuraCall::report_equivocation(
-							AuraEquivocationProof::new(
-								header.clone(),
-								header.clone(),
-								sig.clone(),
-								sig.clone(),
-							).encode()
-						)),
-					)
-				);
+				// transaction_pool.as_ref().map(|txpool|
+				// 	submit_report_call(
+				// 		client,
+				// 		txpool,
+				// 		Call::Aura(AuraCall::report_equivocation(
+				// 			AuraEquivocationProof::new(
+				// 				header.clone(),
+				// 				header.clone(),
+				// 				sig.clone(),
+				// 				sig.clone(),
+				// 			).encode()
+				// 		)),
+				// 	)
+				// );
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
