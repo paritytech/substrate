@@ -54,10 +54,6 @@ variables:
   tags:
     - linux-docker
 
-.prs:
-  only:                            &prs
-    - /^[0-9]+$/
-
 
 #### stage:                        test
 
@@ -65,7 +61,8 @@ check-runtime:
   stage:                           pre-test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
-  only:                            *prs
+  only:
+    - /^[0-9]+$/
   variables:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
@@ -77,7 +74,8 @@ check-line-width:
   stage:                           pre-test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
-  only:                            *prs
+  only:
+    - /^[0-9]+$/
   script:
     - ./scripts/gitlab/check_line_width.sh
   allow_failure:                   false
@@ -98,7 +96,6 @@ cargo-check-subkey:
   <<:                              *docker-env
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-    # - /^[0-9]+$/                 # it's not yet decided should it run every commit or not
   script:
     - cd ./subkey
     - time cargo check --release   # makes sense to save artifacts for building it
