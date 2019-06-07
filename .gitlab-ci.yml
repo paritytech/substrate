@@ -93,23 +93,15 @@ cargo-audit:
   allow_failure:                   true
 
 
-test-build-subkey:
+cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
   # except:
-    # - /^[0-9]+$/
+    # - /^[0-9]+$/                 # it's not yet decided should it run every commit or not
   script:
     - cd ./subkey
-    - time cargo check --release
-    - cargo clean
-    - time cargo check --release
-    - cargo clean
-    - time cargo build --release
-    - cargo clean
-    - time cargo build --release
+    - time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
-  tags:
-    - qa # bench
   
 
 test-linux-stable:
