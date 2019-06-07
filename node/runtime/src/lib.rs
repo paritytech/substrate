@@ -377,12 +377,6 @@ impl_runtime_apis! {
 	}
 
 	impl consensus_aura::AuraApi<Block, aura::AuthorityId> for Runtime {
-		// TODO: make work.
-		fn authorities_change(digest: &DigestFor<Block>)
-			-> Option<Vec<aura::AuthorityId>>
-		{
-			None
-		}
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

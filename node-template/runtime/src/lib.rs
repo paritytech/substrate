@@ -272,12 +272,6 @@ impl_runtime_apis! {
 		fn authorities() -> Vec<aura::AuthorityId> {
 			Aura::authorities()
 		}
-		// TODO: make work.
-		fn authorities_change(_digest: &DigestFor<Block>)
-			-> Option<Vec<aura::AuthorityId>>
-		{
-			None
-		}
 	}
 
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

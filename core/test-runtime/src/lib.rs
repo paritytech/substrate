@@ -458,12 +458,6 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block, consensus_aura::AuthorityId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
-				// TODO: make work.
-				fn authorities_change(_digest: &DigestFor<Block>)
-					-> Option<Vec<consensus_aura::AuthorityId>>
-				{
-					None
-				}
 			}
 
 			impl consensus_babe::BabeApi<Block, consensus_aura::AuthorityId> for Runtime {
