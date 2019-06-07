@@ -40,7 +40,7 @@ trait Crypto {
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { pair.public().as_ref().to_owned() }
 	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
-			println!("Secret Key URI (phrase) `{}` is account:\n  Secret seed (hex): 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
 				HexDisplay::from(&seed.as_ref()),
 				HexDisplay::from(&Self::public_from_pair(&pair)),

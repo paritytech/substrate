@@ -86,6 +86,18 @@ subcommands:
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
+  - vanity:
+      about: Generate a seed that provides a vanity address
+      args:
+        - pattern:
+            index: 1
+            help: Desired pattern
+        - number:
+            short: n
+            long: number
+            help: Number of keys to generate
+            takes_value: true
+            default_value: "1"
   - sign-transaction:
       about: Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
       args:
