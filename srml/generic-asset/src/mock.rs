@@ -23,7 +23,7 @@ use primitives::{
 	BuildStorage,
 };
 use substrate_primitives::{Blake2Hasher, H256};
-use srml_support::impl_outer_origin;
+use support::impl_outer_origin;
 
 use super::*;
 

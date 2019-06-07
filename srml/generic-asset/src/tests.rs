@@ -20,7 +20,7 @@
 use super::*;
 use crate::mock::{new_test_ext, ExtBuilder, GenericAsset, Origin, Test};
 use runtime_io::with_externalities;
-use srml_support::{assert_noop, assert_ok};
+use support::{assert_noop, assert_ok};
 
 #[test]
 fn issuing_asset_units_to_issuer_should_work() {
