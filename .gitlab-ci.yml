@@ -96,8 +96,8 @@ cargo-audit:
 test-build-subkey:
   stage:                           test
   <<:                              *docker-env
-  except:
-    - /^[0-9]+$/
+  # except:
+    # - /^[0-9]+$/
   script:
     - cd ./subkey
     - time cargo check --release
