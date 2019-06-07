@@ -708,23 +708,21 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
-		let packet_data = {
+		let packet = {
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone());
 
-
 			inner.local_view.as_ref().map(|v| {
-				let packet = NeighborPacket {
+				NeighborPacket {
 					round: v.round,
 					set_id: v.set_id,
 					commit_finalized_height: v.last_commit.unwrap_or(Zero::zero()),
-				};
-
-				GossipMessage::<Block>::from(packet).encode()
+				}
 			})
 		};
 
-		if let Some(packet_data) = packet_data {
+		if let Some(packet) = packet {
+			let packet_data = GossipMessage::<Block>::from(packet).encode();
 			context.send_message(who, packet_data);
 		}
 	}
