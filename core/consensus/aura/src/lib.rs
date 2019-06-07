@@ -56,7 +56,7 @@ use inherents::{InherentDataProviders, InherentData};
 use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future};
-use tokio::timer::Timeout;
+use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use srml_aura::{
@@ -914,7 +914,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync_without_disconnects();

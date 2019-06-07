@@ -4068,6 +4068,7 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-client 2.0.0",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4125,6 +4126,7 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-client 2.0.0",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4196,7 +4198,7 @@ dependencies = [
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-client 2.0.0",
- "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
