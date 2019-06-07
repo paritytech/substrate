@@ -19,6 +19,8 @@
 // end::description[]
 
 #[cfg(feature = "std")]
+use rand::{RngCore, rngs::OsRng};
+#[cfg(feature = "std")]
 use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
@@ -294,7 +296,7 @@ pub trait Pair: Sized + 'static {
 
 	/// The type used to (minimally) encode the data required to securely create
 	/// a new key pair.
-	type Seed;
+	type Seed: Default + AsRef<[u8]> + AsMut<[u8]> + Clone;
 
 	/// The type used to represent a signature. Can be created from a key pair and a message
 	/// and verified with the message and a public key.
@@ -307,7 +309,12 @@ pub trait Pair: Sized + 'static {
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
-	fn generate() -> Self;
+	fn generate() -> (Self, Self::Seed) {
+		let mut csprng: OsRng = OsRng::new().expect("OS random generator works; qed");
+		let mut seed = Self::Seed::default();
+		csprng.fill_bytes(seed.as_mut());
+		(Self::from_seed(&seed), seed)
+	}
 
 	/// Generate new secure (random) key pair and provide the recovery phrase.
 	///
@@ -315,10 +322,10 @@ pub trait Pair: Sized + 'static {
 	///
 	/// This is generally slower than `generate()`, so prefer that unless you need to persist
 	/// the key from the current session.
-	fn generate_with_phrase(password: Option<&str>) -> (Self, String);
+	fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed);
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError>;
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Self, Self::DeriveError>;
@@ -327,7 +334,7 @@ pub trait Pair: Sized + 'static {
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
-	fn from_seed(seed: Self::Seed) -> Self;
+	fn from_seed(seed: &Self::Seed) -> Self;
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
 	/// it will return `None`.

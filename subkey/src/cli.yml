@@ -21,6 +21,12 @@ args:
 subcommands:
   - generate:
       about: Generate a random account
+      args:
+        - words:
+            short: w
+            long: words
+            help: The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
+            takes_value: true
   - inspect:
       about: Gets a public key and a SS58 address from the provided Secret URI
       args:
@@ -80,18 +86,6 @@ subcommands:
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
-  - vanity:
-      about: Generate a seed that provides a vanity address
-      args:
-        - pattern:
-            index: 1
-            help: Desired pattern
-        - number:
-            short: n
-            long: number
-            help: Number of keys to generate
-            takes_value: true
-            default_value: "1"
   - sign-transaction:
       about: Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
       args:
