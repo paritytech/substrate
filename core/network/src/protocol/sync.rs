@@ -39,8 +39,8 @@ use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
-use crate::blocks::BlockCollection;
-use crate::sync::extra_requests::ExtraRequestsAggregator;
+use blocks::BlockCollection;
+use extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
 	CheckedSub, SaturatedConversion
@@ -50,6 +50,7 @@ use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
 
+mod blocks;
 mod extra_requests;
 
 // Maximum blocks to request in a single packet.
@@ -303,13 +304,18 @@ impl<B: BlockT> ChainSync<B> {
 						common_number: Zero::zero(),
 						best_hash: info.best_hash,
 						best_number: info.best_number,
-						state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::ExponentialBackoff(One::one())),
+						state: PeerSyncState::AncestorSearch(
+							common_best,
+							AncestorSearchState::ExponentialBackoff(One::one())
+						),
 						recently_announced: Default::default(),
 					});
 					Self::request_ancestry(protocol, who, common_best)
 				}
 			},
-			(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChainWithState), _) | (Ok(BlockStatus::InChainPruned), _) => {
+			(Ok(BlockStatus::Queued), _) |
+			(Ok(BlockStatus::InChainWithState), _) |
+			(Ok(BlockStatus::InChainPruned), _) => {
 				debug!(target:"sync", "New peer with known best hash {} ({}).", info.best_hash, info.best_number);
 				self.peers.insert(who.clone(), PeerSync {
 					common_number: info.best_number,
@@ -441,7 +447,8 @@ impl<B: BlockT> ChainSync<B> {
 						protocol.disconnect_peer(who);
 						return None
 					}
-					if let Some((next_state, next_block_num)) = Self::handle_ancestor_search_state(state, num, block_hash_match) {
+					if let Some((next_state, next_block_num)) =
+						Self::handle_ancestor_search_state(state, num, block_hash_match) {
 						peer.state = PeerSyncState::AncestorSearch(next_block_num, next_state);
 						Self::request_ancestry(protocol, who, next_block_num);
 						return None
@@ -450,7 +457,9 @@ impl<B: BlockT> ChainSync<B> {
 						vec![]
 					}
 				},
-				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) | PeerSyncState::DownloadingFinalityProof(..) => Vec::new(),
+				PeerSyncState::Available |
+				PeerSyncState::DownloadingJustification(..) |
+				PeerSyncState::DownloadingFinalityProof(..) => Vec::new(),
 			}
 		} else {
 			Vec::new()
@@ -770,11 +779,19 @@ impl<B: BlockT> ChainSync<B> {
 				if protocol.client().block_status(&BlockId::Number(*header.number()))
 					.unwrap_or(BlockStatus::Unknown) == BlockStatus::InChainPruned
 				{
-					trace!(target: "sync", "Ignored unknown ancient block announced from {}: {} {:?}", who, hash, header);
+					trace!(
+						target: "sync",
+						"Ignored unknown ancient block announced from {}: {} {:?}",
+						who, hash, header
+					);
 					return false;
 				}
 
-				trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
+				trace!(
+					target: "sync",
+					"Considering new unknown stale block announced from {}: {} {:?}",
+					who, hash, header
+				);
 				let request = self.download_unknown_stale(&who, &hash);
 				match request {
 					Some(request) => if requires_additional_data {
@@ -787,7 +804,11 @@ impl<B: BlockT> ChainSync<B> {
 				}
 			} else {
 				if ancient_parent {
-					trace!(target: "sync", "Ignored ancient stale block announced from {}: {} {:?}", who, hash, header);
+					trace!(
+						target: "sync",
+						"Ignored ancient stale block announced from {}: {} {:?}",
+						who, hash, header
+					);
 					return false;
 				}
 
@@ -934,7 +955,12 @@ impl<B: BlockT> ChainSync<B> {
 					peer.common_number,
 					peer.best_number,
 				);
-				let range = self.blocks.needed_blocks(who.clone(), MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number);
+				let range = self.blocks.needed_blocks(
+					who.clone(),
+					MAX_BLOCKS_TO_REQUEST,
+					peer.best_number,
+					peer.common_number
+				);
 				match range {
 					Some(range) => {
 						trace!(target: "sync", "Requesting blocks from {}, ({} to {})", who, range.start, range.end);
