@@ -192,21 +192,21 @@ and at most once per block:
 - `rent_deposit_offset` and
 - `rent_byte_price` and
 - `Currency::minimum_balance` and
-- `tobmstone_deposit`.
+- `tombstone_deposit`.
 - Calls to `ensure_can_withdraw`, `withdraw`, `make_free_balance_be` can perform arbitrary logic and should be considered separately,
 - `child_storage_root`
 - `kill_child_storage`
 - mutation of `ContractInfoOf`
 
-Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
+Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it, or it has been created in the same call chain).
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
 **complexity**:
-- Only for the first invocation of the contract: up to 6 DB reads and logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
-- On top of that for every invocation: Up to 4 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
+- Only for the first invocation of the contract: up to 5 DB reads and logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
+- On top of that for every invocation: Up to 5 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
 
