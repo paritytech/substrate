@@ -81,7 +81,7 @@ pub struct Service<Components: components::Components> {
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<Arc<tel::Telemetry>>,
+	_telemetry: Option<tel::Telemetry>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
@@ -351,8 +351,9 @@ impl<Components: components::Components> Service<Components> {
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
+				wasm_external_transport: None,
 				on_connect: Box::new(move || {
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
@@ -369,7 +370,11 @@ impl<Components: components::Components> Service<Components> {
 						sink.unbounded_send(()).is_ok()
 					});
 				}),
-			}))
+			});
+			task_executor.spawn(telemetry.clone()
+				.select(exit.clone())
+				.then(|_| Ok(())));
+			telemetry
 		});
 
 		Ok(Service {
@@ -402,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
