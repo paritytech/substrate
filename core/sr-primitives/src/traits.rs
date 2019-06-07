@@ -694,7 +694,7 @@ pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
 /// Extract the authority ID type for a block.
-pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
+//pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -779,13 +779,13 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `ChangesTrieRoot` payload.
 	type Hash: Member;
-/* TODO!!!*/
+/*
 	/// `AuthorityChange` payload.
 	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
 	/// Returns `Some` if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
-/**/
+*/
 	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 

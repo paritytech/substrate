@@ -619,12 +619,6 @@ cfg_if! {
 					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
-
-			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					system::authorities()
-				}
-			}
 		}
 	}
 }

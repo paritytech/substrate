@@ -574,11 +574,10 @@ pub(crate) mod tests {
 	use client::cht;
 	use runtime_primitives::generic::DigestItem;
 	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::AuthorityIdFor;
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
-	type AuthorityId = AuthorityIdFor<Block>;
+	type AuthorityId = primitives::ed25519::Public;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {
@@ -871,7 +870,7 @@ pub(crate) mod tests {
 	fn authorities_are_cached() {
 		let db = LightStorage::new_test();
 
-		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityIdFor<Block>>>)]) {
+		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityId>>)]) {
 			for (at, expected) in checks.iter().take_while(|(at, _)| *at <= max) {
 				let actual = get_authorities(db.cache(), BlockId::Number(*at));
 				assert_eq!(*expected, actual);

@@ -168,12 +168,12 @@ impl<
 	SealSignature: Codec + Member,
 > traits::DigestItem for DigestItem<Hash, AuthorityId, SealSignature> {
 	type Hash = Hash;
-	type AuthorityId = AuthorityId;
+/*	type AuthorityId = AuthorityId;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
 		self.dref().as_authorities_change()
 	}
-
+*/
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		self.dref().as_changes_trie_root()
 	}

@@ -18,7 +18,6 @@ srml-aura = { path = "../../../srml/aura" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.17"
 tokio = "0.1.7"

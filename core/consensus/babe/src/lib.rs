@@ -31,7 +31,7 @@ use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use consensus_common::ExtraVerification;
+use consensus_common::{ExtraVerification, well_known_cache_keys::Id as CacheKeyId};
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
@@ -577,7 +577,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -645,9 +645,11 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 
 				extra_verification.into_future().wait()?;
 
-				let new_authorities = pre_header.digest()
+				let maybe_keys = pre_header.digest()
 					.log(DigestItem::as_authorities_change)
-					.map(|digest| digest.to_vec());
+					.map(|digest| digest.to_vec())
+					.map(Encode::encode)
+					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);
 
 				let import_block = ImportBlock {
 					origin,
@@ -661,7 +663,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				};
 
 				// FIXME #1019 extract authorities
-				Ok((import_block, new_authorities))
+				Ok((import_block, maybe_keys))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -811,7 +813,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Public])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
