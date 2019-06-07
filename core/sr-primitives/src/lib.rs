@@ -607,7 +607,7 @@ macro_rules! impl_outer_config {
 		$top:ident;
 		$children:ident;
 	) => {
-		$crate::CreateModuleGenesisStorage::<$runtime, $module::DefaultInstance>::create_module_genesis_storage(
+		$crate::CreateModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::create_module_genesis_storage(
 			$extra,
 			$top,
 			$children,

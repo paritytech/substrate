@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-/*
 use srml_support::runtime_primitives::generic;
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify};
 use srml_support::codec::{Encode, Decode};
@@ -187,4 +186,3 @@ fn create_genesis_config() {
 		})
 	};
 }
-*/

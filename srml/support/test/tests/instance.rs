@@ -13,9 +13,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
 #![recursion_limit="128"]
-#![feature(trace_macros)]
 
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
@@ -199,8 +197,7 @@ mod module3 {
 	}
 
 	srml_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		}
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
 	}
 }
 
@@ -258,7 +255,6 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-trace_macros!(true);
 srml_support::construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
 		Block = Block,
@@ -275,7 +271,6 @@ srml_support::construct_runtime!(
 		Module3: module3::{Module, Call},
 	}
 );
-trace_macros!(false);
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;

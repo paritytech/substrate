@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! `decl_storage` macro transformation
-// end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{
@@ -24,7 +22,7 @@ use srml_support_procedural_tools::{
 };
 
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 
 use syn::{
 	Ident,
@@ -41,6 +39,9 @@ use quote::quote;
 use super::*;
 
 const NUMBER_OF_INSTANCE: usize = 16;
+const DEFAULT_INSTANTIABLE_TRAIT_NAME: &str = "__GeneratedInstantiable";
+const DEFAULT_INSTANCE_NAME: &str = "__GeneratedInstance";
+const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
 // try macro but returning tokenized error
 macro_rules! try_tok(( $expre : expr ) => {
@@ -421,12 +422,22 @@ fn decl_store_extra_genesis(
 		|| !genesis_extrafields.is_empty()
 		|| !builders.is_empty();
 	if is_extra_genesis_needed {
+		let (inherent_instance, inherent_bound_instantiable) = if instance.is_some() {
+			(instance.clone(), bound_instantiable.clone())
+		} else {
+			let instantiable = Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site());
+			(
+				Some(Ident::new(DEFAULT_INSTANCE_NAME, Span::call_site())),
+				quote!(: #instantiable),
+			)
+		};
+
 		let (fparam_struct, fparam_impl, sparam, build_storage_impl) = if is_trait_needed {
 			(
 				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
 				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
 				quote!(<#traitinstance, #instance>),
-				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
+				quote!(<#traitinstance: #traittype, #inherent_instance #inherent_bound_instantiable>),
 			)
 		} else {
 			// do not even need type parameter
@@ -434,7 +445,7 @@ fn decl_store_extra_genesis(
 				quote!(),
 				quote!(),
 				quote!(),
-				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
+				quote!(<#traitinstance: #traittype, #inherent_instance #inherent_bound_instantiable>),
 			)
 		};
 
@@ -447,7 +458,7 @@ fn decl_store_extra_genesis(
 			(quote!(), quote!())
 		};
 
-		let impl_trait = quote!(CreateModuleGenesisStorage<#traitinstance, #instance>);
+		let impl_trait = quote!(CreateModuleGenesisStorage<#traitinstance, #inherent_instance>);
 
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
@@ -523,6 +534,35 @@ fn decl_store_extra_genesis(
 	}
 }
 
+fn create_and_impl_instance(
+	prefix: &str,
+	ident: &Ident,
+	doc: &TokenStream2,
+	const_names: &[(Ident, String)],
+	scrate: &TokenStream2,
+	instantiable: &Ident,
+) -> TokenStream2 {
+	let mut const_impls = TokenStream2::new();
+
+	for (const_name, partial_const_value) in const_names {
+		let const_value = format!("{}{}", partial_const_value, prefix);
+		const_impls.extend(quote! {
+			const #const_name: &'static str = #const_value;
+		});
+	}
+
+	quote! {
+		// Those trait are derived because of wrong bounds for generics
+		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
+		#doc
+		pub struct #ident;
+		impl #instantiable for #ident {
+			#const_impls
+		}
+	}
+}
+
 fn decl_storage_items(
 	scrate: &TokenStream2,
 	traitinstance: &Ident,
@@ -544,54 +584,69 @@ fn decl_storage_items(
 	let build_prefix = |cratename, name| format!("{} {}", cratename, name);
 
 	// Build Instantiable trait
-	if instance.is_some() {
-		let mut const_names = vec![];
+	let mut const_names = vec![];
 
-		for sline in storage_lines.inner.iter() {
-			let DeclStorageLine {
-				storage_type,
-				name,
-				..
-			} = sline;
+	for sline in storage_lines.inner.iter() {
+		let DeclStorageLine {
+			storage_type,
+			name,
+			..
+		} = sline;
 
-			let prefix = build_prefix(cratename, name);
+		let prefix = build_prefix(cratename, name);
 
-			let type_infos = get_type_infos(storage_type);
+		let type_infos = get_type_infos(storage_type);
 
-			let const_name = syn::Ident::new(&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
-			let partial_const_value = prefix.clone();
+		let const_name = syn::Ident::new(
+			&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site()
+		);
+		let partial_const_value = prefix.clone();
+		const_names.push((const_name, partial_const_value));
+
+		if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
+			let const_name = syn::Ident::new(
+				&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
+			);
+			let partial_const_value = format!("head of {}", prefix);
 			const_names.push((const_name, partial_const_value));
-
-			if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
-				let const_name = syn::Ident::new(&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site());
-				let partial_const_value = format!("head of {}", prefix);
-				const_names.push((const_name, partial_const_value));
-			}
 		}
+	}
 
-		// Declare Instance trait
-		{
-			let mut const_impls = TokenStream2::new();
-			for (const_name, _) in &const_names {
-				const_impls.extend(quote! {
-					const #const_name: &'static str;
-				});
-			}
+	let instantiable = instantiable
+		.clone()
+		.unwrap_or_else(|| Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
 
-			impls.extend(quote! {
-				/// Tag a type as an instance of a module.
-				///
-				/// Defines storage prefixes, they must be unique.
-				pub trait #instantiable: 'static {
-					#const_impls
-				}
+	// Declare Instance trait
+	{
+		let mut const_impls = TokenStream2::new();
+		for (const_name, _) in &const_names {
+			const_impls.extend(quote! {
+				const #const_name: &'static str;
 			});
 		}
 
+		let hide = if instance.is_some() {
+			quote!()
+		} else {
+			quote!(#[doc(hidden)])
+		};
+
+		impls.extend(quote! {
+			/// Tag a type as an instance of a module.
+			///
+			/// Defines storage prefixes, they must be unique.
+			#hide
+			pub trait #instantiable: 'static {
+				#const_impls
+			}
+		});
+	}
+
+	if instance.is_some() {
 		let instances = (0..NUMBER_OF_INSTANCE)
 			.map(|i| {
 				let name = format!("Instance{}", i);
-				let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+				let ident = Ident::new(&name, proc_macro2::Span::call_site());
 				(name, ident, quote! {#[doc=r"Module instance"]})
 			})
 			.chain(
@@ -604,26 +659,26 @@ fn decl_storage_items(
 
 		// Impl Instance trait for instances
 		for (prefix, ident, doc) in instances {
-			let mut const_impls = TokenStream2::new();
-
-			for (const_name, partial_const_value) in &const_names {
-				let const_value = format!("{}{}", partial_const_value, prefix);
-				const_impls.extend(quote! {
-					const #const_name: &'static str = #const_value;
-				});
-			}
-
-			impls.extend(quote! {
-				// Those trait are derived because of wrong bounds for generics
-				#[cfg_attr(feature = "std", derive(Debug))]
-				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
-				#doc
-				pub struct #ident;
-				impl #instantiable for #ident {
-					#const_impls
-				}
-			});
+			impls.extend(
+				create_and_impl_instance(&prefix, &ident, &doc, &const_names, scrate, &instantiable)
+			);
 		}
+	}
+
+	// The name of the inherently available instance.
+	let inherent_instance = Ident::new(INHERENT_INSTANCE_NAME, Span::call_site());
+
+	if default_instance.is_some() {
+		impls.extend(quote! {
+			#[doc(hidden)]
+			pub type #inherent_instance = #default_instance;
+		});
+	} else {
+		impls.extend(
+			create_and_impl_instance(
+				"", &inherent_instance, &quote!(#[doc(hidden)]), &const_names, scrate, &instantiable
+			)
+		);
 	}
 
 	for sline in storage_lines.inner.iter() {
@@ -1030,29 +1085,29 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 
 #[derive(Default)]
 pub(crate) struct InstanceOpts {
-	pub instance: Option<syn::Ident>,
-	pub default_instance: Option<syn::Ident>,
-	pub instantiable: Option<syn::Ident>,
+	pub instance: Option<Ident>,
+	pub default_instance: Option<Ident>,
+	pub instantiable: Option<Ident>,
 	pub comma_instance: TokenStream2,
 	pub equal_default_instance: TokenStream2,
 	pub bound_instantiable: TokenStream2,
 }
 
 fn get_instance_opts(
-	instance: Option<syn::Ident>,
-	instantiable: Option<syn::Ident>,
-	default_instance: Option<syn::Ident>,
-) -> syn::Result<InstanceOpts> {
-
+	instance: Option<Ident>,
+	instantiable: Option<Ident>,
+	default_instance: Option<Ident>,
+) -> Result<InstanceOpts> {
 	let right_syntax = "Should be $Instance: $Instantiable = $DefaultInstance";
 
 	match (instance, instantiable, default_instance) {
-		(Some(instance), Some(instantiable), default_instance_def) => {
-			let (equal_default_instance, default_instance) = if let Some(default_instance) = default_instance_def {
-				(quote!{= #default_instance}, Some(default_instance))
+		(Some(instance), Some(instantiable), default_instance) => {
+			let (equal_default_instance, default_instance) = if let Some(def) = default_instance {
+				(quote!{= #def}, Some(def))
 			} else {
-				(quote!{}, None)
+				(quote!(), None)
 			};
+
 			Ok(InstanceOpts {
 				comma_instance: quote!{, #instance},
 				equal_default_instance,
@@ -1063,8 +1118,35 @@ fn get_instance_opts(
 			})
 		},
 		(None, None, None) => Ok(Default::default()),
-		(Some(instance), None, _) => Err(syn::Error::new(instance.span(), format!("Expect instantiable trait bound for instance: {}. {}", instance, right_syntax))),
-		(None, Some(instantiable), _) => Err(syn::Error::new(instantiable.span(), format!("Expect instance generic for bound instantiable: {}. {}", instantiable, right_syntax))),
-		(None, _, Some(default_instance)) => Err(syn::Error::new(default_instance.span(), format!("Expect instance generic for default instance: {}. {}", default_instance, right_syntax))),
+		(Some(instance), None, _) => Err(
+			Error::new(
+				instance.span(),
+				format!(
+					"Expect instantiable trait bound for instance: {}. {}",
+					instance,
+					right_syntax,
+				)
+			)
+		),
+		(None, Some(instantiable), _) => Err(
+			Error::new(
+				instantiable.span(),
+				format!(
+					"Expect instance generic for bound instantiable: {}. {}",
+					instantiable,
+					right_syntax,
+				)
+			)
+		),
+		(None, _, Some(default_instance)) => Err(
+			Error::new(
+				default_instance.span(),
+				format!(
+					"Expect instance generic for default instance: {}. {}",
+					default_instance,
+					right_syntax,
+				)
+			)
+		),
 	}
 }

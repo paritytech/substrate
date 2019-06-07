@@ -18,7 +18,7 @@ use crate::storage::transformation::{DeclStorageTypeInfos, InstanceOpts};
 
 use srml_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream as TokenStream2;
-use syn;
+use syn::Ident;
 use quote::quote;
 
 pub fn option_unwrap(is_option: bool) -> TokenStream2 {
@@ -88,7 +88,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			let const_name = Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
 			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
@@ -103,11 +103,15 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				quote!(#traitinstance, #instance),
 			)
 		} else {
-			(quote!(#instance #bound_instantiable #equal_default_instance), quote!(#instance #bound_instantiable), quote!(#instance))
+			(
+				quote!(#instance #bound_instantiable #equal_default_instance),
+				quote!(#instance #bound_instantiable),
+				quote!(#instance)
+			)
 		};
 
 		// generator for value
-		quote!{
+		quote! {
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
