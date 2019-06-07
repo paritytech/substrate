@@ -367,7 +367,7 @@ macro_rules! aura_err {
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 fn check_header<C, B: Block, P: Pair, T>(
 	client: &Arc<C>,
-	transaction_pool: &Arc<T>,
+	transaction_pool: &Option<Arc<T>>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -425,17 +425,19 @@ where
 					equivocation_proof.second_header().hash(),
 				);
 			} else {
-				submit_report_call(
-					client,
-					transaction_pool,
-					Call::Aura(AuraCall::report_equivocation(
-						AuraEquivocationProof::new(
-							header.clone(),
-							header.clone(),
-							sig.clone(),
-							sig.clone(),
-						).encode()
-					)),
+				transaction_pool.as_ref().map(|txpool|
+					submit_report_call(
+						client,
+						txpool,
+						Call::Aura(AuraCall::report_equivocation(
+							AuraEquivocationProof::new(
+								header.clone(),
+								header.clone(),
+								sig.clone(),
+								sig.clone(),
+							).encode()
+						)),
+					)
 				);
 			}
 
@@ -449,7 +451,7 @@ where
 /// A verifier for Aura blocks.
 pub struct AuraVerifier<C, E, P, T> {
 	client: Arc<C>,
-	transaction_queue: Arc<T>,
+	transaction_pool: Option<Arc<T>>,
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
@@ -564,7 +566,7 @@ impl<B: Block, C, E, P, T> Verifier<B> for AuraVerifier<C, E, P, T> where
 		// headers.
 		let checked_header = check_header::<C, B, P, T>(
 			&self.client,
-			&self.transaction_queue,
+			&self.transaction_pool,
 			slot_now + 1,
 			header,
 			hash,
@@ -724,7 +726,7 @@ pub fn import_queue<T, B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-	transaction_queue: Option<Arc<T>>,
+	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	T: PoolApi + Send + Sync + 'static,
@@ -743,7 +745,7 @@ pub fn import_queue<T, B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier::<C, E, P, T> {
 			client: client.clone(),
-			transaction_queue: transaction_queue.unwrap().clone(), // TODO: remove unwrap.
+			transaction_pool: transaction_pool.clone(),
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
@@ -930,7 +932,7 @@ mod tests {
 					assert_eq!(slot_duration.get(), SLOT_DURATION);
 					Arc::new(AuraVerifier {
 						client,
-						transaction_queue: Arc::new(TestPool::default()),
+						transaction_pool: None,
 						extra: NothingExtra,
 						inherent_data_providers,
 						phantom: Default::default(),

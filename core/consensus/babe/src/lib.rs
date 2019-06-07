@@ -446,7 +446,7 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 #[forbid(warnings)]
 fn check_header<B: Block + Sized, C, T>(
 	client: &Arc<C>,
-	_transaction_pool: &Arc<T>,
+	_transaction_pool: &Option<Arc<T>>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -531,7 +531,7 @@ where
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<C, E, T> {
 	client: Arc<C>,
-	transaction_pool: Arc<T>,
+	transaction_pool: Option<Arc<T>>,
 	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
 	threshold: u64,
@@ -986,7 +986,7 @@ mod tests {
 			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
-				transaction_pool: Arc::new(TestPool::default()),
+				transaction_pool: None,
 				extra: NothingExtra,
 				inherent_data_providers,
 				threshold: config.threshold(),

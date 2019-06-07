@@ -516,7 +516,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TestPool::default()),
+			transaction_pool: Arc::new(TestPool::default())
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
