@@ -492,7 +492,7 @@ mod test {
 	#[test]
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
-		let pair = Pair::from_seed(seed);
+		let pair = Pair::from_seed(&seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter()).ok().unwrap();
@@ -501,7 +501,7 @@ mod test {
 
 	#[test]
 	fn test_vector_should_work() {
-		let pair: Pair = Pair::from_seed(hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
+		let pair = Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
 		let message = b"";
@@ -512,7 +512,7 @@ mod test {
 
 	#[test]
 	fn test_vector_by_string_should_work() {
-		let pair: Pair = Pair::from_string("0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", None).unwrap();
+		let pair = Pair::from_string("0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", None).unwrap();
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
 		let message = b"";
@@ -523,7 +523,7 @@ mod test {
 
 	#[test]
 	fn generated_pair_should_work() {
-		let pair = Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
@@ -533,7 +533,7 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
@@ -545,31 +545,31 @@ mod test {
 
 	#[test]
 	fn generate_with_phrase_recovery_possible() {
-		let (pair1, phrase) = Pair::generate_with_phrase(None);
-		let pair2 = Pair::from_phrase(&phrase, None).unwrap();
+		let (pair1, phrase, _) = Pair::generate_with_phrase(None);
+		let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
 
 		assert_eq!(pair1.public(), pair2.public());
 	}
 
 	#[test]
 	fn generate_with_password_phrase_recovery_possible() {
-		let (pair1, phrase) = Pair::generate_with_phrase(Some("password"));
-		let pair2 = Pair::from_phrase(&phrase, Some("password")).unwrap();
+		let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
+		let (pair2, _) = Pair::from_phrase(&phrase, Some("password")).unwrap();
 
 		assert_eq!(pair1.public(), pair2.public());
 	}
 
 	#[test]
 	fn password_does_something() {
-		let (pair1, phrase) = Pair::generate_with_phrase(Some("password"));
-		let pair2 = Pair::from_phrase(&phrase, None).unwrap();
+		let (pair1, phrase, _) = Pair::generate_with_phrase(Some("password"));
+		let (pair2, _) = Pair::from_phrase(&phrase, None).unwrap();
 
 		assert_ne!(pair1.public(), pair2.public());
 	}
 
 	#[test]
 	fn ss58check_roundtrip_works() {
-		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		let s = public.to_ss58check();
 		println!("Correct: {}", s);

@@ -431,27 +431,54 @@ mod tests {
 
 	impl Pair for TestPair {
 		type Public = ();
-		type Seed = ();
+		type Seed = [u8; 0];
 		type Signature = ();
 		type DeriveError = ();
 
-		fn generate() -> Self { TestPair::Generated }
-		fn generate_with_phrase(_password: Option<&str>) -> (Self, String) { (TestPair::GeneratedWithPhrase, "".into()) }
-		fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError> {
-			Ok(TestPair::GeneratedFromPhrase{ phrase: phrase.to_owned(), password: password.map(Into::into) })
+		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, []) }
+		fn generate_with_phrase(_password: Option<&str>) -> (Self, String, <Self as Pair>::Seed) {
+			(TestPair::GeneratedWithPhrase, "".into(), [])
 		}
-		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Result<Self, Self::DeriveError> {
+		fn from_phrase(phrase: &str, password: Option<&str>)
+			-> Result<(Self, <Self as Pair>::Seed), SecretStringError>
+		{
+			Ok((TestPair::GeneratedFromPhrase {
+				phrase: phrase.to_owned(),
+				password: password.map(Into::into)
+			}, []))
+		}
+		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter)
+			-> Result<Self, Self::DeriveError>
+		{
 			Err(())
 		}
-		fn from_seed(_seed: <TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
+		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(_sig: &Self::Signature, _message: M, _pubkey: P) -> bool { true }
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_sig: &[u8], _message: M, _pubkey: P) -> bool { true }
+		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+			_sig: &Self::Signature,
+			_message: M,
+			_pubkey: P
+		) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+			_sig: &[u8],
+			_message: M,
+			_pubkey: P
+		) -> bool { true }
 		fn public(&self) -> Self::Public { () }
-		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError> {
-			Ok(TestPair::Standard { phrase: phrase.to_owned(), password: password.map(ToOwned::to_owned), path: path.collect() })
+		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
+			phrase: &str,
+			password: Option<&str>,
+			path: I
+		) -> Result<Self, SecretStringError> {
+			Ok(TestPair::Standard {
+				phrase: phrase.to_owned(),
+				password: password.map(ToOwned::to_owned),
+				path: path.collect()
+			})
 		}
-		fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError> {
+		fn from_seed_slice(seed: &[u8])
+			-> Result<Self, SecretStringError>
+		{
 			Ok(TestPair::Seed(seed.to_owned()))
 		}
 	}

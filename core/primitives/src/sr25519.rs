@@ -531,7 +531,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
@@ -543,7 +543,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
@@ -555,7 +555,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_public_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
@@ -566,7 +566,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_public_should_fail() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::hard(1));
@@ -575,7 +575,7 @@ mod test {
 
 	#[test]
 	fn sr_test_vector_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let public = pair.public();
@@ -592,7 +592,7 @@ mod test {
 
 	#[test]
 	fn generated_pair_should_work() {
-		let pair = Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
@@ -602,7 +602,7 @@ mod test {
 	#[test]
 	fn seeded_pair_should_work() {
 
-		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
 			public,
@@ -617,7 +617,7 @@ mod test {
 
 	#[test]
 	fn ss58check_roundtrip_works() {
-		let pair = Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let s = public.to_ss58check();
 		println!("Correct: {}", s);
