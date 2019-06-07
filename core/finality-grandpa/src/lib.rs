@@ -653,7 +653,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 								votes: Vec::new(),
 							},
 							new.set_id,
-							new.authorities.iter().map(|(a, _)| a.clone()).collect(),
+							&*authority_set.inner().read(),
 						),
 						current_round: HasVoted::No,
 					};

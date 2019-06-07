@@ -46,7 +46,7 @@ use crate::{
 
 use consensus_common::SelectChain;
 
-use crate::authorities::SharedAuthoritySet;
+use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
@@ -100,15 +100,21 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
-	pub fn new(genesis: CompletedRound<Block>, set_id: u64, voters: Vec<AuthorityId>)
+	pub(crate) fn new(
+		genesis: CompletedRound<Block>,
+		set_id: u64,
+		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+	)
 		-> CompletedRounds<Block>
 	{
 		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		rounds.push_back(genesis);
+
+		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
 	}
 
-	/// Set the set-id and voter set of the completed rounds.
+	/// Get the set-id and voter set of the completed rounds.
 	pub fn set_info(&self) -> (u64, &[AuthorityId]) {
 		(self.set_id, &self.voters[..])
 	}

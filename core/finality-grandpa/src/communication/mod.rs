@@ -71,6 +71,7 @@ mod cost {
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
 	pub(super) const INVALID_COMMIT: i32 = -5000;
+	pub(super) const OUT_OF_SCOPE_MESSAGE: i32 = -500;
 }
 
 // benefit scalars for reporting peers.

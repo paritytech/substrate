@@ -95,6 +95,8 @@ enum Consider {
 	RejectPast,
 	/// Message is from the future. Reject.
 	RejectFuture,
+	/// Message cannot be evaluated. Reject.
+	RejectOutOfScope,
 }
 
 /// A view of protocol state.
@@ -301,6 +303,10 @@ pub(super) enum Misbehavior {
 	// A message received that's from the future relative to our view.
 	// always misbehavior.
 	FutureMessage,
+	// A message received that cannot be evaluated relative to our view.
+	// This happens before we have a view and have sent out neighbor packets.
+	// always misbehavior.
+	OutOfScopeMessage,
 }
 
 impl Misbehavior {
@@ -320,6 +326,7 @@ impl Misbehavior {
 				(benefit as i32).saturating_add(cost as i32)
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
+			OutOfScopeMessage => cost::OUT_OF_SCOPE_MESSAGE,
 		}
 	}
 }
@@ -507,12 +514,12 @@ impl<Block: BlockT> Inner<Block> {
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-			.unwrap_or(Consider::RejectFuture)
+			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	fn consider_global(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
 		self.local_view.as_ref().map(|v| v.consider_global(set_id, number))
-			.unwrap_or(Consider::RejectFuture)
+			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> i32 {
@@ -525,6 +532,7 @@ impl<Block: BlockT> Inner<Block> {
 	{
 		match self.consider_vote(full.round, full.set_id) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
+			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
@@ -564,7 +572,9 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
+			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
 			Consider::Accept => {},
+
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {

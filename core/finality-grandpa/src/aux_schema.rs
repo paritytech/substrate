@@ -165,7 +165,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 					base,
 				},
 				set_id,
-				new_set.current().1.iter().map(|(a, _)| a.clone()).collect(),
+				&new_set,
 			),
 			current_round: HasVoted::No,
 		};
@@ -195,10 +195,9 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 		backend,
 		AUTHORITY_SET_KEY,
 	)? {
-		let authorities = set.current().1.iter().map(|(a, _)| a.clone()).collect();
 		let set_id = set.current().0;
 
-		let completed_rounds = move |number, state, base| CompletedRounds::new(
+		let completed_rounds = |number, state, base| CompletedRounds::new(
 			CompletedRound {
 				number,
 				state,
@@ -206,7 +205,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 				base,
 			},
 			set_id,
-			authorities,
+			&set,
 		);
 
 		let set_state = match load_decode::<_, V1VoterSetState<Block::Hash, NumberFor<Block>>>(
@@ -311,7 +310,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 									state,
 								},
 								set.current().0,
-								set.current().1.iter().map(|(a, _)| a.clone()).collect(),
+								&set,
 							),
 							current_round: HasVoted::No,
 						}
@@ -349,7 +348,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 				base,
 			},
 			0,
-			genesis_authorities.iter().map(|(a, _)| a.clone()).collect(),
+			&genesis_set,
 		),
 		current_round: HasVoted::No,
 	};
@@ -369,6 +368,10 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 }
 
 /// Update the authority set on disk after a change.
+///
+/// If there has just been a handoff, pass a `new_set` parameter that describes the
+/// handoff. `set` in all cases should reflect the current authority set, with all
+/// changes and handoffs applied.
 pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	new_set: Option<&NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
@@ -407,7 +410,7 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 					base: (new_set.canon_hash, new_set.canon_number),
 				},
 				new_set.set_id,
-				new_set.authorities.iter().map(|(id, _)| id.clone()).collect(),
+				&set,
 			),
 			current_round: HasVoted::No,
 		};
@@ -536,7 +539,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					authorities.iter().map(|(a, _)| a.clone()).collect(),
+					&*authority_set.inner().read(),
 				),
 				current_round: HasVoted::No,
 			},
@@ -623,7 +626,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					authorities.iter().map(|(a, _)| a.clone()).collect(),
+					&*authority_set.inner().read(),
 				),
 				current_round: HasVoted::No,
 			},
