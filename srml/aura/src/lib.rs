@@ -126,7 +126,7 @@ impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Author
 	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>
-				unimplemented!("TODO: No idea what to do here?"),
+				primitives::generic::DigestItem::Consensus(*b"aura", authorities.encode()),
 			RawLog::PreRuntime(id, v, _) =>
 				primitives::generic::DigestItem::PreRuntime(id, v),
 		}

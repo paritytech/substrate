@@ -25,7 +25,7 @@ use parity_codec::{Encode, Decode};
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -246,7 +246,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthoritySignature>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

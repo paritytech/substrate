@@ -21,7 +21,7 @@
 use parity_codec::Codec;
 use substrate_client::decl_runtime_apis;
 use substrate_primitives::ed25519;
-use runtime_primitives::{ConsensusEngineId, traits::DigestFor};
+use runtime_primitives::ConsensusEngineId;
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];

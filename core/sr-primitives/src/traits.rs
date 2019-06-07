@@ -22,7 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
-use crate::codec::{Codec, Encode, HasCompact};
+use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -33,6 +33,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
+use crate::{ConsensusEngineId, generic::OpaqueDigestItemId};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -779,18 +780,28 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `ChangesTrieRoot` payload.
 	type Hash: Member;
-/*
-	/// `AuthorityChange` payload.
-	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
-	/// Returns `Some` if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
-*/
 	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 
 	/// Returns `Some` if this entry is the `PreRuntime` entry.
-	fn as_pre_runtime(&self) -> Option<(super::ConsensusEngineId, &[u8])>;
+	fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &[u8])>;
+
+	/// Returns `Some` if this entry is the `Consensus` entry.
+	fn as_consensus(&self) -> Option<(ConsensusEngineId, &[u8])>;
+
+	/// Returns `Some` if this entry is the `Seal` entry.
+	fn as_seal(&self) -> Option<(ConsensusEngineId, &[u8])>;
+
+	/// Returns `Some` if this entry is the `Other` entry.
+	fn as_other(&self) -> Option<&[u8]>;
+
+	/// Returns the opaque data contained in the item if `Some` if this entry has the id given.
+	fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&[u8]>;
+
+	/// Returns the data contained in the item if `Some` if this entry has the id given, decoded
+	/// to the type provided `T`.
+	fn try_into<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

@@ -23,7 +23,7 @@ use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::ed25519::{Public as AuthorityId};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -44,7 +44,7 @@ impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
 	}
 }
 /// Digest item
-pub type DigestItem = GenDigestItem<H256, AuthoritySignature>;
+pub type DigestItem = GenDigestItem<H256>;
 
 /// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]

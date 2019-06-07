@@ -745,6 +745,26 @@ macro_rules! impl_outer_log {
 			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
 				self.dref().and_then(|dref| dref.as_pre_runtime())
 			}
+
+			fn as_consensus(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
+				self.dref().and_then(|dref| dref.as_consensus())
+			}
+
+			fn as_seal(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
+				self.dref().and_then(|dref| dref.as_seal())
+			}
+
+			fn as_other(&self) -> Option<&[u8]> {
+				self.dref().and_then(|dref| dref.as_other())
+			}
+
+			fn try_as_raw(&self, id: $crate::generic::OpaqueDigestItemId) -> Option<&[u8]> {
+				self.dref().and_then(|dref| dref.try_as_raw(id))
+			}
+
+			fn try_into<T: Decode>(&self, id: $crate::generic::OpaqueDigestItemId) -> Option<T> {
+				self.dref().and_then(|dref| dref.try_into::<T>(id))
+			}
 		}
 
 		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {

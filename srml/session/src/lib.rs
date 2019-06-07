@@ -117,8 +117,6 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use parity_codec::Decode;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 use primitives::traits::{Zero, Saturating, Member};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter};
