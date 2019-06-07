@@ -42,7 +42,7 @@ use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use primitives::{
 	crypto::Pair,
-	sr25519::{Public, Signature, self},
+	sr25519::{Public, self},
 };
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
@@ -78,7 +78,7 @@ use client::{
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
-use tokio::timer::Timeout;
+use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
@@ -183,12 +183,12 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B, Public>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash, Signature>: DigestItem<Hash=B::Hash>,
+	generic::DigestItem<B::Hash>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
 		Hash=B::Hash,
 	>,
 	E: Environment<B, Error=Error>,
@@ -236,7 +236,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
 		Hash=B::Hash,
 	>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -975,7 +975,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync_without_disconnects();

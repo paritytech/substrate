@@ -55,7 +55,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{Future, IntoFuture, future};
-use tokio::timer::Timeout;
+use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use srml_aura::{
@@ -142,7 +142,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash, P::Signature>: DigestItem<Hash=B::Hash>,
+	generic::DigestItem<B::Hash>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
@@ -150,7 +150,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	P::Signature: Hash + Member + Encode + Decode,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
 		Hash=B::Hash,
 	>,
 	E: Environment<B, Error=Error>,
@@ -196,7 +196,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Signature>>,
+		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
 		Hash=B::Hash,
 	>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -908,7 +908,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync_without_disconnects();

@@ -21,7 +21,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../common" 
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.26"
-tokio = "0.1.18"
+tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
 log = "0.4.6"
 schnorrkel = "0.1.1"
@@ -34,4 +34,5 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
+tokio = "0.1.18"
 env_logger = "0.6.1"

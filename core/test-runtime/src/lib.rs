@@ -39,7 +39,7 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, DigestFor
+		GetNodeBlockType, GetRuntimeBlockType, Verify
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -161,7 +161,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, AuthoritySignature>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.

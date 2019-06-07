@@ -92,7 +92,7 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh
+    - ./scripts/build.sh --locked
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
@@ -117,7 +117,7 @@ test-linux-stable-int:             &test
       - $DEPLOY_TAG
   before_script:
     - sccache -s
-    - ./scripts/build.sh
+    - ./scripts/build.sh --locked
   script:
     - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
@@ -137,10 +137,14 @@ check-web-wasm:
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
+    - time cargo web build -p substrate-client
+    - time cargo web build -p substrate-consensus-aura
+    - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
     - time cargo web build -p substrate-keyring
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
+    - time cargo web build -p substrate-network
     - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
@@ -148,6 +152,7 @@ check-web-wasm:
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
+    - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
     - sccache -s
   tags:
@@ -172,7 +177,7 @@ build-linux-release:
   tags:
     - linux-docker
   script:
-    - ./scripts/build.sh
+    - ./scripts/build.sh --locked
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
@@ -204,7 +209,7 @@ build-rust-doc-release:
   tags:
     - linux-docker
   script:
-    - ./scripts/build.sh
+    - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
