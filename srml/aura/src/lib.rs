@@ -230,8 +230,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// instant changes
 		if changed {
-			// TODO: handle case where stalled. this will presumably mean tracking the `on_stalled`
-			// TODO:    signal below and checking it here.
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::authorities();
 			if next_authorities != last_authorities {
