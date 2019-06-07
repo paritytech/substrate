@@ -86,25 +86,12 @@ impl<T: EstimateSize> EstimateSize for (T, T) {
 	}
 }
 
-// Estimation of size for a vec v as linked hash map key.
-// This is related to linked hash map implementation.
-// It does not account for linked hashmap pointer,
-// only the key hash.
-// Current hash is `RandomState` `SipHasher13` so u64.
-// Do not account for std hashmap inner implementation details.
-//
-// This is higly dependant on std or foreing libreary implementation
-// and should be considered as a small fix cost to account for when
-// spaming small key value. (the value is rather low).
-const LINKED_HASHMAP_ENTRY_OVERHEAD:	usize = 64 / 8; 
-
 impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 	fn remove(&mut self, k: &K) {
 		let map = &mut self.0;
 		let storage_used_size = &mut self.1;
 		if let Some(v) = map.remove(k) {
 			*storage_used_size -= k.estimate_size();
-			*storage_used_size -= LINKED_HASHMAP_ENTRY_OVERHEAD;
 			*storage_used_size -= v.estimate_size();
 		}
 	}
@@ -125,7 +112,6 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 			},
 			Entry::Vacant(entry) => {
 				*storage_used_size += klen;
-				*storage_used_size += LINKED_HASHMAP_ENTRY_OVERHEAD;
 				entry.insert(v);
 			},
 		};
@@ -133,7 +119,6 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		while *storage_used_size > limit {
 			if let Some((k,v)) = lmap.pop_front() {
 				*storage_used_size -= k.estimate_size();
-				*storage_used_size -= LINKED_HASHMAP_ENTRY_OVERHEAD;
 				*storage_used_size -= v.estimate_size();
 			} else {
 				// can happen fairly often as we get value from multiple lru
@@ -649,7 +634,7 @@ mod tests {
 	#[test]
 	fn should_track_used_size_correctly() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(117, ((117-43), 117));
+		let shared = new_shared_cache::<Block, Blake2Hasher>(109, ((109-36), 109));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
@@ -665,8 +650,8 @@ mod tests {
 			Some(0),
 			|| true,
 		);
-		// 32 key, 8 key hash, 4 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 43 /* bytes */);
+		// 32 key, 3 byte size
+		assert_eq!(shared.lock().used_storage_cache_size(), 35 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -678,14 +663,14 @@ mod tests {
 			Some(0),
 			|| true,
 		);
-		// 43 + (2 * 32) key + 8 key hash, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 117 /* bytes */);
+		// 35 + (2 * 32) key, 2 byte size
+		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
 	}
 
 	#[test]
 	fn should_remove_lru_items_based_on_tracking_used_size() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(45*3, (2,3));
+		let shared = new_shared_cache::<Block, Blake2Hasher>(36*3, (2,3));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
@@ -700,8 +685,8 @@ mod tests {
 			Some(0),
 			|| true,
 		);
-		// 32 key, 8 key hash, 4 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 44 /* bytes */);
+		// 32 key, 4 byte size
+		assert_eq!(shared.lock().used_storage_cache_size(), 36 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -713,7 +698,7 @@ mod tests {
 			Some(0),
 			|| true,
 		);
-		// 32 key, 8 key hash, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 42 /* bytes */);
+		// 32 key, 2 byte size
+		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
 	}
 }
