@@ -100,7 +100,8 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, who: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
+	pub fn needed_blocks(&mut self, who: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>)
+		-> Option<Range<NumberFor<B>>> {
 		// First block number that we need to download
 		let first_different = common + <NumberFor<B>>::one();
 		let count = (count as u32).into();
@@ -110,7 +111,8 @@ impl<B: BlockT> BlockCollection<B> {
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
-					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS =>
+					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _)
+						if downloading < MAX_PARALLEL_DOWNLOADS =>
 						(*start .. *start + *len, downloading),
 					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
@@ -134,9 +136,13 @@ impl<B: BlockT> BlockCollection<B> {
 		}
 		range.end = cmp::min(peer_best + One::one(), range.end);
 		self.peer_requests.insert(who, range.start);
-		self.blocks.insert(range.start, BlockRangeState::Downloading { len: range.end - range.start, downloading: downloading + 1 });
+		self.blocks.insert(range.start, BlockRangeState::Downloading {
+			len: range.end - range.start,
+			downloading: downloading + 1
+		});
 		if range.end <= range.start {
-			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}", range, count, peer_best, common, self.blocks);
+			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}",
+				range, count, peer_best, common, self.blocks);
 		}
 		Some(range)
 	}
@@ -248,14 +254,17 @@ mod test {
 		bc.insert(1, blocks[1..11].to_vec(), peer0.clone());
 
 		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0), Some(11 .. 41));
-		assert_eq!(bc.drain(1), blocks[1..11].iter().map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) }).collect::<Vec<_>>());
+		assert_eq!(bc.drain(1), blocks[1..11].iter()
+			.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) }).collect::<Vec<_>>());
 
 		bc.clear_peer_download(&peer0);
 		bc.insert(11, blocks[11..41].to_vec(), peer0.clone());
 
 		let drained = bc.drain(12);
-		assert_eq!(drained[..30], blocks[11..41].iter().map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) }).collect::<Vec<_>>()[..]);
-		assert_eq!(drained[30..], blocks[41..81].iter().map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[..30], blocks[11..41].iter()
+			.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[30..], blocks[41..81].iter()
+			.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) }).collect::<Vec<_>>()[..]);
 
 		bc.clear_peer_download(&peer2);
 		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 80), Some(81 .. 121));
@@ -266,8 +275,10 @@ mod test {
 
 		assert_eq!(bc.drain(80), vec![]);
 		let drained = bc.drain(81);
-		assert_eq!(drained[..40], blocks[81..121].iter().map(|b| BlockData { block: b.clone(), origin: Some(peer2.clone()) }).collect::<Vec<_>>()[..]);
-		assert_eq!(drained[40..], blocks[121..150].iter().map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[..40], blocks[81..121].iter()
+			.map(|b| BlockData { block: b.clone(), origin: Some(peer2.clone()) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[40..], blocks[121..150].iter()
+			.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) }).collect::<Vec<_>>()[..]);
 	}
 
 	#[test]

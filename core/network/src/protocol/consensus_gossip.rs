@@ -208,7 +208,12 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	}
 
 	/// Validate consensus message.
-	fn validate(&self, context: &mut dyn ValidatorContext<B>, sender: &PeerId, data: &[u8]) -> ValidationResult<B::Hash>;
+	fn validate(
+		&self,
+		context: &mut dyn ValidatorContext<B>,
+		sender: &PeerId,
+		data: &[u8]
+	) -> ValidationResult<B::Hash>;
 
 	/// Produce a closure for validating messages on a given topic.
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
