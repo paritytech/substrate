@@ -2495,4 +2495,110 @@ pub(crate) mod tests {
 			None,
 		);
 	}
+
+	#[test]
+	fn importing_diverged_finalized_block_should_trigger_reorg() {
+		use test_client::blockchain::HeaderBackend;
+
+		let client = test_client::new();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		// create but don't import B1 just yet
+		let b1 = b1.bake().unwrap();
+
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
+		// A2 is the current best since it's the longest chain
+		assert_eq!(
+			blockchain.info().best_hash,
+			a2.hash(),
+		);
+
+		// importing B1 as finalized should trigger a re-org and set it as new best
+		let justification = vec![1, 2, 3];
+		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			b1.hash(),
+		);
+
+		assert_eq!(
+			blockchain.info().finalized_hash,
+			b1.hash(),
+		);
+	}
+
+	#[test]
+	fn finalizing_diverged_block_should_trigger_reorg() {
+		use test_client::blockchain::HeaderBackend;
+
+		let client = test_client::new();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+
+		dbg!((a1.header().number(), a1.hash()));
+		dbg!((a2.header().number(), a2.hash()));
+		dbg!((b1.header().number(), b1.hash()));
+
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
+		// A2 is the current best since it's the longest chain
+		assert_eq!(
+			blockchain.info().best_hash,
+			a2.hash(),
+		);
+
+		// we finalize block B1 which is on a different branch from current best
+		// which should trigger a re-org.
+		client.finalize_block(BlockId::Hash(b1.hash()), None, false).unwrap();
+
+		// B1 should now be the latest finalized
+		assert_eq!(
+			blockchain.info().finalized_hash,
+			b1.hash(),
+		);
+
+		// and also the new best block
+		assert_eq!(
+			blockchain.info().best_hash,
+			b1.hash(),
+		);
+	}
 }
