@@ -39,12 +39,14 @@ pub fn submit_report_call<C, T, Block>(
 	Block: BlockT + 'static,
 	C: HeaderBackend<Block>,
 {
-	info!(target: "accountable-safety", "Submitting report call to tx pool");
+	info!(target: "accountable-safety", "Submitting report call to tx pool {:?}", report_call);
 	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-	let uxt = Decode::decode(&mut extrinsic.encode().as_slice())
-		.expect("Encoded extrinsic is valid");
-	let block_id = BlockId::<Block>::number(client.info().best_number);
-	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
-		info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
+	if let Some(uxt) = Decode::decode(&mut extrinsic.encode().as_slice()) {
+		let block_id = BlockId::<Block>::number(client.info().best_number);
+		if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
+			info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
+		}
+	} else {
+		println!("Error decoding report call");
 	}
 }
