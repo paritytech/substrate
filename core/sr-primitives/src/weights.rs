@@ -34,7 +34,6 @@
 /// expression must evaluate to.
 pub type Weight = u32;
 
-
 /// A `Call` enum that can be weighted using the custom weight attribute of the
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
 pub trait WeighableCall {
@@ -52,7 +51,7 @@ pub trait WeighableTransaction {
 }
 
 /// Default weight wrapper.
-/// This is tailored for the Polkadot's use case. Users may replace it with anything.
+/// This is tailored for the Polkadot use case. Users may replace it with anything.
 pub enum TransactionWeight {
 	/// basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
@@ -70,7 +69,7 @@ impl WeighableTransaction for TransactionWeight {
 	fn calculate_weight(self, len: usize) -> Weight {
 		match self {
 			TransactionWeight::Basic(base, byte) => base + byte * len as Weight,
-			TransactionWeight::Max => 4 * 1024 * 1024,
+			TransactionWeight::Max => 3 * 1024 * 1024,
 			TransactionWeight::Free => 0,
 		}
 	}

@@ -33,8 +33,7 @@ pub struct CheckedExtrinsic<AccountId, Index, Call> {
 	pub function: Call,
 }
 
-impl<AccountId, Index, Call> traits::Applyable
-	for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call>
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
@@ -57,8 +56,7 @@ where
 	}
 }
 
-impl<AccountId, Index, Call> WeighableCall
-	for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call> WeighableCall for CheckedExtrinsic<AccountId, Index, Call>
 where
 	Call: WeighableCall,
 {

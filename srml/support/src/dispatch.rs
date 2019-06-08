@@ -1475,7 +1475,7 @@ mod tests {
 	#[test]
 	fn weight_should_attach_to_call_enum() {
 		// max weight. not dependent on input.
-		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 4 * 1024 * 1024);
+		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 3 * 1024 * 1024);
 		// default weight.
 		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
 		// custom basic

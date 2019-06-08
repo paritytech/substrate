@@ -126,9 +126,11 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
+	<Block::Extrinsic as Checkable<Context>>::Checked:
+		Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
+		From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
 {
 	fn execute_block(block: Block) {
@@ -146,9 +148,11 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
+	<Block::Extrinsic as Checkable<Context>>::Checked:
+		Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
+		From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
 {
 	/// Start the execution of a particular block.
@@ -158,7 +162,12 @@ where
 		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
 	}
 
-	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash, digest: &System::Digest) {
+	fn initialize_block_impl(
+		block_number: &System::BlockNumber,
+		parent_hash: &System::Hash,
+		extrinsics_root: &System::Hash,
+		digest: &System::Digest
+	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 	}
@@ -169,7 +178,8 @@ where
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
-			n > System::BlockNumber::zero() && <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
+			n > System::BlockNumber::zero()
+			&& <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
@@ -246,7 +256,11 @@ where
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+	fn apply_extrinsic_with_len(
+		uxt: Block::Extrinsic,
+		encoded_len: usize,
+		to_note: Option<Vec<u8>>
+	) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
