@@ -45,10 +45,10 @@ use client::{
 	backend::AuxStore,
 };
 
-use runtime_primitives::{generic::{self, BlockId}, Justification};
+use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
-	Zero, Member,
+	Zero, Member
 };
 
 use primitives::Pair;
@@ -591,12 +591,10 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 				extra_verification.into_future().wait()?;
 
-				// TODO: make this work with the Aura-specific authorities change log.
-				let maybe_keys = None;/*pre_header.digest()
-					.log(DigestItem::as_authorities_change)
-					.map(|digest| digest.to_vec())
-					.map(Encode::encode)
-					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);*/
+				// `Consensus` is the Aura-specific authorities change log.
+				let maybe_keys = pre_header.digest()
+					.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)))
+					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 				let import_block = ImportBlock {
 					origin,
