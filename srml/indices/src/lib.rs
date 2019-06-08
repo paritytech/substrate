@@ -45,7 +45,7 @@ pub trait ResolveHint<AccountId, AccountIndex> {
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex>;
 }
 
-/// Simple encode-based resolve hint implemenntation.
+/// Simple encode-based resolve hint implementation.
 pub struct SimpleResolveHint<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
 impl<AccountId: Encode, AccountIndex: From<u32>>
 	ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex>

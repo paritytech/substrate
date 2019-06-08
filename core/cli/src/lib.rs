@@ -50,7 +50,7 @@ pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType
+	NodeKeyParams, NodeKeyType, Cors,
 };
 pub use params::{NoCustom, CoreParams, SharedParams};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -485,9 +485,9 @@ where
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
-		None
+		Cors::All
 	} else {
-		Some(vec![
+		Cors::List(vec![
 			"http://localhost:*".into(),
 			"http://127.0.0.1:*".into(),
 			"https://localhost:*".into(),
@@ -495,7 +495,7 @@ where
 			"https://polkadot.js.org".into(),
 			"https://substrate-ui.parity.io".into(),
 		])
-	});
+	}).into();
 
 	// Override telemetry
 	if cli.no_telemetry {
@@ -617,7 +617,7 @@ where
 	let to = cli.to;
 	let json = cli.json;
 
-	let file: Box<Write> = match cli.output {
+	let file: Box<dyn Write> = match cli.output {
 		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
@@ -640,7 +640,7 @@ where
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
-	let file: Box<Read> = match cli.input {
+	let file: Box<dyn Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};

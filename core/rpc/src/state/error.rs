@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! State RPC errors.
+
 use client;
 use crate::rpc;
 use crate::errors;
@@ -29,8 +31,11 @@ pub enum Error {
 	/// Provided block range couldn't be resolved to a list of blocks.
 	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
 	InvalidBlockRange {
+		/// Beginning of the block range.
 		from: String,
+		/// End of the block range.
 		to: String,
+		/// Details of the error message.
 		details: String,
 	},
 }

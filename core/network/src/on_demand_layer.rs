@@ -16,7 +16,7 @@
 
 //! On-demand requests service.
 
-use crate::on_demand::RequestData;
+use crate::protocol::on_demand::RequestData;
 use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use parking_lot::Mutex;
@@ -50,7 +50,7 @@ impl<B: BlockT> OnDemand<B> where
 	B::Header: HeaderT,
 {
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
+	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
 		let (requests_send, requests_queue) = mpsc::unbounded();
 		let requests_queue = Mutex::new(Some(requests_queue));
 
@@ -62,7 +62,7 @@ impl<B: BlockT> OnDemand<B> where
 	}
 
 	/// Get checker reference.
-	pub fn checker(&self) -> &Arc<FetchChecker<B>> {
+	pub fn checker(&self) -> &Arc<dyn FetchChecker<B>> {
 		&self.checker
 	}
 

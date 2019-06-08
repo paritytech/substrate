@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 parity-codec = { version = "3.3", features = ["derive"] }

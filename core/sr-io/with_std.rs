@@ -28,7 +28,7 @@ pub use substrate_state_machine::{
 };
 
 use environmental::environmental;
-use primitives::{hexdisplay::HexDisplay, H256};
+use primitives::{offchain, hexdisplay::HexDisplay, H256};
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -251,12 +251,142 @@ impl HashingApi for () {
 	}
 }
 
+fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: &'static str) -> R {
+	ext::with(|ext| ext
+		.offchain()
+		.map(|ext| f(ext))
+		.expect(msg)
+	).expect("offchain-worker functions cannot be called outside of an Externalities-provided environment.")
+}
+
 impl OffchainApi for () {
-	fn submit_extrinsic<T: codec::Encode>(data: &T) {
-		ext::with(|ext| ext
-			.submit_extrinsic(codec::Encode::encode(data))
-			.expect("submit_extrinsic can be called only in offchain worker context")
-		).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
+	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
+		with_offchain(|ext| {
+			ext.submit_transaction(codec::Encode::encode(data))
+		}, "submit_transaction can be called only in the offchain worker context")
+	}
+
+	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
+		with_offchain(|ext| {
+			ext.new_crypto_key(crypto)
+		}, "new_crypto_key can be called only in the offchain worker context")
+	}
+
+	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.encrypt(key, data)
+		}, "encrypt can be called only in the offchain worker context")
+	}
+
+	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.decrypt(key, data)
+		}, "decrypt can be called only in the offchain worker context")
+	}
+
+	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.sign(key, data)
+		}, "sign can be called only in the offchain worker context")
+	}
+
+	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		with_offchain(|ext| {
+			ext.verify(key, msg, signature)
+		}, "verify can be called only in the offchain worker context")
+	}
+
+	fn timestamp() -> offchain::Timestamp {
+		with_offchain(|ext| {
+			ext.timestamp()
+		}, "timestamp can be called only in the offchain worker context")
+	}
+
+	fn sleep_until(deadline: Timestamp) {
+		with_offchain(|ext| {
+			ext.sleep_until(deadline)
+		}, "sleep_until can be called only in the offchain worker context")
+	}
+
+	fn random_seed() -> [u8; 32] {
+		with_offchain(|ext| {
+			ext.random_seed()
+		}, "random_seed can be called only in the offchain worker context")
+	}
+
+	fn local_storage_set(key: &[u8], value: &[u8]) {
+		with_offchain(|ext| {
+			ext.local_storage_set(key, value)
+		}, "local_storage_set can be called only in the offchain worker context")
+	}
+
+	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+		with_offchain(|ext| {
+			ext.local_storage_compare_and_set(key, old_value, new_value)
+		}, "local_storage_compare_and_set can be called only in the offchain worker context")
+	}
+
+	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+		with_offchain(|ext| {
+			ext.local_storage_get(key)
+		}, "local_storage_get can be called only in the offchain worker context")
+	}
+
+	fn http_request_start(
+		method: &str,
+		uri: &str,
+		meta: &[u8]
+	) -> Result<offchain::HttpRequestId, ()> {
+		with_offchain(|ext| {
+			ext.http_request_start(method, uri, meta)
+		}, "http_request_start can be called only in the offchain worker context")
+	}
+
+	fn http_request_add_header(
+		request_id: offchain::HttpRequestId,
+		name: &str,
+		value: &str
+	) -> Result<(), ()> {
+		with_offchain(|ext| {
+			ext.http_request_add_header(request_id, name, value)
+		}, "http_request_add_header can be called only in the offchain worker context")
+	}
+
+	fn http_request_write_body(
+		request_id: offchain::HttpRequestId,
+		chunk: &[u8],
+		deadline: Option<offchain::Timestamp>
+	) -> Result<(), offchain::HttpError> {
+		with_offchain(|ext| {
+			ext.http_request_write_body(request_id, chunk, deadline)
+		}, "http_request_write_body can be called only in the offchain worker context")
+	}
+
+	fn http_response_wait(
+		ids: &[offchain::HttpRequestId],
+		deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::HttpRequestStatus> {
+		with_offchain(|ext| {
+			ext.http_response_wait(ids, deadline)
+		}, "http_response_wait can be called only in the offchain worker context")
+	}
+
+	fn http_response_headers(
+		request_id: offchain::HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		with_offchain(|ext| {
+			ext.http_response_headers(request_id)
+		}, "http_response_headers can be called only in the offchain worker context")
+	}
+
+	fn http_response_read_body(
+		request_id: offchain::HttpRequestId,
+		buffer: &mut [u8],
+		deadline: Option<offchain::Timestamp>
+	) -> Result<usize, offchain::HttpError> {
+		with_offchain(|ext| {
+			ext.http_response_read_body(request_id, buffer, deadline)
+		}, "http_response_read_body can be called only in the offchain worker context")
 	}
 }
 
@@ -265,7 +395,7 @@ impl Api for () {}
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
 }
 

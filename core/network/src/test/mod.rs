@@ -101,19 +101,21 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: crate::message::Status<Block>) {
-	}
+	fn on_connect(
+		&mut self,
+		_ctx: &mut dyn Context<Block>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<Block>
+	) {}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
-	}
+	fn on_disconnect(&mut self, _ctx: &mut dyn Context<Block>, _peer_id: PeerId) {}
 
 	fn on_message(
 		&mut self,
-		_ctx: &mut Context<Block>,
+		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
-	) {
-	}
+	) {}
 }
 
 pub type PeersFullClient =
@@ -158,7 +160,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn info(&self) -> ClientResult<ClientInfo<Block>> {
+	pub fn info(&self) -> ClientInfo<Block> {
 		match *self {
 			PeersClient::Full(ref client) => client.info(),
 			PeersClient::Light(ref client) => client.info(),
@@ -287,7 +289,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	finalized_hash: Mutex<Option<H256>>,
 }
 
-type MessageFilter = Fn(&NetworkMsg<Block>) -> bool;
+type MessageFilter = dyn Fn(&NetworkMsg<Block>) -> bool;
 
 pub enum FromNetworkMsg<B: BlockT> {
 	/// A peer connected, with debug info.
@@ -460,7 +462,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 		let header = self
 			.client
 			.header(&BlockId::Hash(info.chain.best_hash))
@@ -521,7 +523,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Synchronize with import queue.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn import_queue_sync(&self) {
+	pub fn import_queue_sync(&self) {
 		self.import_queue.synchronize();
 		let _ = self.net_proto_channel.wait_sync();
 	}
@@ -533,7 +535,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block import notifications.
 	fn send_import_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut best_hash = self.best_hash.lock();
 		match *best_hash {
@@ -549,7 +551,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block finalization notifications.
 	fn send_finality_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut finalized_hash = self.finalized_hash.lock();
 		match *finalized_hash {
@@ -600,7 +602,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Execute a closure with the consensus gossip.
 	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
+		where F: FnOnce(&mut ConsensusGossip<Block>, &mut dyn Context<Block>) + Send + 'static
 	{
 		self.net_proto_channel.send_from_client(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
@@ -620,7 +622,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
 	{
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
 	}
 
@@ -669,13 +671,13 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
@@ -762,7 +764,7 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Get finality proof provider (if supported).
-	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<FinalityProofProvider<Block>>> {
+	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<dyn FinalityProofProvider<Block>>> {
 		None
 	}
 
@@ -794,7 +796,7 @@ pub trait TestNetFactory: Sized {
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		tx_pool: EmptyTransactionPool,
-		finality_proof_provider: Option<Arc<FinalityProofProvider<Block>>>,
+		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,

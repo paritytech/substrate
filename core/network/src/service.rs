@@ -31,14 +31,14 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::AlwaysBadChecker;
 use crate::chain::FinalityProofProvider;
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::message::Message;
-use crate::on_demand::RequestData;
+use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::protocol::message::Message;
+use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
 use crate::protocol::{ProtocolStatus, PeerInfo, NetworkOut};
 use crate::config::Params;
 use crate::error::Error;
-use crate::specialization::NetworkSpecialization;
+use crate::protocol::specialization::NetworkSpecialization;
 
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
@@ -358,7 +358,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F>(&self, f: F)
-		where F: FnOnce(&mut S, &mut Context<B>) + Send + 'static
+		where F: FnOnce(&mut S, &mut dyn Context<B>) + Send + 'static
 	{
 		let _ = self
 			.protocol_sender
@@ -367,7 +367,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 
 	/// Execute a closure with the consensus gossip.
 	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>) + Send + 'static
+		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
 	{
 		let _ = self
 			.protocol_sender
@@ -489,9 +489,9 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// A block has been finalized (sent by the client).
 	BlockFinalized(B::Hash, B::Header),
 	/// Execute a closure with the chain-specific network specialization.
-	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
+	ExecuteWithSpec(Box<dyn SpecTask<B, S> + Send + 'static>),
 	/// Execute a closure with the consensus gossip.
-	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
+	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	/// Tell protocol to perform regular maintenance.
@@ -504,22 +504,22 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
-	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+	fn call_box(self: Box<Self>, spec: &mut S, context: &mut dyn Context<B>);
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
-	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut dyn Context<B>)> SpecTask<B, S> for F {
+	fn call_box(self: Box<F>, spec: &mut S, context: &mut dyn Context<B>) {
 		(*self)(spec, context)
 	}
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait GossipTask<B: BlockT> {
-	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut dyn Context<B>);
 }
 
-impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>)> GossipTask<B> for F {
+	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut dyn Context<B>) {
 		(*self)(gossip, context)
 	}
 }
@@ -535,9 +535,9 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	service: Arc<NetworkService<B, S>>,
 	network_service: Arc<Mutex<Libp2pNetService<Message<B>>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
-	import_queue: Box<ImportQueue<B>>,
+	import_queue: Box<dyn ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
+	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,

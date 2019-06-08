@@ -8,7 +8,7 @@ edition = "2018"
 client = { package = "substrate-client", path = "../client" }
 client-db = { package = "substrate-client-db", path = "../client/db", features = ["test-helpers"] }
 futures = { version = "0.1.17" }
-parity-codec = "3.3"
+parity-codec = "3.5.1"
 executor = { package = "substrate-executor", path = "../executor" }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }

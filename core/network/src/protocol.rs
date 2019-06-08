@@ -24,16 +24,16 @@ use runtime_primitives::traits::{
 	CheckedSub, SaturatedConversion
 };
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
-use crate::message::{
-	self, BlockRequest as BlockRequestMessage,
+use message::{
+	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
 };
-use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
-use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
-use crate::specialization::NetworkSpecialization;
-use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
+use message::{BlockAttributes, Direction, FromBlock, RequestId};
+use message::generic::{Message as GenericMessage, ConsensusMessage};
+use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
+use specialization::NetworkSpecialization;
+use sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
 use rustc_hex::ToHex;
@@ -43,7 +43,15 @@ use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::{FetchChecker, ChangesProof};
-use crate::{error, util::LruHashSet};
+use crate::error;
+use util::LruHashSet;
+
+mod util;
+pub mod consensus_gossip;
+pub mod message;
+pub mod on_demand;
+pub mod specialization;
+pub mod sync;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
@@ -119,7 +127,7 @@ pub struct ProtocolStatus<B: BlockT> {
 }
 
 /// Peer information
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
@@ -335,11 +343,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 		self.network_out.disconnect_peer(who)
 	}
 
-	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(who).map(|p| p.info.clone())
-	}
-
-	fn client(&self) -> &Client<B> {
+	fn client(&self) -> &dyn Client<B> {
 		&*self.context_data.chain
 	}
 
@@ -366,7 +370,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
-	pub chain: Arc<Client<B>>,
+	pub chain: Arc<dyn Client<B>>,
 }
 
 /// Configuration for the Substrate-specific part of the networking layer.
@@ -388,11 +392,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<Client<B>>,
+		chain: Arc<dyn Client<B>>,
 		checker: Arc<dyn FetchChecker<B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
-		let info = chain.info()?;
+		let info = chain.info();
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
 			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
@@ -503,7 +507,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
 		message: Message<B>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
@@ -521,8 +525,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			},
 			GenericMessage::BlockAnnounce(announce) => {
-				self.on_block_announce(network_out, who.clone(), announce);
+				let outcome = self.on_block_announce(network_out, who.clone(), announce);
 				self.update_peer_info(&who);
+				return outcome;
 			},
 			GenericMessage::Transactions(m) =>
 				self.on_extrinsics(network_out, transaction_pool, who, m),
@@ -848,14 +853,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				network_out.disconnect_peer(who);
 				return;
 			}
+
 			if self.config.roles.is_light() {
+				// we're not interested in light peers
+				if status.roles.is_light() {
+					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
+					network_out.report_peer(who.clone(), i32::min_value());
+					network_out.disconnect_peer(who);
+					return;
+				}
+
+				// we don't interested in peers that are far behind us
 				let self_best_block = self
 					.context_data
 					.chain
 					.info()
-					.ok()
-					.and_then(|info| info.best_queued_number)
-					.unwrap_or_else(|| Zero::zero());
+					.chain.best_number;
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
 					.unwrap_or_else(Zero::zero)
@@ -899,9 +912,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			status.version
 		};
 
+		let info = self.context_data.peers.get(&who).expect("We just inserted above; QED").info.clone();
 		self.on_demand_core.on_connect(&mut network_out, who.clone(), status.roles, status.best_number);
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.new_peer(&mut context, who.clone());
+		self.sync.new_peer(&mut context, who.clone(), info);
 		if protocol_version > 2 {
 			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
 		}
@@ -1000,18 +1014,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Send Status message
 	fn send_status(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId) {
-		if let Ok(info) = self.context_data.chain.info() {
-			let status = message::generic::Status {
-				version: CURRENT_VERSION,
-				min_supported_version: MIN_VERSION,
-				genesis_hash: info.chain.genesis_hash,
-				roles: self.config.roles.into(),
-				best_number: info.chain.best_number,
-				best_hash: info.chain.best_hash,
-				chain_status: self.specialization.status(),
-			};
-			self.send_message(network_out, who, GenericMessage::Status(status))
-		}
+		let info = self.context_data.chain.info();
+		let status = message::generic::Status {
+			version: CURRENT_VERSION,
+			min_supported_version: MIN_VERSION,
+			genesis_hash: info.chain.genesis_hash,
+			roles: self.config.roles.into(),
+			best_number: info.chain.best_number,
+			best_hash: info.chain.best_hash,
+			chain_status: self.specialization.status(),
+		};
+
+		self.send_message(network_out, who, GenericMessage::Status(status))
 	}
 
 	fn on_block_announce(
@@ -1019,7 +1033,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		announce: message::BlockAnnounce<B::Header>
-	) {
+	) -> CustomMessageOutcome<B>  {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -1028,12 +1042,55 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		self.on_demand_core.on_block_announce(&mut network_out, who.clone(), *header.number());
-		self.sync.on_block_announce(
+		let try_import = self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, network_out),
 			who.clone(),
 			hash,
 			&header,
 		);
+
+		// try_import is only true when we have all data required to import block
+		// in the BlockAnnounce message. This is only when:
+		// 1) we're on light client;
+		// AND
+		// - EITHER 2.1) announced block is stale;
+		// - OR 2.2) announced block is NEW and we normally only want to download this single block (i.e.
+		//           there are no ascendants of this block scheduled for retrieval)
+		if !try_import {
+			return CustomMessageOutcome::None;
+		}
+
+		// to import header from announced block let's construct response to request that normally would have
+		// been sent over network (but it is not in our case)
+		let blocks_to_import = self.sync.on_block_data(
+			&mut ProtocolContext::new(&mut self.context_data, network_out),
+			who.clone(),
+			message::generic::BlockRequest {
+				id: 0,
+				fields: BlockAttributes::HEADER,
+				from: message::FromBlock::Hash(hash),
+				to: None,
+				direction: message::Direction::Ascending,
+				max: Some(1),
+			},
+			message::generic::BlockResponse {
+				id: 0,
+				blocks: vec![
+					message::generic::BlockData {
+						hash: hash,
+						header: Some(header),
+						body: None,
+						receipt: None,
+						message_queue: None,
+						justification: None,
+					},
+				],
+			},
+		);
+		match blocks_to_import {
+			Some((origin, blocks)) => CustomMessageOutcome::BlockImport(origin, blocks),
+			None => CustomMessageOutcome::None,
+		}
 	}
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
@@ -1138,16 +1195,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		processed_blocks: Vec<B::Hash>,
 		has_error: bool
 	) {
-		self.sync.blocks_processed(processed_blocks, has_error);
-		let mut context =
-			ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.maintain_sync(&mut context);
+		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
+		self.sync.blocks_processed(&mut context, processed_blocks, has_error);
 	}
 
 	/// Restart the sync process.
 	pub fn restart(&mut self, network_out: &mut dyn NetworkOut<B>) {
+		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.sync.restart(&mut context);
+		self.sync.restart(&mut context, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
 	/// Notify about successful import of the given block.
@@ -1349,7 +1405,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
-		finality_proof_provider: Option<&FinalityProofProvider<B>>
+		finality_proof_provider: Option<&dyn FinalityProofProvider<B>>
 	) {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = finality_proof_provider.as_ref()

@@ -107,7 +107,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut Externalities<Blake2Hasher>, f: F) -> Result<U>
+pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
@@ -121,7 +121,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
 	// fn dispatch<H: hash_db::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
-	fn dispatch(ext: &mut Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
@@ -133,7 +133,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 #[derive(Debug)]
-pub struct NativeExecutor<D: NativeExecutionDispatch> {
+pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
 	/// The fallback executor in case native isn't available.
