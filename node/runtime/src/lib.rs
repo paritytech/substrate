@@ -132,11 +132,11 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa,);
+type SessionHandlers = (Grandpa, Aura);
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 impl_opaque_keys! {
-	pub struct SessionKeys(AuthorityId,);
+	pub struct SessionKeys(grandpa::AuthorityId, aura::AuthorityId);
 }
 
 // NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
@@ -238,8 +238,6 @@ impl sudo::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type SessionKey = AuthorityId;
-	type Log = Log;
 	type Event = Event;
 }
 
@@ -348,27 +346,13 @@ impl_runtime_apis! {
 		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>
 		{
-			for log in digest.logs.iter().filter_map(|l| match l {
-				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-			}) {
-				if let Some(change) = Grandpa::scrape_digest_change(log) {
-					return Some(change);
-				}
-			}
-			None
+			Grandpa::pending_change(digest)
 		}
 
 		fn grandpa_forced_change(digest: &DigestFor<Block>)
 			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
 		{
-			for log in digest.logs.iter().filter_map(|l| match l {
-				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-			}) {
-				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
-					return Some(change);
-				}
-			}
-			None
+			Grandpa::forced_change(digest)
 		}
 
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {

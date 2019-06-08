@@ -24,7 +24,7 @@ use substrate_client::decl_runtime_apis;
 
 
 /// The `ConsensusEngineId` of BABE.
-pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
+pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
