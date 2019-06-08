@@ -134,7 +134,6 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = ();
-	type Log = Log;
 }
 
 impl indices::Trait for Runtime {
@@ -187,9 +186,9 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{default, Log(ChangesTrieRoot)},
+		System: system::{default, Config<T>},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,

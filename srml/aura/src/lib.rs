@@ -54,7 +54,7 @@ use rstd::{result, prelude::*};
 use parity_codec::{Encode, Decode};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
+use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Digest}, generic::DigestItem};
 use timestamp::OnTimestampSet;
 use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
@@ -65,6 +65,7 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 #[cfg(feature = "std")]
 use serde::Serialize;
 pub use substrate_consensus_aura_primitives::AuthorityId;
+use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 
 mod mock;
 mod tests;
@@ -91,45 +92,6 @@ impl AuraInherentData for InherentData {
 
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
-	}
-}
-
-/// Logs in this module.
-pub type Log<T> = RawLog<T>;
-
-/// Logs in this module.
-///
-/// The type parameter distinguishes logs belonging to two different runtimes,
-/// which should not be mixed.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<T> {
-	/// AuRa inherent digests
-	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
-	/// Authorities set has been changed. Contains the new set of authorities.
-	AuthoritiesChange(Vec<AuthorityId>),
-}
-
-impl<T> RawLog<T> {
-	/// Try to cast the log entry as AuthoritiesChange log entry.
-	pub fn as_authorities_change(&self) -> Option<&[AuthorityId]> {
-		match *self {
-			RawLog::AuthoritiesChange(ref item) => Some(item),
-			_ => None,
-		}
-	}
-}
-
-// Implementation for tests outside of this crate.
-#[cfg(any(feature = "std", test))]
-impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<AuthorityId> {
-	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
-		match log {
-			RawLog::AuthoritiesChange(authorities) =>
-				primitives::generic::DigestItem::Consensus(*b"aura", authorities.encode()),
-			RawLog::PreRuntime(id, v, _) =>
-				primitives::generic::DigestItem::PreRuntime(id, v),
-		}
 	}
 }
 
@@ -190,9 +152,6 @@ impl HandleReport for () {
 }
 
 pub trait Trait: timestamp::Trait {
-	/// Type for all log entries of this module.
-	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
-
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 }
@@ -215,11 +174,14 @@ impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(AURA_ENGINE_ID, new.encode());
+		//Self::deposit_log();
+		<system::Module<T>>::deposit_log(log.into());
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Log<T>) {
-		<system::Module<T>>::deposit_log(<T as Trait>::Log::from(log).into());
+	fn deposit_log<L>(log: L) where <<T as system::Trait>::Digest as Digest>::Item: From<L> {
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 

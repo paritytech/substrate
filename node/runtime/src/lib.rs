@@ -103,7 +103,6 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
-	type Log = Log;
 }
 
 impl indices::Trait for Runtime {
@@ -254,8 +253,8 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{default, Config<T>, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
+		System: system::{default, Config<T>},
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Indices: indices,
 		Balances: balances,
@@ -351,7 +350,6 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_change(log) {
 					return Some(change);
@@ -365,7 +363,6 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
 					return Some(change);

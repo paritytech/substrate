@@ -33,17 +33,15 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use rstd::prelude::*;
-use parity_codec as codec;
-use codec::{Encode, Decode};
-use fg_primitives::ScheduledChange;
-use srml_support::{Parameter, decl_event, decl_storage, decl_module};
-use srml_support::{dispatch::Result};
-use srml_support::storage::StorageValue;
-use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::CurrentHeight;
+use parity_codec::{self as codec, Encode, Decode};
 use substrate_primitives::ed25519;
+use srml_support::{
+	Parameter, decl_event, decl_storage, decl_module, dispatch::Result,
+	storage::{StorageValue, unhashed::StorageVec}
+};
+use primitives::traits::{self, CurrentHeight, MaybeSerializeDebug};
+use fg_primitives::ScheduledChange;
 use system::ensure_signed;
-use primitives::traits::MaybeSerializeDebug;
 
 // TODO: switch to import from aura primitives.
 use ed25519::Public as AuthorityId;
@@ -127,10 +125,10 @@ impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
 }
 
 pub trait Trait: system::Trait {
-	/// Type for all log entries of this module.
-	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
+	/// Overarching log type that can convert from/into log entries of this module.
+	type Log: traits::DigestItem<Hash=Self::Hash> + Into<<Self as system::Trait>::Log> + From<Log<Self>>;
 
-	/// The session key type used by authorities.
+	/// The key type used by Grandpa authorities to sign grandpa stuff.
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 
 	/// The event type of this module.

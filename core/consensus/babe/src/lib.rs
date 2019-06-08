@@ -32,7 +32,7 @@ pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::{ExtraVerification, well_known_cache_keys::Id as CacheKeyId};
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
 	SimpleBitOps,
@@ -645,14 +645,12 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 
 				extra_verification.into_future().wait()?;
 
-				let maybe_keys = None;
-				/* TODO: make this work:
-					pre_header.digest()
-					.log(DigestItem::as_authorities_change)
-					.map(|digest| digest.to_vec())
-					.map(Encode::encode)
-					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob)]);
-				*/
+				// `Consensus` is the Babe-specific authorities change log.
+				// It's an encoded `Vec<AuthorityId>`, the same format as is stored in the cache,
+				// so no need to decode/re-encode.
+				let maybe_keys = pre_header.digest()
+					.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID)))
+					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 				let import_block = ImportBlock {
 					origin,

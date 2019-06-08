@@ -76,10 +76,10 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
+use primitives::{generic::DigestItem, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
-};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+}};
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
@@ -168,7 +168,7 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// Collection of (light-client-relevant) logs for a block to be included verbatim in the block header.
 	type Digest:
-		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash=Self::Hash, Item=Self::Log>;
 
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
@@ -191,7 +191,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Event: Parameter + Member + From<Event>;
 
 	/// A piece of information that can be part of the digest (as a digest item).
-	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
+	type Log: traits::DigestItem<Hash=Self::Hash> + From<DigestItem<Self::Hash>>;
 }
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
@@ -294,38 +294,6 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 
 /// Exposed trait-generic origin type.
 pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
-
-pub type Log<T> = RawLog<
-	<T as Trait>::Hash,
->;
-
-/// A log in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<Hash> {
-	/// Changes trie has been computed for this block. Contains the root of
-	/// changes trie.
-	ChangesTrieRoot(Hash),
-}
-
-impl<Hash: Member> RawLog<Hash> {
-	/// Try to cast the log entry as ChangesTrieRoot log entry.
-	pub fn as_changes_trie_root(&self) -> Option<&Hash> {
-		match *self {
-			RawLog::ChangesTrieRoot(ref item) => Some(item),
-		}
-	}
-}
-
-// Implementation for tests outside of this crate.
-#[cfg(any(feature = "std", test))]
-impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
-	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
-		match log {
-			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot(root),
-		}
-	}
-}
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
@@ -611,8 +579,8 @@ impl<T: Trait> Module<T> {
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
-			let item = RawLog::ChangesTrieRoot(storage_changes_root);
-			let item = <T as Trait>::Log::from(item).into();
+			let item = DigestItem::ChangesTrieRoot(storage_changes_root);
+			let item = <T as Trait>::Log::from(item);
 			digest.push(item);
 		}
 
