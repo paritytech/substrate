@@ -106,7 +106,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -171,6 +171,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -283,7 +284,7 @@ pub fn testnet_genesis(
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -332,6 +333,7 @@ pub fn testnet_genesis(
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }

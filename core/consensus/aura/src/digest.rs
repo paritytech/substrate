@@ -54,7 +54,7 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 	}
 
 	fn as_aura_seal(&self) -> Option<Signature<P>> {
-		self.try_into(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
+		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
 	}
 
 	fn aura_pre_digest(slot_num: u64) -> Self {
@@ -62,6 +62,6 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 	}
 
 	fn as_aura_pre_digest(&self) -> Option<u64> {
-		self.try_into(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
+		self.try_to(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
 	}
 }

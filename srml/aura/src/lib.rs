@@ -175,12 +175,6 @@ impl<T: Trait> Module<T> {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(AURA_ENGINE_ID, new.encode());
-		//Self::deposit_log();
-		<system::Module<T>>::deposit_log(log.into());
-	}
-
-	/// Deposit one of this module's logs.
-	fn deposit_log<L>(log: L) where <<T as system::Trait>::Digest as Digest>::Item: From<L> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }

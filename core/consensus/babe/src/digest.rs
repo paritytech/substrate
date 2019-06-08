@@ -19,7 +19,7 @@
 use primitives::sr25519::{Public, Signature};
 use babe_primitives::BABE_ENGINE_ID;
 use runtime_primitives::{
-	traits::DigestItem as DigestItemT, generic::{DigestItem, OpaqueDigestItemId}
+	traits::DigestItem as _1, generic::{DigestItem, OpaqueDigestItemId}
 };
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
@@ -99,7 +99,7 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
-		self.try_into(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
+		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
 	fn babe_seal(signature: Signature) -> Self {
@@ -107,6 +107,6 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	}
 
 	fn as_babe_seal(&self) -> Option<Signature> {
-		self.try_into(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
+		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 }

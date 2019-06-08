@@ -21,7 +21,8 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use substrate_primitives::crypto::Pair;
+#[cfg(feature = "std")]
+use serde::Serialize;
 use parity_codec::{Encode, Decode};
 use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
@@ -31,10 +32,10 @@ use rstd::vec::Vec;
 pub type AuthorityPair = substrate_primitives::ed25519::Pair;
 
 /// Identity of a Grandpa authority.
-pub type AuthorityId = <AuthorityPair as Pair>::Public;
+pub type AuthorityId = substrate_primitives::ed25519::Public;
 
 /// Signature for a Grandpa authority.
-pub type AuthoritySignature = <AuthorityPair as Pair>::Signature;
+pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
 
 /// The `ConsensusEngineId` of BABE.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
@@ -43,8 +44,8 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 pub type AuthorityWeight = u64;
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Debug, PartialEq))]
-#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: Vec<(AuthorityId, u64)>,

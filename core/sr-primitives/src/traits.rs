@@ -771,6 +771,13 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 			.filter_map(predicate)
 			.next()
 	}
+
+	/// Get a conversion of the first digest item that successfully converts using the function.
+	fn convert_first<T, F: Fn(&Self::Item) -> Option<T>>(&self, predicate: F) -> Option<T> {
+		self.logs().iter()
+			.filter_map(predicate)
+			.next()
+	}
 }
 
 /// Single digest item. Could be any type that implements `Member` and provides methods
@@ -801,7 +808,7 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 
 	/// Returns the data contained in the item if `Some` if this entry has the id given, decoded
 	/// to the type provided `T`.
-	fn try_into<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T>;
+	fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

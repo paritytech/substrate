@@ -762,8 +762,8 @@ macro_rules! impl_outer_log {
 				self.dref().and_then(|dref| dref.try_as_raw(id))
 			}
 
-			fn try_into<T: Decode>(&self, id: $crate::generic::OpaqueDigestItemId) -> Option<T> {
-				self.dref().and_then(|dref| dref.try_into::<T>(id))
+			fn try_to<T: Decode>(&self, id: $crate::generic::OpaqueDigestItemId) -> Option<T> {
+				self.dref().and_then(|dref| dref.try_to::<T>(id))
 			}
 		}
 

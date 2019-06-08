@@ -34,55 +34,46 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 use serde::Serialize;
 use rstd::prelude::*;
 use parity_codec::{self as codec, Encode, Decode};
-use substrate_primitives::ed25519;
 use srml_support::{
-	Parameter, decl_event, decl_storage, decl_module, dispatch::Result,
-	storage::{StorageValue, unhashed::StorageVec}
+	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
-use primitives::traits::{self, CurrentHeight, MaybeSerializeDebug};
-use fg_primitives::ScheduledChange;
+use primitives::{
+	generic::{OpaqueDigestItemId, DigestItem}, traits::{Digest, DigestItem as _1, CurrentHeight}
+};
+use fg_primitives::{ScheduledChange, AuthorityWeight, GRANDPA_ENGINE_ID};
 pub use fg_primitives::AuthorityId;
 use system::ensure_signed;
-use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 mod mock;
 mod tests;
 
-/// Logs which can be scanned by GRANDPA for authorities change events.
-pub trait GrandpaChangeSignal<N> {
-	/// Try to cast the log entry as a contained signal.
-	fn as_signal(&self) -> Option<ScheduledChange<N>>;
-	/// Try to cast the log entry as a contained forced signal.
-	fn as_forced_signal(&self) -> Option<(N, ScheduledChange<N>)>;
-}
-
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum ConsensusSignal<N> {
+pub enum Signal<N> {
 	/// Authorities set change has been signaled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
-	AuthoritiesChangeSignal(ScheduledChange<N>),
+	AuthoritiesChange(ScheduledChange<N>),
 	/// A forced authorities set change. Contains in this order: the median last
 	/// finalized block when the change was signaled, the delay in blocks _to import_
 	/// before applying and the new set of authorities.
-	ForcedAuthoritiesChangeSignal(N, ScheduledChange<N>),
+	ForcedAuthoritiesChange(N, ScheduledChange<N>),
 }
 
-impl<N: Clone, AuthorityId> RawLog<N> {
+impl<N> Signal<N> {
 	/// Try to cast the log entry as a contained signal.
-	pub fn try_into_change(&self) -> Option<ScheduledChange<T::BlockNumber>> {
-		match *self {
-			RawLog::AuthoritiesChangeSignal(change) => Some(change),
-			RawLog::ForcedAuthoritiesChangeSignal(_, _, _) => None,
+	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
+		match self {
+			Signal::AuthoritiesChange(change) => Some(change),
+			Signal::ForcedAuthoritiesChange(_, _) => None,
 		}
 	}
 
 	/// Try to cast the log entry as a contained forced signal.
-	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<T::BlockNumber>)> {
-		match *self {
-			RawLog::ForcedAuthoritiesChangeSignal(median, change) => Some((median, change)),
-			RawLog::AuthoritiesChangeSignal(_, _) => None,
+	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
+		match self {
+			Signal::ForcedAuthoritiesChange(median, change) => Some((median, change)),
+			Signal::AuthoritiesChange(_) => None,
 		}
 	}
 }
@@ -143,10 +134,10 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
-		Authorities get(authorities) config(): Vec<(AuthorityId, AuthorityCount)>
+		Authorities get(authorities) config(): Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// Pending change: (signaled at, scheduled change).
-		PendingChange get(pending_change): Option<StoredPendingChange<T::BlockNumber>>;
+		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -155,7 +146,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
@@ -167,28 +158,28 @@ decl_module! {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {
-						Self::deposit_log(RawLog::ForcedAuthoritiesChangeSignal(
+						Self::deposit_log(Signal::ForcedAuthoritiesChange(
 							median,
 							ScheduledChange{
 								delay: pending_change.delay,
-								next_authorities: pending_change.next_authorities,
+								next_authorities: pending_change.next_authorities.clone(),
 							}
 						))
 					} else {
-						Self::deposit_log(RawLog::AuthoritiesChangeSignal(
+						Self::deposit_log(Signal::AuthoritiesChange(
 							ScheduledChange{
 								delay: pending_change.delay,
-								next_authorities: pending_change.next_authorities,
+								next_authorities: pending_change.next_authorities.clone(),
 							}
 						));
 					}
 				}
 
 				if block_number == pending_change.scheduled_at + pending_change.delay {
+					<Authorities<T>>::put(&pending_change.next_authorities);
 					Self::deposit_event(
-						RawEvent::NewAuthorities(pending_change.next_authorities.clone())
+						Event::NewAuthorities(pending_change.next_authorities)
 					);
-					<Authorities<T>>::put(pending_change.next_authorities);
 					<PendingChange<T>>::kill();
 				}
 			}
@@ -199,7 +190,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
-		<Authorities<T>>::items()
+		<Authorities<T>>::get()
 	}
 
 	/// Schedule a change in the authorities.
@@ -221,7 +212,7 @@ impl<T: Trait> Module<T> {
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
 	) -> Result {
-		if Self::pending_change().is_none() {
+		if !<PendingChange<T>>::exists() {
 			let scheduled_at = system::ChainContext::<T>::default().current_height();
 
 			if let Some(_) = forced {
@@ -248,28 +239,28 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Log<T>) {
-		<system::Module<T>>::deposit_log(<T as Trait>::Log::from(log).into());
+	fn deposit_log(log: Signal<T::BlockNumber>) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &T::Digest) -> Option<ConsensusSignal<T::BlockNumber>> {
+	pub fn grandpa_log(digest: &T::Digest) -> Option<Signal<T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest()
-			.log(|l| l.try_into::<ConsensusSignal<T::BlockNumber>>(id))
+		digest.convert_first(|l| l.try_to::<Signal<T::BlockNumber>>(id))
 	}
 
-	pub fn grandpa_pending_change(digest: &T::Digest)
+	pub fn pending_change(digest: &T::Digest)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
-		self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
 	}
 
-	pub fn grandpa_forced_change(digest: &T::Digest)
+	pub fn forced_change(digest: &T::Digest)
 		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
 	{
-		self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 }
 

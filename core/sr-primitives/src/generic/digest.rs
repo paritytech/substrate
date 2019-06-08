@@ -350,8 +350,8 @@ impl<
 		self.dref().try_as_raw(id)
 	}
 
-	fn try_into<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
-		self.dref().try_into::<T>(id)
+	fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+		self.dref().try_to::<T>(id)
 	}
 }
 
@@ -444,7 +444,7 @@ impl<'a, Hash: Codec + Member> DigestItemRef<'a, Hash> {
 
 	/// Try to match this digest item to the given opaque item identifier; if it matches, then
 	/// try to cast to the given datatype; if that works, return it.
-	pub fn try_into<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
 		self.try_as_raw(id).and_then(|mut x| Decode::decode(&mut x))
 	}
 }

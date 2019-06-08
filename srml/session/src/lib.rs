@@ -159,7 +159,7 @@ macro_rules! count {
 /// Would be much nicer for this to be converted to `derive` code.
 macro_rules! impl_opaque_keys {
 	(
-		pub struct $name:ident ( $( $t:tt ,)* );
+		pub struct $name:ident ( $( $t:ty ),* $(,)* );
 	) => {
 		impl_opaque_keys! {
 			pub struct $name ( $( $t ,)* );
@@ -167,7 +167,7 @@ macro_rules! impl_opaque_keys {
 		}
 	};
 	(
-		pub struct $name:ident ( $( $t:tt ,)* );
+		pub struct $name:ident ( $( $t:ty ),* $(,)* );
 		impl OpaqueKeys for _ {
 			$($rest:tt)*
 		}
