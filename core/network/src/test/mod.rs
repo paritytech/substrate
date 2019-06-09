@@ -52,9 +52,7 @@ use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
-
-// TODO: switch to import from aura primitives.
-use primitives::ed25519::Public as AuthorityId;
+use test_runtime::AuthorityId;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;

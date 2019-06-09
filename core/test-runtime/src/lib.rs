@@ -49,6 +49,12 @@ use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+pub use consensus_babe::AuthorityId;
+
+// Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub type AuraId = AuthorityId;
+// Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub type BabeId = AuthorityId;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -146,10 +152,6 @@ impl Extrinsic {
 	}
 }
 
-/// The signature type used by authorities.
-pub type AuthoritySignature = ed25519::Signature;
-/// The identity type used by authorities.
-pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
 /// The signature type used by accounts/transactions.
 pub type AccountSignature = sr25519::Signature;
 /// An identifier for an account on this system.
@@ -455,12 +457,12 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuthorityId> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
-				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
+				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block, AuthorityId> for Runtime {
+			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
@@ -468,7 +470,7 @@ cfg_if! {
 						threshold: std::u64::MAX,
 					}
 				}
-				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
+				fn authorities() -> Vec<BabeId> { system::authorities() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
@@ -599,8 +601,9 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
@@ -611,6 +614,7 @@ cfg_if! {
 						threshold: core::u64::MAX,
 					}
 				}
+				fn authorities() -> Vec<BabeId> { system::authorities() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

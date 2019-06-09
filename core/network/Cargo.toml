@@ -37,6 +37,7 @@ void = "1.0"
 env_logger = { version = "0.6" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common", features = ["test-helpers"] }
 tokio = "0.1.11"
 

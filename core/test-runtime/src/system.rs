@@ -25,9 +25,10 @@ use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT, 
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
-use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
+use super::{
+	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
+};
 use primitives::{Blake2Hasher, storage::well_known_keys};
-use primitives::ed25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -39,7 +40,7 @@ storage_items! {
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 	StorageDigest: b"sys:digest" => Digest;
-	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
+	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -72,37 +73,24 @@ pub fn take_block_number() -> Option<BlockNumber> {
 
 /// Actually execute all transitioning for `block`.
 pub fn polish_block(block: &mut Block) {
-	let header = &mut block.header;
-
-	// check transaction trie root represents the transactions.
-	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
-	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
-	header.extrinsics_root = txs_root;
-
-	// execute transactions
-	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	execute_block_with_state_root_handler(block, |mut header| {
+		header.state_root = storage_root().into();
 	});
-
-	header.state_root = storage_root().into();
-
-	// check digest
-	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
-	}
-
-	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
-/*	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}*/
 }
 
 pub fn execute_block(mut block: Block) {
+	execute_block_with_state_root_handler(&mut block, |header| {
+		// check storage root.
+		let storage_root = storage_root().into();
+		info_expect_equal_hash(&storage_root, &header.state_root);
+		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
+	});
+}
+
+fn execute_block_with_state_root_handler(
+	block: &mut Block,
+	f: impl FnOnce(&mut header)
+) {
 	let header = &mut block.header;
 
 	// check transaction trie root represents the transactions.
@@ -113,26 +101,23 @@ pub fn execute_block(mut block: Block) {
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.extrinsics.into_iter().enumerate().for_each(|(i, e)| {
+	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
-	// check storage root.
-	let storage_root = storage_root().into();
-	info_expect_equal_hash(&storage_root, &header.state_root);
-	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
+	f(header);
 
 	// check digest
 	let digest = &mut header.digest;
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
-	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
-	/*if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}*/
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
+		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
 }
 
 /// The block executor.
@@ -216,10 +201,10 @@ pub fn finalize_block() -> Header {
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
-	// TODO: Fix: This isn't a thing any more - it must go into a consensus-specific digest item.
-	/*if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}*/
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
+		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
 
 	Header {
 		number,
