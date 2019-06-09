@@ -138,13 +138,14 @@ type SessionHandlers = (Grandpa, Aura);
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 impl_opaque_keys! {
-	pub struct SessionKeys(grandpa::AuthorityId, aura::AuthorityId);
+	pub struct SessionKeys(grandpa::AuthorityId, AuraId);
 }
 
 // NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
 // The number and order of items in `SessionHandler` *MUST* be the same number and order of keys in
 // `SessionKeys`.
-// TODO: Introduce some structure to tie these together to make it a bit less of a footgun.
+// TODO: Introduce some structure to tie these together to make it a bit less of a footgun. This
+// should be easy, since OneSessionHandler trait provides the `Key` as an associated type.
 
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;

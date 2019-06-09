@@ -60,7 +60,6 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-pub use substrate_consensus_aura_primitives::AuthorityId;
 use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 
 mod mock;
