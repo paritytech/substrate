@@ -202,7 +202,7 @@ impl<T: Trait> Module<T> {
 			let delay = latency + (window_size / two);
 			// median may be at most n - delay
 			if median + delay <= now {
-				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one());
+				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one(), median);
 			}
 		}
 	}
@@ -212,20 +212,20 @@ impl<T: Trait> Module<T> {
 pub trait OnFinalizationStalled<N> {
 	/// The parameter here is how many more blocks to wait before applying
 	/// changes triggered by finality stalling.
-	fn on_stalled(further_wait: N);
+	fn on_stalled(further_wait: N, median: N);
 }
 
 macro_rules! impl_on_stalled {
 	() => (
 		impl<N> OnFinalizationStalled<N> for () {
-			fn on_stalled(_: N) {}
+			fn on_stalled(_: N, _: N) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(further_wait: NUM) {
-				$($t::on_stalled(further_wait.clone());)*
+			fn on_stalled(further_wait: NUM, median: NUM) {
+				$($t::on_stalled(further_wait.clone(), median.clone());)*
 			}
 		}
 	}
@@ -306,7 +306,7 @@ mod tests {
 
 			pub struct StallTracker;
 			impl OnFinalizationStalled<u64> for StallTracker {
-				fn on_stalled(further_wait: u64) {
+				fn on_stalled(further_wait: u64, _median: u64) {
 					let now = System::block_number();
 					NOTIFICATIONS.lock().push(StallEvent { at: now, further_wait });
 				}

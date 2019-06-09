@@ -291,13 +291,11 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait + finality_tracker::Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
-	fn on_stalled(further_wait: T::BlockNumber) {
+impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
+	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
 		// when we record old authority sets, we can use `finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
-		// TODO: consider passing `median` into this as a param
-		let median = <finality_tracker::Module<T>>::median();
 		<Stalled<T>>::put((further_wait, median));
 	}
 }
