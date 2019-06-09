@@ -41,12 +41,11 @@ pub type AccountIndex = u32;
 /// Balance of an account.
 pub type Balance = u128;
 
-/// The Ed25519 pub key of an session that belongs to an authority of the chain. This is
-/// exactly equivalent to what the substrate calls an "authority".
-pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
+/// Alias to the signature scheme used for Aura authority signatures.
+pub type AuraSignature = primitives::ed25519::Signature;
 
-/// Alias to 512-bit hash when used in the context of a session signature on the chain.
-pub type AuthoritySignature = primitives::ed25519::Signature;
+/// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
+pub type AuraId = primitives::ed25519::Public;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;

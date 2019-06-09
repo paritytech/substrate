@@ -2152,6 +2152,7 @@ dependencies = [
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura 2.0.0",
+ "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-finality-grandpa 2.0.0",
  "substrate-inherents 2.0.0",
@@ -3461,7 +3462,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
- "srml-staking 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
@@ -4096,6 +4096,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-slots 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]

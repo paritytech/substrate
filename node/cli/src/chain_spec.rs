@@ -17,7 +17,7 @@
 //! Substrate chain configurations.
 
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::AccountId;
+use node_primitives::{AccountId, AuraId};
 use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys};
@@ -25,9 +25,7 @@ pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
-
-// TODO: switch to import from aura primitives.
-use primitives::ed25519::Public as AuthorityId;
+use grandpa::AuthorityId as GrandpaId;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -46,21 +44,25 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// and
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
-	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
+	let initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)> = vec![(
 		hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].unchecked_into(), // 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
 		hex!["781ead1e2fa9ccb74b44c19d29cb2a7a4b5be3972927ae98cd3877523976a276"].unchecked_into(), // 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
+		hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"].unchecked_into(), // 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
 		hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"].unchecked_into(), // 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
 	),(
 		hex!["68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde78"].unchecked_into(), // 5ERawXCzCWkjVq3xz1W5KGNtVx2VdefvZ62Bw1FEuZW4Vny2
 		hex!["c8dc79e36b29395413399edaec3e20fcca7205fb19776ed8ddb25d6f427ec40e"].unchecked_into(), // 5Gc4vr42hH1uDZc93Nayk5G7i687bAQdHHc9unLuyeawHipF
 		hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"].unchecked_into(), // 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
+		hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"].unchecked_into(), // 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
 	),(
 		hex!["547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d65"].unchecked_into(), // 5DyVtKWPidondEu8iHZgi6Ffv9yrJJ1NDNLom3X9cTDi98qp
 		hex!["9e42241d7cd91d001773b0b616d523dd80e13c6c2cab860b1234ef1b9ffc1526"].unchecked_into(), // 5FeD54vGVNpFX3PndHPXJ2MDakc462vBCD5mgtWRnWYCpZU9
 		hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"].unchecked_into(), // 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
+		hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"].unchecked_into(), // 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
 	),(
 		hex!["f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c2663"].unchecked_into(), // 5HYZnKWe5FVZQ33ZRJK1rG3WaLMztxWrrNDb1JRwaHHVWyP9
 		hex!["66bc1e5d275da50b72b15de072a2468a5ad414919ca9054d2695767cf650012f"].unchecked_into(), // 5EPQdAQ39WQNLCRjWsCk5jErsCitHiY5ZmjfWzzbXDoAoYbn
+		hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"].unchecked_into(), // 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
 		hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"].unchecked_into(), // 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
 	)];
 
@@ -167,10 +169,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
 			_genesis_phantom_data: Default::default(),
 		}),
 	}
@@ -198,25 +199,33 @@ pub fn get_account_id_from_seed(seed: &str) -> AccountId {
 		.public()
 }
 
-/// Helper function to generate AuthorityId from seed
-pub fn get_session_key_from_seed(seed: &str) -> AuthorityId {
+/// Helper function to generate AuraId from seed
+pub fn get_aura_id_from_seed(seed: &str) -> AuraId {
+	ed25519::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+/// Helper function to generate GrandpaId from seed
+pub fn get_grandpa_id_from_seed(seed: &str) -> GrandpaId {
 	ed25519::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuthorityId) {
+pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuraId, GrandpaId) {
 	(
 		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
-		get_session_key_from_seed(seed)
+		get_aura_id_from_seed(seed),
+		get_grandpa_id_from_seed(seed)
 	)
 }
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
+	initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
@@ -300,7 +309,7 @@ pub fn testnet_genesis(
 		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
-				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
+				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
@@ -329,10 +338,9 @@ pub fn testnet_genesis(
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
 			_genesis_phantom_data: Default::default(),
 		}),
 	}

@@ -26,7 +26,7 @@ use runtime_primitives::ConsensusEngineId;
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
-/// The identifier for an Aura authority.
+/// TODO: Remove!!! This should be generic
 pub type AuthorityId = ed25519::Public;
 
 decl_runtime_apis! {

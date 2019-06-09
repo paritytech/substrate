@@ -971,7 +971,7 @@ mod tests {
 			header: B::Header,
 			justification: Option<Justification>,
 			body: Option<Vec<B::Extrinsic>>,
-		) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+		) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((ImportBlock {
 				origin,
 				header,

@@ -20,8 +20,12 @@
 
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::ConsensusEngineId;
+use substrate_primitives::sr25519::{Public, Signature, Pair};
 use substrate_client::decl_runtime_apis;
 
+/// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
+/// the main Babe module. If that ever changes, then this must, too.
+pub type AuthorityId = Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -63,7 +67,7 @@ impl slots::SlotData for BabeConfiguration {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	pub trait BabeApi<AuthorityId: Codec> {
+	pub trait BabeApi {
 		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///

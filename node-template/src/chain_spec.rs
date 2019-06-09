@@ -4,9 +4,7 @@ use node_template_runtime::{
 	SudoConfig, IndicesConfig, SystemConfig
 };
 use substrate_service;
-
-// TODO: switch to import from aura primitives.
-use ed25519::Public as AuthorityId;
+use aura::AuthorityId;
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";

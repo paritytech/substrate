@@ -40,10 +40,7 @@ use runtime_primitives::traits::{
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
-use primitives::{
-	crypto::Pair,
-	sr25519::{Public, self},
-};
+use primitives::{crypto::Pair, sr25519};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -83,6 +80,7 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
+pub use babe_primitives::AuthorityId;
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -95,7 +93,7 @@ impl Config {
 	/// state.
 	pub fn get_or_compute<A, B: Block, C>(client: &C) -> CResult<Self>
 	where
-		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B, Public>,
+		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self) {
@@ -181,7 +179,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 > where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B, Public>,
+	C::Api: BabeApi<B>,
 	SC: SelectChain<B>,
 	generic::DigestItem<B::Hash>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -228,7 +226,7 @@ struct BabeWorker<C, E, I, SO> {
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	B: Block<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B, Public>,
+	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -450,7 +448,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
-	authorities: &[Public],
+	authorities: &[AuthorityId],
 	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
@@ -567,8 +565,8 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 
 impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
-	C::Api: BlockBuilderApi<B> + BabeApi<B, Public>,
-	DigestItemFor<B>: CompatibleDigestItem,// + DigestItem<AuthorityId=Public>,
+	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+	DigestItemFor<B>: CompatibleDigestItem,
 	E: ExtraVerification<B>,
 {
 	fn verify(
@@ -678,19 +676,19 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 }
 
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
-	Vec<Public>,
+	Vec<AuthorityId>,
 	ConsensusError,
 > where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B, Public>,
+	C::Api: BabeApi<B>,
 {
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<dyn BabeApi<B, Public>>(at).unwrap_or(false) {
+			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \
@@ -751,7 +749,7 @@ fn claim_slot(
 	slot_number: u64,
 	genesis_hash: &[u8],
 	epoch: u64,
-	authorities: &[sr25519::Public],
+	authorities: &[AuthorityId],
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
@@ -795,7 +793,7 @@ mod tests {
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
-	type Item = generic::DigestItem<Hash, Public, Signature>;
+	type Item = generic::DigestItem<Hash>;
 	use test_client::AuthorityKeyring;
 
 	type Error = client::error::Error;

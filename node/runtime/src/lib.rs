@@ -25,7 +25,7 @@ use parity_codec::{Encode, Decode};
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -44,7 +44,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-pub use session::impl_opaque_keys;
+use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -53,6 +53,7 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
+pub use session::impl_opaque_keys;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -103,6 +104,7 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
+	type AuthorityId = AuraId;
 }
 
 impl indices::Trait for Runtime {
@@ -355,16 +357,16 @@ impl_runtime_apis! {
 			Grandpa::forced_change(digest)
 		}
 
-		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
+		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, aura::AuthorityId> for Runtime {
+	impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
-		fn authorities() -> Vec<aura::AuthorityId> {
+		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
 		}
 	}

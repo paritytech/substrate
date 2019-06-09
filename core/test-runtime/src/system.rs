@@ -27,8 +27,6 @@ use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_vali
 use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
 use primitives::{Blake2Hasher, storage::well_known_keys};
-
-// TODO: switch to import from aura primitives.
 use primitives::ed25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";

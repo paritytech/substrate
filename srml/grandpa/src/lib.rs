@@ -40,8 +40,8 @@ use srml_support::{
 use primitives::{
 	generic::{OpaqueDigestItemId, DigestItem}, traits::{Digest, DigestItem as _1, CurrentHeight}
 };
-use fg_primitives::{ScheduledChange, AuthorityWeight, GRANDPA_ENGINE_ID};
-pub use fg_primitives::AuthorityId;
+use fg_primitives::{ScheduledChange, GRANDPA_ENGINE_ID};
+pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::ensure_signed;
 
 mod mock;

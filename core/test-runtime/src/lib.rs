@@ -455,12 +455,12 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, consensus_aura::AuthorityId> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuthorityId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<consensus_aura::AuthorityId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block, consensus_aura::AuthorityId> for Runtime {
+			impl consensus_babe::BabeApi<Block, AuthorityId> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,

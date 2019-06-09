@@ -52,9 +52,8 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use parity_codec::{Encode, Decode};
-use srml_support::storage::StorageValue;
-use srml_support::{decl_storage, decl_module};
-use primitives::{traits::{SaturatedConversion, Saturating, Zero, One}, generic::DigestItem};
+use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
+use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -151,6 +150,9 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
+
+	/// The identifier type for an authority.
+	type AuthorityId: Member + Parameter + Default;
 }
 
 decl_storage! {
@@ -159,7 +161,7 @@ decl_storage! {
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities) config(): Vec<AuthorityId>;
+		pub Authorities get(authorities) config(): Vec<T::AuthorityId>;
 	}
 }
 
@@ -168,7 +170,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn change_authorities(new: Vec<AuthorityId>) {
+	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(AURA_ENGINE_ID, new.encode());
@@ -177,9 +179,9 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = AuthorityId;
+	type Key = T::AuthorityId;
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		// instant changes
 		if changed {
