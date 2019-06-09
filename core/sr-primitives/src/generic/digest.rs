@@ -483,7 +483,6 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_primitives::hash::H512 as Signature;
 
 	#[test]
 	fn should_serialize_digest() {
@@ -491,7 +490,7 @@ mod tests {
 			logs: vec![
 				DigestItem::ChangesTrieRoot(4),
 				DigestItem::Other(vec![1, 2, 3]),
-				DigestItem::Seal(Default::default(), Signature::default())
+				DigestItem::Seal(*b"test", vec![1, 2, 3])
 			],
 		};
 

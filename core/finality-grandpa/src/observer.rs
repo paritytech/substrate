@@ -37,9 +37,7 @@ use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
-
-// TODO: switch to import from aura primitives.
-use substrate_primitives::ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 

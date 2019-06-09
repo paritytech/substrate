@@ -18,19 +18,16 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use substrate_primitives::ed25519;
 use grandpa::voter_set::VoterSet;
 use parity_codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use fg_primitives::AuthorityId;
 
 use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
-
-// TODO: switch to import from aura primitives.
-use ed25519::Public as AuthorityId;
 
 /// A shared authority set.
 pub(crate) struct SharedAuthoritySet<H, N> {

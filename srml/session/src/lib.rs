@@ -452,11 +452,6 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl consensus::Trait for Test {
-		type Log = DigestItem;
-		type SessionKey = UintAuthorityId;
-		type InherentOfflineReport = ();
-	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;

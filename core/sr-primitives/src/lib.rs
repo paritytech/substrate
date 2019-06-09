@@ -865,43 +865,42 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::{H256, H512};
+	use substrate_primitives::hash::H256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::DigestItem;
 
 	pub trait RuntimeT {
-		type AuthorityId;
+		type Id;
 	}
 
 	pub struct Runtime;
 
 	impl RuntimeT for Runtime {
-		type AuthorityId = u64;
+		type Id = u64;
 	}
 
 	mod a {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
 		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
+		pub type Log<R> = RawLog<<R as RuntimeT>::Id>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
+		pub enum RawLog<Id> { A1(Id), A2(Vec<Id>), A3(Id) }
 	}
 
 	mod b {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
 		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
+		pub type Log<R> = RawLog<<R as RuntimeT>::Id>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
+		pub enum RawLog<Id> { B1(Id), B2(Id) }
 	}
 
 	impl_outer_log! {
-		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
-			a(AuthoritiesChange), b()
+		pub enum Log(InternalLog: DigestItem<H256>) for Runtime {
+			a(), b()
 		}
 	}
 
@@ -931,31 +930,12 @@ mod tests {
 		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		assert_eq!(b1, decoded_b1);
 
-		// encode/decode system item
-		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
-		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		assert_eq!(auth_change, decoded_auth_change);
-
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: super::generic::DigestItem<H256> = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
 			super::generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
-
-		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		match generic_auth_change {
-			super::generic::DigestItem::AuthoritiesChange::<H256, u64, H512>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
-			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
-		}
-
-		// check that as-style methods are working with system items
-		assert!(auth_change.as_authorities_change().is_some());
-
-		// check that as-style methods are not working with regular items
-		assert!(b1.as_authorities_change().is_none());
 	}
 
 	#[test]

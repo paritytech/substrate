@@ -112,7 +112,7 @@ use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
 
-use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use fg_primitives::{AuthorityId, AuthoritySignature};
 
 #[cfg(test)]
 mod tests;

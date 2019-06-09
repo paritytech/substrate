@@ -54,16 +54,13 @@ use rstd::{result, prelude::*};
 use parity_codec::{Encode, Decode};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Digest}, generic::DigestItem};
+use primitives::{traits::{SaturatedConversion, Saturating, Zero, One}, generic::DigestItem};
 use timestamp::OnTimestampSet;
-use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-#[cfg(feature = "std")]
-use serde::Serialize;
 pub use substrate_consensus_aura_primitives::AuthorityId;
 use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 

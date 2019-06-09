@@ -338,14 +338,14 @@ impl system::Trait for Runtime {
 }
 
 srml_support::construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<H256>) where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot, AuthoritiesChange), Inherent},
-		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot, AuthoritiesChange), Inherent},
+		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent},
+		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
 		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
