@@ -141,6 +141,9 @@ decl_storage! {
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
+
+		/// `true` if we are currently stalled.
+		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
 	}
 }
 
@@ -271,13 +274,15 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// instant changes
 		if changed {
-			// TODO: handle case where stalled. this will presumably mean tracking the `on_stalled`
-			// TODO:    signal below and checking it here.
 			let next_authorities = validators.map(|(_, k)| (k, 1u64)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::grandpa_authorities();
 			if next_authorities != last_authorities {
 				use primitives::traits::Zero;
-				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
+				if let Some((further_wait, median)) = <Stalled<T>>::take() {
+					let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
+				} else {
+					let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
+				}
 			}
 		}
 	}
@@ -285,63 +290,15 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		// ignore?
 	}
 }
-/*
-/// Helper for authorities being synchronized with the general session authorities.
-///
-/// This is not the only way to manage an authority set for GRANDPA, but it is
-/// a convenient one. When this is used, no other mechanism for altering authority
-/// sets should be.
-pub struct SyncedAuthorities<T, Index, Keys>(::rstd::marker::PhantomData<(T, Index, Keys)>);
 
-// FIXME: remove when https://github.com/rust-lang/rust/issues/26925 is fixed
-impl<T, Index, Keys> Default for SyncedAuthorities<T, Index, Keys> {
-	fn default() -> Self {
-		SyncedAuthorities(::rstd::marker::PhantomData)
-	}
-}
-
-impl<T: Trait<AuthorityId=Key>, Index: Get<usize>, Key: Default, Keys: OpaqueKeys<>> session::SessionHandler<T::AccountId, Keys>
-	for SyncedAuthorities<T, Index, Keys>
-{
-	fn on_new_session(changed: bool, validators: &[(T::AccountId, Keys)]) {
-		// instant changes
-		if changed {
-			// TODO: handle case where stalled. this will presumably mean tracking the `on_stalled`
-			// TODO:    signal below and checking it here.
-			let next_authorities = validators.iter()
-				.map(|(_, ks)| (ks.key::<AuthorityId>(Index::get()).unwrap_or_default(), 1u64))
-				.collect::<Vec<_>>();
-			let last_authorities = <Module<T>>::grandpa_authorities();
-			if next_authorities != last_authorities {
-				use primitives::traits::Zero;
-				let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero(), None);
-			}
-		}
-	}
-
-	fn on_disabled(_i: usize) {
-		// ignore for now
-	}
-}
-
-impl<T, Index, Keys> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthorities<T, Index, Keys> where
-	T: Trait + finality_tracker::Trait,
-{
+impl<T: Trait + finality_tracker::Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
 	fn on_stalled(further_wait: T::BlockNumber) {
 		// when we record old authority sets, we can use `finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
-/*
-		let next_authorities = <consensus::Module<T>>::authorities()
-			.into_iter()
-			.map(|key| (key, 1)) // evenly-weighted.
-			.collect::<Vec<(<T as Trait>::AuthorityId, u64)>>();
-
+		// TODO: consider passing `median` into this as a param
 		let median = <finality_tracker::Module<T>>::median();
-
-		// schedule a change for `further_wait` blocks.
-		let _ = <Module<T>>::schedule_change(next_authorities, further_wait, Some(median));
-*/
+		<Stalled<T>>::put((further_wait, median));
 	}
 }
-*/
+

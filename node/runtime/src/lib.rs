@@ -208,7 +208,6 @@ impl council::Trait for Runtime {
 	type OnMembersChanged = CouncilMotions;
 }
 
-
 impl council::motions::Trait for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
@@ -245,7 +244,7 @@ impl grandpa::Trait for Runtime {
 }
 
 impl finality_tracker::Trait for Runtime {
-	type OnFinalizationStalled = ();// TODO: should record this for next time the session changes.
+	type OnFinalizationStalled = Grandpa;
 }
 
 construct_runtime!(

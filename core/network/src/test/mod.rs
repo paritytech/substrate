@@ -72,11 +72,11 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-/*		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
-			.map(|auth| auth.iter().cloned().collect());*/
-		// TODO: should grab the new authorities from the digest (if any) and put in the new cache
-		// key that the consensus algo expects.
-		let maybe_keys = None;
+		let maybe_keys = pre_header.digest()
+			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura")
+				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
+			))
+			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 		Ok((ImportBlock {
 			origin,
