@@ -119,7 +119,7 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use parity_codec::Decode;
 use primitives::traits::{Zero, Saturating, Member};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter};
+use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter, print};
 use system::ensure_signed;
 
 /// Simple index type with which we can count sessions.
@@ -359,6 +359,7 @@ decl_module! {
 						Err(_) => {
 							// unreachable as long as our state is valid. we don't want to panic if
 							// it isn't, though.
+							print("ERROR: active doesn't contain outgoing key");
 						}
 					}
 				}
