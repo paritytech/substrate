@@ -37,7 +37,7 @@ pub type AuthorityId = substrate_primitives::ed25519::Public;
 /// Signature for a Grandpa authority.
 pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
 
-/// The `ConsensusEngineId` of BABE.
+/// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
 /// The weight of an authority.
