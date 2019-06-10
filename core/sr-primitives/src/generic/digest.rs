@@ -199,7 +199,7 @@ gen_digest_type! {
 		PreRuntime((ConsensusEngineId, Vec<u8>), (a, b)),
 
 		/// Put a Seal on it. This **MUST** come after all other `DigestItem`
-		/// variants. There **MUST** be exactly one `Seal` per consensus engine,
+		/// variants. There **MUST** be at most one `Seal` per consensus engine,
 		/// and its `ConsensusEngineId` **MUST** be that of the consensus engine
 		/// that produced it. Runtimes will not see this variant.
 		Seal((ConsensusEngineId, Vec<u8>), (a, b)),
