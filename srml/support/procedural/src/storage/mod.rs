@@ -214,13 +214,7 @@ enum HasherKind {
 
 impl From<&SetHasher> for HasherKind {
 	fn from(set_hasher: &SetHasher) -> Self {
-		match set_hasher.inner.content {
-			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
-			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
-			Hasher::Twox256(_) => HasherKind::Twox256,
-			Hasher::Twox128(_) => HasherKind::Twox128,
-			Hasher::Twox64Concat(_) => HasherKind::Twox64Concat,
-		}
+		(&set_hasher.inner.content).into()
 	}
 }
 
