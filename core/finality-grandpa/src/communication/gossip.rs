@@ -656,6 +656,12 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_round_message(&mut self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
+		// ensure authority is part of the set.
+		if !self.authorities.contains(&full.message.id) {
+			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			return Action::Discard(cost::UNKNOWN_VOTER);
+		}
+
 		match self.consider_vote(who, full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
@@ -664,12 +670,6 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
-		}
-
-		// ensure authority is part of the set.
-		if !self.authorities.contains(&full.message.id) {
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
 		if let Err(()) = super::check_message_sig::<Block>(
