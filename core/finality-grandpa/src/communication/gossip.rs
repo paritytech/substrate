@@ -79,9 +79,6 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-
-use crate::ed25519::Public as AuthorityId;
-
 use crate::{CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
@@ -486,22 +483,21 @@ impl<Block: BlockT> Inner<Block> {
 
 	/// Note a round in the current set has started.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
-		{
-			let local_view = match self.local_view {
-				None => return None,
-				Some(ref mut v) => if v.round == round {
-					return None
-				} else {
-					v
-				},
-			};
+		let local_view = match self.local_view {
+			None => return None,
+			Some(ref mut v) => if v.round == round {
+				return None
+			} else {
+				v
+			},
+		};
 
-			let set_id = local_view.set_id;
+		let set_id = local_view.set_id;
 
-			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round,set_id));
+		debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
+			self.config.name(), (round,set_id));
 
-			local_view.round = round;
+		local_view.round = round;
 
 		let pruned = self.live_topics.push(round, set_id);
 
@@ -568,7 +564,7 @@ impl<Block: BlockT> Inner<Block> {
 				// We don't know about this round,
 				// let the local-view handle it and likely treat it as past or future.
 				return self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-                    .unwrap_or(Consider::RejectOutOfScope)
+					.unwrap_or(Consider::RejectOutOfScope)
 			}
 		};
 		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
@@ -580,7 +576,7 @@ impl<Block: BlockT> Inner<Block> {
 				// We don't know about this round,
 				// let the local-view handle it and likely treat it as past or future.
 				return self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-                    .unwrap_or(Consider::RejectOutOfScope)
+					.unwrap_or(Consider::RejectOutOfScope)
 			}
 		};
 		let mut per_peer_tally = peer_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
@@ -1022,11 +1018,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							None => return false,
 							Some(peer) => peer.view.last_commit,
 						};
-            			// global message.
-            			let local_view = match inner.local_view {
-            				Some(ref v) => v,
-            				None => return false, // cannot evaluate until we have a local view.
-            			};
+						// global message.
+						let local_view = match inner.local_view {
+							Some(ref v) => v,
+							None => return false, // cannot evaluate until we have a local view.
+						};
 						let our_best_commit = local_view.last_commit;
 						(our_best_commit, peer_best_commit)
 					};
@@ -1054,12 +1050,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					Some((Some(_), _)) => return false, // round messages don't require further checking.
 					Some((None, _)) => {},
 				};
-    			let local_view = match inner.local_view {
-    				Some(ref v) => v,
-    				None => return true, // no local view means we can't evaluate or hold any topic.
-    			};
+				let local_view = match inner.local_view {
+					Some(ref v) => v,
+					None => return true, // no local view means we can't evaluate or hold any topic.
+				};
 				// global messages -- only keep the best commit.
-				inner.local_view.last_commit
+				local_view.last_commit
 			};
 
 			match GossipMessage::<Block>::decode(&mut data) {
