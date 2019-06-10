@@ -223,6 +223,19 @@ impl From<&SetHasher> for HasherKind {
 		}
 	}
 }
+
+impl From<&Hasher> for HasherKind {
+	fn from(hasher: &Hasher) -> Self {
+		match hasher {
+			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
+			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
+			Hasher::Twox256(_) => HasherKind::Twox256,
+			Hasher::Twox128(_) => HasherKind::Twox128,
+			Hasher::Twox64Concat(_) => HasherKind::Twox64Concat,
+		}
+	}
+}
+
 impl HasherKind {
 	fn into_storage_hasher_struct(&self) -> TokenStream2 {
 		match self {
