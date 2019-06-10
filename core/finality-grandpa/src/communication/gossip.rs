@@ -1321,7 +1321,7 @@ mod tests {
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
 		val.note_round(Round(0), |_, _| {});
 
-		let inner = val.inner.read();
+		let mut inner = val.inner.write();
 		let unknown_voter = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
 			round: Round(0),
 			set_id: SetId(set_id),
