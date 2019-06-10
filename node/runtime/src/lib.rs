@@ -57,9 +57,9 @@ pub use staking::StakerStatus;
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
-	authoring_version: 10,
+	authoring_version: 11,
 	spec_version: 92,
-	impl_version: 93,
+	impl_version: 94,
 	apis: RUNTIME_API_VERSIONS,
 };
 
