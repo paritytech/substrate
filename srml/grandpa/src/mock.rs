@@ -24,7 +24,7 @@ use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{GenesisConfig, Trait, Module, RawLog};
+use crate::{GenesisConfig, Trait, Module};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -40,9 +40,8 @@ impl From<RawLog<u64, u64>> for DigestItem {
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
 impl Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = u64;
 	type Event = TestEvent;
+
 }
 impl system::Trait for Test {
 	type Origin = Origin;

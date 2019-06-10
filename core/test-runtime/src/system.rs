@@ -40,7 +40,7 @@ storage_items! {
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 	StorageDigest: b"sys:digest" => Digest;
-	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>
+	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -89,7 +89,7 @@ pub fn execute_block(mut block: Block) {
 
 fn execute_block_with_state_root_handler(
 	block: &mut Block,
-	f: impl FnOnce(&mut header)
+	f: impl FnOnce(&mut Header)
 ) {
 	let header = &mut block.header;
 
