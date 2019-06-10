@@ -18,9 +18,9 @@
 #![deny(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Codec, Encode, Decode};
+use parity_codec::{Encode, Decode};
 use runtime_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519::{Public, Signature, Pair};
+use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in

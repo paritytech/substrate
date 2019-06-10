@@ -402,8 +402,6 @@ impl<T: Trait> Module<T> {
 			<Validators<T>>::get()
 		};
 
-		println!("Validators: {:?}", validators);
-
 		let session_index = session_index + 1;
 		<CurrentIndex<T>>::put(session_index);
 
@@ -454,7 +452,6 @@ mod tests {
 	}
 
 	pub struct TestShouldEndSession;
-
 	impl ShouldEndSession<u64> for TestShouldEndSession {
 		fn should_end_session(now: u64) -> bool {
 			let l = SESSION_LENGTH.with(|l| *l.borrow());

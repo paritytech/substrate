@@ -1035,13 +1035,15 @@ impl<T: Trait> Module<T> {
 			}
 
 			// This optimization will most likely be only applied off-chain.
-			let do_equalise = false;
-			if do_equalise {
+			let do_equalize = false;
+			if do_equalize {
 				let tolerance = 10 as u128;
 				let iterations = 10 as usize;
 				phragmen::equalize::<T>(
 					&mut assignments_with_stakes,
-					&mut exposures, tolerance, iterations
+					&mut exposures,
+					tolerance,
+					iterations
 				);
 			}
 

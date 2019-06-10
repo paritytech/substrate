@@ -44,11 +44,6 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
-impl consensus::Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
-}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -74,6 +69,7 @@ impl balances::Trait for Test {
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 	type OnSessionChange = Staking;
+	type SessionKeys = UintAuthorityId;
 	type Event = ();
 }
 impl timestamp::Trait for Test {

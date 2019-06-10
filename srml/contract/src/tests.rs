@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use substrate_primitives::storage::well_known_keys;
 use substrate_primitives::Blake2Hasher;
 use system::{self, EventRecord, Phase};
-use {balances, consensus, wabt};
+use {balances, wabt};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -91,11 +91,6 @@ impl balances::Trait for Test {
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-}
-impl consensus::Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
 }
 impl Trait for Test {
 	type Currency = Balances;

@@ -55,8 +55,7 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
-/// The consensus engine ID of GRANDPA.
-pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+pub use fg_primitives::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
 mod cost {
