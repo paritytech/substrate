@@ -32,14 +32,19 @@ pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ExtraVerification;
+use consensus_common::import_queue::{
+	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	SharedFinalityProofRequestBuilder,
+};
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
-	SimpleBitOps,
+	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}, convert::TryFrom};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
+use parking_lot::Mutex;
 use primitives::{
 	crypto::Pair,
 	sr25519::{Public, Signature, self},
@@ -526,9 +531,8 @@ pub struct BabeVerifier<C, E> {
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
-	threshold: u64,
-	start: Instant,
-	timestamps: Mutex<Vec<Instant>>,
+	config: Config,
+	timestamps: Mutex<(Option<Instant>, Vec<(Instant, u64)>)>,
 }
 
 impl<C, E> BabeVerifier<C, E> {
@@ -618,7 +622,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			header,
 			hash,
 			&authorities[..],
-			self.threshold,
+			self.config.threshold(),
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
@@ -666,23 +670,30 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				};
 
 				// We do not produce an `Instant` synthetically, so this cannot panic.
-				let elapsed = self.start.elapsed();
-				let slot_num: u32 = match u32::try_from(slot_num) {
-					Some(s) => s,
-					// FIXME this needs to be fixed prior to merge!
-					None => panic!("We cannot handle slot numbers above u32::MAX yet!"),
-				}
+				let slot_num: u32 = u32::try_from(slot_num)
+					.expect("FIXME: We cannot handle slot numbers above u32::MAX yet!");
 				let mut timestamps = self.timestamps.lock();
 				// Remainder of this block is a critical section.
-				let num_timestamps = timestamps.len();
-				if num_timestamps >= self.config.minimum_tmestamps {
-					let new_list = timestamps.iter().enumerate().map(|(t: Duration, a: usize)| {
-						let new_duration = t + Duration::from_seconds(self.config.get())
-							.checked_mul(a)
-							.expect("we assume duration cannot overflow; qed");
-					})
+				let num_timestamps = timestamps.1.len();
+				if num_timestamps as u64 >= self.config.0.median_required_blocks {
+					let mut new_list: Vec<_> = timestamps.1.iter().enumerate().map(|(_counter, &(t, sl)): (usize, &(Instant, u64))| {
+						t + Duration::from_secs(self.config.get())
+							.checked_mul(slot_num - sl as u32)
+							.expect("we assume duration cannot overflow; qed")
+					}).collect();
+					// FIXME use a selection algorithm instead of a full sorting algorithm.
+					new_list.sort_unstable();
+					let &median = new_list
+						.get(num_timestamps / 2)
+						.expect("we have at least one timestamp, so this is a valid indx; qed");
+					drop(new_list);
+					std::mem::replace(&mut timestamps.1, Default::default());
+					// Compute the (relative!) start time of the blockchain ―
+					// that is, the issue time of the genesis block that would
+					// give the values we observed.
+					timestamps.0.replace(Instant::now() - ((Instant::now() - median) * self.config.get() as u32));
 				} else {
-					timestamps.push((elapsed, slot_now));
+					timestamps.1.push((Instant::now(), slot_now));
 				}
 
 				// FIXME #1019 extract authorities
@@ -806,9 +817,41 @@ fn claim_slot(
 	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
 
+fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
+	B: Block,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
+{
+	// no cache => no initialization
+	let cache = match client.cache() {
+		Some(cache) => cache,
+		None => return Ok(()),
+	};
+
+	// check if we already have initialized the cache
+	let genesis_id = BlockId::Number(Zero::zero());
+	let genesis_authorities: Option<Vec<AuthorityIdFor<B>>> = cache
+		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
+		.and_then(|v| Decode::decode(&mut &v[..]));
+	if genesis_authorities.is_some() {
+		return Ok(());
+	}
+
+	let map_err = |error| consensus_common::Error::from(consensus_common::Error::ClientImport(
+		format!(
+			"Error initializing authorities cache: {}",
+			error,
+		)));
+	let genesis_authorities = authorities(client, &genesis_id)?;
+	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
+		.map_err(map_err)?;
+
+	Ok(())
+}
+
 /// Start an import queue for the Babe consensus algorithm.
 pub fn import_queue<B, C, E>(
-	slot_duration: SlotDuration,
+	config: Config,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
@@ -816,14 +859,14 @@ pub fn import_queue<B, C, E>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+) -> Result<BabeImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=sr25519::Public>,
 	E: 'static + ExtraVerification<B>,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = Arc::new(
@@ -831,9 +874,8 @@ pub fn import_queue<B, C, E>(
 			client: client.clone(),
 			extra,
 			inherent_data_providers,
-			phantom: PhantomData,
-			start: Instant::now(),
 			timestamps: Default::default(),
+			config,
 		}
 	);
 	Ok(BasicQueue::new(
@@ -859,7 +901,6 @@ mod tests {
 	use network::test::{Block as TestBlock, PeersClient};
 	use runtime_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
-	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
 	use super::generic::DigestItem;
@@ -944,8 +985,8 @@ mod tests {
 				client,
 				extra: NothingExtra,
 				inherent_data_providers,
-				threshold: config.threshold(),
-				start: Instant::now(),
+				config,
+				start: None,
 				timestamps: Default::default(),
 			})
 		}

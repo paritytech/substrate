@@ -217,7 +217,7 @@ fn decl_store_extra_genesis(
 
 		let type_infos = get_type_infos(storage_type);
 
-		let mut opt_build;
+		let opt_build;
 		// need build line
 		if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {

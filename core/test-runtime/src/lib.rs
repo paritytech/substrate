@@ -465,6 +465,7 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: std::u64::MAX,
+						median_required_blocks: 100,
 					}
 				}
 			}
