@@ -656,6 +656,7 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
+	import_lock: Mutex<()>,
 }
 
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
@@ -722,6 +723,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			blockchain,
 			canonicalization_delay,
 			shared_cache: new_shared_cache(state_cache_size),
+			import_lock: Default::default(),
 		})
 	}
 
@@ -1349,6 +1351,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			state.release().sync_cache(&[], &[], vec![], None, None, is_best);
 		}
 		Ok(())
+	}
+
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
 	}
 }
 

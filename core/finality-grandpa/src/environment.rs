@@ -46,7 +46,7 @@ use crate::{
 
 use consensus_common::SelectChain;
 
-use crate::authorities::SharedAuthoritySet;
+use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
@@ -66,11 +66,13 @@ pub struct CompletedRound<Block: BlockT> {
 	pub votes: Vec<SignedMessage<Block>>,
 }
 
-// Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
+// Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
 // contains data about at least one round (genesis).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletedRounds<Block: BlockT> {
-	inner: VecDeque<CompletedRound<Block>>,
+	rounds: VecDeque<CompletedRound<Block>>,
+	set_id: u64,
+	voters: Vec<AuthorityId>,
 }
 
 // NOTE: the current strategy for persisting completed rounds is very naive
@@ -80,34 +82,51 @@ const NUM_LAST_COMPLETED_ROUNDS: usize = 2;
 
 impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	fn encode(&self) -> Vec<u8> {
-		Vec::from_iter(&self.inner).encode()
+		let v = Vec::from_iter(&self.rounds);
+		(&v, &self.set_id, &self.voters).encode()
 	}
 }
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
-		Vec::<CompletedRound<Block>>::decode(value)
-			.map(|completed_rounds| CompletedRounds {
-				inner: completed_rounds.into(),
+		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
+			.map(|(rounds, set_id, voters)| CompletedRounds {
+				rounds: rounds.into(),
+				set_id,
+				voters,
 			})
 	}
 }
 
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
-	pub fn new(genesis: CompletedRound<Block>) -> CompletedRounds<Block> {
-		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
-		inner.push_back(genesis);
-		CompletedRounds { inner }
+	pub(crate) fn new(
+		genesis: CompletedRound<Block>,
+		set_id: u64,
+		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+	)
+		-> CompletedRounds<Block>
+	{
+		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
+		rounds.push_back(genesis);
+
+		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
+		CompletedRounds { rounds, set_id, voters }
 	}
 
+	/// Get the set-id and voter set of the completed rounds.
+	pub fn set_info(&self) -> (u64, &[AuthorityId]) {
+		(self.set_id, &self.voters[..])
+	}
+
+	/// Iterate over all completed rounds.
 	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
-		self.inner.iter()
+		self.rounds.iter()
 	}
 
 	/// Returns the last (latest) completed round.
 	pub fn last(&self) -> &CompletedRound<Block> {
-		self.inner.back()
+		self.rounds.back()
 			.expect("inner is never empty; always contains at least genesis; qed")
 	}
 
@@ -118,11 +137,11 @@ impl<Block: BlockT> CompletedRounds<Block> {
 			return false;
 		}
 
-		if self.inner.len() == NUM_LAST_COMPLETED_ROUNDS {
-			self.inner.pop_front();
+		if self.rounds.len() == NUM_LAST_COMPLETED_ROUNDS {
+			self.rounds.pop_front();
 		}
 
-		self.inner.push_back(completed_round);
+		self.rounds.push_back(completed_round);
 
 		true
 	}

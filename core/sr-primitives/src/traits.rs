@@ -73,7 +73,11 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str> {
+		Self::try_origin(o).map_err(|_| "Invalid origin")
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.

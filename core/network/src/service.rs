@@ -31,14 +31,14 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::AlwaysBadChecker;
 use crate::chain::FinalityProofProvider;
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::message::Message;
-use crate::on_demand::RequestData;
+use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::protocol::message::Message;
+use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
 use crate::protocol::{ProtocolStatus, PeerInfo, NetworkOut};
 use crate::config::Params;
 use crate::error::Error;
-use crate::specialization::NetworkSpecialization;
+use crate::protocol::specialization::NetworkSpecialization;
 
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);

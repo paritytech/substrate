@@ -104,22 +104,78 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 >;
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder {
+pub struct TestClientBuilder<E, B> {
 	execution_strategies: ExecutionStrategies,
 	genesis_extension: HashMap<Vec<u8>, Vec<u8>>,
 	support_changes_trie: bool,
+	backend: Arc<B>,
+	_phantom: std::marker::PhantomData<E>,
 }
 
-impl TestClientBuilder {
+#[cfg(feature = "include-wasm-blob")]
+impl<B> TestClientBuilder<LocalExecutor, B> where
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+{
+	/// Create a new instance of the test client builder using the given backend.
+	pub fn new_with_backend(backend: Arc<B>) -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+			backend,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+#[cfg(feature = "include-wasm-blob")]
+impl TestClientBuilder<LocalExecutor, Backend> {
 	/// Create a new instance of the test client builder.
 	pub fn new() -> Self {
 		TestClientBuilder {
 			execution_strategies: ExecutionStrategies::default(),
 			genesis_extension: HashMap::default(),
 			support_changes_trie: false,
+			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
+			_phantom: Default::default(),
 		}
 	}
+}
 
+#[cfg(not(feature = "include-wasm-blob"))]
+impl<E, B> TestClientBuilder<E, B> where
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+{
+	/// Create a new instance of the test client builder using the given backend.
+	pub fn new_with_backend(backend: Arc<B>) -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+			backend,
+			_phantom: Default::default(),
+		}
+	}
+}
+
+#[cfg(not(feature = "include-wasm-blob"))]
+impl<E> TestClientBuilder<E, Backend> {
+	/// Create a new instance of the test client builder.
+	pub fn new() -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<E, B> TestClientBuilder<E, B> where
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+	E: executor::NativeExecutionDispatch
+{
 	/// Set the execution strategy that should be used by all contexts.
 	pub fn set_execution_strategy(
 		mut self,
@@ -151,60 +207,46 @@ impl TestClientBuilder {
 	}
 
 	/// Build the test client.
-	#[cfg(feature = "include-wasm-blob")]
 	pub fn build(self) -> client::Client<
-		Backend, Executor, runtime::Block, runtime::RuntimeApi
-	> {
-		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
-		self.build_with_backend(backend)
-	}
-
-	/// Build the test client with the given backend.
-	#[cfg(feature = "include-wasm-blob")]
-	pub fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
 		B,
-		client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+		client::LocalCallExecutor<B, executor::NativeExecutor<E>>,
 		runtime::Block,
-		runtime::RuntimeApi
-	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher> {
-		let executor = NativeExecutor::new(None);
-		let executor = LocalCallExecutor::new(backend.clone(), executor);
-
-		client::Client::new(
-			backend,
-			executor,
-			genesis_storage(self.support_changes_trie, self.genesis_extension),
-			self.execution_strategies
-		).expect("Creates new client")
+		runtime::RuntimeApi,
+	> {
+		self.build_with_longest_chain().0
 	}
 
-	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<E>(
-		self,
-		executor: executor::NativeExecutor<E>
-	) -> client::Client<
-		Backend,
-		client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
-		runtime::Block,
-		runtime::RuntimeApi
-	> where E: executor::NativeExecutionDispatch
-	{
-		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
-		let executor = LocalCallExecutor::new(backend.clone(), executor);
+	/// Build the test client and longest chain as select chain.
+	pub fn build_with_longest_chain(self) -> (
+		client::Client<
+			B,
+			client::LocalCallExecutor<B, executor::NativeExecutor<E>>,
+			runtime::Block,
+			runtime::RuntimeApi,
+		>,
+		client::LongestChain<B, runtime::Block>,
+	) {
+		let executor = NativeExecutor::<E>::new(None);
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
-		client::Client::new(
-			backend,
+		let client = client::Client::new(
+			self.backend.clone(),
 			executor,
 			genesis_storage(self.support_changes_trie, self.genesis_extension),
-			self.execution_strategies
-		).expect("Creates new client")
+			self.execution_strategies,
+		).expect("Creates new client");
+
+		#[allow(deprecated)]
+		let longest_chain = client::LongestChain::new(self.backend);
+
+		(client, longest_chain)
 	}
 }
 
 /// Creates new client instance used for tests.
 #[cfg(feature = "include-wasm-blob")]
 pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	new_with_backend(Arc::new(Backend::new_test(::std::u32::MAX, ::std::u64::MAX)), false)
+	TestClientBuilder::new().build()
 }
 
 /// Creates new light client instance used for tests.
@@ -219,40 +261,6 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
 	client::Client::new(backend, call_executor, genesis_storage(false, Default::default()), Default::default()).unwrap()
-}
-
-/// Creates new client instance used for tests with the given api execution strategy.
-#[cfg(feature = "include-wasm-blob")]
-pub fn new_with_execution_strategy(
-	execution_strategy: ExecutionStrategy
-) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	TestClientBuilder::new().set_execution_strategy(execution_strategy).build()
-}
-
-/// Creates new test client instance that suports changes trie creation.
-#[cfg(feature = "include-wasm-blob")]
-pub fn new_with_changes_trie()
-	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
-{
-	TestClientBuilder::new().set_support_changes_trie(true).build()
-}
-
-/// Creates new client instance used for tests with an explicitly provided backend.
-/// This is useful for testing backend implementations.
-#[cfg(feature = "include-wasm-blob")]
-pub fn new_with_backend<B>(
-	backend: Arc<B>,
-	support_changes_trie: bool
-) -> client::Client<
-	B,
-	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
-	runtime::Block,
-	runtime::RuntimeApi
-> where B: backend::LocalBackend<runtime::Block, Blake2Hasher>
-{
-	TestClientBuilder::new()
-		.set_support_changes_trie(support_changes_trie)
-		.build_with_backend(backend)
 }
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
