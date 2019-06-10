@@ -65,8 +65,8 @@ mod cost {
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
     pub(super) const UNKNOWN_VOTER: i32 = -150;
-	pub(super) const WILLFULREDUNDANT: i32 = -500;
-	pub(super) const REDUNDANT: i32 = 0;
+    pub(super) const WILLFULREDUNDANT: i32 = -500;
+    pub(super) const REDUNDANT: i32 = 0;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
