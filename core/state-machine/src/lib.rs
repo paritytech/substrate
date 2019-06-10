@@ -48,9 +48,11 @@ pub use changes_trie::{
 	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
+	BuildCache as ChangesTrieBuildCache,
+	CachedBuildData as ChangesTrieCachedBuildData,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
-	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
 };
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{
@@ -59,6 +61,12 @@ pub use proving_backend::{
 };
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
+
+/// Type of changes trie transaction.
+pub type ChangesTrieTransaction<H, N> = (
+	MemoryDB<H>,
+	Option<ChangesTrieCachedBuildData<<H as Hasher>::Out, N>>,
+);
 
 /// A wrapper around a child storage key.
 ///
@@ -525,7 +533,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	pub fn execute(
 		&mut self,
 		strategy: ExecutionStrategy,
-	) -> Result<(Vec<u8>, (B::Transaction, H::Out), Option<MemoryDB<H>>), Box<dyn Error>> {
+	) -> Result<(Vec<u8>, (B::Transaction, H::Out), Option<ChangesTrieTransaction<H, N>>), Box<dyn Error>> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
 		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -549,7 +557,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		CallResult<R, Exec::Error>,
 		bool,
 		Option<(B::Transaction, H::Out)>,
-		Option<MemoryDB<H>>,
+		Option<ChangesTrieTransaction<H, N>>,
 	) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
@@ -582,7 +590,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
 		on_consensus_failure: Handler,
-	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<MemoryDB<H>>) where
+	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(
@@ -613,7 +621,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		compute_tx: bool,
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
-	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<MemoryDB<H>>) where
+	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
@@ -644,7 +652,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	) -> Result<(
 		NativeOrEncoded<R>,
 		Option<(B::Transaction, H::Out)>,
-		Option<MemoryDB<H>>
+		Option<ChangesTrieTransaction<H, N>>,
 	), Box<dyn Error>> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,

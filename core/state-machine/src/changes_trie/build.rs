@@ -32,13 +32,13 @@ use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 ///
 /// Returns Err if storage error has occurred OR if storage haven't returned
 /// required data.
-pub fn prepare_input<'a, B, S, H, Number>(
+pub(crate) fn prepare_input<'a, B, S, H, Number>(
 	backend: &'a B,
 	storage: &'a S,
 	config: &'a Configuration,
 	changes: &'a OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
-) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
+) -> Result<(impl Iterator<Item=InputPair<Number>> + 'a, Vec<Number>), String>
 	where
 		B: Backend<H>,
 		S: Storage<H, Number>,
@@ -49,13 +49,15 @@ pub fn prepare_input<'a, B, S, H, Number>(
 	let extrinsics_input = prepare_extrinsics_input(
 		backend,
 		&number,
-		changes)?;
-	let digest_input = prepare_digest_input::<_, H, Number>(
+		changes,
+	)?;
+	let (digest_input, digest_input_blocks) = prepare_digest_input::<_, H, Number>(
 		parent,
 		config,
 		number,
-		storage)?;
-	Ok(extrinsics_input.chain(digest_input))
+		storage,
+	)?;
+	Ok((extrinsics_input.chain(digest_input), digest_input_blocks))
 }
 
 /// Prepare ExtrinsicIndex input pairs.
@@ -116,21 +118,18 @@ fn prepare_digest_input<'a, S, H, Number>(
 	config: &Configuration,
 	block: Number,
 	storage: &'a S
-) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
+) -> Result<(impl Iterator<Item=InputPair<Number>> + 'a, Vec<Number>), String>
 	where
 		S: Storage<H, Number>,
 		H: Hasher,
 		H::Out: 'a,
 		Number: BlockNumber,
 {
-	digest_build_iterator(config, block.clone())
+	let digest_input_blocks = digest_build_iterator(config, block.clone()).collect::<Vec<_>>();
+	digest_input_blocks.clone().into_iter()
 		.try_fold(BTreeMap::new(), move |mut map, digest_build_block| {
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
-			let trie_storage = TrieBackendEssence::<_, H>::new(
-				crate::changes_trie::TrieBackendStorageAdapter(storage),
-				trie_root,
-			);
 
 			let mut insert_to_map = |key: Vec<u8>| {
 				match map.entry(key.clone()) {
@@ -154,6 +153,19 @@ fn prepare_digest_input<'a, S, H, Number>(
 				}
 			};
 
+			if let Some(changed_keys) = storage.cached_changed_keys(&trie_root) {
+				for changed_key in changed_keys {
+					insert_to_map(changed_key);
+				}
+
+				return Ok(map);
+			}
+
+			let trie_storage = TrieBackendEssence::<_, H>::new(
+				crate::changes_trie::TrieBackendStorageAdapter(storage),
+				trie_root,
+			);
+
 			let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block.clone());
 			trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
 				if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
@@ -168,7 +180,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 			Ok(map)
 		})
-		.map(|pairs| pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)))
+		.map(|pairs| (pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)), digest_input_blocks))
 }
 
 #[cfg(test)]
@@ -177,7 +189,8 @@ mod test {
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
-	use crate::changes_trie::storage::InMemoryStorage;
+	use crate::changes_trie::{RootsStorage, storage::InMemoryStorage};
+	use crate::changes_trie::build_cache::IncompleteCachedBuildData;
 	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
 
@@ -267,7 +280,7 @@ mod test {
 			&changes,
 			&parent,
 		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+		assert_eq!(changes_trie_nodes.0.collect::<Vec<InputPair<u64>>>(), vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![103] }, vec![0, 1]),
@@ -286,7 +299,7 @@ mod test {
 			&changes,
 			&parent,
 		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+		assert_eq!(changes_trie_nodes.0.collect::<Vec<InputPair<u64>>>(), vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
@@ -310,7 +323,7 @@ mod test {
 			&changes,
 			&parent,
 		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+		assert_eq!(changes_trie_nodes.0.collect::<Vec<InputPair<u64>>>(), vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![103] }, vec![0, 1]),
@@ -342,7 +355,7 @@ mod test {
 			&changes,
 			&parent,
 		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+		assert_eq!(changes_trie_nodes.0.collect::<Vec<InputPair<u64>>>(), vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
@@ -351,6 +364,41 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
+		]);
+	}
+
+	#[test]
+	fn cache_is_used_when_changes_trie_is_built() {
+		let (backend, mut storage, changes) = prepare_for_build();
+		let config = changes.changes_trie_config.as_ref().unwrap();
+		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
+
+		// override some actual values from storage with values from the cache
+		// (keys 100, 101, 103, 105 are now missing from block#4 => they do not appear
+		// in l2 digest at block 16)
+		let trie4_root = storage.root(&parent, 4).unwrap().unwrap();
+		let cached4_data = IncompleteCachedBuildData::new(false)
+			.set_digest_input_blocks(vec![1, 2, 3])
+			.insert(vec![100])
+			.insert(vec![102])
+			.complete(4, trie4_root);
+		storage.cache_mut().insert(cached4_data);
+
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			config,
+			&changes,
+			&parent,
+		).unwrap();
+		assert_eq!(changes_trie_nodes.0.collect::<Vec<InputPair<u64>>>(), vec![
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![103] }, vec![0, 1]),
+
+			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![100] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![105] }, vec![8]),
 		]);
 	}
 }

@@ -16,16 +16,14 @@
 
 //! Changes trie storage utilities.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use hash_db::Hasher;
 use trie::DBValue;
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{RootsStorage, Storage, AnchorBlockId, BlockNumber};
+use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;
 
-#[cfg(test)]
-use std::collections::HashSet;
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
@@ -34,6 +32,7 @@ use crate::changes_trie::input::InputPair;
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 	data: RwLock<InMemoryStorageData<H, Number>>,
+	cache: BuildCache<H::Out, Number>,
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
@@ -55,12 +54,18 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots: BTreeMap::new(),
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
 	/// Create the storage with empty database.
 	pub fn new() -> Self {
 		Self::with_db(Default::default())
+	}
+
+	/// Get mutable cache reference.
+	pub fn cache_mut(&mut self) -> &mut BuildCache<H::Out, Number> {
+		&mut self.cache
 	}
 
 	/// Create the storage with given blocks.
@@ -70,6 +75,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots: blocks.into_iter().collect(),
 				mdb: MemoryDB::default(),
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -89,6 +95,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots,
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -132,6 +139,10 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 }
 
 impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
+	fn cached_changed_keys(&self, root: &H::Out) -> Option<HashSet<Vec<u8>>> {
+		self.cache.get(root).cloned()
+	}
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
