@@ -986,7 +986,6 @@ mod tests {
 				extra: NothingExtra,
 				inherent_data_providers,
 				config,
-				start: None,
 				timestamps: Default::default(),
 			})
 		}
