@@ -79,7 +79,6 @@ check-line-width:
     - /^[0-9]+$/
   script:
     - ./scripts/gitlab/check_line_width.sh
-  allow_failure:                   false
 
 
 cargo-audit:
