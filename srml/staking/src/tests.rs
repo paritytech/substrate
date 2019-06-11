@@ -907,12 +907,11 @@ fn reward_destination_works() {
 		// Check how much is at stake
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 		// Check current session reward is 10
-		let session_reward0 = Staking::current_session_reward(); // 10
+		let session_reward0 = 3 * Staking::current_session_reward(); // 10
 
 		// Move forward the system for payment
-		System::set_block_number(1);
 		Timestamp::set_timestamp(5);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
@@ -921,15 +920,14 @@ fn reward_destination_works() {
 		// Check that amount at stake increased accordingly
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + session_reward0, active: 1000 + session_reward0, unlocking: vec![] }));
 		// Update current session reward
-		let session_reward1 = Staking::current_session_reward(); // 1010 (1* slot_stake)
+		let session_reward1 = 3 * Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		//Change RewardDestination to Stash
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
 
 		// Move forward the system for payment
-		System::set_block_number(2);
 		Timestamp::set_timestamp(10);
-		Session::on_initialize(System::block_number());
+		start_era(2);
 
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
@@ -947,10 +945,9 @@ fn reward_destination_works() {
 		assert_eq!(Balances::free_balance(&10), 1);
 
 		// Move forward the system for payment
-		System::set_block_number(3);
 		Timestamp::set_timestamp(15);
-		Session::on_initialize(System::block_number());
-		let session_reward2 = Staking::current_session_reward(); // 1010 (1* slot_stake)
+		start_era(3);
+		let session_reward2 = 3 * Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
