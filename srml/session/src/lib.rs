@@ -369,7 +369,6 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
-	use parity_codec::{Encode, Decode};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnInitialize};
@@ -396,7 +395,7 @@ mod tests {
 
 	pub struct TestSessionHandler;
 	impl SessionHandler<u64> for TestSessionHandler {
-		fn on_new_session<T: OpaqueKeys>(changed: bool, validators: &[(u64, T)]) {
+		fn on_new_session<T: OpaqueKeys>(_changed: bool, validators: &[(u64, T)]) {
 			AUTHORITIES.with(|l|
 				*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
 			);
