@@ -19,6 +19,7 @@
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
+use primitives::traits::OnInitialize;
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
@@ -111,7 +112,7 @@ fn change_controller_works() {
 		assert_ok!(Staking::set_controller(Origin::signed(11), 5));
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 
 		assert_noop!(
@@ -286,7 +287,7 @@ fn slashing_does_not_cause_underflow() {
 		});
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Should not panic
 		Staking::on_offline_validator(10, 100);
@@ -343,7 +344,7 @@ fn rewards_should_work() {
 		let mut block = 3; // Block 3 => Session 1 => Era 0
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);	// on time.
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 
@@ -354,7 +355,7 @@ fn rewards_should_work() {
 		block = 6; // Block 6 => Session 2 => Era 0
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5 + delay);	// a little late.
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 
@@ -366,7 +367,7 @@ fn rewards_should_work() {
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);  // back to being on time. no delays
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
@@ -402,7 +403,7 @@ fn multi_era_reward_should_work() {
 		// Block 3 => Session 1 => Era 0
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 
@@ -413,7 +414,7 @@ fn multi_era_reward_should_work() {
 		block = 6; // Block 6 => Session 2 => Era 0
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5 + delay);	// a little late.
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 
@@ -423,7 +424,7 @@ fn multi_era_reward_should_work() {
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);  // back to being punktlisch. no delayss
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
@@ -436,14 +437,14 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Staking::current_session_reward(), new_session_reward);
 
 		// fast forward to next era:
-		block=12; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
-		block=15; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=12; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
+		block=15; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
 
 		// intermediate test.
 		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
 
 		// new era is triggered here.
-		block=18; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=18; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
 
 		// pay time
 		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
@@ -473,7 +474,7 @@ fn staking_should_work() {
 
 		// --- Block 1:
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 
 		// add a new candidate for being a validator. account 3 controlled by 4.
@@ -485,7 +486,7 @@ fn staking_should_work() {
 
 		// --- Block 2:
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 
 		// No effects will be seen so far. Era has not been yet triggered.
@@ -494,7 +495,7 @@ fn staking_should_work() {
 
 		// --- Block 3: the validators will now change.
 		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// 2 only voted for 4 and 20
 		assert_eq!(Session::validators().len(), 2);
@@ -504,7 +505,7 @@ fn staking_should_work() {
 
 		// --- Block 4: Unstake 4 as a validator, freeing up the balance stashed in 3
 		System::set_block_number(4);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// 4 will chill
 		Staking::chill(Origin::signed(4)).unwrap();
@@ -516,14 +517,14 @@ fn staking_should_work() {
 
 		// --- Block 5: nothing. 4 is still there.
 		System::set_block_number(5);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq_uvec!(Session::validators(), vec![20, 4]);
 		assert_eq!(Staking::current_era(), 1);
 
 
 		// --- Block 6: 4 will not be a validator.
 		System::set_block_number(6);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators().contains(&4), false);
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
@@ -549,7 +550,7 @@ fn less_than_needed_candidates_works() {
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 
 		// Previous set is selected. NO election algorithm is even executed.
@@ -584,7 +585,7 @@ fn no_candidate_emergency_condition() {
 
 		// trigger era
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Previous ones are elected. chill is invalidates. TODO: #2494
 		assert_eq_uvec!(Session::validators(), vec![10, 20, 30, 40]);
@@ -664,7 +665,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 
 		// 10 and 20 have more votes, they will be chosen by phragmen.
@@ -695,7 +696,7 @@ fn nominating_and_rewards_should_work() {
 
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
 		// nothing else will happen, era ends and rewards are paid again,
@@ -743,7 +744,7 @@ fn nominators_also_get_slashed() {
 
 		// new era, pay rewards,
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Nominator stash didn't collect any.
 		assert_eq!(Balances::total_balance(&2), initial_balance);
@@ -817,7 +818,7 @@ fn session_and_eras_work() {
 
 		// Block 1: No change.
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -825,7 +826,7 @@ fn session_and_eras_work() {
 
 		// Block 2: Simple era change.
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -834,7 +835,7 @@ fn session_and_eras_work() {
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
 		assert_ok!(Staking::set_sessions_per_era(3));
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -842,7 +843,7 @@ fn session_and_eras_work() {
 
 		// Block 4: Era change kicks in.
 		System::set_block_number(4);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 4);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -850,7 +851,7 @@ fn session_and_eras_work() {
 
 		// Block 5: No change.
 		System::set_block_number(5);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 5);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -858,7 +859,7 @@ fn session_and_eras_work() {
 
 		// Block 6: No change.
 		System::set_block_number(6);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 6);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -866,7 +867,7 @@ fn session_and_eras_work() {
 
 		// Block 7: Era increment.
 		System::set_block_number(7);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 7);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -954,7 +955,7 @@ fn reward_destination_works() {
 		// Move forward the system for payment
 		System::set_block_number(1);
 		Timestamp::set_timestamp(5);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
@@ -971,7 +972,7 @@ fn reward_destination_works() {
 		// Move forward the system for payment
 		System::set_block_number(2);
 		Timestamp::set_timestamp(10);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
@@ -991,7 +992,7 @@ fn reward_destination_works() {
 		// Move forward the system for payment
 		System::set_block_number(3);
 		Timestamp::set_timestamp(15);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		let session_reward2 = Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		// Check that RewardDestination is Controller
@@ -1044,7 +1045,7 @@ fn validator_payment_prefs_work() {
 		// Block 3 => Session 1 => Era 0
 		let mut block = 3;
 		System::set_block_number(block);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 
@@ -1054,7 +1055,7 @@ fn validator_payment_prefs_work() {
 
 		block = 6; // Block 6 => Session 2 => Era 0
 		System::set_block_number(block);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 
@@ -1063,7 +1064,7 @@ fn validator_payment_prefs_work() {
 
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
@@ -1141,7 +1142,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 
 		// confirm that 10 is a normal validator and gets paid at the end of the era.
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Initial state of 10
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
@@ -1155,7 +1156,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ne!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
-		System::set_block_number(2);Timestamp::set_timestamp(10);Session::check_rotate_session(System::block_number());
+		System::set_block_number(2);Timestamp::set_timestamp(10);Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::current_index(), 2);
 
@@ -1177,7 +1178,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 
 		// trigger next era.
 		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq!(Staking::current_era(), 3);
 		assert_eq!(Session::current_index(), 3);
@@ -1189,7 +1190,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 
 		// trigger next era.
 		System::set_block_number(4);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 4);
 		assert_eq!(Session::current_index(), 4);
 
@@ -1209,7 +1210,7 @@ fn too_many_unbond_calls_should_not_work() {
 		}
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// locked ar era 1 until 4
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1217,10 +1218,10 @@ fn too_many_unbond_calls_should_not_work() {
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
 		// free up.
@@ -1263,7 +1264,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 
 		// New era --> rewards are paid --> stakes are changed
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 
 		// -- new balances + reward
@@ -1475,7 +1476,7 @@ fn phragmen_poc_works() {
 
 		// New era => election algorithm will trigger
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
@@ -1576,21 +1577,21 @@ fn switching_roles() {
 
 		// new block
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// no change
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// new block
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// no change
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// new block --> ne era --> new validators
 		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// with current nominators 10 and 5 have the most stake
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
@@ -1605,16 +1606,16 @@ fn switching_roles() {
 		// Winners: 20 and 2
 
 		System::set_block_number(4);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
 
 		System::set_block_number(5);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
 
 		// ne era
 		System::set_block_number(6);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 		assert_eq_uvec!(Session::validators(), vec![2, 20]);
 		check_exposure_all();
 	});
@@ -1641,7 +1642,7 @@ fn wrong_vote_is_null() {
 
 		// new block
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 	});
@@ -1667,7 +1668,7 @@ fn bond_with_no_staked_value() {
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Not elected even though we want 3.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
@@ -1684,7 +1685,7 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Stingy one is selected
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
@@ -1697,7 +1698,7 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		let reward = Staking::current_session_reward();
 		// 2 will not get a reward of only 1
@@ -1729,7 +1730,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// 2 is elected.
 		// and fucks up the slot stake.
@@ -1742,7 +1743,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
 		assert_eq!(Staking::slot_stake(), 1);
@@ -1784,7 +1785,7 @@ fn phragmen_linear_worse_case_equalize() {
 		assert_ok!(Staking::set_validator_count(7));
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![10, 60, 40, 20, 50, 30, 70]);
 
@@ -1822,7 +1823,7 @@ fn phragmen_chooses_correct_number_of_validators() {
 		assert_eq!(Session::validators().len(), 1);
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq!(Session::validators().len(), 1);
 		check_exposure_all();
@@ -1842,7 +1843,7 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 		bond_validator(8, u64::max_value()-2);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq!(Session::validators(), vec![4, 2]);
 		check_exposure_all();
@@ -1865,7 +1866,7 @@ fn phragmen_should_not_overflow_validators() {
 		bond_nominator(8, u64::max_value()/2, vec![3, 5]);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
@@ -1892,7 +1893,7 @@ fn phragmen_should_not_overflow_nominators() {
 		bond_nominator(8, u64::max_value(), vec![3, 5]);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
@@ -1915,7 +1916,7 @@ fn phragmen_should_not_overflow_ultimate() {
 		bond_nominator(8, u64::max_value(), vec![3, 5]);
 
 		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
@@ -1968,7 +1969,7 @@ fn phragmen_large_scale_test() {
 		);
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// For manual inspection
 		println!("Validators are {:?}", Session::validators());
@@ -2018,7 +2019,7 @@ fn phragmen_large_scale_test_2() {
 		bond_nominator(50, nom_budget, vec![3, 5]);
 
 		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
+		Session::on_initialize(System::block_number());
 
 		// Each exposure => total == own + sum(others)
 		check_exposure_all();
