@@ -285,7 +285,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// This field is used only in test code, but maintaining different
 	/// instantiation paths or field names is too much hassle, hence
 	/// we allow it to be unused.
-	#[allow(unused)]
+	#[cfg_attr(not(test), allow(unused))]
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 	import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
