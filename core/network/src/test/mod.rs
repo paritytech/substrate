@@ -37,7 +37,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
+use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
@@ -46,13 +46,12 @@ use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Digest, Header, NumberFor};
+use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
+use runtime_primitives::traits::{Block as BlockT, Digest, Header, NumberFor, DigestItem};
 use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
-use test_runtime::AuthorityId;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
@@ -72,10 +71,10 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let maybe_keys = pre_header.digest()
-			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura")
+		let maybe_keys = header.digest()
+			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
-			))
+			)
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 		Ok((ImportBlock {
@@ -700,7 +699,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<test_runtime::AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()
