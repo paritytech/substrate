@@ -536,9 +536,7 @@ fn less_than_needed_candidates_works() {
 		assert_eq!(Staking::minimum_validator_count(), 1);
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
+		start_era(1);
 
 		// Previous set is selected. NO election algorithm is even executed.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
