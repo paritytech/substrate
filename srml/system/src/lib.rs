@@ -315,8 +315,13 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total length in bytes for all extrinsics put together, for the current block.
-		AllExtrinsicsLen: Option<u32>;
+		/// Total weight for all extrinsics put together, for the current block.
+		AllExtrinsicsWeight: Option<u32>;
+		/// The weights for the past 50 blocks. This is arranged as a ring buffer with the `i8` prefix being the 
+		/// index into the `Vec` of the oldest block weight.
+		WeightHistory get(weight_history): (i8, Vec<u32>);
+		/// Average weight for the past 50 blocks
+		AverageSaturation: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -530,9 +535,15 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicCount<T>>::get().unwrap_or_default()
 	}
 
-	/// Gets a total length of all executed extrinsics.
-	pub fn all_extrinsics_len() -> u32 {
-		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	/// Gets a total weight of all executed extrinsics.
+	pub fn all_extrinsics_weight() -> u32 {
+		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
+	}
+
+	/// Gets the average block saturation for the past 50 blocks
+	/// -- yields average of x blocks if x < 50 blocks have passed
+	pub fn average_saturation() -> u32 {
+		<AverageSaturation<T>>::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
@@ -563,7 +574,19 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsLen<T>>::kill();
+		let total_weight = <AllExtrinsicsWeight<T>>::get();
+		<WeightHistory<T>>::mutate(|&mut(ref mut index, ref mut weights)| if weights.len() < 50 {
+			weights.push(total_weight.unwrap_or_default())
+		} else {
+			weights[*index as usize] = total_weight.unwrap_or_default();
+			*index = (*index + 1) % 50;
+		});
+		// only necessary for the first 50 blocks after which we can just divide by 50
+		let history_length = <WeightHistory<T>>::get().1.len() as u32;
+		let weight_sum: u32 = <WeightHistory<T>>::get().1.iter().sum();
+		<AverageSaturation<T>>::put(weight_sum.checked_div(history_length).unwrap_or_default());
+		// clean up count for this block's extrinsics weight
+		<AllExtrinsicsWeight<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -714,10 +737,10 @@ impl<T: Trait> Module<T> {
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsLen<T>>::put(&total_length);
+		<AllExtrinsicsWeight<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
