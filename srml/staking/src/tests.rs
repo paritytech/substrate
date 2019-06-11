@@ -1100,8 +1100,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_eq!(Balances::total_balance(&10), 1);
 
 		// confirm that 10 is a normal validator and gets paid at the end of the era.
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// Initial state of 10
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
@@ -1115,9 +1114,9 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ne!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
-		System::set_block_number(2);Timestamp::set_timestamp(10);Session::on_initialize(System::block_number());
+		Timestamp::set_timestamp(10);
+		start_era(2);
 		assert_eq!(Staking::current_era(), 2);
-		assert_eq!(Session::current_index(), 2);
 
 		// ledger should be the same.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
@@ -1127,31 +1126,24 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 2}] })
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}] })
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 2}] }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}] }));
 
 		// trigger next era.
-		System::set_block_number(3);
-		Session::on_initialize(System::block_number());
-
-		assert_eq!(Staking::current_era(), 3);
-		assert_eq!(Session::current_index(), 3);
+		start_era(3);
 
 		// nothing yet
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 2}] }));
+			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}] }));
 
 		// trigger next era.
-		System::set_block_number(4);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 4);
-		assert_eq!(Session::current_index(), 4);
+		start_era(5);
 
 		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
 		// Now the value is free and the staking ledger is updated.
