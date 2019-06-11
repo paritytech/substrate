@@ -32,3 +32,32 @@ impl Misconduct for Unresponsive {
 		self.severity
 	}
 }
+
+
+
+/// ...
+pub struct GrandpaEquivocation {
+	severity: u64,
+}
+
+impl Default for GrandpaEquivocation {
+	fn default() -> Self {
+		Self { severity: 25 }
+	}
+}
+
+impl Misconduct for GrandpaEquivocation {
+	type Severity = u64;
+
+	fn on_misconduct(&mut self) {
+		self.severity = std::cmp::max(1, self.severity / 2);
+	}
+
+	fn on_signal(&mut self) {
+		self.severity = std::cmp::min(25, self.severity * 2);
+	}
+
+	fn severity(&self) -> Self::Severity {
+		self.severity
+	}
+}

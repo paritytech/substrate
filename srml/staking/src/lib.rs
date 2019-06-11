@@ -252,6 +252,7 @@
 //! - [Session](../srml_session/index.html): Used to manage sessions. Also, a list of new validators
 //! is stored in the Session module's `Validators` at the end of each era.
 
+#![warn(missing_docs)]
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
@@ -266,6 +267,11 @@ mod mock;
 mod tests;
 
 mod phragmen;
+
+// TODO(niklasad1): remove this mod?!
+mod slash;
+
+pub use slash::StakingSlasher;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
