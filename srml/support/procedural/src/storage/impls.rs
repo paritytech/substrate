@@ -637,10 +637,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				fn key_for(k1: &#k1ty, k2: &#k2ty) -> Vec<u8> {
 					use #scrate::storage::hashed::generator::StorageHasher;
+
 					let mut key = #as_double_map::prefix_for(k1);
-					let mut key2 = vec![];
-					#scrate::codec::Encode::encode_to(k2, &mut key2);
-					key.extend(#scrate::#k2_hasher::hash(&key2[..]).to_vec());
+					#scrate::codec::Encode::using_encoded(k2, |e| key.extend(&#scrate::#k2_hasher::hash(e)));
 					key
 				}
 
