@@ -498,6 +498,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		engine_id: ConsensusEngineId,
 		force: bool
 	) {
+		// Note: critical section on the validator starts here.
 		let validator = self.validators.get(&engine_id);
 		let mut message_allowed = match validator {
 			None => return, // treat all messages with no validator as not allowed
@@ -522,6 +523,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				});
 			}
 		}
+		// Note: critical section on the validator ends here.
 	}
 
 	/// Multicast a message to all peers.
