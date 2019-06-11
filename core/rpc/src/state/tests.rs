@@ -18,11 +18,11 @@ use super::*;
 use self::error::Error;
 
 use assert_matches::assert_matches;
-use consensus::BlockOrigin;
 use primitives::storage::well_known_keys;
 use sr_io::blake2_256;
 use test_client::{
 	prelude::*,
+	consensus::BlockOrigin,
 	runtime,
 };
 use substrate_executor::NativeExecutionDispatch;
@@ -53,7 +53,9 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
+	let client = Arc::new(test_client::TestClientBuilder::new()
+		.add_child_storage("test", "key", vec![42_u8])
+		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
 	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
@@ -128,7 +130,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
-		let alice_balance_key = blake2_256(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		api.subscribe_storage(Default::default(), subscriber, Some(vec![
 			StorageKey(alice_balance_key.to_vec()),
@@ -180,7 +182,7 @@ fn should_query_storage() {
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
 
-		let alice_balance_key = blake2_256(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		let mut expected = vec![
 			StorageChangeSet {

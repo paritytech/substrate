@@ -16,7 +16,7 @@ proc-macro-crate = "0.1.3"
 
 [dev-dependencies]
 client = { package = "substrate-client", path = "../client" }
-test_client = { package = "substrate-test-client", path = "../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
