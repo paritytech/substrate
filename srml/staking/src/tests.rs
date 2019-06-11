@@ -1142,19 +1142,14 @@ fn too_many_unbond_calls_should_not_work() {
 			assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		}
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
-		// locked ar era 1 until 4
+		// locked at era 1 until 4
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		// can't do more.
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
-
-		System::set_block_number(3);
-		Session::on_initialize(System::block_number());
+		start_era(3);
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
 		// free up.
