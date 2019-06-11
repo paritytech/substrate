@@ -216,3 +216,87 @@ where
 		Async::NotReady
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use futures::prelude::*;
+	use libp2p::identity::Keypair;
+	use libp2p::Multiaddr;
+	use libp2p::core::{upgrade, Swarm};
+	use libp2p::core::transport::{Transport, MemoryTransport};
+	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
+	use std::collections::HashSet;
+	use super::{DiscoveryBehaviour, DiscoveryOut};
+
+	#[test]
+	fn discovery_working() {
+		let mut user_defined = Vec::new();
+
+		// Build swarms whose behaviour is `DiscoveryBehaviour`.
+		let mut swarms = (0..25).map(|_| {
+			let keypair = Keypair::generate_ed25519();
+
+			let transport = MemoryTransport
+				.with_upgrade(libp2p::secio::SecioConfig::new(keypair.clone()))
+				.and_then(move |out, endpoint| {
+					let peer_id = out.remote_key.into_peer_id();
+					let peer_id2 = peer_id.clone();
+					let upgrade = libp2p::yamux::Config::default()
+						.map_inbound(move |muxer| (peer_id, muxer))
+						.map_outbound(move |muxer| (peer_id2, muxer));
+					upgrade::apply(out.stream, upgrade, endpoint)
+				});
+
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone());
+			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
+			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
+
+			if user_defined.is_empty() {
+				user_defined.push((keypair.public().into_peer_id(), listen_addr.clone()));
+			}
+
+			Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
+			(swarm, listen_addr)
+		}).collect::<Vec<_>>();
+
+		// Build a `Vec<HashSet<PeerId>>` with the list of nodes remaining to be discovered.
+		let mut to_discover = (0..swarms.len()).map(|n| {
+			(0..swarms.len()).filter(|p| *p != n)
+				.map(|p| Swarm::local_peer_id(&swarms[p].0).clone())
+				.collect::<HashSet<_>>()
+		}).collect::<Vec<_>>();
+
+		let fut = futures::future::poll_fn(move || -> Result<_, ()> {
+			loop {
+				let mut keep_polling = false;
+
+				for swarm_n in 0..swarms.len() {
+					if let Async::Ready(Some(DiscoveryOut::Discovered(other))) =
+						swarms[swarm_n].0.poll().unwrap() {
+						if to_discover[swarm_n].remove(&other) {
+							keep_polling = true;
+							// Call `add_self_reported_address` to simulate identify happening.
+							let addr = swarms.iter()
+								.find(|s| *Swarm::local_peer_id(&s.0) == other)
+								.unwrap()
+								.1.clone();
+							swarms[swarm_n].0.add_self_reported_address(&other, addr);
+						}
+					}
+				}
+
+				if !keep_polling {
+					break;
+				}
+			}
+
+			if to_discover.iter().all(|l| l.is_empty()) {
+				Ok(Async::Ready(()))
+			} else {
+				Ok(Async::NotReady)
+			}
+		});
+
+		tokio::runtime::Runtime::new().unwrap().block_on(fut).unwrap();
+	}
+}
