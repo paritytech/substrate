@@ -44,6 +44,8 @@ use crate::config::Params;
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
+mod tests;
+
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.

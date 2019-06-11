@@ -28,7 +28,6 @@ mod chain;
 mod custom_proto;
 mod debug_info;
 mod discovery;
-//mod libp2p_tests;
 mod on_demand_layer;
 #[macro_use]
 mod protocol;
