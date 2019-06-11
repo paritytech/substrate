@@ -20,7 +20,7 @@ do
   cd "$PROJECT_ROOT/$SRC"
 
   cargo update
-  ./build.sh
+  ./build.sh "$@"
 
   cd - >> /dev/null
 done
