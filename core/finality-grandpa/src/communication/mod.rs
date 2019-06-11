@@ -544,7 +544,7 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 pub struct Round(pub u64);
 
 /// Type-safe wrapper around u64 when indicating that it's a set ID.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub u64);
 
 // check a message.

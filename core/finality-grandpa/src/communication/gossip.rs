@@ -193,7 +193,7 @@ impl<B: BlockT> KeepTopics<B> {
 	}
 
     // Adds a round of topic, returns a list of pruned rounds
-	fn push(&mut self, round: Round, set_id: SetId) -> Vec<Round> {
+	fn push(&mut self, round: Round, set_id: SetId) -> Vec<(Round, SetId)> {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 		self.rounds.push_back((round, set_id));
 
@@ -201,8 +201,8 @@ impl<B: BlockT> KeepTopics<B> {
 
 		// the 1 is for the current round.
 		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
-			if let Some((pruned, _)) = self.rounds.pop_front() {
-				pruned_rounds.push(pruned);
+			if let Some((pruned, set_id)) = self.rounds.pop_front() {
+				pruned_rounds.push((pruned, set_id));
 			}
 		}
 
@@ -459,9 +459,9 @@ struct Inner<Block: BlockT> {
 	authorities: Vec<AuthorityId>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
-	incoming_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
-	incoming_msg_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
-	outgoing_votes_tally: HashMap<Round, HashMap<(AuthorityId, PeerId), VoteTally>>,
+	incoming_votes_tally: HashMap<(Round, SetId), HashMap<AuthorityId, VoteTally>>,
+	incoming_msg_tally: HashMap<(Round, SetId), HashMap<(AuthorityId, PeerId), VoteTally>>,
+	outgoing_votes_tally: HashMap<(Round, SetId), HashMap<(AuthorityId, PeerId), VoteTally>>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -501,17 +501,17 @@ impl<Block: BlockT> Inner<Block> {
 
 		let pruned = self.live_topics.push(round, set_id);
 
-		for round in pruned {
+		for p in pruned {
 			// Prune the tallies
-			self.incoming_votes_tally.remove(&round);
-			self.incoming_msg_tally.remove(&round);
-			self.outgoing_votes_tally.remove(&round);
+			self.incoming_votes_tally.remove(&p);
+			self.incoming_msg_tally.remove(&p);
+			self.outgoing_votes_tally.remove(&p);
 		}
 
 		// Reset the votes-tally for a new round.
-		self.incoming_votes_tally.insert(round, Default::default());
-		self.incoming_msg_tally.insert(round, Default::default());
-		self.outgoing_votes_tally.insert(round, Default::default());
+		self.incoming_votes_tally.insert((round, set_id), Default::default());
+		self.incoming_msg_tally.insert((round, set_id), Default::default());
+		self.outgoing_votes_tally.insert((round, set_id), Default::default());
 
 		self.multicast_neighbor_packet()
 	}
@@ -558,7 +558,7 @@ impl<Block: BlockT> Inner<Block> {
 
 	fn consider_vote(&mut self, who: &PeerId, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
 		// A tally of votes per voter, per round
-		let tally_for_round = match self.incoming_votes_tally.get_mut(&round) {
+		let tally_for_round = match self.incoming_votes_tally.get_mut(&(round, set_id)) {
 			Some(tally_for_round) =>  tally_for_round,
 			None => {
 				// We don't know about this round,
@@ -570,7 +570,7 @@ impl<Block: BlockT> Inner<Block> {
 		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
 
 		// A tally of messages received per peer, per voter, per round.
-		let peer_tally_for_round = match self.incoming_msg_tally.get_mut(&round) {
+		let peer_tally_for_round = match self.incoming_msg_tally.get_mut(&(round, set_id)) {
 			Some(tally_for_round) =>  tally_for_round,
 			None => {
 				// We don't know about this round,
@@ -583,7 +583,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// A tally of messages we sent out, per peer, per voter, per round
 		let outgoing_tally_for_round = self.outgoing_votes_tally
-			.get_mut(&round)
+			.get_mut(&(round, set_id))
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
 		let outgoing_tally = outgoing_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
 
@@ -891,15 +891,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		-> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
 		let (inner, do_rebroadcast) = {
-			let inner = Arc::clone(&self.inner);
+			let mut inner = self.inner.write();
 			let now = Instant::now();
-			let do_rebroadcast = if now >= inner.read().next_rebroadcast {
-				(*inner.write()).next_rebroadcast = now + REBROADCAST_AFTER;
+			let do_rebroadcast = if now >= inner.next_rebroadcast {
+				inner.next_rebroadcast = now + REBROADCAST_AFTER;
 				true
 			} else {
 				false
 			};
-			(inner, do_rebroadcast)
+			(Arc::clone(&self.inner), do_rebroadcast)
 		};
 
 		Box::new(move |who, intent, topic, mut data| {
@@ -907,10 +907,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				return do_rebroadcast;
 			}
 
+			let mut inner = inner.write();
+
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
 			let (maybe_round, set_id) = {
-				let inner = inner.read();
 				match inner.peers.peer(who) {
 					None => return false,
 					Some(_) => {},
@@ -927,7 +928,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				if let Some(GossipMessage::VoteOrPrecommit(msg)) = message {
 					// If we don't know about the peer,
 					// or if the topic is not something the peer accepts, discard.
-					match inner.read().peers.peer(who) {
+					match inner.peers.peer(who) {
 						None => return false,
 						Some(peer) => {
 							if !(peer.view.consider_vote(round, set_id) == Consider::Accept) {
@@ -937,9 +938,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					}
 
 					let (primary_proposals_to_peer, pre_votes_to_peer, pre_commits_to_peer) = {
-						let mut inner = inner.write();
 						// If we haven't noted this round yet, the message is not allowed.
-						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&(round, set_id)) {
 							Some(tally_for_round) => tally_for_round,
 							None => return false
 						};
@@ -949,11 +949,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						(tally.primary_proposals, tally.pre_votes, tally.pre_commits)
 					};
 
-
 					let (primary_proposals_from_peer, pre_votes_from_peer, pre_commits_from_peer) = {
-						let mut inner = inner.write();
 						// If we haven't noted this round yet, the message is not allowed.
-						let peer_tally_for_round = match inner.incoming_msg_tally.get_mut(&round) {
+						let peer_tally_for_round = match inner.incoming_msg_tally.get_mut(&(round, set_id)) {
 							Some(tally_for_round) =>  tally_for_round,
 							None => {
 								return false
@@ -974,9 +972,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							return false
 					}
 
-					let mut inner = inner.write();
 					// If we haven't noted this round yet, the message is not allowed.
-					let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+					let tally_for_round = match inner.outgoing_votes_tally.get_mut(&(round, set_id)) {
 						Some(tally_for_round) => tally_for_round,
 						None => return false
 					};
@@ -1013,7 +1010,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(GossipMessage::Commit(full)) => {
 					// global message.
 					let (our_best_commit, peer_best_commit) = {
-						let inner = inner.read();
 						let peer_best_commit = match inner.peers.peer(who) {
 							None => return false,
 							Some(peer) => peer.view.last_commit,
