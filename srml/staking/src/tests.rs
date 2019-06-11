@@ -648,16 +648,14 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
+		start_era(1);
 
 		// 10 and 20 have more votes, they will be chosen by phragmen.
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// OLD validators must have already received some rewards.
-		assert_eq!(Balances::total_balance(&40), 1 + session_reward);
-		assert_eq!(Balances::total_balance(&30), 1 + session_reward);
+		assert_eq!(Balances::total_balance(&40), 1 + 3 * session_reward);
+		assert_eq!(Balances::total_balance(&30), 1 + 3 * session_reward);
 
 		// ------ check the staked value of all parties.
 
@@ -679,22 +677,21 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Staking::stakers(41).total, 0);
 
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(2);
 		// next session reward.
-		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
+		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 		// nothing else will happen, era ends and rewards are paid again,
 		// it is expected that nominators will also be paid. See below
 
 		// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&2), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11));
+		assert_eq!(Balances::total_balance(&2), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1);
 		// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11));
+		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1);
 
 		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
 		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
 		// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11);
+		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11+ 2);
 
 		check_exposure_all();
 	});
