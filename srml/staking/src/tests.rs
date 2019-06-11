@@ -723,8 +723,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		// new era, pay rewards,
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// Nominator stash didn't collect any.
 		assert_eq!(Balances::total_balance(&2), initial_balance);
@@ -738,7 +737,7 @@ fn nominators_also_get_slashed() {
 		let nominator_slash = nominator_stake.min(total_slash - validator_slash);
 
 		// initial + first era reward + slash
-		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - validator_slash);
+		assert_eq!(Balances::total_balance(&10), initial_balance + 30 - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		// Because slashing happened.
