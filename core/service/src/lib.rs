@@ -209,13 +209,18 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(())));
 
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(
-				client.clone(),
-				task_executor.clone(),
-			)))
-		} else {
-			None
+		let offchain_workers = match (config.offchain_worker, client.backend().offchain_storage()) {
+			(true, Some(db)) => {
+				Some(Arc::new(offchain::OffchainWorkers::new(
+					client.clone(),
+					db,
+					task_executor.clone(),
+				)))
+			},
+			(true, None) => {
+				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+			},
+			_ => None,
 		};
 
 		{

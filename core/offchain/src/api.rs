@@ -37,17 +37,21 @@ enum ExtMessage {
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct AsyncApi(mpsc::UnboundedSender<ExtMessage>);
+pub(crate) struct Api {
+	sender: mpsc::UnboundedSender<ExtMessage>,
+	db: client_db::offchain::LocalStorage,
+}
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!("This {:?} API is not available for offchain workers yet. Follow
+	error!("The {:?} API is not available for offchain workers yet. Follow \
 		   https://github.com/paritytech/substrate/issues/1458 for details", name);
 	Default::default()
 }
 
-impl OffchainExt for AsyncApi {
+impl OffchainExt for Api {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
-		self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
+		self.sender
+			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
 			.map(|_| ())
 			.map_err(|_| ())
 	}
@@ -159,24 +163,35 @@ impl OffchainExt for AsyncApi {
 }
 
 /// Offchain extensions implementation API
-pub(crate) struct Api<A: ChainApi> {
+///
+/// This is the asynchronous processing part of the API.
+pub(crate) struct AsyncApi<A: ChainApi> {
 	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
 	transaction_pool: Arc<Pool<A>>,
 	at: BlockId<A::Block>,
 }
 
-impl<A: ChainApi> Api<A> {
+impl<A: ChainApi> AsyncApi<A> {
+	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
 	pub fn new(
 		transaction_pool: Arc<Pool<A>>,
+		db: client_db::offchain::LocalStorage,
 		at: BlockId<A::Block>,
-	) -> (AsyncApi, Self) {
-		let (tx, rx) = mpsc::unbounded();
-		let api = Self {
+	) -> (Api, AsyncApi<A>) {
+		let (sender, rx) = mpsc::unbounded();
+
+		let api = Api {
+			sender,
+			db,
+		};
+
+		let async_api = AsyncApi {
 			receiver: Some(rx),
 			transaction_pool,
 			at,
 		};
-		(AsyncApi(tx), api)
+
+		(api, async_api)
 	}
 
 	/// Run a processing task for the API
@@ -207,5 +222,34 @@ impl<A: ChainApi> Api<A> {
 				debug!("Couldn't submit transaction: {:?}", e);
 			},
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn offchain_api() -> (AsyncApi, Api<impl ChainApi>) {
+		let _ = env_logger::try_init();
+		let client = Arc::new(test_client::new());
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
+
+		Api::new(pool, BlockId::Number(0))
+	}
+
+	#[test]
+	fn should_set_and_get_local_storage() {
+		// given
+		let mut api = offchain_api().0;
+		let key = b"test";
+
+		// when
+		assert_eq!(api.local_storage_get(key), None);
+		api.local_storage_set(key, b"value");
+
+		// then
+		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
+
+		// then
 	}
 }

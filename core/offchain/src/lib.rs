@@ -58,6 +58,7 @@ pub use offchain_primitives::OffchainWorkerApi;
 #[derive(Debug)]
 pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
+	db: client_db::offchain::LocalStorage,
 	executor: TaskExecutor,
 	_block: PhantomData<Block>,
 }
@@ -66,10 +67,12 @@ impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
+		db: client_db::offchain::LocalStorage,
 		executor: TaskExecutor,
 	) -> Self {
 		Self {
 			client,
+			db,
 			executor,
 			_block: PhantomData,
 		}
@@ -95,7 +98,11 @@ impl<C, Block> OffchainWorkers<C, Block> where
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {
-			let (api, runner) = api::Api::new(pool.clone(), at.clone());
+			let (api, runner) = api::AsyncApi::new(
+				pool.clone(),
+				self.db.clone(),
+				at.clone(),
+			);
 			self.executor.spawn(runner.process());
 
 			debug!("Running offchain workers at {:?}", at);

@@ -590,6 +590,7 @@ where
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
 	type ChangesTrieStorage = ChangesTrieStorage<Block, H>;
+	type OffchainStorage = ();
 
 	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -665,6 +666,10 @@ where
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		Some(&self.changes_trie_storage)
+	}
+
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+		None
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {

@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
+client-db = { package = "substrate-client-db", path = "../../core/client/db/" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 futures = "0.1.25"
 log = "0.4"

@@ -4239,6 +4239,7 @@ dependencies = [
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-client-db 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
