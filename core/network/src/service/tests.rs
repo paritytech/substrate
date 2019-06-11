@@ -158,11 +158,6 @@ fn many_nodes_connectivity() {
 			let mut num_connecs = 0;
 			stream::poll_fn(move || -> io::Result<_> {
 				loop {
-					// TODO: ?
-					/*const MAX_BANDWIDTH: u64 = NUM_NODES as u64 * 2048;		// 2kiB/s/node
-					assert!(node.average_download_per_sec() < MAX_BANDWIDTH);
-					assert!(node.average_upload_per_sec() < MAX_BANDWIDTH);*/
-
 					match try_ready!(node.poll()) {
 						Some(CustomProtoOut::CustomProtocolOpen { .. }) => {
 							num_connecs += 1;
