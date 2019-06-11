@@ -111,9 +111,7 @@ fn change_controller_works() {
 
 		assert_ok!(Staking::set_controller(Origin::signed(11), 5));
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
+		start_era(1);
 
 		assert_noop!(
 			Staking::validate(Origin::signed(10), ValidatorPrefs::default()),
