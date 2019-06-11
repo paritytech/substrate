@@ -123,7 +123,7 @@
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
-use parity_codec::{Encode, Decode};
+use primitives::traits::One;
 
 /// The module configuration trait.
 pub trait Trait: system::Trait {
@@ -134,7 +134,7 @@ pub trait Trait: system::Trait {
 	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
-	type AssetId: Parameter + SimpleArithmetic + Default + Copy + Encode + Decode;
+	type AssetId: Parameter + SimpleArithmetic + Default + Copy;
 }
 
 decl_module! {
@@ -147,7 +147,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 
 			let id = Self::next_asset_id();
-			<NextAssetId<T>>::mutate(|id| *id += 1.into());
+			<NextAssetId<T>>::mutate(|id| *id += One::one());
 
 			<Balances<T>>::insert((id, origin.clone()), total);
 			<TotalSupply<T>>::insert(id, total);
