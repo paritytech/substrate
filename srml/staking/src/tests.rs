@@ -1565,8 +1565,7 @@ fn wrong_vote_is_null() {
 		]));
 
 		// new block
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 	});
