@@ -85,7 +85,11 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 		// DigestBuildIterator is created only by internal function that is checking
 		// that all multiplications/subtractions are safe within max_step limit
 
-		let next_step_reverse = if self.current_step_reverse == 0 { 1 } else { self.current_step_reverse * self.digest_interval };
+		let next_step_reverse = if self.current_step_reverse == 0 {
+			1
+		} else {
+			self.current_step_reverse * self.digest_interval
+		};
 		if next_step_reverse > self.max_step {
 			return None;
 		}
