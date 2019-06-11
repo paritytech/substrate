@@ -92,6 +92,17 @@ cargo-audit:
   allow_failure:                   true
 
 
+check-warnings:
+  stage:                           pre-test
+  <<:                              *docker-env
+  except:
+    - /^[0-9]+$/
+  script:
+    - RUSTFLAGS="-D warnings" time cargo check --release --verbose
+    - sccache -s
+  allow_failure:                   true
+
+
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
