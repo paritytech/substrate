@@ -45,8 +45,6 @@ use crate::{
 	PrimaryPropose, NewAuthoritySet, VoterCommand, HistoricalVotes,
 };
 
-use consensus_common::SelectChain;
-
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;

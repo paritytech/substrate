@@ -318,8 +318,9 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 
 fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Block>) -> VoterSetState<Block> {
 	let transform = |completed_rounds: V2CompletedRounds<Block>| {
-		CompletedRounds::new_with_rounds(completed_rounds.inner.into_iter().map(
-				| V2CompletedRound { number, state, base, votes: _ } | {
+		CompletedRounds::new_with_rounds(
+			completed_rounds.inner.into_iter().map(
+				| V2CompletedRound { number, state, base, votes: _ } |
 					CompletedRound {
 						number,
 						state,
