@@ -1679,8 +1679,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// 2 is elected.
 		// and fucks up the slot stake.
@@ -1688,21 +1687,20 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Staking::slot_stake(), 1);
 
 		// Old ones are rewarded.
-		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 10);
+		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 30);
 		// no rewards paid to 2. This was initial election.
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(2);
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
 		assert_eq!(Staking::slot_stake(), 1);
 
 		let reward = Staking::current_session_reward();
 		// 2 will not get the full reward, practically 1
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + reward.max(1));
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + reward.max(3));
 		// same for 10
-		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 10 + reward.max(1));
+		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 30 + reward.max(3));
 		check_exposure_all();
 	});
 }
