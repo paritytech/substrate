@@ -1,7 +1,7 @@
 [package]
 description = "Substrate offchain workers"
 name = "substrate-offchain"
-version = "0.1.0"
+version = "2.0.0"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,10 +10,10 @@ edition = "2018"
 client = { package = "substrate-client", path = "../../core/client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 futures = "0.1.25"
-inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 parity-codec = { version = "3.3", features = ["derive"] }
+parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 tokio = "0.1.7"

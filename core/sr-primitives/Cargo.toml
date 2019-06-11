@@ -1,6 +1,6 @@
 [package]
 name = "sr-primitives"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -17,6 +17,7 @@ paste = { version = "0.1", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
+primitive-types = "0.2"
 
 [features]
 default = ["std"]

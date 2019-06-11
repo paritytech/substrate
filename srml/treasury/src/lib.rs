@@ -16,46 +16,54 @@
 
 //! # Treasury Module
 //!
-//! The `treasury` module keeps account of currency in a `pot` and manages the subsequent
-//! deployment of these funds.
+//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
+//! system and a structure for making spending proposals from this pot.
+//!
+//! - [`treasury::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
 //!
-//! Funds for treasury are raised in two ways:
-//! 1. By minting new tokens, leading to inflation, and
-//! 2. By channeling tokens from transaction fees and slashing.
+//! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
+//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! inflation, fees) for collecting funds.
 //!
-//! Treasury funds can be used to pay for developers who provide software updates,
-//! any changes decided by referenda, and to generally keep the system running smoothly.
+//! By way of example, the Council could vote to fund the Treasury with a portion of the block
+//! reward and use the funds to pay developers.
 //!
-//! Treasury can be used with other modules, such as to tax validator rewards in the `staking` module.
+//! ### Terminology
+//!
+//! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
+//! - **Beneficiary:** An account who will receive the funds from a proposal iff
+//! the proposal is approved.
+//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
+//! deposit will be returned or slashed if the proposal is approved or rejected
+//! respectively.
+//! - **Pot:** Unspent funds accumulated by the treasury module.
 //!
 //! ### Implementations
 //!
 //! The treasury module provides an implementation for the following trait:
-//! - `OnDilution` - Mint extra funds upon dilution; maintain the ratio of `portion` diluted to `total_issuance`.
+//!
+//! - `OnDilution` - When new funds are minted to reward the deployment of other existing funds,
+//! a corresponding amount of tokens are minted into the treasury so that the tokens being rewarded
+//! do not represent a higher portion of total supply. For example, in the default substrate node,
+//! when validators are rewarded new tokens for staking, they do not hold a higher portion of total
+//! tokens. Rather, tokens are added to the treasury to keep the portion of tokens staked constant.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! - `propose_spend` - Propose a spending proposal and stake a proposal deposit.
+//! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `set_pot` - Set the spendable balance of funds.
 //! - `configure` - Configure the module's proposal requirements.
-//! - `reject_proposal` - Reject a proposal and slash the deposit.
-//! - `approve_proposal` - Accept the proposal and return the deposit.
+//! - `reject_proposal` - Reject a proposal, slashing the deposit.
+//! - `approve_proposal` - Accept the proposal, returning the deposit.
 //!
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//! ## GenesisConfig
 //!
-//! ### Public Functions
-//!
-//! See the [module](./struct.Module.html) for details on publicly available functions.
-//!
-//! ## Related Modules
-//!
-//! The treasury module depends on the `system` and `srml_support` modules as well as
-//! Substrate Core libraries and the Rust standard library.
-//!
+//! The Treasury module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -64,7 +72,9 @@ use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance};
-use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
+use runtime_primitives::{Permill,
+	traits::{Zero, EnsureOrigin, StaticLookup, Saturating, CheckedSub, CheckedMul}
+};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
@@ -181,8 +191,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		// Config...
 
-		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
-		/// proposal gets these back. A rejected proposal doesn't.
+		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+		/// An accepted proposal gets these back. A rejected proposal does not.
 		ProposalBond get(proposal_bond) config(): Permill;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
@@ -291,8 +301,12 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
 			let total_issuance = T::Currency::total_issuance();
-			let funding = (total_issuance - portion) / portion * minted;
-			<Pot<T>>::mutate(|x| *x += funding);
+			if let Some(funding) = total_issuance.checked_sub(&portion) {
+				let funding = funding / portion;
+				if let Some(funding) = funding.checked_mul(&minted) {
+					<Pot<T>>::mutate(|x| *x = x.saturating_add(funding));
+				}
+			}
 		}
 	}
 }
@@ -498,6 +512,35 @@ mod tests {
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Balances::free_balance(&3), 100);
 			assert_eq!(Treasury::pot(), 0);
+		});
+	}
+
+	#[test]
+	// Note: This test demonstrates that `on_dilution` does not increase the pot with good resolution
+	// with large amounts of the network staked. https://github.com/paritytech/substrate/issues/2579
+	// A fix to 2579 should include a change of this test.
+	fn on_dilution_quantization_effects() {
+		with_externalities(&mut new_test_ext(), || {
+			// minted = 1% of total issuance for all cases
+			let _ = Treasury::set_pot(0);
+			assert_eq!(Balances::total_issuance(), 200);
+
+			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
+			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
+
+			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
+			assert_eq!(Treasury::pot(), 6); // should increase by 2 (200 - 67) / 67 * 2
+
+			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 2 (200 - 100) / 100 * 2
+
+			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
+			// then the pot will not increase.
+			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 101) / 101 * 2
+
+			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 134) / 134 * 2
 		});
 	}
 

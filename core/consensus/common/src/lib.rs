@@ -33,23 +33,26 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block};
+use runtime_primitives::traits::{AuthorityIdFor, Block, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
 pub mod offline_tracker;
 pub mod error;
-mod block_import;
+pub mod block_import;
+mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
-pub use self::error::{Error, ErrorKind};
+pub use self::error::Error;
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult,
+	JustificationImport, FinalityProofImport, FinalityProofRequestBuilder,
 };
+pub use select_chain::SelectChain;
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
@@ -84,7 +87,12 @@ pub trait Proposer<B: Block> {
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B, Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
+	fn propose(
+		&self,
+		inherent_data: InherentData,
+		inherent_digests: DigestFor<B>,
+		max_duration: Duration,
+	) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.
@@ -116,6 +124,20 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	fn is_offline(&self) -> bool {
 		T::is_offline(&*self)
 	}
+}
+
+/// Extra verification for blocks.
+pub trait ExtraVerification<B: Block>: Send + Sync {
+	/// Future that resolves when the block is verified, or fails with error if
+	/// not.
+	type Verified: IntoFuture<Item=(),Error=String>;
+
+	/// Do additional verification for this block.
+	fn verify(
+		&self,
+		header: &B::Header,
+		body: Option<&[B::Extrinsic]>,
+	) -> Self::Verified;
 }
 
 /// A list of all well known keys in the cache.

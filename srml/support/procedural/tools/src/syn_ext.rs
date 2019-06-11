@@ -22,7 +22,7 @@ use syn::{
 	visit::{Visit, self}, parse::{Parse, ParseStream, Result},
 	token::CustomKeyword, Ident,
 };
-use proc_macro2::{ TokenStream, TokenTree };
+use proc_macro2::{TokenStream, TokenTree};
 use quote::{ToTokens, quote};
 use std::iter::once;
 use srml_support_procedural_tools_derive::{ToTokens, Parse};
@@ -68,32 +68,6 @@ macro_rules! groups_impl {
 groups_impl!(Braces, Brace, Brace, parse_braces);
 groups_impl!(Brackets, Bracket, Bracket, parse_brackets);
 groups_impl!(Parens, Paren, Parenthesis, parse_parens);
-
-#[derive(Debug, Clone)]
-pub struct CustomToken<T>(std::marker::PhantomData<T>);
-
-impl<T: CustomKeyword> Parse for CustomToken<T> {
-	fn parse(input: ParseStream) -> Result<Self> {
-		let ident: syn::Ident = input.parse()?;
-
-		if ident.to_string().as_str() != T::ident() {
-			return Err(syn::parse::Error::new_spanned(ident, "expected another custom token"))
-		}
-		Ok(CustomToken(std::marker::PhantomData))
-	}
-}
-
-impl<T: CustomKeyword> ToTokens for CustomToken<T> {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		use std::str::FromStr;
-		tokens.extend(TokenStream::from_str(T::ident()).expect("custom keyword should parse to ident"));
-	}
-}
-
-impl<T: CustomKeyword> CustomKeyword for CustomToken<T> {
-	fn ident() -> &'static str { <T as CustomKeyword>::ident() }
-	fn display() -> &'static str { <T as CustomKeyword>::display() }
-}
 
 #[derive(Debug)]
 pub struct PunctuatedInner<P,T,V> {

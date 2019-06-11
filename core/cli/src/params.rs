@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
-/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
+/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
 	( $type:ident ) => {
 		impl $crate::GetLogFilter for $type {
@@ -119,7 +119,7 @@ pub struct NetworkConfigurationParams {
 	pub in_peers: u32,
 
 	/// By default, the network will use mDNS to discover other nodes on the local network. This
-	/// disables it.
+	/// disables it. Automatically implied when using --dev.
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
 
@@ -333,13 +333,17 @@ pub struct RunCmd {
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
+	/// Maximum number of WS RPC server connections.
+	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
+	pub ws_max_connections: Option<usize>,
+
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	/// It's a comma-separated list of origins (protocol://domain or special `null` value).
 	/// Value of `all` will disable origin validation.
 	/// Default is to allow localhost, https://polkadot.js.org and https://substrate-ui.parity.io origins.
 	/// When running in --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = "parse_cors"))]
-	pub rpc_cors: Option<Option<Vec<String>>>,
+	pub rpc_cors: Option<Cors>,
 
 	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
@@ -395,6 +399,10 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
+
+	/// Interactive password for validator key.
+	#[structopt(short = "i")]
+	pub interactive_password: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.
@@ -468,7 +476,7 @@ impl Keyring {
 }
 
 /// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Error>> {
+fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
 		None => {
@@ -482,8 +490,29 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Er
 	}
 }
 
+/// CORS setting
+///
+/// The type is introduced to overcome `Option<Option<T>>`
+/// handling of `structopt`.
+#[derive(Clone, Debug)]
+pub enum Cors {
+	/// All hosts allowed
+	All,
+	/// Only hosts on the list are allowed.
+	List(Vec<String>),
+}
+
+impl From<Cors> for Option<Vec<String>> {
+	fn from(cors: Cors) -> Self {
+		match cors {
+			Cors::All => None,
+			Cors::List(list) => Some(list),
+		}
+	}
+}
+
 /// Parse cors origins
-fn parse_cors(s: &str) -> Result<Option<Vec<String>>, Box<std::error::Error>> {
+fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
@@ -496,7 +525,7 @@ fn parse_cors(s: &str) -> Result<Option<Vec<String>>, Box<std::error::Error>> {
 		}
 	}
 
-	Ok(if is_all { None } else { Some(origins) })
+	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
 impl_augment_clap!(RunCmd);
@@ -529,11 +558,11 @@ pub struct ExportBlocksCmd {
 
 	/// Specify starting block number. 1 by default.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<u64>,
+	pub from: Option<u32>,
 
 	/// Specify last block number. Best block by default.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<u64>,
+	pub to: Option<u32>,
 
 	/// Use JSON output rather than binary.
 	#[structopt(long = "json")]
@@ -564,12 +593,12 @@ pub struct ImportBlocksCmd {
 
 impl_get_log_filter!(ImportBlocksCmd);
 
-/// The `revert` command used revert the chain to a previos state.
+/// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: u64,
+	pub num: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

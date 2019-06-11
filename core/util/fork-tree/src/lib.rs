@@ -22,7 +22,7 @@
 use std::fmt;
 use parity_codec::{Decode, Encode};
 
-/// Error occured when interating with the tree.
+/// Error occured when iterating with the tree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error<E> {
 	/// Adding duplicate node to tree.
@@ -52,7 +52,7 @@ impl<E: std::error::Error> std::error::Error for Error<E> {
 		}
 	}
 
-	fn cause(&self) -> Option<&std::error::Error> {
+	fn cause(&self) -> Option<&dyn std::error::Error> {
 		None
 	}
 }

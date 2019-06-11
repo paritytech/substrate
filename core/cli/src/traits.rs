@@ -16,7 +16,7 @@
 
 use structopt::{StructOpt, clap::App};
 
-/// Something that can augment a clapp app with further parameters.
+/// Something that can augment a clap app with further parameters.
 /// `derive(StructOpt)` is implementing this function by default, so a macro `impl_augment_clap!`
 /// is provided to simplify the implementation of this trait.
 pub trait AugmentClap: StructOpt {

@@ -80,7 +80,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		Err(err) => return err.to_compile_error().into(),
 	};
 
-	let hidden_crate_name = hidden_crate.map(|rc| rc.ident.content).map(|i| i.to_string())
+	let hidden_crate_name = hidden_crate.inner.map(|rc| rc.ident.content).map(|i| i.to_string())
 		.unwrap_or_else(|| "decl_storage".to_string());
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(
@@ -109,7 +109,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traittype,
 		&instance_opts,
 		&storage_lines,
-		&extra_genesis,
+		&extra_genesis.inner,
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -200,7 +200,7 @@ fn decl_store_extra_genesis(
 	} = instance_opts;
 
 	let mut is_trait_needed = false;
-	let mut serde_complete_bound = std::collections::HashSet::new();
+	let mut serde_complete_bound = Vec::new();
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
@@ -232,7 +232,7 @@ fn decl_store_extra_genesis(
 		let builder = if let Some(ref config) = config {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else if let Some(ref getter) = getter {
+			} else if let Some(ref getter) = getter.inner {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
 			} else {
@@ -250,9 +250,20 @@ fn decl_store_extra_genesis(
 				is_trait_needed = true;
 			}
 
-			serde_complete_bound.insert(type_infos.value_type);
-			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				serde_complete_bound.insert(key_type);
+			let value_type = &type_infos.value_type;
+			serde_complete_bound.push(quote!( #value_type ));
+			match type_infos.kind {
+				DeclStorageTypeInfosKind::Map { key_type, .. } =>
+					serde_complete_bound.push(quote!( #key_type )),
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					serde_complete_bound.push(quote!( #key1_type ));
+					serde_complete_bound.push(quote!( #key2_type ));
+				},
+				_ => {},
+			}
+
+			if type_infos.is_option {
+				serde_complete_bound.push(type_infos.typ.clone());
 			}
 
 			// Propagate doc attributes.
@@ -374,7 +385,7 @@ fn decl_store_extra_genesis(
 						is_trait_needed = true;
 					}
 
-					serde_complete_bound.insert(extra_type);
+					serde_complete_bound.push(quote!( #extra_type ));
 
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
@@ -722,7 +733,7 @@ fn decl_storage_items(
 				i.linked_map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
-				i.double_map(hasher.into_hashable_fn(), key1_type, key2_type, key2_hasher)
+				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher)
 			},
 		};
 		impls.extend(implementation)
@@ -797,7 +808,7 @@ fn impl_store_fns(
 			..
 		} = sline;
 
-		if let Some(getter) = getter {
+		if let Some(getter) = getter.inner.as_ref() {
 			let get_fn = &getter.getfn.content;
 
 			let type_infos = get_type_infos(storage_type);
@@ -818,7 +829,10 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							<#name<#struct_trait #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
+							<#name<#struct_trait #instance> as
+								#scrate::storage::hashed::generator::StorageValue<#typ>> :: get(
+									&#scrate::storage::RuntimeStorage
+								)
 						}
 					}
 				},
@@ -1053,17 +1067,17 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
 		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: false,
 		}),
 		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: true,
 		}),
 		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
 			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },

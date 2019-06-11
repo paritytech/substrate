@@ -159,19 +159,6 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Sync the child storage root.
-	pub(crate) fn sync_child_storage_root(&mut self, storage_key: &[u8], root: Option<Vec<u8>>) {
-		let entry = self.prospective.top.entry(storage_key.to_vec()).or_default();
-		entry.value = root;
-
-		if let Some((Some(extrinsics), _)) = self.prospective.children.get(storage_key) {
-			for extrinsic in extrinsics {
-				entry.extrinsics.get_or_insert_with(Default::default)
-					.insert(*extrinsic);
-			}
-		}
-	}
-
 	/// Clear child storage of given storage key.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
@@ -309,7 +296,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 
 #[cfg(test)]
 mod tests {
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use primitives::{Blake2Hasher, H256};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
@@ -374,7 +361,7 @@ mod tests {
 			..Default::default()
 		};
 
-		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut ext = Ext::new(
 			&mut overlay,
 			&backend,

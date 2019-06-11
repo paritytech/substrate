@@ -23,7 +23,6 @@ use std::{
 
 use serde::Serialize;
 use log::debug;
-use error_chain::bail;
 use parking_lot::RwLock;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
@@ -376,7 +375,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 			// bail - the transaction has too low priority to replace the old ones
 			if old_priority >= tx.priority {
-				bail!(error::ErrorKind::TooLowPriority(old_priority, tx.priority))
+				return Err(error::Error::TooLowPriority { old: old_priority, new: tx.priority })
 			}
 
 			replace_hashes.into_iter().cloned().collect::<Vec<_>>()
@@ -500,6 +499,7 @@ mod tests {
 			valid_till: 2,
 			requires: vec![vec![1], vec![2]],
 			provides: vec![vec![3], vec![4]],
+			propagate: true,
 		}
 	}
 
@@ -559,6 +559,7 @@ mod tests {
 			valid_till: u64::max_value(),	// use the max_value() here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
+			propagate: true,
 		};
 
 		// when

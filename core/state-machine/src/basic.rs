@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::trie_root;
+use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -103,7 +103,7 @@ impl From< HashMap<Vec<u8>, Vec<u8>> > for BasicExternalities {
 	}
 }
 
-impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),
@@ -152,13 +152,13 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		vec![42]
 	}
 
-	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
-		None
+	fn storage_changes_root(&mut self, _parent: H::Out) -> Result<Option<H::Out>, ()> {
+		Ok(None)
 	}
 
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
-		warn!("Call to submit_extrinsic without offchain externalities set.");
-		Err(())
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
+		warn!("Call to non-existent out offchain externalities set.");
+		None
 	}
 }
 
@@ -166,12 +166,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
-		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -182,7 +182,7 @@ mod tests {
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = BasicExternalities::default();
-		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());

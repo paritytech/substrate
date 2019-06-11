@@ -1,11 +1,10 @@
 [package]
 name = "srml-staking"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-hex-literal = "0.1.0"
 serde = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false}
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
@@ -22,8 +21,10 @@ session = { package = "srml-session", path = "../session", default-features = fa
 substrate-primitives = { path = "../../core/primitives" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
 balances = { package = "srml-balances", path = "../balances" }
+rand = "0.6.5"
 
 [features]
+bench = []
 default = ["std"]
 std = [
 	"serde",

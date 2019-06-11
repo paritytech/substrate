@@ -15,8 +15,90 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Networking layer of Substrate.
-//! 
-//! **Important**: This crate is unstable and the API and usage may change.
+//!
+//! # Overview
+//!
+//! This crate handles the following network mechanisms:
+//!
+//! - Discovering nodes that are part of the network.
+//! - Connecting to said nodes and accepting incoming connections.
+//! - Encrypting communications between nodes.
+//! - Ensure that nodes are really the `PeerId` that they pretend to be.
+//! - Ensuring that the nodes belong to the same chain as us before reporting a new connection.
+//!
+//! From the point of view of our node, each other node on the network has a reputation value in
+//! the form of an `i32`. We try to establish connections towards nodes with a higher reputation
+//! over nodes with a lower reputation.
+//!
+//! Establishing connections to other nodes is automatically performed by this crate, and there is
+//! no way to influence this, except by adjusting reputations.
+//!
+//! ## About the term "connecting"
+//!
+//! The documentation of this crate uses the words "connected" and "disconnected". It is important
+//! to note that this doesn't correspond to actual TCP/IP connections and disconnections. Libp2p
+//! will maintain connections that aren't reported by the API of this crate, and TCP/IP connections
+//! can be kept alive even after we have reported a disconnect in order to potentially reuse them.
+//!
+//! # Usage
+//!
+//! > **Important**: This crate is unstable and the API and usage may change.
+//!
+//! The first step is to crate a [`RegisteredProtocol`] describing the protocol, and a
+//! [`NetworkConfiguration`] describing the network. Then call [`start_service`] with them, which
+//! returns a [`Service`] object and a [`substrate_peerset::PeersetHandle`].
+//!
+//! The former allows you to know what happens on the network and to send messages, while the
+//! latter can be used to adjust the reputations of nodes.
+//!
+//! You must call the `poll` method of [`Service`] in order to make the network progress and in
+//! order to update the internal state of the [`Service`]. Calling `poll` will produce
+//! [`ServiceEvent`]s, which inform you of what happened on the network.
+//!
+//! Please keep in mind that the state of the [`Service`] only updates itself in a way
+//! corresponding to the [`ServiceEvent`] that `poll` returns.
+//!
+//! Illustration:
+//!
+//! - You call [`Service::connected_peers`] to get the list of nodes we are connected to.
+//! - If you then call [`Service::connected_peers`] again, the returned list will always be the
+//!   same, no matter what happened on the wire.
+//! - If you then call [`Service::poll`] and a [`ServiceEvent::OpenedCustomProtocol`] event is
+//!   returned, then the concerned node, and only the concerned node, will be added to the list of
+//!   nodes we are connected to.
+//! - Similarly, if [`Service::poll`] produces a [`ServiceEvent::ClosedCustomProtocol`] event, then
+//!   only the concerned node will disappear from the list.
+//! - And if [`Service::poll`] returns neither [`ServiceEvent::OpenedCustomProtocol`] nor
+//!   [`ServiceEvent::ClosedCustomProtocol`], then the list of connected nodes doesn't change.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! # use futures::prelude::*;
+//! use substrate_network_libp2p::ServiceEvent;
+//!
+//! let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"hello"[..], &[0]);
+//! let config = substrate_network_libp2p::NetworkConfiguration::default();
+//! let (mut service, _peerset) = substrate_network_libp2p::start_service(config, proto).unwrap();
+//!
+//! tokio::run(futures::future::poll_fn(move || {
+//! 	loop {
+//! 		match service.poll().unwrap() {
+//! 			Async::NotReady => return Ok(Async::NotReady),
+//! 			Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. })) => {
+//! 				println!("now connected to {:?}", peer_id);
+//! 				service.send_custom_message(&peer_id, b"hello world!".to_vec());
+//! 			}
+//! 			Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { peer_id, .. })) =>
+//! 				println!("now disconnected from {:?}", peer_id),
+//! 			Async::Ready(Some(ServiceEvent::CustomMessage { peer_id, message })) =>
+//! 				println!("received message from {:?}: {:?}", peer_id, message),
+//! 			Async::Ready(None) => return Ok(Async::Ready(())),
+//! 			_ => {}
+//! 		}
+//! 	}
+//! }));
+//! ```
 //!
 
 mod behaviour;
@@ -25,9 +107,8 @@ mod custom_proto;
 mod service_task;
 mod transport;
 
-pub use crate::behaviour::Severity;
 pub use crate::config::*;
-pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
+pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
@@ -37,6 +118,17 @@ use libp2p::core::nodes::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
+
+/// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.
+pub trait DiscoveryNetBehaviour {
+	/// Notify the protocol that we have learned about the existence of nodes.
+	///
+	/// Can (or most likely will) be called multiple times with the same `PeerId`s.
+	///
+	/// Also note that there is no notification for expired nodes. The implementer must add a TTL
+	/// system, or remove nodes that will fail to reach.
+	fn add_discovered_nodes(&mut self, nodes: impl Iterator<Item = PeerId>);
+}
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -155,6 +247,10 @@ pub struct NetworkStatePeer {
 pub struct NetworkStateNotConnectedPeer {
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
+	/// Node information, as provided by the node itself, if we were ever connected to this node.
+	pub version_string: Option<String>,
+	/// Latest ping duration with this node, if we were ever connected to this node.
+	pub latest_ping_time: Option<Duration>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -178,8 +274,8 @@ impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 				NetworkStatePeerEndpoint::Dialing(address),
 			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr: listen_addr,
-					send_back_addr: send_back_addr
+					listen_addr,
+					send_back_addr
 				}
 		}
 	}

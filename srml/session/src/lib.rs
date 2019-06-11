@@ -116,7 +116,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use primitives::traits::{As, Zero, One, Convert};
+use primitives::traits::{Zero, One, Convert};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
 use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
 use system::ensure_signed;
@@ -200,9 +200,9 @@ decl_storage! {
 		/// The current set of validators.
 		pub Validators get(validators) config(): Vec<T::AccountId>;
 		/// Current length of the session.
-		pub SessionLength get(length) config(session_length): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub SessionLength get(length) config(session_length): T::BlockNumber = 1000.into();
 		/// Current index of the session.
-		pub CurrentIndex get(current_index) build(|_| T::BlockNumber::sa(0)): T::BlockNumber;
+		pub CurrentIndex get(current_index) build(|_| 0.into()): T::BlockNumber;
 		/// Timestamp when current session started.
 		pub CurrentStart get(current_start) build(|_| T::Moment::zero()): T::Moment;
 

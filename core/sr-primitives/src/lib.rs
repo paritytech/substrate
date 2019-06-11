@@ -25,6 +25,8 @@ pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+pub use rstd;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -33,17 +35,16 @@ pub use paste;
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
+use rstd::{prelude::*, ops};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
-
-#[cfg(feature = "std")]
-use substrate_primitives::hexdisplay::ascii_format;
 
 #[cfg(feature = "std")]
 pub mod testing;
 
 pub mod traits;
+use traits::{SaturatedConversion, UniqueSaturatedInto};
+
 pub mod generic;
 pub mod transaction_validity;
 
@@ -122,13 +123,28 @@ impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
-
 	fn assimilate_storage(
 		self,
 		storage: &mut StorageOverlay,
 		_child_storage: &mut ChildrenStorageOverlay
 	) -> Result<(), String> {
 		storage.extend(self);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		Ok(self)
+	}
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	)-> Result<(), String> {
+		storage.extend(self.0);
+		child_storage.extend(self.1);
 		Ok(())
 	}
 }
@@ -142,24 +158,55 @@ pub type ConsensusEngineId = [u8; 4];
 pub struct Permill(u32);
 
 impl Permill {
-	/// Wraps the argument into `Permill` type.
-	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
+	/// Nothing.
+	pub fn zero() -> Self { Self(0) }
 
-	/// Converts percents into `Permill`.
-	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Self { Self(1_000_000) }
+
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
-	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Permill
+impl<N> ops::Mul<N> for Permill
 where
-	N: traits::As<u64>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000)
+		let million: N = 1_000_000.into();
+		let part: N = self.0.into();
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(million.clone());
+
+			// `rem` is inferior to one million, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
+
+			// `self` and `rem` are inferior to one million, thus the product is less than 10^12
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
+
+			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			rem_multiplied_divided_u32.into()
+		};
+
+		(b / million) * part + rem_multiplied_divided
 	}
 }
 
@@ -201,39 +248,57 @@ pub struct Perbill(u32);
 
 impl Perbill {
 	/// Nothing.
-	pub fn zero() -> Perbill { Perbill(0) }
+	pub fn zero() -> Self { Self(0) }
 
 	/// `true` if this is nothing.
 	pub fn is_zero(&self) -> bool { self.0 == 0 }
 
 	/// Everything.
-	pub fn one() -> Perbill { Perbill(1_000_000_000) }
+	pub fn one() -> Self { Self(1_000_000_000) }
 
-	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
-	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
-	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
-
-	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
-	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
 
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
-	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
-
-	#[cfg(feature = "std")]
-	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
-	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Perbill
+impl<N> ops::Mul<N> for Perbill
 where
-	N: traits::As<u64>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000)
+		let billion: N = 1_000_000_000.into();
+		let part: N = self.0.into();
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(billion.clone());
+
+			// `rem` is inferior to one billion, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
+
+			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
+
+			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			rem_multiplied_divided_u32.into()
+		};
+
+		(b / billion) * part + rem_multiplied_divided
 	}
 }
 
@@ -279,11 +344,14 @@ impl PerU128 {
 	/// Nothing.
 	pub fn zero() -> Self { Self(0) }
 
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
 	/// Everything.
 	pub fn one() -> Self { Self(U128) }
 
-	/// Construct new instance where `x` is parts in u128::max_value. Equal to x/U128::max_value.
-	pub fn from_max_value(x: u128) -> Self { Self(x) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u128) -> Self { Self(x) }
 
 	/// Construct new instance where `x` is denominator and the nominator is 1.
 	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
@@ -293,8 +361,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {
@@ -615,6 +683,69 @@ macro_rules! impl_outer_config {
 	}
 }
 
+// NOTE [`PreRuntime` and `Consensus` are special]
+//
+// We MUST treat `PreRuntime` and `Consensus` variants specially, as they:
+//
+// * have more parameters (both in `generic::DigestItem` and in runtimes)
+// * have a `PhantomData` parameter in the runtime, but not in `generic::DigestItem`
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern_2 {
+	(PreRuntime $module:ident $variant:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$variant($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
+	};
+	(Consensus $module:ident $variant:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$variant($module::RawLog::Consensus(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
+	};
+	($name:ident $module:ident $variant:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$variant($module::RawLog::$name(ref $v1))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern {
+	(PreRuntime $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::PreRuntime($engine_id, $binder)
+	};
+	(Consensus $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::Consensus($engine_id, $binder)
+	};
+	($name:ident $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::$name($binder)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr {
+	(PreRuntime $engine_id:expr, $module:ident $variant:ident $internal:ident $binder:expr) => {
+		$internal::$variant($module::RawLog::PreRuntime($engine_id, $binder, Default::default()))
+	};
+	(Consensus $engine_id:expr, $module:ident $variant:ident $internal:ident $binder:expr) => {
+		$internal::$variant($module::RawLog::Consensus($engine_id, $binder, Default::default()))
+	};
+	($name:ident $engine_id:expr, $module:ident $variant:ident $internal:ident $binder:expr) => {
+		$internal::$variant($module::RawLog::$name($binder))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr_2 {
+	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::PreRuntime($v1, $v2)
+	};
+	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::Consensus($v1, $v2)
+	};
+	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::$name($v1)
+	};
+}
+
 /// Generates enum that contains all possible log entries for the runtime.
 /// Every individual module of the runtime that is mentioned, must
 /// expose a `Log` and `RawLog` enums.
@@ -667,15 +798,12 @@ macro_rules! impl_outer_log {
 				fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 					match &self.0 {
 						$(
-							$internal::[< $module $( _ $instance )? >] (item) => {
-								match item {
-									$(
-										$module::RawLog::$sitem(ref v) =>
-											Some($crate::generic::DigestItemRef::$sitem(v)),
-									)*
-									_ => None,
-								}
-							}
+							$(
+								$crate::__parse_pattern_2!(
+									$sitem $module [< $module $( _ $instance )? >] $internal a b
+								) =>
+									Some($crate::__parse_expr_2!($sitem $module $internal a b)),
+							)*
 						)*
 						_ => None,
 					}
@@ -697,23 +825,37 @@ macro_rules! impl_outer_log {
 				}
 			}
 
-			impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-				/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
-				/// a system item which is supported by the runtime, it is returned.
-				/// Otherwise we expect a `Other` log item. Trying to convert from anything other
-				/// will lead to panic in runtime, since the runtime does not supports this 'system'
-				/// log item.
-				#[allow(unreachable_patterns)]
-				fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
-					$crate::impl_outer_log! {
-						@GEN_FROM_DIGESTITEM_MATCH
-						gen
-						$name
-						$internal
-						{}
+			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
+				self.dref().and_then(|dref| dref.as_pre_runtime())
+			}
+		}
+
+		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
+						#[allow(unreachable_patterns)]
+			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
+				match gen {
+					$(
 						$(
-							$module $( $instance )? { $( $sitem ),* };
+							$crate::__parse_pattern!($sitem b, a) =>
+								$name(
+									$crate::__parse_expr!(
+										$sitem b, $module [< $module $( _ $instance )? >] $internal a
+									)
+								),
 						)*
+					)*
+					_ => {
+						if let Some(s) = gen.as_other()
+							.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
+							.map($name)
+						{
+							s
+						} else {
+							panic!(
+								"We only reach here if the runtime did not handle a digest; \
+								runtimes are required to handle all digests they receive; qed"
+							)
+						}
 					}
 				}
 			}
@@ -758,78 +900,6 @@ macro_rules! impl_outer_log {
 			)*
 		}
 	};
-	// With Instance
-	(@GEN_FROM_DIGESTITEM_MATCH
-		$gen:ident
-		$name:ident
-		$internal:ident
-		{ $( $generated:tt )* }
-		$module:ident $instance:ident { $( $sitem:ident ),* };
-		$( $impl_outer_log_match_instance_rest:tt )*
-	) => {
-		$crate::impl_outer_log! {
-			@GEN_FROM_DIGESTITEM_MATCH
-			$gen
-			$name
-			$internal
-			{
-				$( $generated )*
-				$(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name(
-							$internal::[< $module _ $instance >](
-								$module::RawLog::$sitem(value)
-							)
-						),
-				)*
-			}
-			$( $impl_outer_log_match_instance_rest )*
-		}
-	};
-	// Without Instance
-	(@GEN_FROM_DIGESTITEM_MATCH
-		$gen:ident
-		$name:ident
-		$internal:ident
-		{ $( $generated:tt )* }
-		$module:ident { $( $sitem:ident ),* };
-		$( $impl_outer_log_match_rest:tt )*
-	) => {
-		$crate::impl_outer_log! {
-			@GEN_FROM_DIGESTITEM_MATCH
-			$gen
-			$name
-			$internal
-			{
-				$( $generated )*
-				$(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name(
-							$internal::$module(
-								$module::RawLog::$sitem(value)
-							)
-						),
-				)*
-			}
-			$( $impl_outer_log_match_rest )*
-		}
-	};
-	// Final step, generate match
-	(@GEN_FROM_DIGESTITEM_MATCH
-		$gen:ident
-		$name:ident
-		$internal:ident
-		{ $( $generated:tt )* }
-	) => {
-		match $gen {
-			$( $generated )*
-			_ => $gen.as_other()
-				.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-				.map($name)
-				.expect("not allowed to fail in runtime"),
-		}
-	};
-
 }
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
@@ -896,6 +966,24 @@ mod tests {
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
 			a(AuthoritiesChange), b()
+		}
+	}
+
+	macro_rules! per_thing_mul_upper_test {
+		($num_type:tt, $per:tt) => {
+			// all sort of from_percent
+			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
+			assert_eq!(
+				$per::from_percent(99) * $num_type::max_value(),
+				((Into::<U256>::into($num_type::max_value()) * 99u32) / 100u32).as_u128() as $num_type
+			);
+			assert_eq!($per::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
+			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
+			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
+
+			// bounds
+			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
+			assert_eq!($per::zero() * $num_type::max_value(), 0);
 		}
 	}
 
@@ -980,8 +1068,36 @@ mod tests {
 	}
 
 	#[test]
-	fn saturating_mul() {
-		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
-		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
+	fn per_things_should_work() {
+		use super::{Perbill, Permill};
+		use primitive_types::U256;
+
+		per_thing_mul_upper_test!(u32, Perbill);
+		per_thing_mul_upper_test!(u64, Perbill);
+		per_thing_mul_upper_test!(u128, Perbill);
+
+		per_thing_mul_upper_test!(u32, Permill);
+		per_thing_mul_upper_test!(u64, Permill);
+		per_thing_mul_upper_test!(u128, Permill);
+	}
+
+	#[test]
+	fn per_things_operate_in_output_type() {
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
+	}
+
+	#[test]
+	fn per_things_one_minus_one_part() {
+		use primitive_types::U256;
+
+		assert_eq!(
+			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
+		);
+
+		assert_eq!(
+			super::Permill::from_parts(999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
+		);
 	}
 }

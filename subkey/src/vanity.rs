@@ -19,9 +19,9 @@ use super::Crypto;
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
-		0 ... 1_000_000 => 100_000,
-		0 ... 10_000_000 => 1_000_000,
-		0 ... 100_000_000 => 10_000_000,
+		0 ..= 1_000_000 => 100_000,
+		0 ..= 10_000_000 => 1_000_000,
+		0 ..= 100_000_000 => 10_000_000,
 		_ => 100_000_000,
 	}
 }
@@ -105,7 +105,7 @@ pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<Ke
 mod tests {
 	use super::*;
 	use super::super::Ed25519;
-	use substrate_primitives::Pair;
+	use substrate_primitives::{Pair, crypto::Ss58Codec};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 

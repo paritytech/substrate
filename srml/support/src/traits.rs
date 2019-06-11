@@ -14,13 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Traits for SRML
+//! Traits for SRML.
+//!
+//! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, As
+	MaybeSerializeDebug, SimpleArithmetic
 };
+
+use super::for_each_tuple;
+
+/// A trait for querying a single fixed value from a type.
+pub trait Get<T> {
+	/// Return a constant value.
+	fn get() -> T;
+}
+
+/// A trait for querying whether a type can be said to statically "contain" a value. Similar
+/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
+/// enumerate all values that it contains) and work for multiple values rather than just one.
+pub trait Contains<T> {
+	/// Return `true` if this "contains" the given value `t`.
+	fn contains(t: &T) -> bool;
+}
+
+impl<V: PartialEq, T: Get<V>> Contains<V> for T {
+	fn contains(t: &V) -> bool {
+		&Self::get() == t
+	}
+}
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -28,19 +52,23 @@ pub trait OnFreeBalanceZero<AccountId> {
 	fn on_free_balance_zero(who: &AccountId);
 }
 
-impl<AccountId> OnFreeBalanceZero<AccountId> for () {
-	fn on_free_balance_zero(_who: &AccountId) {}
-}
-impl<
-	AccountId,
-	X: OnFreeBalanceZero<AccountId>,
-	Y: OnFreeBalanceZero<AccountId>,
-> OnFreeBalanceZero<AccountId> for (X, Y) {
-	fn on_free_balance_zero(who: &AccountId) {
-		X::on_free_balance_zero(who);
-		Y::on_free_balance_zero(who);
+macro_rules! impl_on_free_balance_zero {
+	() => (
+		impl<AccountId> OnFreeBalanceZero<AccountId> for () {
+			fn on_free_balance_zero(_: &AccountId) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<AccountId, $($t: OnFreeBalanceZero<AccountId>),*> OnFreeBalanceZero<AccountId> for ($($t,)*) {
+			fn on_free_balance_zero(who: &AccountId) {
+				$($t::on_free_balance_zero(who);)*
+			}
+		}
 	}
 }
+
+for_each_tuple!(impl_on_free_balance_zero);
 
 /// Trait for a hook to get called when some balance has been minted, causing dilution.
 pub trait OnDilution<Balance> {
@@ -195,7 +223,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -230,7 +258,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

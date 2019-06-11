@@ -1,6 +1,6 @@
 [package]
 name = "substrate-consensus-slots"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2018"
@@ -14,6 +14,8 @@ consensus_common = { package = "substrate-consensus-common", path = "../common" 
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures = "0.1.17"
 tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
+parking_lot = "0.8.0"
 log = "0.4"
+
+[dev-dependencies]
+test_client = { package = "substrate-test-client", path = "../../test-client" }

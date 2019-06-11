@@ -246,7 +246,8 @@ mod tests {
 
 	mod system {
 		pub trait Trait {
-			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+				+ From<RawOrigin<Self::AccountId>>;
 			type AccountId;
 			type BlockNumber;
 		}
@@ -265,14 +266,14 @@ mod tests {
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
-			Inherent,
+			None,
 		}
 
 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 				match s {
 					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::Inherent,
+					None => RawOrigin::None,
 				}
 			}
 		}

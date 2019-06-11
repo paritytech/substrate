@@ -17,7 +17,6 @@
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod error;
 mod node_header;
@@ -44,9 +43,9 @@ pub type TrieError<H> = trie_db::TrieError<H, Error>;
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// As in `hash_db`, but less generic, trait exposed.
-pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
+pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
-pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
+pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
@@ -158,11 +157,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
-	let mut db = MemoryDB::default();
-	let mut root = H::Out::default();
-	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);
-	empty.commit();
-	empty.root().as_ref().to_vec()
+	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
@@ -339,7 +334,7 @@ mod tests {
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	fn check_equivalent(input: &Vec<(&[u8], &[u8])>) {
 		{
@@ -375,6 +370,18 @@ mod tests {
 				t.iter().unwrap().map(|x| x.map(|y| (y.0, y.1.to_vec())).unwrap()).collect::<Vec<_>>()
 			);
 		}
+	}
+
+	#[test]
+	fn default_trie_root() {
+		let mut db = MemoryDB::default();
+		let mut root = <Blake2Hasher as Hasher>::Out::default();
+		let mut empty = TrieDBMut::<Blake2Hasher>::new(&mut db, &mut root);
+		empty.commit();
+		let root1 = empty.root().as_ref().to_vec();
+		let root2: Vec<u8> = trie_root::<Blake2Hasher, _, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().iter().cloned().collect();
+
+		assert_eq!(root1, root2);
 	}
 
 	#[test]
@@ -464,7 +471,7 @@ mod tests {
 	}
 
 	fn populate_trie<'db>(
-		db: &'db mut HashDB<Blake2Hasher, DBValue>,
+		db: &'db mut dyn HashDB<Blake2Hasher, DBValue>,
 		root: &'db mut <Blake2Hasher as Hasher>::Out,
 		v: &[(Vec<u8>, Vec<u8>)]
 	) -> TrieDBMut<'db, Blake2Hasher> {

@@ -136,13 +136,13 @@ use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
-use system::{ensure_signed, ensure_inherent};
+use system::{ensure_signed, ensure_none};
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::ed25519::Public as AuthorityId;
+use substrate_primitives::sr25519::Public as AuthorityId;
 
 mod mock;
 mod tests;
@@ -221,6 +221,7 @@ impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityRepo
 	}
 }
 
+/// Logs in this module.
 pub type Log<T> = RawLog<
 	<T as Trait>::SessionKey,
 >;
@@ -298,7 +299,7 @@ decl_module! {
 
 		/// Note that the previous block's validator missed its opportunity to propose a block.
 		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
-			ensure_inherent(origin)?;
+			ensure_none(origin)?;
 
 			T::InherentOfflineReport::handle_report(offline);
 		}

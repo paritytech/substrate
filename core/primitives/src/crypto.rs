@@ -215,7 +215,9 @@ pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> { None }
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
+		None
+	}
 }
 
 #[cfg(feature = "std")]
@@ -266,11 +268,19 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
-		let path = re_junction.captures_iter(&cap["path"])
-			.map(|f| DeriveJunction::from(&f[1]));
-		Self::from_ss58check(cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS))?
-			.derive(path)
-			.ok_or(PublicError::InvalidPath)
+		let addr = Self::from_ss58check(
+			cap.name("ss58")
+				.map(|r| r.as_str())
+				.unwrap_or(DEV_ADDRESS)
+		)?;
+		if cap["path"].is_empty() {
+			Ok(addr)
+		} else {
+			let path = re_junction.captures_iter(&cap["path"])
+				.map(|f| DeriveJunction::from(&f[1]));
+			addr.derive(path)
+				.ok_or(PublicError::InvalidPath)
+		}
 	}
 }
 
@@ -278,7 +288,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: Sized {
+pub trait Pair: Sized + 'static {
 	/// TThe type which is used to encode a public key.
 	type Public;
 
@@ -400,7 +410,7 @@ pub trait Pair: Sized {
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use super::*;
 
 	#[derive(Eq, PartialEq, Debug)]

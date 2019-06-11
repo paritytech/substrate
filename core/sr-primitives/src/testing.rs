@@ -23,7 +23,7 @@ use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::sr25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -107,21 +107,20 @@ impl traits::Header for Header {
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self {
 		Header {
 			number,
-			extrinsics_root: extrinsics_root,
+			extrinsics_root,
 			state_root,
 			parent_hash,
-			digest
+			digest,
 		}
 	}
 }
@@ -199,7 +198,10 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test transaction
+/// Test transaction, tuple of (sender, index, call)
+/// with index only used if sender is some.
+///
+/// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
@@ -222,7 +224,7 @@ impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
 	fn is_signed(&self) -> Option<bool> {
-		None
+		Some(self.0.is_some())
 	}
 }
 impl<Call> Applyable for TestXt<Call> where

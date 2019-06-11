@@ -169,7 +169,7 @@ macro_rules! impl_outer_origin {
 
 		#[allow(dead_code)]
 		impl $name {
-			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
+			pub const NONE: Self = $name::system($system::RawOrigin::None);
 			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
 				$name::system($system::RawOrigin::Signed(by))
@@ -180,12 +180,12 @@ macro_rules! impl_outer_origin {
 				$name::system(x)
 			}
 		}
-		impl Into<Option<$system::Origin<$runtime>>> for $name {
-			fn into(self) -> Option<$system::Origin<$runtime>> {
+		impl Into<$crate::rstd::result::Result<$system::Origin<$runtime>, $name>> for $name {
+			fn into(self) -> $crate::rstd::result::Result<$system::Origin<$runtime>, Self> {
 				if let $name::system(l) = self {
-					Some(l)
+					Ok(l)
 				} else {
-					None
+					Err(self)
 				}
 			}
 		}
@@ -201,12 +201,20 @@ macro_rules! impl_outer_origin {
 						$name::[< $module $( _ $generic_instance )? >](x)
 					}
 				}
-				impl Into<Option<$module::Origin < $( $generic )? $(, $module::$generic_instance )? >>> for $name {
-					fn into(self) -> Option<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > {
+				impl Into<
+					$crate::rstd::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >>,
+						$name,
+					>
+				for $name {
+					fn into(self) -> $crate::rstd::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
+						Self,
+					> {
 						if let $name::[< $module $( _ $generic_instance )? >](l) = self {
-							Some(l)
+							Ok(l)
 						} else {
-							None
+							Err(self)
 						}
 					}
 				}
@@ -226,14 +234,14 @@ mod tests {
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
-			Inherent,
+			None,
 		}
 
 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 				match s {
 					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::Inherent,
+					None => RawOrigin::None,
 				}
 			}
 		}

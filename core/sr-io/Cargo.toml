@@ -1,6 +1,6 @@
 [package]
 name = "sr-io"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2018"
@@ -11,7 +11,7 @@ rustc_version = "0.2"
 [dependencies]
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
-parity-codec = { version = "3.3", default-features = false }
+codec = { package = "parity-codec", version = "3.5.1", default-features = false }
 hash-db = { version = "0.12", default-features = false }
 libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }
@@ -19,11 +19,14 @@ environmental = { version = "1.0.1", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 
+[dev-dependencies]
+substrate-offchain = { path = "../offchain" }
+
 [features]
 default = ["std"]
 std = [
 	"primitives/std",
-	"parity-codec/std",
+	"codec/std",
 	"rstd/std",
 	"hash-db/std",
 	"trie",
@@ -35,3 +38,5 @@ std = [
 nightly = []
 strict = []
 wasm-nice-panic-message = []
+no_panic_handler = []
+no_oom = []

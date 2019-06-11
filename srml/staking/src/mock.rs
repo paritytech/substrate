@@ -16,14 +16,12 @@
 
 //! Test utilities
 
-#![cfg(test)]
-
 use primitives::{traits::{IdentityLookup, Convert}, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait, StakerStatus};
+use srml_support::{impl_outer_origin, assert_ok, traits::Currency};
+use crate::{GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination};
 
 /// The AccountId alias in this test module.
 pub type AccountIdType = u64;
@@ -241,3 +239,33 @@ pub type Balances = balances::Module<Test>;
 pub type Session = session::Module<Test>;
 pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;
+
+pub fn check_exposure(acc: u64) {
+	let expo = Staking::stakers(&acc);
+	assert_eq!(expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>());
+}
+
+pub fn check_exposure_all() {
+	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
+}
+
+pub fn assert_total_expo(acc: u64, val: u64) {
+	let expo = Staking::stakers(&acc);
+	assert_eq!(expo.total, val);
+}
+
+pub fn bond_validator(acc: u64, val: u64) {
+	// a = controller
+	// a + 1 = stash
+	let _ = Balances::make_free_balance_be(&(acc+1), val);
+	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
+	assert_ok!(Staking::validate(Origin::signed(acc), ValidatorPrefs::default()));
+}
+
+pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
+	// a = controller
+	// a + 1 = stash
+	let _ = Balances::make_free_balance_be(&(acc+1), val);
+	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
+	assert_ok!(Staking::nominate(Origin::signed(acc), target));
+}

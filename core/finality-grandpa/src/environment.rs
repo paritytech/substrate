@@ -34,7 +34,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -43,6 +43,8 @@ use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
+
+use consensus_common::SelectChain;
 
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
@@ -97,6 +99,10 @@ impl<Block: BlockT> CompletedRounds<Block> {
 		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		inner.push_back(genesis);
 		CompletedRounds { inner }
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
+		self.inner.iter()
 	}
 
 	/// Returns the last (latest) completed round.
@@ -262,8 +268,9 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
+	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -273,7 +280,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N, RA, SC> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -289,12 +296,16 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA>
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC>
+	grandpa::Chain<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, N, RA, SC>
+where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network<Block> + 'static,
 	N::In: 'static,
+	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -317,7 +328,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 		let limit = self.authority_set.current_limit();
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
-		match self.inner.best_containing(block, None) {
+		match self.select_chain.finality_target(block, None) {
 			Ok(Some(mut best_hash)) => {
 				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
@@ -376,6 +387,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	}
 }
 
+
 pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: Block::Hash,
@@ -387,6 +399,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
 	let tree_route_res = ::client::blockchain::tree_route(
+		#[allow(deprecated)]
 		client.backend().blockchain(),
 		BlockId::Hash(block),
 		BlockId::Hash(base),
@@ -411,13 +424,17 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+	voter::Environment<Block::Hash, NumberFor<Block>>
+for Environment<B, E, Block, N, RA, SC>
+where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
 	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
+	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
@@ -505,6 +522,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -546,6 +564,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -585,6 +604,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -628,6 +648,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				current_round: HasVoted::No,
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -639,8 +660,10 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
 		use client::blockchain::HeaderBackend;
 
-		let status = self.inner.backend().blockchain().info()?;
-		if number <= status.finalized_number && self.inner.backend().blockchain().hash(number)? == Some(hash) {
+		#[allow(deprecated)]
+		let blockchain = self.inner.backend().blockchain();
+		let status = blockchain.info();
+		if number <= status.finalized_number && blockchain.hash(number)? == Some(hash) {
 			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
 			// finalized block.
@@ -657,7 +680,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
-			Some(As::sa(self.config.justification_period)),
+			Some(self.config.justification_period.into()),
 			hash,
 			number,
 			(round, commit).into(),
@@ -789,7 +812,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info()?.chain.finalized_number;
+						let last_finalized_number = client.info().chain.finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);
@@ -958,6 +981,7 @@ where B: Backend<Block, Blake2Hasher>,
 		}
 
 		let tree_route = client::blockchain::tree_route(
+			#[allow(deprecated)]
 			client.backend().blockchain(),
 			BlockId::Hash(*hash),
 			BlockId::Hash(*base),
