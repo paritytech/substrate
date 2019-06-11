@@ -19,6 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use parity_codec::{Encode, Decode};
+use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
