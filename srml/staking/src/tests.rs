@@ -410,7 +410,7 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Session::current_index(), 2);
 
 		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), 2*session_reward - delay);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward); // - delay);
 
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
@@ -420,7 +420,7 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Session::current_index(), 3);
 
 		// 1 + sum of of the session rewards accumulated
-		let recorded_balance = 1 + 3*session_reward - delay;
+		let recorded_balance = 1 + 3*session_reward; // - delay;
 		assert_eq!(Balances::total_balance(&10), recorded_balance);
 
 		// the reward for next era will be: session_reward * slot_stake
