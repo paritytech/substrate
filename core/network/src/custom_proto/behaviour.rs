@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::DiscoveryNetBehaviour;
+use crate::{DiscoveryNetBehaviour, ProtocolId};
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
@@ -224,9 +224,12 @@ pub enum CustomProtoOut<TMessage> {
 impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
-		protocol: RegisteredProtocol<TMessage>,
+		protocol: impl Into<ProtocolId>,
+		versions: &[u8],
 		peerset: peerset::Peerset,
 	) -> Self {
+		let protocol = RegisteredProtocol::new(protocol, versions);
+
 		CustomProto {
 			protocol,
 			peerset,

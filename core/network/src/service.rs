@@ -25,8 +25,8 @@ use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use crate::custom_proto::{CustomProto, CustomProtoOut, RegisteredProtocol};
-use crate::{behaviour::Behaviour, parse_str_addr};
+use crate::custom_proto::{CustomProto, CustomProtoOut};
+use crate::{behaviour::Behaviour, parse_str_addr, ProtocolId};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode, config::NetworkConfiguration};
 use peerset::PeersetHandle;
@@ -233,16 +233,16 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
-		let registered = RegisteredProtocol::new(params.protocol_id, &versions);
 
 		// Start the main service.
-		let (network, bandwidth, peerset) = match start_service::<B>(params.network_config, registered) {
-			Ok((network, bandwidth, peerset)) => (Arc::new(Mutex::new(network)), bandwidth, peerset),
-			Err(err) => {
-				warn!("Error starting network: {}", err);
-				return Err(err.into())
-			},
-		};
+		let (network, bandwidth, peerset) =
+			match start_service::<B, _>(params.network_config, params.protocol_id, &versions) {
+				Ok((network, bandwidth, peerset)) => (Arc::new(Mutex::new(network)), bandwidth, peerset),
+				Err(err) => {
+					warn!("Error starting network: {}", err);
+					return Err(err.into())
+				},
+			};
 
 		let service = Arc::new(NetworkService {
 			status_sinks: status_sinks.clone(),
@@ -790,9 +790,10 @@ type Swarm<B> = libp2p::core::Swarm<
 /// Starts the substrate libp2p service.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-fn start_service<B: BlockT>(
+fn start_service<B: BlockT, Pid: Into<ProtocolId>>(
 	config: NetworkConfiguration,
-	registered_custom: RegisteredProtocol<Message<B>>,
+	protocol_id: Pid,
+	versions: &[u8],
 ) -> Result<(Swarm<B>, Arc<transport::BandwidthSinks>, peerset::PeersetHandle), io::Error> {
 
 	if let Some(ref path) = config.net_config_path {
@@ -846,7 +847,7 @@ fn start_service<B: BlockT>(
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let proto = CustomProto::new(registered_custom, peerset);
+		let proto = CustomProto::new(protocol_id, versions, peerset);
 		let behaviour = Behaviour::new(proto, user_agent, local_public, known_addresses, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(
 			local_identity,
