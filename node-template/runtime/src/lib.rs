@@ -33,10 +33,10 @@ pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
 /// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = primitives::ed25519::Signature;
+pub type AuraSignature = ed25519::Signature;
 
 /// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = primitives::ed25519::Public;
+pub type AuraId = ed25519::Public;
 
 /// Alias to pubkey that identifies an account on the chain.
 pub type AccountId = <AccountSignature as Verify>::Signer;

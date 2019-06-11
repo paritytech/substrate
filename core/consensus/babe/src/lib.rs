@@ -91,7 +91,7 @@ pub struct Config(slots::SlotDuration<BabeConfiguration>);
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<A, B: Block, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
 	where
 		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
@@ -987,7 +987,7 @@ mod tests {
 	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().sign(b"");
-		let bad_seal: Item = DigestItem::Seal([0; 4], sig);
+		let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
 	}
@@ -995,7 +995,7 @@ mod tests {
 	#[test]
 	fn malformed_pre_digest_rejected() {
 		drop(env_logger::try_init());
-		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, Signature([0; 64]));
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 	}
 
@@ -1003,7 +1003,7 @@ mod tests {
 	fn sig_is_not_pre_digest() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().sign(b"");
-		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig);
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_some())
 	}

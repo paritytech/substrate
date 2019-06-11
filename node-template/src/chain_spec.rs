@@ -1,10 +1,9 @@
 use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
-	AccountId, GenesisConfig, AuraConfig, TimestampConfig, BalancesConfig,
+	AccountId, AuraId as AuthorityId, GenesisConfig, AuraConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, SystemConfig
 };
 use substrate_service;
-use aura::AuthorityId;
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -98,7 +97,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 5, // 10 second block time.
