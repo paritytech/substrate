@@ -391,17 +391,18 @@ decl_module! {
 		// If you don't respect these rules, it is likely that your chain will be attackable.
 		//
 		// Each transaction can optionally indicate a weight. The weight is passed in as a
-		// custom attribute and the value can be anything that implements the `WeighableTransaction`
-		// trait. Most often using substrate's default `TransactionWeight` is enough for you. A basic
-		// weight is a tuple of `(base_weight, byte_weight)`. Upon including each transaction in a block,
-		// the final weight is calculated as `base_weight + byte_weight * tx_size`. If this value,
-		// added to the weight of all included transactions, exceeds `MAX_TRANSACTION_WEIGHT`,
+		// custom attribute and the value can be anything that implements the `Weighable`
+		// trait. Most often using substrate's default `TransactionWeight` is enough for you.
+		//
+		// A basic weight is a tuple of `(base_weight, byte_weight)`. Upon including each transaction
+		// in a block, the final weight is calculated as `base_weight + byte_weight * tx_size`.
+		// If this value, added to the weight of all included transactions, exceeds `MAX_TRANSACTION_WEIGHT`,
 		// the transaction is not included. If no weight attribute is provided, the `::default()`
-		// implementation of `TransactionWeight()` is used.
+		// implementation of `TransactionWeight` is used.
 		//
 		// The example below showcases a transaction which is relatively costly, but less dependent on
-		// the input, hence byte_weight is configured smaller.
-		#[weight = TransactionWeight::Basic(10_000, 100)]
+		// the input, hence `byte_weight` is configured smaller.
+		#[weight = TransactionWeight::Basic(100_000, 10)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;

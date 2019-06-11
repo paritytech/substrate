@@ -18,26 +18,24 @@
 //!
 //! Each dispatch function withing `decl_module!` can now have an optional
 //! `#[weight = $x]` attribute. $x can be any object that implements the
-//! [`WeighableTransaction`] trait. By default, All transactions are annotated by
+//! [`Weighable`] trait. By default, All transactions are annotated by
 //! `#[weight = TransactionWeight::default()]`.
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
-//!
-//! Note that [`WeighableCall`] and [`WeighableTransaction`] are more or less similar.
-//! The distinction is because one serves to pass the weight from the the
-//! dispatchable function's attribute to the call enum ([`WeighableTransaction`]) and the
-//! other to pass the final weight from call enum to the executive module
-//! ([`WeighableCall`]).
 
 /// The final type that each `#[weight = $x:expr]`'s
 /// expression must evaluate to.
 pub type Weight = u32;
 
-/// A `Call` enum that can be weighted using the custom weight attribute of the
+/// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of the
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
+///
+/// Both the outer Call enum and the per-module individual ones will implement this.
+/// The outer enum simply calls the inner ones based on call type.
 pub trait Weighable {
 	/// Return the weight of this call.
+	/// The `len` argument is the number of bytes in the transaction/call.
 	fn weight(&self, len: usize) -> Weight;
 }
 

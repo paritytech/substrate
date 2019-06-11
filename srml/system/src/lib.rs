@@ -315,7 +315,7 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total length in bytes for all extrinsics put together, for the current block.
+		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
@@ -530,7 +530,7 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicCount<T>>::get().unwrap_or_default()
 	}
 
-	/// Gets a total length of all executed extrinsics.
+	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> u32 {
 		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
 	}
