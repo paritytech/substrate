@@ -1905,8 +1905,7 @@ fn phragmen_large_scale_test() {
 			prefix + 25]
 		);
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// For manual inspection
 		println!("Validators are {:?}", Session::validators());
@@ -1955,8 +1954,7 @@ fn phragmen_large_scale_test_2() {
 
 		bond_nominator(50, nom_budget, vec![3, 5]);
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// Each exposure => total == own + sum(others)
 		check_exposure_all();
