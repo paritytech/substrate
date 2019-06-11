@@ -299,4 +299,3 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 		<Stalled<T>>::put((further_wait, median));
 	}
 }
-
