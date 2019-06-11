@@ -1778,8 +1778,7 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 		bond_validator(6, u64::max_value()-1);
 		bond_validator(8, u64::max_value()-2);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq!(Session::validators(), vec![4, 2]);
 		check_exposure_all();
