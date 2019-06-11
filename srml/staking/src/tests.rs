@@ -1196,23 +1196,21 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![] });
 
 		// New era --> rewards are paid --> stakes are changed
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
+		start_era(1);
 
 		// -- new balances + reward
-		assert_eq!(Staking::stakers(&11).total, 1000 + 10);
-		assert_eq!(Staking::stakers(&21).total, 69 + 10);
+		assert_eq!(Staking::stakers(&11).total, 1000 + 30);
+		assert_eq!(Staking::stakers(&21).total, 69 + 30);
 
 		// -- slot stake should also be updated.
-		assert_eq!(Staking::slot_stake(), 79);
+		assert_eq!(Staking::slot_stake(), 69 + 30);
 
 		// If 10 gets slashed now, it will be slashed by 5% of exposure.total * 2.pow(unstake_thresh)
 		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// check the balance of 10 (slash will be deducted from free balance.)
-		assert_eq!(Balances::free_balance(&11), 1000 + 10 - 50 /*5% of 1000*/ * 8 /*2**3*/);
+		assert_eq!(Balances::free_balance(&11), 1000 + 30 - 51 /*5% of 1030*/ * 8 /*2**3*/);
 
 		check_exposure_all();
 	});
