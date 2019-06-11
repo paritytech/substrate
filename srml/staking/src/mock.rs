@@ -16,7 +16,8 @@
 
 //! Test utilities
 
-use primitives::{traits::{IdentityLookup, Convert, OpaqueKeys}, BuildStorage, Perbill};
+use primitives::{BuildStorage, Perbill};
+use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -266,4 +267,17 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 	let _ = Balances::make_free_balance_be(&(acc+1), val);
 	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
 	assert_ok!(Staking::nominate(Origin::signed(acc), target));
+}
+
+pub fn start_session(session_index: session::SessionIndex) {
+	for i in 0..(session_index - Session::current_index()) {
+		System::set_block_number((i + 1).into());
+		Session::on_initialize(System::block_number());
+	}
+	assert_eq!(Session::current_index(), session_index);
+}
+
+pub fn start_era(era_index: EraIndex) {
+	start_session((era_index * 3).into());
+	assert_eq!(Staking::current_era(), era_index);
 }
