@@ -116,6 +116,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
+#[cfg(not(feature = "std"))]
+use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
 use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};

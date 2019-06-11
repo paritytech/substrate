@@ -51,7 +51,9 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::{Encode, Decode};
+use parity_codec::Encode;
+#[cfg(feature = "std")]
+use parity_codec::Decode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
 use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
 use timestamp::OnTimestampSet;

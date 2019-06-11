@@ -29,6 +29,7 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 /// The grandpa crypto scheme defined via the keypair type.
+#[cfg(feature = "std")]
 pub type AuthorityPair = substrate_primitives::ed25519::Pair;
 
 /// Identity of a Grandpa authority.
