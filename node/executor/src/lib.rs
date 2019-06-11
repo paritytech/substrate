@@ -39,12 +39,12 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Digest, DigestItem};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, staking, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, SessionKeys};
 	use wabt;
 	use primitives::map;
 
@@ -258,10 +258,14 @@ mod tests {
 		});
 	}
 
+  fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
+    SessionKeys(ring.to_owned().into(), ring.to_owned().into())
+  }
+
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let three = AccountId::from_raw([3u8; 32]);
 		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
-			consensus: Some(Default::default()),
+			aura: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
@@ -289,16 +293,14 @@ mod tests {
 				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
-				session_length: 2,
 				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
-					(alice(), AuthorityKeyring::Alice.into()),
-					(bob(), AuthorityKeyring::Bob.into()),
-					(charlie(), AuthorityKeyring::Charlie.into())
+					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
+					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
+					(charlie(), to_session_keys(&AuthorityKeyring::Charlie)),
 				]
 			}),
 			staking: Some(StakingConfig {
-				sessions_per_era: 2,
 				current_era: 0,
 				stakers: vec![
 					(dave(), alice(), 111, staking::StakerStatus::Validator),
@@ -307,7 +309,6 @@ mod tests {
 				],
 				validator_count: 3,
 				minimum_validator_count: 0,
-				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
 				current_session_reward: 0,
@@ -321,6 +322,7 @@ mod tests {
 			contract: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
+				_genesis_phantom_data: Default::default(),
 				authorities: vec![],
 			}),
 		}.build_storage().unwrap().0);
@@ -448,7 +450,7 @@ mod tests {
 		// session change => consensus authorities change => authorities change digest item appears
 		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
 		assert_eq!(digest.logs().len(), 1);
-		assert!(digest.logs()[0].as_authorities_change().is_some());
+		assert!(digest.logs()[0].as_consensus().is_some());
 
 		(block1, block2)
 	}
@@ -462,10 +464,6 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
-				},
-				CheckedExtrinsic {
-					signed: Some((alice(), 0)),
-					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
 				}
 			]
 		)
@@ -600,7 +598,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1)),
+					event: Event::session(session::Event::NewSession(1)),
 					topics: vec![],
 				},
 			]);

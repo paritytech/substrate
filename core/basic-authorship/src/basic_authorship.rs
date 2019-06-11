@@ -319,7 +319,6 @@ mod tests {
 
 		let mut proposer = proposer_factory.init(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			&[]
 		).unwrap();
 
 		// when

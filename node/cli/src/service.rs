@@ -303,7 +303,7 @@ mod tests {
 			});
 			let mut digest = Digest::<DigestItem>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
-			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
+			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,

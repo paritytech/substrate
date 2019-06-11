@@ -520,8 +520,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_b = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -585,8 +585,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_c = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_c = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -651,7 +651,7 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -717,8 +717,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_b = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),

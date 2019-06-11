@@ -444,7 +444,7 @@ const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
