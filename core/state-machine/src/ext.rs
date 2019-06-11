@@ -19,12 +19,12 @@
 use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
-use crate::changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
+use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
+use trie::{MemoryDB, default_child_trie_root};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -320,27 +320,13 @@ where
 
 	fn storage_changes_root(&mut self, parent_hash: H::Out) -> Result<Option<H::Out>, ()> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		let root_and_tx = compute_changes_trie_root::<_, T, H, N>(
+		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
 			self.changes_trie_storage.clone(),
 			self.overlay,
 			parent_hash,
 		)?;
-		let root_and_tx = root_and_tx.map(|(root, changes)| {
-			let mut calculated_root = Default::default();
-			let mut mdb = MemoryDB::default();
-			{
-				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
-				for (key, value) in changes {
-					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
-				}
-			}
-
-			(mdb, root)
-		});
-		let root = root_and_tx.as_ref().map(|(_, root)| root.clone());
-		self.changes_trie_transaction = root_and_tx;
-		Ok(root)
+		Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

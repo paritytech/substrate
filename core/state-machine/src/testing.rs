@@ -22,7 +22,7 @@ use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
 use crate::changes_trie::{
-	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage,
+	build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
 	BlockNumber as ChangesTrieBlockNumber,
 };
 use primitives::offchain;
@@ -226,12 +226,12 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> {
-		Ok(compute_changes_trie_root::<_, _, H, N>(
+		Ok(build_changes_trie::<_, _, H, N>(
 			&self.backend,
 			Some(&self.changes_trie_storage),
 			&self.overlay,
 			parent,
-		)?.map(|(root, _)| root.clone()))
+		)?.map(|(_, root)| root))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
