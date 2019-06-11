@@ -20,10 +20,10 @@
 #![warn(missing_docs)]
 
 mod components;
-mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod error;
 
 use std::io;
 use std::net::SocketAddr;
@@ -34,18 +34,16 @@ use parking_lot::Mutex;
 use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
-use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
-use consensus_common::SelectChain;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -65,7 +63,7 @@ use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::OnDemand;
+pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 
@@ -74,17 +72,16 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: <Components as components::Components>::SelectChain,
+	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<Arc<tel::Telemetry>>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
+	_telemetry: Option<tel::Telemetry>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
@@ -107,7 +104,7 @@ pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 /// Used to hook on telemetry connection established events.
 pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 	/// Executor to which the hook is spawned.
@@ -143,7 +140,7 @@ impl<Components: components::Components> Service<Components> {
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
 			None => {
-				let key = keystore.generate("")?;
+				let key = keystore.generate(&config.password)?;
 				let public_key = key.public();
 				info!("Generated a new keypair: {:?}", public_key);
 
@@ -156,32 +153,27 @@ impl<Components: components::Components> Service<Components> {
 		let import_queue = Box::new(Components::build_import_queue(
 			&mut config,
 			client.clone(),
-			select_chain.clone()
+			select_chain.clone(),
 		)?);
-		let best_header = select_chain.best_chain()?;
+		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+		let chain_info = client.info().chain;
 
 		let version = config.full_version();
-		info!("Best block: #{}", best_header.number());
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+		info!("Highest known block at #{}", chain_info.best_number);
+		telemetry!(SUBSTRATE_INFO; "node.start";
+			"height" => chain_info.best_number.saturated_into::<u64>(),
+			"best" => ?chain_info.best_hash
+		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !(config.roles == Roles::LIGHT),
+			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 });
-
-		let network_params = network::config::Params {
-			config: network::config::ProtocolConfig { roles: config.roles },
-			network_config: config.network.clone(),
-			chain: client.clone(),
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			specialization: network_protocol,
-		};
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -196,19 +188,30 @@ impl<Components: components::Components> Service<Components> {
 			network::ProtocolId::from(protocol_id_full)
 		};
 
-		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_chan) = network::Service::new(
-			network_params,
+		let network_params = network::config::Params {
+			roles: config.roles,
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			finality_proof_provider,
+			on_demand,
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			import_queue,
 			protocol_id,
-			import_queue
-		)?;
-		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
+			specialization: network_protocol,
+		};
 
-		let inherents_pool = Arc::new(InherentsPool::default());
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+		let network_mut = network::NetworkWorker::new(network_params)?;
+		let network = network_mut.service().clone();
+
+		task_executor.spawn(network_mut
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(())));
+
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
-				inherents_pool.clone(),
 				task_executor.clone(),
 			)))
 		} else {
@@ -324,8 +327,16 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			network.clone(),
+			has_bootnodes,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
@@ -340,8 +351,9 @@ impl<Components: components::Components> Service<Components> {
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
+				wasm_external_transport: None,
 				on_connect: Box::new(move || {
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
@@ -358,7 +370,11 @@ impl<Components: components::Components> Service<Components> {
 						sink.unbounded_send(()).is_ok()
 					});
 				}),
-			}))
+			});
+			task_executor.spawn(telemetry.clone()
+				.select(exit.clone())
+				.then(|_| Ok(())));
+			telemetry
 		});
 
 		Ok(Service {
@@ -366,7 +382,6 @@ impl<Components: components::Components> Service<Components> {
 			network: Some(network),
 			select_chain,
 			transaction_pool,
-			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -383,7 +398,7 @@ impl<Components: components::Components> Service<Components> {
 		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, "")))
+				.map(|k| keystore.load(k, &self.config.password)))
 		{
 			Some(key)
 		} else {
@@ -392,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
@@ -404,7 +419,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get clone of select chain.
-	pub fn select_chain(&self) -> <Components as components::Components>::SelectChain {
+	pub fn select_chain(&self) -> Option<<Components as components::Components>::SelectChain> {
 		self.select_chain.clone()
 	}
 
@@ -416,11 +431,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -474,26 +484,36 @@ pub struct TransactionPoolAdapter<C: Components> {
 
 impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
+		Some(BlockId::hash(self.client.info().chain.best_hash))
 	}
+}
+
+/// Get transactions for propagation.
+///
+/// Function extracted to simplify the test and prevent creating `ServiceFactory`.
+fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+	-> Vec<(H, B::Extrinsic)>
+where
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+{
+	pool.ready()
+		.filter(|t| t.is_propagateable())
+		.map(|t| {
+			let hash = t.hash.clone();
+			let ex: B::Extrinsic = t.data.clone();
+			(hash, ex)
+		})
+		.collect()
 }
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
 	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
 {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready()
-			.map(|t| {
-				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.clone();
-				(hash, ex)
-			})
-			.collect()
+		transactions_to_propagate(&self.pool)
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -508,7 +528,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+					Ok(txpool::error::Error::AlreadyImported(hash)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
 					},
@@ -541,33 +561,78 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 ///
 /// # Example
 ///
-/// ```nocompile
+/// ```
+/// # use substrate_service::{
+/// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # };
+/// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+/// # use network::construct_simple_protocol;
+/// # use client::{self, LongestChain};
+/// # use primitives::{Pair as PairT, ed25519};
+/// # use consensus_common::import_queue::{BasicQueue, Verifier};
+/// # use consensus_common::{BlockOrigin, ImportBlock};
+/// # use node_runtime::{GenesisConfig, RuntimeApi};
+/// # use std::sync::Arc;
+/// # use node_primitives::Block;
+/// # use runtime_primitives::Justification;
+/// # use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT};
+/// # use grandpa;
+/// # construct_simple_protocol! {
+/// # 	pub struct NodeProtocol where Block = Block { }
+/// # }
+/// # struct MyVerifier;
+/// # impl<B: BlockT> Verifier<B> for MyVerifier {
+/// # 	fn verify(
+/// # 		&self,
+/// # 		origin: BlockOrigin,
+/// # 		header: B::Header,
+/// # 		justification: Option<Justification>,
+/// # 		body: Option<Vec<B::Extrinsic>>,
+/// # 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+/// # 		unimplemented!();
+/// # 	}
+/// # }
+/// type FullChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<FullBackend<T>, FullExecutor<T>, Block, RuntimeApi>, Block>;
+/// type LightChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<LightBackend<T>, LightExecutor<T>, Block, RuntimeApi>, Block>;
+///
 /// construct_service_factory! {
 /// 	struct Factory {
-///         // Declare the block type
+/// 		// Declare the block type
 /// 		Block = Block,
-///         // Declare the network protocol and give an initializer.
+/// 		RuntimeApi = RuntimeApi,
+/// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 /// 		RuntimeDispatch = node_executor::Executor,
-/// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+/// 		FullTransactionPoolApi = FullChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-/// 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+/// 		LightTransactionPoolApi = LightChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 /// 		Genesis = GenesisConfig,
 /// 		Configuration = (),
-/// 		FullService = Service<FullComponents<Self>>
-/// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
-///         // Setup as Consensus Authority (if the role and key are given)
+/// 		FullService = FullComponents<Self>
+/// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
+/// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
-/// 		LightService = Service<LightComponents<Self>>
-/// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-///         // Declare the import queue. The import queue is special as it takes two initializers.
-///         // The first one is for the initializing the full import queue and the second for the
-///         // light import queue.
-/// 		ImportQueue = BasicQueue<Block, NoneVerifier>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) }
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) },
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 				Ok(service)
+/// 			}},
+/// 		LightService = LightComponents<Self>
+/// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+/// 		FullImportQueue = BasicQueue<Block>
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		LightImportQueue = BasicQueue<Block>
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
+/// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+/// 				#[allow(deprecated)]
+/// 				Ok(LongestChain::new(client.backend().clone()))
+/// 			}},
+/// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
+/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
+/// 			}},
 /// 	}
 /// }
 /// ```
@@ -593,6 +658,7 @@ macro_rules! construct_service_factory {
 				{ $( $light_import_queue_init:tt )* },
 			SelectChain = $select_chain:ty
 				{ $( $select_chain_init:tt )* },
+			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -658,6 +724,12 @@ macro_rules! construct_service_factory {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 
+			fn build_finality_proof_provider(
+				client: Arc<$crate::FullClient<Self>>
+			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
+				( $( $finality_proof_provider_init )* ) (client)
+			}
+
 			fn new_light(
 				config: $crate::FactoryFullConfiguration<Self>,
 				executor: $crate::TaskExecutor
@@ -677,5 +749,43 @@ macro_rules! construct_service_factory {
 				})
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use consensus_common::SelectChain;
+	use runtime_primitives::traits::BlindCheckable;
+	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}, TestClientBuilder};
+
+	#[test]
+	fn should_not_propagate_transactions_that_are_marked_as_such() {
+		// given
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = Arc::new(TransactionPool::new(
+			Default::default(),
+			transaction_pool::ChainApi::new(client.clone())
+		));
+		let best = longest_chain.best_chain().unwrap();
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		assert_eq!(pool.status().ready, 2);
+
+		// when
+		let transactions = transactions_to_propagate(&pool);
+
+		// then
+		assert_eq!(transactions.len(), 1);
+		assert!(transactions[0].1.clone().check().is_ok());
+		// this should not panic
+		let _ = transactions[0].1.transfer();
 	}
 }

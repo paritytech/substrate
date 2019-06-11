@@ -39,7 +39,8 @@ mod system {
 	use super::*;
 
 	pub trait Trait: 'static + Eq + Clone {
-		type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+			+ From<RawOrigin<Self::AccountId>>;
 		type BlockNumber;
 		type Digest: Digest<Hash = H256>;
 		type Hash;
@@ -100,12 +101,9 @@ mod system {
 	}
 
 	pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-		where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+		where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 	{
-		match o.into() {
-			Some(RawOrigin::Root) => Ok(()),
-			_ => Err("bad origin: expected to be a root origin"),
-		}
+		o.into().map(|_| ()).map_err(|_| "bad origin: expected to be a root origin")
 	}
 }
 
@@ -165,14 +163,17 @@ mod module1 {
 	pub type Log<T, I> = RawLog<
 		T,
 		I,
+		<T as system::Trait>::Hash,
 	>;
 
 	/// A logs in this module.
 	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<T, I> {
+	pub enum RawLog<T, I, Hash> {
 		_Phantom(rstd::marker::PhantomData<(T, I)>),
 		AmountChange(u32),
+		ChangesTrieRoot(Hash),
+		AuthoritiesChange(Vec<()>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
@@ -343,8 +344,8 @@ srml_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot, AuthoritiesChange), Inherent},
+		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot, AuthoritiesChange), Inherent},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
 		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},

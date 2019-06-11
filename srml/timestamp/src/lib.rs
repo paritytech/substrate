@@ -87,6 +87,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::{result, ops::{Mul, Div}, cmp};
 use parity_codec::Encode;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
@@ -94,9 +95,8 @@ use parity_codec::Decode;
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
-use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
+use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
 use system::ensure_none;
-use rstd::{result, ops::{Mul, Div}, cmp};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
 /// The identifier for the `timestamp` inherent.
@@ -252,7 +252,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
+		pub Now get(now) build(|_| 0.into()): T::Moment;
 
 		/// Old storage item provided for compatibility. Remove after all networks upgraded.
 		// TODO: #2133
@@ -262,7 +262,7 @@ decl_storage! {
 		/// that the block production apparatus provides. Your chosen consensus system will generally
 		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
 		/// period on default settings.
-		pub MinimumPeriod get(minimum_period) config(): T::Moment = T::Moment::sa(3);
+		pub MinimumPeriod get(minimum_period) config(): T::Moment = 3.into();
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
@@ -297,23 +297,25 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
+		let data: T::Moment = extract_inherent_data(data)
+			.expect("Gets and decodes timestamp inherent data")
+			.saturated_into();
 
-		let next_time = cmp::max(As::sa(data), Self::now() + <MinimumPeriod<T>>::get());
+		let next_time = cmp::max(data, Self::now() + <MinimumPeriod<T>>::get());
 		Some(Call::set(next_time.into()))
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
-		let t = match call {
-			Call::set(ref t) => t.clone(),
+		let t: u64 = match call {
+			Call::set(ref t) => t.clone().saturated_into::<u64>(),
 			_ => return Ok(()),
-		}.as_();
+		};
 
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-		let minimum = (Self::now() + <MinimumPeriod<T>>::get()).as_();
+		let minimum = (Self::now() + <MinimumPeriod<T>>::get()).saturated_into::<u64>();
 		if t > data + MAX_TIMESTAMP_DRIFT {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {

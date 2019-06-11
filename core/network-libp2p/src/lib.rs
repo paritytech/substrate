@@ -57,9 +57,9 @@
 //!
 //! Please keep in mind that the state of the [`Service`] only updates itself in a way
 //! corresponding to the [`ServiceEvent`] that `poll` returns.
-//! 
+//!
 //! Illustration:
-//! 
+//!
 //! - You call [`Service::connected_peers`] to get the list of nodes we are connected to.
 //! - If you then call [`Service::connected_peers`] again, the returned list will always be the
 //!   same, no matter what happened on the wire.
@@ -118,6 +118,17 @@ use libp2p::core::nodes::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
+
+/// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.
+pub trait DiscoveryNetBehaviour {
+	/// Notify the protocol that we have learned about the existence of nodes.
+	///
+	/// Can (or most likely will) be called multiple times with the same `PeerId`s.
+	///
+	/// Also note that there is no notification for expired nodes. The implementer must add a TTL
+	/// system, or remove nodes that will fail to reach.
+	fn add_discovered_nodes(&mut self, nodes: impl Iterator<Item = PeerId>);
+}
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -236,6 +247,10 @@ pub struct NetworkStatePeer {
 pub struct NetworkStateNotConnectedPeer {
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
+	/// Node information, as provided by the node itself, if we were ever connected to this node.
+	pub version_string: Option<String>,
+	/// Latest ping duration with this node, if we were ever connected to this node.
+	pub latest_ping_time: Option<Duration>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -259,8 +274,8 @@ impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 				NetworkStatePeerEndpoint::Dialing(address),
 			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr: listen_addr,
-					send_back_addr: send_back_addr
+					listen_addr,
+					send_back_addr
 				}
 		}
 	}

@@ -6,6 +6,7 @@ description = "Rhododendron Round-Based consensus-algorithm for substrate"
 edition = "2018"
 
 [dependencies]
+derive_more = "0.14.0"
 futures = "0.1.17"
 codec = { package = "parity-codec", version = "3.2", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
@@ -19,8 +20,7 @@ runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
+parking_lot = "0.8.0"
 log = "0.4"
 rhododendron = { version = "0.5.0", features = ["codec"] }
 exit-future = "0.1"

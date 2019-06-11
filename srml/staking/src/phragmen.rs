@@ -19,7 +19,6 @@
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use primitives::{PerU128};
 use primitives::traits::{Zero, Convert, Saturating};
-use parity_codec::{Encode, Decode};
 use crate::{BalanceOf, Assignment, RawAssignment, ExpoMap, Trait, ValidatorPrefs};
 
 type Fraction = PerU128;
@@ -35,7 +34,7 @@ const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 
 /// Wrapper around validation candidates some metadata.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId> {
 	/// The validator's account
@@ -49,7 +48,7 @@ pub struct Candidate<AccountId> {
 }
 
 /// Wrapper around the nomination info of a single nominator for a group of validators.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominator<AccountId> {
 	/// The nominator's account.
@@ -63,7 +62,7 @@ pub struct Nominator<AccountId> {
 }
 
 /// Wrapper around a nominator vote and the load of that vote.
-#[derive(Clone, Encode, Decode, Default)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId> {
 	/// Account being voted for
@@ -108,29 +107,29 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
 	let mut nominators: Vec<Nominator<T::AccountId>> = Vec::with_capacity(validator_iter.size_hint().0 + nominator_iter.size_hint().0);
 	let mut candidates = validator_iter.map(|(who, _)| {
-			let stash_balance = stash_of(&who);
-			(Candidate { who, ..Default::default() }, stash_balance)
-		})
-		.filter_map(|(mut c, s)| {
-			c.approval_stake += to_votes(s);
-			if c.approval_stake.is_zero() {
-				None
-			} else {
-				Some((c, s))
-			}
-		})
-		.enumerate()
-		.map(|(idx, (c, s))| {
-			nominators.push(Nominator {
-				who: c.who.clone(),
-				edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
-				budget: to_votes(s),
-				load: Fraction::zero(),
-			});
-			c_idx_cache.insert(c.who.clone(), idx);
-			c
-		})
-		.collect::<Vec<Candidate<T::AccountId>>>();
+		let stash_balance = stash_of(&who);
+		(Candidate { who, ..Default::default() }, stash_balance)
+	})
+	.filter_map(|(mut c, s)| {
+		c.approval_stake += to_votes(s);
+		if c.approval_stake.is_zero() {
+			None
+		} else {
+			Some((c, s))
+		}
+	})
+	.enumerate()
+	.map(|(idx, (c, s))| {
+		nominators.push(Nominator {
+			who: c.who.clone(),
+			edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
+			budget: to_votes(s),
+			load: Fraction::zero(),
+		});
+		c_idx_cache.insert(c.who.clone(), idx);
+		c
+	})
+	.collect::<Vec<Candidate<T::AccountId>>>();
 
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
@@ -180,7 +179,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 						let temp =
 							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
 							* (*n.load / SCALE_FACTOR);
-						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
+						c.score = Fraction::from_parts((*c.score).saturating_add(temp));
 					}
 				}
 			}
@@ -196,7 +195,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for n in &mut nominators {
 					for e in &mut n.edges {
 						if e.who == winner.who {
-							e.load = Fraction::from_max_value(*winner.score - *n.load);
+							e.load = Fraction::from_parts(*winner.score - *n.load);
 							n.load = winner.score;
 						}
 					}

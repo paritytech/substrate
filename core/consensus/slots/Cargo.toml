@@ -13,7 +13,9 @@ runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures = "0.1.17"
-tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
+tokio-timer = "0.2.11"
+parking_lot = "0.8.0"
 log = "0.4"
+
+[dev-dependencies]
+test_client = { package = "substrate-test-client", path = "../../test-client" }

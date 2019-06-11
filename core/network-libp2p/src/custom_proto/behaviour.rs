@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::DiscoveryNetBehaviour;
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
@@ -153,6 +154,22 @@ enum PeerState {
 	},
 }
 
+impl PeerState {
+	/// True if we have an open channel with that node.
+	fn is_open(&self) -> bool {
+		match self {
+			PeerState::Poisoned => false,
+			PeerState::Banned { .. } => false,
+			PeerState::PendingRequest { .. } => false,
+			PeerState::Requested => false,
+			PeerState::Disabled { open, .. } => *open,
+			PeerState::DisabledPendingEnable { open, .. } => *open,
+			PeerState::Enabled { open, .. } => *open,
+			PeerState::Incoming { .. } => false,
+		}
+	}
+}
+
 /// State of an "incoming" message sent to the peer set manager.
 #[derive(Debug)]
 struct IncomingPeer {
@@ -220,6 +237,16 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			marker: PhantomData,
 			clock: Clock::new(),
 		}
+	}
+
+	/// Returns the list of all the peers we have an open channel to.
+	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
+		self.peers.iter().filter(|(_, state)| state.is_open()).map(|(id, _)| id)
+	}
+
+	/// Returns true if we have a channel open with this node.
+	pub fn is_open(&self, peer_id: &PeerId) -> bool {
+		self.peers.get(peer_id).map(|p| p.is_open()).unwrap_or(false)
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -312,21 +339,6 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		}
 	}
 
-	/// Returns true if we have opened a protocol with the given peer.
-	pub fn is_open(&self, peer_id: &PeerId) -> bool {
-		match self.peers.get(peer_id) {
-			None => false,
-			Some(PeerState::Disabled { open, .. }) => *open,
-			Some(PeerState::DisabledPendingEnable { open, .. }) => *open,
-			Some(PeerState::Enabled { open, .. }) => *open,
-			Some(PeerState::Incoming { .. }) => false,
-			Some(PeerState::Requested) => false,
-			Some(PeerState::PendingRequest { .. }) => false,
-			Some(PeerState::Banned { .. }) => false,
-			Some(PeerState::Poisoned) => false,
-		}
-	}
-
 	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -346,14 +358,6 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				message,
 			}
 		});
-	}
-
-	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
-			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
-		}));
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -408,7 +412,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open };
 			},
@@ -426,7 +430,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open: false };
 			},
@@ -547,7 +551,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", incoming.peer_id);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: incoming.peer_id,
-			event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+			event: CustomProtoHandlerIn::Enable,
 		});
 
 		*state = PeerState::Enabled { open: false, connected_point };
@@ -595,6 +599,15 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 }
 
+impl<TMessage, TSubstream> DiscoveryNetBehaviour for CustomProto<TMessage, TSubstream> {
+	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
+	}
+}
+
 impl<TMessage, TSubstream> NetworkBehaviour for CustomProto<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
@@ -621,7 +634,7 @@ where
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*st = PeerState::Enabled { open: false, connected_point };
 			}
@@ -972,7 +985,7 @@ where
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable now that ban has expired", peer_id);
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+						event: CustomProtoHandlerIn::Enable,
 					});
 					*peer_state = PeerState::Enabled { connected_point, open };
 				}

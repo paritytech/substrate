@@ -39,7 +39,7 @@ use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
-use network::{consensus_gossip as network_gossip, Service as NetworkService};
+use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
@@ -64,12 +64,14 @@ mod cost {
 	pub(super) const BAD_SIGNATURE: i32 = -100;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
+	pub(super) const UNKNOWN_VOTER: i32 = -150;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
 	pub(super) const INVALID_COMMIT: i32 = -5000;
+	pub(super) const OUT_OF_SCOPE_MESSAGE: i32 = -500;
 }
 
 // benefit scalars for reporting peers.
@@ -98,6 +100,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// Force causes it to be sent to all peers, even if they've seen it already.
 	/// Only should be used in case of consensus stall.
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
+
+	/// Register a message with the gossip service, it isn't broadcast right
+	/// away to any peers, but may be sent to new peers joining or when asked to
+	/// broadcast the topic. Useful to register previous messages on node
+	/// startup.
+	fn register_gossip_message(&self, topic: Block::Hash, data: Vec<u8>);
 
 	/// Send a message to a bunch of specific peers, even if they've seen it already.
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
@@ -145,9 +153,19 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
+
 		self.with_gossip(
 			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
 		)
+	}
+
+	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
+		let msg = ConsensusMessage {
+			engine_id: GRANDPA_ENGINE_ID,
+			data,
+		};
+
+		self.with_gossip(move |gossip, _| gossip.register_message(topic, msg))
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
@@ -212,9 +230,12 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
+	/// If a voter set state is given it registers previous round votes with the
+	/// gossip service.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
+		set_state: Option<&crate::environment::VoterSetState<B>>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 	) -> (
 		Self,
@@ -224,6 +245,44 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let (validator, report_stream) = GossipValidator::new(config);
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
+
+		if let Some(set_state) = set_state {
+			// register all previous votes with the gossip service so that they're
+			// available to peers potentially stuck on a previous round.
+			let completed = set_state.completed_rounds();
+			let (set_id, voters) = completed.set_info();
+			validator.note_set(SetId(set_id), voters.to_vec(), |_, _| {});
+			for round in completed.iter() {
+				let topic = round_topic::<B>(round.number, set_id);
+
+				// we need to note the round with the gossip validator otherwise
+				// messages will be ignored.
+				validator.note_round(Round(round.number), |_, _| {});
+
+				for signed in round.votes.iter() {
+					let message = gossip::GossipMessage::VoteOrPrecommit(
+						gossip::VoteOrPrecommitMessage::<B> {
+							message: signed.clone(),
+							round: Round(round.number),
+							set_id: SetId(set_id),
+						}
+					);
+
+					service.register_gossip_message(
+						topic,
+						message.encode(),
+					);
+				}
+
+				trace!(target: "afg",
+					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
+					round.votes.len(),
+					topic,
+					round.number,
+					set_id,
+				);
+			}
+		}
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());
@@ -241,7 +300,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		(bridge, startup_work)
 	}
 
-	/// Get the round messages for a round in a given set ID. These are signature-checked.
+	/// Get the round messages for a round in the current set ID. These are signature-checked.
 	pub(crate) fn round_communication(
 		&self,
 		round: Round,
@@ -253,9 +312,18 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
+		// is a no-op if currently in that set.
+		self.validator.note_set(
+			set_id,
+			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			|to, neighbor| self.service.send_message(
+				to,
+				GossipMessage::<B>::from(neighbor).encode()
+			),
+		);
+
 		self.validator.note_round(
 			round,
-			set_id,
 			|to, neighbor| self.service.send_message(
 				to,
 				GossipMessage::<B>::from(neighbor).encode()
@@ -356,6 +424,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	) {
 		self.validator.note_set(
 			set_id,
+			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 
@@ -596,7 +665,7 @@ fn check_compact_commit<Block: BlockT>(
 	let f = voters.total_weight() - voters.threshold();
 	let full_threshold = voters.total_weight() + f;
 
-	// check total weight is not too high.
+	// check total weight is not out of range.
 	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
 		if let Some(weight) = voters.info(id).map(|info| info.weight()) {

@@ -28,7 +28,7 @@ use primitives::{H256, Blake2Hasher, storage::StorageKey};
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get blockchain info.
-	fn info(&self) -> Result<ClientInfo<Block>, Error>;
+	fn info(&self) -> ClientInfo<Block>;
 
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
@@ -68,6 +68,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error>;
 }
 
+/// Finality proof provider.
+pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
+	/// Prove finality of the block.
+	fn prove_finality(&self, for_block: Block::Hash, request: &[u8]) -> Result<Option<Vec<u8>>, Error>;
+}
+
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -75,7 +81,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn info(&self) -> Result<ClientInfo<Block>, Error> {
+	fn info(&self) -> ClientInfo<Block> {
 		(self as &SubstrateClient<B, E, Block, RA>).info()
 	}
 
@@ -128,6 +134,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		}
 
 		let tree_route = ::client::blockchain::tree_route(
+			#[allow(deprecated)]
 			self.backend().blockchain(),
 			BlockId::Hash(*block),
 			BlockId::Hash(*base),

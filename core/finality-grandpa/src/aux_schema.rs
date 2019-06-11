@@ -159,7 +159,7 @@ where H: Clone + Debug + PartialEq,
 	}
 }
 
-fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
@@ -220,10 +220,24 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 			None => (0, genesis_round()),
 		};
 
+		let set_id = new_set.current().0;
+
 		let base = last_round_state.prevote_ghost
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-		let set_state = make_voter_set_state_live(last_round_number, last_round_state, base);
+		let set_state = VoterSetState::Live {
+			completed_rounds: CompletedRounds::new(
+				CompletedRound {
+					number: last_round_number,
+					state: last_round_state,
+					base,
+				},
+				set_id,
+				&new_set,
+			),
+			current_round: HasVoted::No,
+		};
+
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
 		return Ok(Some((new_set, set_state)));
@@ -249,6 +263,19 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 		backend,
 		AUTHORITY_SET_KEY,
 	)? {
+		let set_id = set.current().0;
+
+		let completed_rounds = |number, state, base| CompletedRounds::new(
+			CompletedRound {
+				number,
+				state,
+				votes: Vec::new(),
+				base,
+			},
+			set_id,
+			&set,
+		);
+
 		let set_state = match load_decode::<_, V1VoterSetState<Block::Hash, NumberFor<Block>>>(
 			backend,
 			SET_STATE_KEY,
@@ -258,23 +285,26 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 				VoterSetState::Paused {
-					completed_rounds: CompletedRounds::new(CompletedRound {
-						number: last_round_number,
-						state: set_state,
-						base,
-					}),
+					completed_rounds: completed_rounds(last_round_number, set_state, base),
 				}
 			},
 			Some(V1VoterSetState::Live(last_round_number, set_state)) => {
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-				make_voter_set_state_live(last_round_number, set_state, base)
+
+				VoterSetState::Live {
+					completed_rounds: completed_rounds(last_round_number, set_state, base),
+					current_round: HasVoted::No,
+				}
 			},
 			None => {
 				let set_state = genesis_round();
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-				make_voter_set_state_live(0, set_state, base)
+				VoterSetState::Live {
+					completed_rounds: completed_rounds(0, set_state, base),
+					current_round: HasVoted::No,
+				}
 			},
 		};
 
@@ -295,7 +325,6 @@ fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Bl
 						state,
 						base,
 					}
-				}
 			).collect::<VecDeque<CompletedRound<Block>>>()
 		)
 	};
@@ -414,11 +443,15 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 						VoterSetState::Live {
-							completed_rounds: CompletedRounds::new(CompletedRound {
-								number: 0,
-								base,
-								state,
-							}),
+							completed_rounds: CompletedRounds::new(
+								CompletedRound {
+									number: 0,
+									base,
+									state,
+								},
+								set.current().0,
+								&set,
+							),
 							current_round: HasVoted::No,
 						}
 					}
@@ -440,17 +473,22 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	info!(target: "afg", "Loading GRANDPA authority set \
 		from genesis on what appears to be first startup.");
 
-	let genesis_set = AuthoritySet::genesis(genesis_authorities()?);
+	let genesis_authorities = genesis_authorities()?;
+	let genesis_set = AuthoritySet::genesis(genesis_authorities.clone());
 	let state = make_genesis_round();
 	let base = state.prevote_ghost
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 	let genesis_state = VoterSetState::Live {
-		completed_rounds: CompletedRounds::new(CompletedRound {
-			number: 0,
-			state,
-			base,
-		}),
+		completed_rounds: CompletedRounds::new(
+			CompletedRound {
+				number: 0,
+				state,
+				base,
+			},
+			0,
+			&genesis_set,
+		),
 		current_round: HasVoted::No,
 	};
 	backend.insert_aux(
@@ -469,6 +507,10 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 }
 
 /// Update the authority set on disk after a change.
+///
+/// If there has just been a handoff, pass a `new_set` parameter that describes the
+/// handoff. `set` in all cases should reflect the current authority set, with all
+/// changes and handoffs applied.
 pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	new_set: Option<&NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
@@ -499,11 +541,15 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 			new_set.canon_number.clone(),
 		));
 		let set_state = VoterSetState::<Block>::Live {
-			completed_rounds: CompletedRounds::new(CompletedRound {
-				number: 0,
-				state: round_state,
-				base: (new_set.canon_hash, new_set.canon_number),
-			}),
+			completed_rounds: CompletedRounds::new(
+				CompletedRound {
+					number: 0,
+					state: round_state,
+					base: (new_set.canon_hash, new_set.canon_number),
+				},
+				new_set.set_id,
+				&set,
+			),
 			current_round: HasVoted::No,
 		};
 		let encoded = set_state.encode();
@@ -665,7 +711,7 @@ mod test {
 		assert_eq!(
 			*authority_set.inner().read(),
 			AuthoritySet {
-				current_authorities: authorities,
+				current_authorities: authorities.clone(),
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
 				set_id,
@@ -675,11 +721,15 @@ mod test {
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
-				completed_rounds: CompletedRounds::new(CompletedRound {
-					number: round_number,
-					state: round_state.clone(),
-					base: round_state.prevote_ghost.unwrap(),
-				}),
+				completed_rounds: CompletedRounds::new(
+					CompletedRound {
+						number: round_number,
+						state: round_state.clone(),
+						base: round_state.prevote_ghost.unwrap(),
+					},
+					set_id,
+					&*authority_set.inner().read(),
+				),
 				current_round: HasVoted::No,
 			},
 		);
@@ -747,7 +797,7 @@ mod test {
 		assert_eq!(
 			*authority_set.inner().read(),
 			AuthoritySet {
-				current_authorities: authorities,
+				current_authorities: authorities.clone(),
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
 				set_id,
@@ -757,11 +807,15 @@ mod test {
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
-				completed_rounds: CompletedRounds::new(CompletedRound {
-					number: round_number,
-					state: round_state.clone(),
-					base: round_state.prevote_ghost.unwrap(),
-				}),
+				completed_rounds: CompletedRounds::new(
+					CompletedRound {
+						number: round_number,
+						state: round_state.clone(),
+						base: round_state.prevote_ghost.unwrap(),
+					},
+					set_id,
+					&*authority_set.inner().read(),
+				),
 				current_round: HasVoted::No,
 			},
 		);

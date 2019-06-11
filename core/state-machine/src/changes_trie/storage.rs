@@ -16,12 +16,12 @@
 
 //! Changes trie storage utilities.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use hash_db::Hasher;
 use trie::DBValue;
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{AnchorBlockId, RootsStorage, Storage};
+use crate::changes_trie::{RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
@@ -32,27 +32,27 @@ use crate::backend::insert_into_memory_db;
 use crate::changes_trie::input::InputPair;
 
 /// In-memory implementation of changes trie storage.
-pub struct InMemoryStorage<H: Hasher> {
-	data: RwLock<InMemoryStorageData<H>>,
+pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
+	data: RwLock<InMemoryStorageData<H, Number>>,
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
-pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
+pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> {
 	storage: &'a S,
-	_hasher: ::std::marker::PhantomData<H>,
+	_hasher: ::std::marker::PhantomData<(H, Number)>,
 }
 
-struct InMemoryStorageData<H: Hasher> {
-	roots: HashMap<u64, H::Out>,
+struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {
+	roots: BTreeMap<Number, H::Out>,
 	mdb: MemoryDB<H>,
 }
 
-impl<H: Hasher> InMemoryStorage<H> {
+impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	/// Create the storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
 			data: RwLock::new(InMemoryStorageData {
-				roots: HashMap::new(),
+				roots: BTreeMap::new(),
 				mdb,
 			}),
 		}
@@ -63,10 +63,20 @@ impl<H: Hasher> InMemoryStorage<H> {
 		Self::with_db(Default::default())
 	}
 
+	/// Create the storage with given blocks.
+	pub fn with_blocks(blocks: Vec<(Number, H::Out)>) -> Self {
+		Self {
+			data: RwLock::new(InMemoryStorageData {
+				roots: blocks.into_iter().collect(),
+				mdb: MemoryDB::default(),
+			}),
+		}
+	}
+
 	#[cfg(test)]
-	pub fn with_inputs(inputs: Vec<(u64, Vec<InputPair>)>) -> Self {
+	pub fn with_inputs(inputs: Vec<(Number, Vec<InputPair<Number>>)>) -> Self {
 		let mut mdb = MemoryDB::default();
-		let mut roots = HashMap::new();
+		let mut roots = BTreeMap::new();
 		for (block, pairs) in inputs {
 			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
 			if let Some(root) = root {
@@ -101,32 +111,44 @@ impl<H: Hasher> InMemoryStorage<H> {
 	}
 
 	/// Insert changes trie for given block.
-	pub fn insert(&self, block: u64, changes_trie_root: H::Out, trie: MemoryDB<H>) {
+	pub fn insert(&self, block: Number, changes_trie_root: H::Out, trie: MemoryDB<H>) {
 		let mut data = self.data.write();
 		data.roots.insert(block, changes_trie_root);
 		data.mdb.consolidate(trie);
 	}
 }
 
-impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> {
-	fn root(&self, _anchor_block: &AnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage<H, Number> {
+	fn build_anchor(&self, parent_hash: H::Out) -> Result<AnchorBlockId<H::Out, Number>, String> {
+		self.data.read().roots.iter()
+			.find(|(_, v)| **v == parent_hash)
+			.map(|(k, _)| AnchorBlockId { hash: parent_hash, number: k.clone() })
+			.ok_or_else(|| format!("Can't find associated number for block {:?}", parent_hash))
+	}
+
+	fn root(&self, _anchor_block: &AnchorBlockId<H::Out, Number>, block: Number) -> Result<Option<H::Out>, String> {
 		Ok(self.data.read().roots.get(&block).cloned())
 	}
 }
 
-impl<H: Hasher> Storage<H> for InMemoryStorage<H> {
+impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 
-impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendAdapter<'a, H, S> {
+impl<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> TrieBackendAdapter<'a, H, Number, S> {
 	pub fn new(storage: &'a S) -> Self {
 		Self { storage, _hasher: Default::default() }
 	}
 }
 
-impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, S> {
+impl<'a, H, Number, S> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number, S>
+	where
+		S: 'a + Storage<H, Number>,
+		Number: BlockNumber,
+		H: Hasher,
+{
 	type Overlay = MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {

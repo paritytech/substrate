@@ -7,8 +7,8 @@ edition = "2018"
 
 [dependencies]
 clap = "~2.32"
+derive_more = "0.14.0"
 env_logger = "0.6"
-error-chain = "0.12"
 log = "0.4"
 atty = "0.2"
 regex = "1"
@@ -33,6 +33,7 @@ substrate-telemetry = { path = "../../core/telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 names = "0.11.0"
 structopt = "0.2"
+rpassword = "3.0"
 
 [dev-dependencies]
 tempdir = "0.3"

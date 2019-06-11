@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
+derive_more = "0.14.0"
 futures = "0.1"
 log = "0.4"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
 substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }

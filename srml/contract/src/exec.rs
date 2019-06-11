@@ -29,6 +29,9 @@ pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
 
+/// A type that represents a topic of an event. At the moment a hash is used.
+pub type TopicOf<T> = <T as system::Trait>::Hash;
+
 #[cfg_attr(test, derive(Debug))]
 pub struct InstantiateReceipt<AccountId> {
 	pub address: AccountId,
@@ -103,11 +106,13 @@ pub trait Ext {
 	/// Returns a reference to the timestamp of the current block
 	fn now(&self) -> &MomentOf<Self::T>;
 
-	/// Returns a reference to the random seed for the current block
-	fn random_seed(&self) -> &SeedOf<Self::T>;
+	/// Returns a random number for the current block with the given subject.
+	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
-	/// Deposit an event.
-	fn deposit_event(&mut self, data: Vec<u8>);
+	/// Deposit an event with the given topics.
+	///
+	/// There should not be any duplicates in `topics`.
+	fn deposit_event(&mut self, topics: Vec<TopicOf<Self::T>>, data: Vec<u8>);
 
 	/// Set rent allowance of the contract
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<Self::T>);
@@ -189,6 +194,15 @@ impl VmExecResult {
 	}
 }
 
+/// Struct that records a request to deposit an event with a list of topics.
+#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq))]
+pub struct IndexedEvent<T: Trait> {
+	/// A list of topics this event will be deposited with.
+	pub topics: Vec<T::Hash>,
+	/// The event to deposit.
+	pub event: Event<T>,
+}
+
 /// A trait that represent a virtual machine.
 ///
 /// You can view a virtual machine as something that takes code, an input data buffer,
@@ -238,7 +252,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
-	pub events: Vec<Event<T>>,
+	pub events: Vec<IndexedEvent<T>>,
 	pub calls: Vec<(T::AccountId, T::Call)>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
@@ -339,7 +353,6 @@ where
 							caller: self.self_account.clone(),
 							value_transferred: value,
 							timestamp: timestamp::Module::<T>::now(),
-							random_seed: system::Module::<T>::random_seed(),
 						},
 						input_data,
 						empty_output_buf,
@@ -409,7 +422,6 @@ where
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
 						timestamp: timestamp::Module::<T>::now(),
-						random_seed: system::Module::<T>::random_seed(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -418,7 +430,10 @@ where
 				.into_result()?;
 
 			// Deposit an instantiation event.
-			nested.events.push(RawEvent::Instantiated(self.self_account.clone(), dest.clone()));
+			nested.events.push(IndexedEvent {
+				event: RawEvent::Instantiated(self.self_account.clone(), dest.clone()),
+				topics: Vec::new(),
+			});
 
 			(nested.overlay.into_change_set(), nested.events, nested.calls)
 		};
@@ -545,8 +560,10 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if transactor != dest {
 		ctx.overlay.set_balance(transactor, new_from_balance);
 		ctx.overlay.set_balance(dest, new_to_balance);
-		ctx.events
-			.push(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
+		ctx.events.push(IndexedEvent {
+			event: RawEvent::Transfer(transactor.clone(), dest.clone(), value),
+			topics: Vec::new(),
+		});
 	}
 
 	Ok(())
@@ -557,7 +574,6 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
-	random_seed: T::Hash,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -623,16 +639,19 @@ where
 		self.value_transferred
 	}
 
-	fn random_seed(&self) -> &T::Hash {
-		&self.random_seed
+	fn random(&self, subject: &[u8]) -> SeedOf<T> {
+		system::Module::<T>::random(subject)
 	}
 
 	fn now(&self) -> &T::Moment {
 		&self.timestamp
 	}
 
-	fn deposit_event(&mut self, data: Vec<u8>) {
-		self.ctx.events.push(RawEvent::Contract(self.ctx.self_account.clone(), data));
+	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
+		self.ctx.events.push(IndexedEvent {
+			topics,
+			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
+		});
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
@@ -659,7 +678,7 @@ where
 mod tests {
 	use super::{
 		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
-		Vm, VmExecResult, InstantiateReceipt, RawEvent,
+		Vm, VmExecResult, InstantiateReceipt, RawEvent, IndexedEvent,
 	};
 	use crate::account_db::AccountDb;
 	use crate::gas::GasMeter;
@@ -684,7 +703,7 @@ mod tests {
 	}
 
 	#[derive(Clone)]
-	struct MockExecutable<'a>(Rc<Fn(MockCtx) -> VmExecResult + 'a>);
+	struct MockExecutable<'a>(Rc<dyn Fn(MockCtx) -> VmExecResult + 'a>);
 
 	impl<'a> MockExecutable<'a> {
 		fn new(f: impl Fn(MockCtx) -> VmExecResult + 'a) -> Self {
@@ -1262,8 +1281,14 @@ mod tests {
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
-					RawEvent::Transfer(ALICE, created_contract_address, 100),
-					RawEvent::Instantiated(ALICE, created_contract_address),
+					IndexedEvent {
+						event: RawEvent::Transfer(ALICE, created_contract_address, 100),
+						topics: Vec::new(),
+					},
+					IndexedEvent {
+						event: RawEvent::Instantiated(ALICE, created_contract_address),
+						topics: Vec::new(),
+					}
 				]);
 			}
 		);
@@ -1314,9 +1339,18 @@ mod tests {
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
-					RawEvent::Transfer(ALICE, BOB, 20),
-					RawEvent::Transfer(BOB, created_contract_address, 15),
-					RawEvent::Instantiated(BOB, created_contract_address),
+					IndexedEvent {
+						event: RawEvent::Transfer(ALICE, BOB, 20),
+						topics: Vec::new(),
+					},
+					IndexedEvent {
+						event: RawEvent::Transfer(BOB, created_contract_address, 15),
+						topics: Vec::new(),
+					},
+					IndexedEvent {
+						event: RawEvent::Instantiated(BOB, created_contract_address),
+						topics: Vec::new(),
+					},
 				]);
 			}
 		);
@@ -1362,7 +1396,10 @@ mod tests {
 				// The contract wasn't created so we don't expect to see an instantiation
 				// event here.
 				assert_eq!(&ctx.events, &[
-					RawEvent::Transfer(ALICE, BOB, 20),
+					IndexedEvent {
+						event: RawEvent::Transfer(ALICE, BOB, 20),
+						topics: Vec::new(),
+					},
 				]);
 			}
 		);

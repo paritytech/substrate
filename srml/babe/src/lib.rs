@@ -17,19 +17,21 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code, warnings)]
+#![forbid(unsafe_code)]
 pub use timestamp;
 
-use rstd::{result, prelude::*};
+use rstd::{result, prelude::*, marker::PhantomData};
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::As;
 use timestamp::{OnTimestampSet, Trait};
+use primitives::traits::{SaturatedConversion, Saturating};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::Decode;
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -54,6 +56,20 @@ impl BabeInherentData for InherentData {
 	fn babe_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// Logs in this module.
+///
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// BABE inherent digests
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for BABE.
@@ -116,10 +132,10 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> u64 {
+	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
+		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
 }
 
@@ -142,10 +158,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			_ => return Ok(()),
 		};
 
-		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
-
+		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
 		let seal_slot = data.babe_inherent_data()?;
-
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
