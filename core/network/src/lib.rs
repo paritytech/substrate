@@ -27,8 +27,7 @@ mod behaviour;
 mod chain;
 mod custom_proto;
 mod debug_info;
-mod libp2p_service;
-mod libp2p_tests;
+//mod libp2p_tests;
 mod on_demand_layer;
 #[macro_use]
 mod protocol;
@@ -168,6 +167,7 @@ pub struct NetworkState {
 	pub peerset: serde_json::Value,
 }
 
+/// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStatePeer {
@@ -187,6 +187,7 @@ pub struct NetworkStatePeer {
 	pub known_addresses: HashSet<Multiaddr>,
 }
 
+/// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStateNotConnectedPeer {
@@ -198,6 +199,7 @@ pub struct NetworkStateNotConnectedPeer {
 	pub latest_ping_time: Option<Duration>,
 }
 
+/// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkStatePeerEndpoint {
