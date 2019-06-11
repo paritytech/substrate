@@ -82,7 +82,7 @@ use primitives::traits::{
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
 	ValidateUnsigned, DigestItem,
 };
-use primitives::weights::WeighableCall;
+use primitives::weights::Weighable;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 use srml_support::{Dispatchable, traits::MakePayment};
@@ -127,7 +127,7 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
+		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
 		From<Option<System::AccountId>>,
@@ -149,7 +149,7 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + WeighableCall,
+		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
 		From<Option<System::AccountId>>,

@@ -23,7 +23,7 @@ pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
-pub use sr_primitives::weights::{WeighableCall, TransactionWeight, WeighableTransaction, Weight};
+pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1001,12 +1001,12 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::WeighableCall
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weighable
 			for $call_type<$trait_instance $(, $instance)?>
 		{
-			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
-				match *self {
-					$( $call_type::$fn_name(..) => $crate::dispatch::WeighableTransaction::calculate_weight($weight, len), )*
+			fn weight(&self, _len: usize) -> $crate::dispatch::Weight {
+				match self {
+					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::weight(&$weight, _len), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
@@ -1133,7 +1133,7 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
-		impl $crate::dispatch::WeighableCall for $call_type {
+		impl $crate::dispatch::Weighable for $call_type {
 			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
 				match self {
 					$( $call_type::$camelcase(call) => call.weight(len), )*

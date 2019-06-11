@@ -18,7 +18,7 @@
 //! stage.
 
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
-use crate::weights::{WeighableCall, Weight};
+use crate::weights::{Weighable, Weight};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -56,9 +56,9 @@ where
 	}
 }
 
-impl<AccountId, Index, Call> WeighableCall for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call> Weighable for CheckedExtrinsic<AccountId, Index, Call>
 where
-	Call: WeighableCall,
+	Call: Weighable,
 {
 	fn weight(&self, len: usize) -> Weight {
 		self.function.weight(len)
