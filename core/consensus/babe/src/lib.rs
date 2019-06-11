@@ -79,7 +79,7 @@ use client::{
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
-use tokio::timer::Timeout;
+use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
@@ -984,7 +984,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync_without_disconnects();

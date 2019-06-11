@@ -501,7 +501,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let (network, network_startup) = NetworkBridge::new(
 		network,
 		config.clone(),
-		Some((authority_set.set_id(), &set_state.read())),
+		Some(&set_state.read()),
 		on_exit.clone(),
 	);
 
@@ -640,12 +640,16 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 					let set_state = VoterSetState::Live {
 						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(CompletedRound {
-							number: 0,
-							state: genesis_state,
-							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
-						}),
+						completed_rounds: CompletedRounds::new(
+							CompletedRound {
+								number: 0,
+								state: genesis_state,
+								base: (new.canon_hash, new.canon_number),
+								votes: Vec::new(),
+							},
+							new.set_id,
+							&*authority_set.inner().read(),
+						),
 						current_round: HasVoted::No,
 					};
 
