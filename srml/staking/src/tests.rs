@@ -94,7 +94,7 @@ fn no_offline_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
 		// New era is not being forced
-		assert!(Staking::forcing_new_era().is_none());
+		assert!(!Staking::forcing_new_era());
 	});
 }
 
@@ -151,7 +151,7 @@ fn invulnerability_should_work() {
 		assert!(<Validators<Test>>::exists(&11));
 		// New era not being forced
 		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
-		assert!(Staking::forcing_new_era().is_none());
+		assert!(!Staking::forcing_new_era());
 	});
 }
 
@@ -181,7 +181,7 @@ fn offline_should_slash_and_kick() {
 		// Confirm account 10 has been removed as a validator
 		assert!(!<Validators<Test>>::exists(&11));
 		// A new era is forced due to slashing
-		assert!(Staking::forcing_new_era().is_some());
+		assert!(Staking::forcing_new_era());
 	});
 }
 
@@ -220,7 +220,7 @@ fn offline_grace_should_delay_slashing() {
 		// User gets slashed
 		assert!(Balances::free_balance(&11) < 70);
 		// New era is forced
-		assert!(Staking::forcing_new_era().is_some());
+		assert!(Staking::forcing_new_era());
 	});
 }
 
@@ -304,8 +304,6 @@ fn rewards_should_work() {
 	// * rewards get paid per Era
 	// * Check that nominators are also rewarded
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(3)
-		.sessions_per_era(3)
 	.build(),
 	|| {
 		let delay = 1;
@@ -317,9 +315,6 @@ fn rewards_should_work() {
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
 		// Initial config should be correct
-		assert_eq!(Staking::era_length(), 9);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
 		assert_eq!(Staking::current_session_reward(), 10);
@@ -382,8 +377,6 @@ fn multi_era_reward_should_work() {
 	// The value of current_session_reward is set at the end of each era, based on
 	// slot_stake and session_reward.
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(3)
-		.sessions_per_era(3)
 		.nominate(false)
 		.build(),
 	|| {
@@ -458,16 +451,12 @@ fn staking_should_work() {
 	// * new ones will be chosen per era
 	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
 	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(3)
 		.nominate(false)
 		.fair(false) // to give 20 more staked value
 		.build(),
 	|| {
 		// remember + compare this along with the test.
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
-
-		assert_ok!(Staking::set_bonding_duration(2));
-		assert_eq!(Staking::bonding_duration(), 2);
 
 		// put some money in account that we'll use.
 		for i in 1..5 { let _ = Balances::make_free_balance_be(&i, 2000); }
@@ -575,7 +564,6 @@ fn no_candidate_emergency_condition() {
 		.nominate(false)
 		.build(),
 	|| {
-		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 15);
 
 		// initial validators
@@ -720,7 +708,6 @@ fn nominating_and_rewards_should_work() {
 fn nominators_also_get_slashed() {
 	// A nominator should be slashed if the validator they nominated is slashed
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
-		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		// slash happens immediately.
 		assert_eq!(Staking::offline_slash_grace(), 0);
@@ -762,7 +749,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		// Because slashing happened.
-		assert!(Staking::forcing_new_era().is_some());
+		assert!(Staking::forcing_new_era());
 	});
 }
 
@@ -773,7 +760,6 @@ fn double_staking_should_fail() {
 	// * an account already bonded as stash cannot nominate.
 	// * an account already bonded as controller can nominate.
 	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(2)
 		.build(),
 		|| {
 			let arbitrary_value = 5;
@@ -793,7 +779,6 @@ fn double_controlling_should_fail() {
 	// should test (in the same order):
 	// * an account already bonded as controller CANNOT be reused as the controller of another account.
 	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(2)
 		.build(),
 		|| {
 			let arbitrary_value = 5;
@@ -807,70 +792,50 @@ fn double_controlling_should_fail() {
 #[test]
 fn session_and_eras_work() {
 	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(2)
 		.build(),
 	|| {
-		assert_eq!(Staking::era_length(), 2);
-		assert_eq!(Staking::sessions_per_era(), 2);
-		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 0);
 
 		// Block 1: No change.
 		System::set_block_number(1);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Staking::sessions_per_era(), 2);
-		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 
 		// Block 2: Simple era change.
 		System::set_block_number(2);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Staking::sessions_per_era(), 2);
-		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
 
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
-		assert_ok!(Staking::set_sessions_per_era(3));
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Staking::sessions_per_era(), 2);
-		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 1);
 
 		// Block 4: Era change kicks in.
 		System::set_block_number(4);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 4);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 5: No change.
 		System::set_block_number(5);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 5);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 6: No change.
 		System::set_block_number(6);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 6);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 7: Era increment.
 		System::set_block_number(7);
 		Session::on_initialize(System::block_number());
 		assert_eq!(Session::current_index(), 7);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 4);
 		assert_eq!(Staking::current_era(), 3);
 	});
 }
@@ -1012,8 +977,6 @@ fn validator_payment_prefs_work() {
 	// Note: unstake threshold is being directly tested in slashing tests.
 	// This test will focus on validator payment.
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(3)
-		.sessions_per_era(3)
 		.build(),
 	|| {
 		// Initial config
@@ -1125,14 +1088,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Set payee to controller. avoids confusion
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
-		// Set unbonding era (bonding_duration) to 2
-		assert_ok!(Staking::set_bonding_duration(2));
-
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Initial config should be correct
-		assert_eq!(Staking::sessions_per_era(), 1);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
 		assert_eq!(Staking::current_session_reward(), 10);
@@ -1553,7 +1512,6 @@ fn switching_roles() {
 	// Test that it should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
-		.sessions_per_era(3)
 		.build(),
 	|| {
 		// Reset reward destination
