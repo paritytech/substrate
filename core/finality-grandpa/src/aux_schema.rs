@@ -18,8 +18,6 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
 use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
@@ -32,7 +30,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
-use crate::{NewAuthoritySet, SignedMessage, HistoricalVotes};
+use crate::{NewAuthoritySet, HistoricalVotes};
 
 use substrate_primitives::ed25519::Public as AuthorityId;
 
@@ -42,58 +40,7 @@ const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 const HISTORICAL_VOTES_PREFIX: &[u8] = b"grandpa_historical_votes_";
 
-const CURRENT_VERSION: u32 = 3;
-
-/// Data about a completed round.
-#[derive(Debug, Clone, Decode, Encode, PartialEq)]
-pub struct V2CompletedRound<Block: BlockT> {
-	/// The round number.
-	pub number: u64,
-	/// The round state (prevote ghost, estimate, finalized, etc.)
-	pub state: RoundState<Block::Hash, NumberFor<Block>>,
-	/// The target block base used for voting in the round.
-	pub base: (Block::Hash, NumberFor<Block>),
-	/// All the votes observed in the round.
-	pub votes: Vec<SignedMessage<Block>>,
-}
-
-// Data about last completed rounds.
-#[derive(Debug, Clone, PartialEq)]
-pub struct V2CompletedRounds<Block: BlockT> {
-	pub inner: VecDeque<V2CompletedRound<Block>>,
-}
-
-impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
-	fn encode(&self) -> Vec<u8> {
-		Vec::from_iter(&self.inner).encode()
-	}
-}
-
-impl<Block: BlockT> Decode for V2CompletedRounds<Block> {
-	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
-		Vec::<V2CompletedRound<Block>>::decode(value)
-			.map(|completed_rounds| V2CompletedRounds {
-				inner: completed_rounds.into(),
-			})
-	}
-}
-
-// The state of the current voter set.
-#[derive(Debug, Decode, Encode, PartialEq)]
-pub enum V2VoterSetState<Block: BlockT> {
-	/// The voter is live, i.e. participating in rounds.
-	Live {
-		/// The previously completed rounds.
-		completed_rounds: V2CompletedRounds<Block>,
-		/// Vote status for the current round.
-		current_round: HasVoted<Block>,
-	},
-	/// The voter is paused, i.e. not casting or importing any votes.
-	Paused {
-		/// The previously completed rounds.
-		completed_rounds: V2CompletedRounds<Block>,
-	},
-}
+const CURRENT_VERSION: u32 = 2;
 
 /// The voter set state.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -177,21 +124,6 @@ pub(crate) struct PersistentData<Block: BlockT> {
 	pub(crate) set_state: SharedVoterSetState<Block>,
 }
 
-fn make_voter_set_state_live<Block: BlockT>(
-	number: u64,
-	state: RoundState<Block::Hash, NumberFor<Block>>,
-	base: (Block::Hash, NumberFor<Block>),
-) -> VoterSetState<Block> {
-	VoterSetState::Live {
-		completed_rounds: CompletedRounds::new(CompletedRound {
-			number,
-			state,
-			base,
-		}),
-		current_round: HasVoted::No,
-	}
-}
-
 fn migrate_from_version0<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
@@ -230,6 +162,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 				CompletedRound {
 					number: last_round_number,
 					state: last_round_state,
+					votes: Vec::new(),
 					base,
 				},
 				set_id,
@@ -316,72 +249,6 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 	Ok(None)
 }
 
-fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Block>) -> VoterSetState<Block> {
-	let transform = |completed_rounds: V2CompletedRounds<Block>| {
-		CompletedRounds::new_with_rounds(
-			completed_rounds.inner.into_iter().map(
-				| V2CompletedRound { number, state, base, votes: _ } |
-					CompletedRound {
-						number,
-						state,
-						base,
-					}
-			).collect::<VecDeque<CompletedRound<Block>>>()
-		)
-	};
-	match voter_set_state_v2 {
-		V2VoterSetState::Paused { completed_rounds } => {
-			VoterSetState::Paused {
-				completed_rounds: transform(completed_rounds)
-			}
-		},
-		V2VoterSetState::Live { completed_rounds, current_round } => {
-			VoterSetState::Live {
-				completed_rounds: transform(completed_rounds),
-				current_round,
-			}
-		},
-	}
-}
-
-fn migrate_from_version2<Block: BlockT, B, G>(
-	backend: &B,
-	genesis_round: &G,
-) -> ClientResult<Option<(
-	AuthoritySet<Block::Hash, NumberFor<Block>>,
-	VoterSetState<Block>,
-)>> where B: AuxStore,
-		  G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
-{
-	CURRENT_VERSION.using_encoded(|s|
-		backend.insert_aux(&[(VERSION_KEY, s)], &[])
-	)?;
-
-	if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
-		backend,
-		AUTHORITY_SET_KEY,
-	)? {
-		let set_state = match load_decode::<_, V2VoterSetState<Block>>(
-			backend,
-			SET_STATE_KEY,
-		)? {
-			Some(voter_set_state_v2) => voter_set_state_from_v2(voter_set_state_v2),
-			None => {
-				let set_state = genesis_round();
-				let base = set_state.prevote_ghost
-					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-				make_voter_set_state_live(0, set_state, base)
-			},
-		};
-
-		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
-
-		return Ok(Some((set, set_state)));
-	}
-
-	Ok(None)
-}
-
 /// Load or initialize persistent data from backend.
 pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	backend: &B,
@@ -420,15 +287,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(2) => {
-			if let Some((new_set, set_state)) = migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)? {
-				return Ok(PersistentData {
-					authority_set: new_set.into(),
-					consensus_changes: Arc::new(consensus_changes.into()),
-					set_state: set_state.into(),
-				});
-			}
-		},
-		Some(3) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
@@ -447,6 +305,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 							completed_rounds: CompletedRounds::new(
 								CompletedRound {
 									number: 0,
+									votes: Vec::new(),
 									base,
 									state,
 								},
@@ -484,6 +343,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		completed_rounds: CompletedRounds::new(
 			CompletedRound {
 				number: 0,
+				votes: Vec::new(),
 				state,
 				base,
 			},
@@ -546,6 +406,7 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 				CompletedRound {
 					number: 0,
 					state: round_state,
+					votes: Vec::new(),
 					base: (new_set.canon_hash, new_set.canon_number),
 				},
 				new_set.set_id,
@@ -647,6 +508,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 #[cfg(test)]
 mod test {
 	use substrate_primitives::{H256, ed25519::Signature};
+	use std::collections::VecDeque;
 	use crate::{Prevote, SignedMessage, environment::Vote};
 	use grandpa::Message;
 	use test_client;

@@ -837,7 +837,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.8.0"
-source = "git+https://github.com/paritytech/finality-grandpa/?branch=marcio/answer-queries-response-methods#d8109fc8f2aa80e57db01f9f13363c06206ce19a"
+source = "git+https://github.com/paritytech/finality-grandpa/?branch=marcio/answer-queries-response-methods#1fdb8045e6da36af43d5f44943d360e96ff29490"
 dependencies = [
  "futures 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashmap_core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",

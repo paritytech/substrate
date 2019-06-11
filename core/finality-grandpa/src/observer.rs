@@ -230,6 +230,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 							CompletedRound {
 								number: 0,
 								state: genesis_state,
+								votes: Vec::new(),
 								base: (new.canon_hash, new.canon_number),
 							},
 							new.set_id,

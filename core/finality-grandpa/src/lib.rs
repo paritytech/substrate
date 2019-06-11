@@ -655,6 +655,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						completed_rounds: CompletedRounds::new(
 							CompletedRound {
 								number: 0,
+								votes: Vec::new(),
 								state: genesis_state,
 								base: (new.canon_hash, new.canon_number),
 							},

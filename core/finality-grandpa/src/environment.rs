@@ -41,7 +41,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use consensus_common::SelectChain;
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
+	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote, SignedMessage,
 	PrimaryPropose, NewAuthoritySet, VoterCommand, HistoricalVotes,
 };
 
@@ -61,6 +61,8 @@ pub struct CompletedRound<Block: BlockT> {
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
+	/// All the votes observed in the round.
+	pub votes: Vec<SignedMessage<Block>>,
 }
 
 // Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -120,11 +122,6 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	/// Iterate over all completed rounds.
 	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
 		self.rounds.iter()
-	}
-
-	/// Create a new completed rounds tracker initialized with the rounds in `completed_rounds`.
-	pub fn new_with_rounds(completed_rounds: VecDeque<CompletedRound<Block>>) -> Self {
-		CompletedRounds { inner: completed_rounds }
 	}
 
 	/// Returns the last (latest) completed round.
@@ -462,6 +459,7 @@ where
 {
 	type Message = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, ed25519::Signature, AuthorityId>;
 
+	#[allow(deprecated)]
 	fn prevotes_seen(&self, round: u64) -> Vec<Self::Message> {
 		crate::aux_schema::read_historical_votes::<Block, _>(&**self.inner.backend(), self.set_id, round)
 			.map(|historical_votes| historical_votes.seen().clone())
@@ -470,21 +468,27 @@ where
 			.filter(|sig_msg| sig_msg.message.is_prevote())
 			.collect()
 	}
+
+	#[allow(deprecated)]
 	fn votes_seen_when_prevoted(&self, round: u64) -> Vec<Self::Message> {
 		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
 			&**self.inner.backend(),
 			self.set_id,
 			round
 		).unwrap_or(HistoricalVotes::<Block>::new());
+
 		let len = historical_votes.prevote_idx().unwrap_or(0);
 		historical_votes.seen().split_at(len).0.to_vec()
 	}
+
+	#[allow(deprecated)]
 	fn votes_seen_when_precommited(&self, round: u64) -> Vec<Self::Message> {
 		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
 			&**self.inner.backend(),
 			self.set_id,
 			round
 		).unwrap_or(HistoricalVotes::<Block>::new());
+
 		let len = historical_votes.precommit_idx().unwrap_or(0);
 		historical_votes.seen().split_at(len).0.to_vec()
 	}
@@ -707,7 +711,8 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: &HistoricalVotes<Block>,
+		votes: Vec<SignedMessage<Block>>,
+		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -726,6 +731,7 @@ where
 				number: round,
 				state: state.clone(),
 				base,
+				votes,
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));
@@ -742,7 +748,7 @@ where
 				self.set_id,
 				round,
 				&set_state,
-				&votes,
+				&historical_votes,
 			)?;
 
 			Ok(Some(set_state))
