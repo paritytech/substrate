@@ -13,7 +13,7 @@ use substrate_service::{
 	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
@@ -106,7 +106,6 @@ construct_service_factory! {
 						None,
 						None,
 						client,
-						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}
@@ -122,7 +121,6 @@ construct_service_factory! {
 						None,
 						None,
 						client,
-						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}

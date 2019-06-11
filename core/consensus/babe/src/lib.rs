@@ -522,9 +522,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<C, E> {
+pub struct BabeVerifier<C> {
 	client: Arc<C>,
-	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
 	threshold: u64,
 }
@@ -551,18 +550,6 @@ impl<C, E> BabeVerifier<C, E> {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-/// No-op extra verification.
-#[derive(Debug, Clone, Copy)]
-pub struct NothingExtra;
-
-impl<B: Block> ExtraVerification<B> for NothingExtra {
-	type Verified = Result<(), String>;
-
-	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
-		Ok(())
 	}
 }
 
@@ -600,11 +587,6 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		let parent_hash = *header.parent_hash();
 		let authorities = self.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
-		let extra_verification = self.extra.verify(
-			&header,
-			body.as_ref().map(|x| &x[..]),
-		);
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -644,8 +626,6 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
-
-				extra_verification.into_future().wait()?;
 
 				let new_authorities = pre_header.digest()
 					.log(DigestItem::as_authorities_change)
@@ -880,7 +860,6 @@ mod tests {
 			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
-				extra: NothingExtra,
 				inherent_data_providers,
 				threshold: config.threshold(),
 			})
