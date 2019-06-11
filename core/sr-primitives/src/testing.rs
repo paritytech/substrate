@@ -19,7 +19,7 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -36,13 +36,14 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
-/// Converter between u64 and the AuthorityId wrapper type.
-pub struct ConvertUintAuthorityId;
-impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
-	fn convert(a: u64) -> Option<UintAuthorityId> {
-		Some(UintAuthorityId(a))
-	}
+impl OpaqueKeys for UintAuthorityId {
+	fn count() -> usize { 1 }
+	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
+	// keep `UintAuthorityId` as a u64 under the hood.
+	fn get_raw(&self, _: usize) -> &[u8] { unsafe { &std::mem::transmute::<_, &[u8; 8]>(&self.0)[..] } }
+	fn get<T: Decode>(&self, _: usize) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 }
+
 /// Digest item
 pub type DigestItem = GenDigestItem<H256>;
 

@@ -117,81 +117,13 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use parity_codec::Decode;
-use primitives::traits::{Zero, Saturating, Member};
+use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter, print};
 use system::ensure_signed;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
-
-/// Opaque datatype that may be destructured into a series of raw byte slices (which represent
-/// individual keys).
-pub trait OpaqueKeys {
-	fn count() -> usize { 0 }
-	fn get_raw(&self, i: usize) -> &[u8];
-	fn get<T: Decode>(&self, i: usize) -> Option<T> { T::decode(&mut self.get_raw(i)) }
-	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
-}
-
-/// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
-/// e.g.
-/// ```
-/// count!(println ("{}",) foo, bar, baz);
-/// // Will result in three `println!`s: "0", "1" and "2".
-/// ```
-#[macro_export]
-macro_rules! count {
-	($f:ident ($($x:tt)*) ) => ();
-	($f:ident ($($x:tt)*) $x1:tt) => { $f!($($x)* 0); };
-	($f:ident ($($x:tt)*) $x1:tt, $x2:tt) => { $f!($($x)* 0); $f!($($x)* 1); };
-	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt) => { $f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); };
-	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt) => {
-		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3);
-	};
-	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt, $x5:tt) => {
-		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3); $f!($($x)* 4);
-	};
-}
-
-#[macro_export]
-/// Just implement `OpaqueKeys` for a given tuple-struct.
-/// Would be much nicer for this to be converted to `derive` code.
-macro_rules! impl_opaque_keys {
-	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-	) => {
-		impl_opaque_keys! {
-			pub struct $name ( $( $t ,)* );
-			impl OpaqueKeys for _ {}
-		}
-	};
-	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-		impl OpaqueKeys for _ {
-			$($rest:tt)*
-		}
-	) => {
-		#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		pub struct $name($( pub $t ,)*);
-		impl $crate::OpaqueKeys for $name {
-			fn count() -> usize {
-				let mut c = 0;
-				$( let _: $t; c += 1; )*
-				c
-			}
-			fn get_raw(&self, i: usize) -> &[u8] {
-				$crate::count!(impl_opaque_keys (!! self i) $($t),*);
-				&[]
-			}
-			$($rest)*
-		}
-	};
-	( !! $self:ident $param_i:ident $i:tt) => {
-		if $param_i == $i { return $self.$i.as_ref() }
-	}
-}
 
 pub trait ShouldEndSession<BlockNumber> {
 	fn should_end_session(now: BlockNumber) -> bool;
@@ -458,14 +390,6 @@ mod tests {
 			let l = SESSION_LENGTH.with(|l| *l.borrow());
 			now % l == 0 || FORCE_SESSION_END.with(|l| { let r = *l.borrow(); *l.borrow_mut() = false; r })
 		}
-	}
-
-	impl OpaqueKeys for UintAuthorityId {
-		fn count() -> usize { 1 }
-		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
-		// keep `UintAuthorityId` as a u64 under the hood.
-		fn get_raw(&self, _: usize) -> &[u8] { unsafe { &std::mem::transmute::<_, &[u8; 8]>(&self.0)[..] } }
-		fn get<T: Decode>(&self, _: usize) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 	}
 
 	pub struct TestSessionHandler;
