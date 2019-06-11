@@ -119,6 +119,7 @@ test-linux-stable:
 
 test-linux-stable-int:             &test
   stage:                           test
+  <<:                              *docker-env
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
