@@ -1617,14 +1617,13 @@ fn bond_with_no_staked_value() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		// Not elected even though we want 3.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
-		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 11).
-		assert_eq!(Staking::slot_stake(), 11);
+		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 31).
+		assert_eq!(Staking::slot_stake(), 31);
 
 		// let's make the stingy one elected.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
@@ -1634,8 +1633,7 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(2);
 
 		// Stingy one is selected
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
@@ -1647,14 +1645,13 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
-		System::set_block_number(3);
-		Session::on_initialize(System::block_number());
+		start_era(3);
 
-		let reward = Staking::current_session_reward();
+		let reward = Staking::current_session_reward() * 3;
 		// 2 will not get a reward of only 1
 		// 4 will get the rest
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 1);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 1);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3);
 	});
 }
 
