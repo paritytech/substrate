@@ -22,7 +22,7 @@ use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestI
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use crate::{Trait, Module};
+use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -31,12 +31,6 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
-
-impl consensus::Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
-}
 
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -59,16 +53,16 @@ impl timestamp::Trait for Test {
 
 impl Trait for Test {
 	type HandleReport = ();
+	type AuthorityId = UintAuthorityId;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		minimum_period: 1,
+	}.build_storage().unwrap().0);
+	t.extend(GenesisConfig::<Test>{
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

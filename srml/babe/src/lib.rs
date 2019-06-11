@@ -21,7 +21,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*, marker::PhantomData};
-use srml_support::{decl_storage, decl_module};
+use srml_support::{decl_storage, decl_module, StorageValue};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating}};
 #[cfg(feature = "std")]

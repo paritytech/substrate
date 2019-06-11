@@ -18,13 +18,12 @@
 
 #![cfg(test)]
 
-use primitives::{testing, traits::OnFinalize};
-use primitives::traits::Header;
+use primitives::{traits::{OnFinalize, Header}, generic::DigestItem as GenDigestItem, testing};
 use runtime_io::with_externalities;
-use crate::mock::{Grandpa, System, new_test_ext};
+use crate::{Event, mock::{Grandpa, System, new_test_ext}};
 use system::{EventRecord, Phase};
-use crate::{RawLog, RawEvent};
 use codec::{Decode, Encode};
+use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange};
 use super::*;
 
 #[test]
@@ -39,14 +38,16 @@ fn authorities_change_logged() {
 		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				RawLog::AuthoritiesChangeSignal(0, vec![(4, 1), (5, 1), (6, 1)]).into(),
+				Signal::AuthoritiesChange(
+					ScheduledChange { delay: 1, next_authorities: vec![(4, 1), (5, 1), (6, 1)] }
+				).into(),
 			],
 		});
 
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Finalization,
-				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+				event: Event::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
 				topics: vec![],
 			},
 		]);
@@ -62,7 +63,9 @@ fn authorities_change_logged_after_delay() {
 		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				RawLog::AuthoritiesChangeSignal(1, vec![(4, 1), (5, 1), (6, 1)]).into(),
+				Signal::AuthoritiesChange(
+					ScheduledChange { delay: 1, next_authorities: vec![(4, 1), (5, 1), (6, 1)] }
+				).into(),
 			],
 		});
 
@@ -77,7 +80,7 @@ fn authorities_change_logged_after_delay() {
 		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Finalization,
-				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+				event: Event::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
 				topics: vec![],
 			},
 		]);

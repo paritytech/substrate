@@ -24,15 +24,16 @@ use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{GenesisConfig, Trait, Module};
+use crate::{GenesisConfig, Trait, Module, Signal};
+use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<RawLog<u64, u64>> for DigestItem {
-	fn from(log: RawLog<u64, u64>) -> DigestItem {
-		GenDigestItem::Other(log.encode())
+impl From<Signal<u64>> for DigestItem {
+	fn from(log: Signal<u64>) -> DigestItem {
+		GenDigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 	}
 }
 
