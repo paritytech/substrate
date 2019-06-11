@@ -20,6 +20,7 @@
 
 use parity_codec::Codec;
 use substrate_client::decl_runtime_apis;
+use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 
 /// The `ConsensusEngineId` of AuRa.
