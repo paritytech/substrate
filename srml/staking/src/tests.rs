@@ -1800,8 +1800,7 @@ fn phragmen_should_not_overflow_validators() {
 		bond_nominator(6, u64::max_value()/2, vec![3, 5]);
 		bond_nominator(8, u64::max_value()/2, vec![3, 5]);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
@@ -1827,8 +1826,7 @@ fn phragmen_should_not_overflow_nominators() {
 		bond_nominator(6, u64::max_value(), vec![3, 5]);
 		bond_nominator(8, u64::max_value(), vec![3, 5]);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
@@ -1850,8 +1848,7 @@ fn phragmen_should_not_overflow_ultimate() {
 		bond_nominator(6, u64::max_value(), vec![3, 5]);
 		bond_nominator(8, u64::max_value(), vec![3, 5]);
 
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
