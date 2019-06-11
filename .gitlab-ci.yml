@@ -78,7 +78,10 @@ prebuild-wasm-binaries:
     when:                          on_success
     expire_in:                     7 days
     paths:                         # "core/executor/wasm" "node/runtime/wasm" "node-template/runtime/wasm"	"core/test-runtime/wasm"
-      - ./*.compact.wasm
+      - core/executor/wasm/target/wasm32-unknown-unknown/release/*.wasm
+      - node/runtime/wasm/target/wasm32-unknown-unknown/release/*.wasm
+      - node-template/runtime/wasm/target/wasm32-unknown-unknown/release/*.wasm
+      - core/test-runtime/wasm/target/wasm32-unknown-unknown/release/*.wasm
   tags:
     - linux-docker
   script:
