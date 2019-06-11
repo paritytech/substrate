@@ -32,11 +32,11 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
-/// The type that is used for identifying authorities.
-pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
+/// Alias to the signature scheme used for Aura authority signatures.
+pub type AuraSignature = primitives::ed25519::Signature;
 
-/// The type used by authorities to prove their ID.
-pub type AuthoritySignature = ed25519::Signature;
+/// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
+pub type AuraId = primitives::ed25519::Public;
 
 /// Alias to pubkey that identifies an account on the chain.
 pub type AccountId = <AccountSignature as Verify>::Signer;
@@ -85,7 +85,7 @@ pub mod opaque {
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
 	/// Opaque session key type.
-	pub type SessionKey = AuthorityId;
+	pub type SessionKey = AuraId;
 }
 
 /// This runtime version.
@@ -134,6 +134,7 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = ();
+	type AuthorityId = AuraId;
 }
 
 impl indices::Trait for Runtime {
@@ -264,11 +265,11 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, aura::AuthorityId> for Runtime {
+	impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
-		fn authorities() -> Vec<aura::AuthorityId> {
+		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
 		}
 	}
