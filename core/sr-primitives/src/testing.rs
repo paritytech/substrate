@@ -242,7 +242,7 @@ impl<Call> Applyable for TestXt<Call> where
 }
 impl<Call> Weighable for TestXt<Call> {
 	fn weight(&self, len: usize) -> Weight {
-		/// for testing: weight == size.
+		// for testing: weight == size.
 		len as Weight
 	}
 }

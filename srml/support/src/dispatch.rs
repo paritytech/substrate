@@ -407,7 +407,10 @@ macro_rules! decl_module {
 	// This puts the function statement into the [], decreasing `$rest` and moving toward finishing the parse.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -423,7 +426,9 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
@@ -444,7 +449,10 @@ macro_rules! decl_module {
 	// Add #[weight] if none is defined.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -459,7 +467,9 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
