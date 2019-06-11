@@ -84,6 +84,8 @@ use log::{error, warn, debug, info, trace};
 use transaction_pool::txpool::{self, PoolApi};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 use safety_primitives::EquivocationProof;
+// use node_runtime::{Call, BabeCall};
+// use consensus_safety::submit_report_call;
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -501,7 +503,7 @@ where
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(equivocation_proof) = check_equivocation::<
+			if let Some(equiv_proof) = check_equivocation::<
 				_, _, BabeEquivocationProof<B::Header, Signature>, _
 			>(
 				client,
@@ -515,9 +517,16 @@ where
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
 					slot_num,
-					equivocation_proof.first_header().hash(),
-					equivocation_proof.second_header().hash(),
+					equiv_proof.first_header().hash(),
+					equiv_proof.second_header().hash(),
 				);
+				// transaction_pool.as_ref().map(|txpool|
+				// 	submit_report_call(
+				// 		client,
+				// 		txpool,
+				// 		Call::Babe(BabeCall::report_equivocation(equiv_proof.encode())),
+				// 	)
+				// );
 			}
 
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);

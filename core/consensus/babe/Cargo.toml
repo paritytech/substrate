@@ -19,11 +19,13 @@ substrate-telemetry = { path = "../../telemetry" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
+consensus_safety = { package = "substrate-consensus-safety", path = "../safety" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../safety/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
+node-runtime = { path = "../../../node/runtime" }
 futures = "0.1.26"
 tokio = "0.1.18"
 parking_lot = "0.8.0"

@@ -29,6 +29,7 @@ use version::NativeVersion;
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use aura::Call as AuraCall;
+pub use babe::Call as BabeCall;
 pub use grandpa::Call as GrandpaCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
