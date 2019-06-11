@@ -31,7 +31,6 @@ use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
@@ -528,7 +527,7 @@ pub struct BabeVerifier<C> {
 	threshold: u64,
 }
 
-impl<C, E> BabeVerifier<C, E> {
+impl<C> BabeVerifier<C> {
 	fn check_inherents<B: Block>(
 		&self,
 		block: B,
@@ -553,11 +552,10 @@ impl<C, E> BabeVerifier<C, E> {
 	}
 }
 
-impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
+impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	E: ExtraVerification<B>,
 	Self: Authorities<B>,
 {
 	fn verify(
@@ -656,7 +654,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	}
 }
 
-impl<B, C, E> Authorities<B> for BabeVerifier<C, E> where
+impl<B, C> Authorities<B> for BabeVerifier<C> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -831,7 +829,7 @@ mod tests {
 
 	impl TestNetFactory for BabeTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = BabeVerifier<PeersFullClient, NothingExtra>;
+		type Verifier = BabeVerifier<PeersFullClient>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
