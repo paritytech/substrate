@@ -154,6 +154,8 @@ fn propagate<'a, B: BlockT, I>(
 	where I: IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,  // (msg_hash, topic, message)
 {
 	let mut check_fns = HashMap::new();
+
+	// Note: critical section starts here, do not use validators directly other than through message_allowed.
 	let mut message_allowed = move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
 		let engine_id = message.engine_id;
 		let check_fn = match check_fns.entry(engine_id) {
@@ -195,6 +197,7 @@ fn propagate<'a, B: BlockT, I>(
 			protocol.send_consensus(id.clone(), message.clone());
 		}
 	}
+	// Note: critical section end here, you can use validator.
 }
 
 /// Validates consensus messages.
@@ -216,11 +219,13 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	) -> ValidationResult<B::Hash>;
 
 	/// Produce a closure for validating messages on a given topic.
+	/// Note: the closure contains a critical section, do not use other methods on Validator while still in scope.
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		Box::new(move |_topic, _data| false)
 	}
 
 	/// Produce a closure for filtering egress messages.
+	/// Note: the closure contains a critical section, do not use other methods on Validator while still in scope.
 	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		Box::new(move |_who, _intent, _topic, _data| true)
 	}
@@ -367,6 +372,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let validators = &self.validators;
 
 		let mut check_fns = HashMap::new();
+		// Note: critical section starts here, do not use validators other than through message_expired.
 		let mut message_expired = move |entry: &MessageEntry<B>| {
 			let engine_id = entry.message.engine_id;
 			let check_fn = match check_fns.entry(engine_id) {
@@ -391,6 +397,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| known_messages.contains_key(h));
 		}
+		// Note: critical section ends here, you can use validators.
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)

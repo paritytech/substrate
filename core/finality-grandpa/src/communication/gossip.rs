@@ -83,7 +83,6 @@ use crate::{CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
@@ -99,8 +98,6 @@ enum Consider {
 	RejectFuture,
 	/// Message cannot be evaluated. Reject.
 	RejectOutOfScope,
-	/// Message is redundant. Reject.
-	RejectRedundant,
 	/// Message is redundant and peer should have known. Reject.
 	RejectWillfulRedundant,
 }
@@ -330,8 +327,6 @@ pub(super) enum Misbehavior {
 	OutOfScopeMessage,
 	// A redundant message is received from a peer who should have known.
 	WillfulRedundant,
-	// A redundant message is received from a peer who couldn't have known.
-	Redundant,
 }
 
 impl Misbehavior {
@@ -353,7 +348,6 @@ impl Misbehavior {
 			FutureMessage => cost::FUTURE_MESSAGE,
 			OutOfScopeMessage => cost::OUT_OF_SCOPE_MESSAGE,
 			WillfulRedundant => cost::WILLFULREDUNDANT,
-			Redundant => cost::REDUNDANT,
 		}
 	}
 }
@@ -459,9 +453,8 @@ struct Inner<Block: BlockT> {
 	authorities: Vec<AuthorityId>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
-	incoming_votes_tally: HashMap<(Round, SetId), HashMap<AuthorityId, VoteTally>>,
 	incoming_msg_tally: HashMap<(Round, SetId), HashMap<(AuthorityId, PeerId), VoteTally>>,
-	outgoing_votes_tally: HashMap<(Round, SetId), HashMap<(AuthorityId, PeerId), VoteTally>>,
+	outgoing_msg_tally: HashMap<(Round, SetId), HashMap<(AuthorityId, PeerId), VoteTally>>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -475,9 +468,8 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
 			config,
-			incoming_votes_tally: Default::default(),
 			incoming_msg_tally: Default::default(),
-			outgoing_votes_tally: Default::default(),
+			outgoing_msg_tally: Default::default(),
 		}
 	}
 
@@ -503,15 +495,13 @@ impl<Block: BlockT> Inner<Block> {
 
 		for p in pruned {
 			// Prune the tallies
-			self.incoming_votes_tally.remove(&p);
 			self.incoming_msg_tally.remove(&p);
-			self.outgoing_votes_tally.remove(&p);
+			self.outgoing_msg_tally.remove(&p);
 		}
 
 		// Reset the votes-tally for a new round.
-		self.incoming_votes_tally.insert((round, set_id), Default::default());
 		self.incoming_msg_tally.insert((round, set_id), Default::default());
-		self.outgoing_votes_tally.insert((round, set_id), Default::default());
+		self.outgoing_msg_tally.insert((round, set_id), Default::default());
 
 		self.multicast_neighbor_packet()
 	}
@@ -557,18 +547,6 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&mut self, who: &PeerId, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
-		// A tally of votes per voter, per round
-		let tally_for_round = match self.incoming_votes_tally.get_mut(&(round, set_id)) {
-			Some(tally_for_round) =>  tally_for_round,
-			None => {
-				// We don't know about this round,
-				// let the local-view handle it and likely treat it as past or future.
-				return self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-					.unwrap_or(Consider::RejectOutOfScope)
-			}
-		};
-		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
-
 		// A tally of messages received per peer, per voter, per round.
 		let peer_tally_for_round = match self.incoming_msg_tally.get_mut(&(round, set_id)) {
 			Some(tally_for_round) =>  tally_for_round,
@@ -582,7 +560,7 @@ impl<Block: BlockT> Inner<Block> {
 		let mut per_peer_tally = peer_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
 
 		// A tally of messages we sent out, per peer, per voter, per round
-		let outgoing_tally_for_round = self.outgoing_votes_tally
+		let outgoing_tally_for_round = self.outgoing_msg_tally
 			.get_mut(&(round, set_id))
 			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
 		let outgoing_tally = outgoing_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
@@ -592,24 +570,15 @@ impl<Block: BlockT> Inner<Block> {
 				if per_peer_tally.primary_proposals < 3 {
 					per_peer_tally.primary_proposals += 1;
 				}
-				if tally.primary_proposals < 2 {
-					tally.primary_proposals += 1;
-				}
 			},
 			Prevote(_prevote) => {
 				if per_peer_tally.pre_votes < 3 {
 					per_peer_tally.pre_votes += 1;
 				}
-				if tally.pre_votes < 2 {
-					tally.pre_votes += 1;
-				}
 			},
 			Precommit(_precommit) => {
 				if per_peer_tally.pre_commits < 3 {
 					per_peer_tally.pre_commits += 1;
-				}
-				if tally.pre_commits < 2 {
-					tally.pre_commits += 1;
 				}
 			},
 		}
@@ -619,24 +588,14 @@ impl<Block: BlockT> Inner<Block> {
 		//
 		// We report peers who send us a third or more of message of any kind,
 		// when we've already exchanged two messages of any kind for that voter to that peer.
-		let (should_reject, should_report) = {
-			let should_reject = tally.primary_proposals > 1 || tally.pre_votes > 1 || tally.pre_commits > 1;
-			let should_report = (outgoing_tally.primary_proposals + per_peer_tally.primary_proposals) > 2 ||
+		let should_report = (outgoing_tally.primary_proposals + per_peer_tally.primary_proposals) > 2 ||
 				(outgoing_tally.pre_votes + per_peer_tally.pre_votes) > 2 ||
 				(outgoing_tally.pre_commits + per_peer_tally.pre_commits) > 2;
-			(should_reject, should_report)
-		};
 
 		// When a peer sends us a redundant message, and should have known better,
 		// ignore the message and report the peer.
 		if should_report {
 			return Consider::RejectWillfulRedundant
-		}
-
-		// When we're processed 2 votes of a given type,
-		// reject all further messages for this voter.
-		if should_reject {
-			return Consider::RejectRedundant
 		}
 
 		self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
@@ -665,7 +624,6 @@ impl<Block: BlockT> Inner<Block> {
 		match self.consider_vote(who, full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
-			Consider::RejectRedundant => return Action::Discard(Misbehavior::Redundant.cost()),
 			Consider::RejectWillfulRedundant => return Action::Discard(Misbehavior::WillfulRedundant.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
@@ -702,7 +660,7 @@ impl<Block: BlockT> Inner<Block> {
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
 			Consider::Accept => {},
-			Consider::RejectRedundant | Consider::RejectWillfulRedundant => {},
+			Consider::RejectWillfulRedundant => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -751,7 +709,7 @@ impl<Block: BlockT> Inner<Block> {
 
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
-	inner: Arc<parking_lot::RwLock<Inner<Block>>>,
+	inner: parking_lot::RwLock<Inner<Block>>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
@@ -760,7 +718,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: Arc::new(parking_lot::RwLock::new(Inner::new(config))),
+			inner: parking_lot::RwLock::new(Inner::new(config)),
 			report_sender: tx,
 		};
 
@@ -890,7 +848,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn message_allowed<'a>(&'a self)
 		-> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
-		let (inner, do_rebroadcast) = {
+		// Note: critical section using self.inner starts here, and continues within the closure
+		let (mut inner, do_rebroadcast) = {
 			let mut inner = self.inner.write();
 			let now = Instant::now();
 			let do_rebroadcast = if now >= inner.next_rebroadcast {
@@ -899,15 +858,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			} else {
 				false
 			};
-			(Arc::clone(&self.inner), do_rebroadcast)
+			(inner, do_rebroadcast)
 		};
 
 		Box::new(move |who, intent, topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
 				return do_rebroadcast;
 			}
-
-			let mut inner = inner.write();
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
@@ -939,7 +896,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 					let (primary_proposals_to_peer, pre_votes_to_peer, pre_commits_to_peer) = {
 						// If we haven't noted this round yet, the message is not allowed.
-						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&(round, set_id)) {
+						let tally_for_round = match inner.outgoing_msg_tally.get_mut(&(round, set_id)) {
 							Some(tally_for_round) => tally_for_round,
 							None => return false
 						};
@@ -973,7 +930,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					}
 
 					// If we haven't noted this round yet, the message is not allowed.
-					let tally_for_round = match inner.outgoing_votes_tally.get_mut(&(round, set_id)) {
+					let tally_for_round = match inner.outgoing_msg_tally.get_mut(&(round, set_id)) {
 						Some(tally_for_round) => tally_for_round,
 						None => return false
 					};
@@ -1034,11 +991,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(Block::Hash, &[u8]) -> bool + 'a> {
-		let inner = Arc::clone(&self.inner);
+		// Note: critical section using self.inner starts here, and continues within the closure
+		let inner = self.inner.read();
 		Box::new(move |topic, mut data| {
 
 			let best_commit = {
-				let inner = inner.read();
 				// if the topic is not one of the ones that we are keeping at the moment,
 				// it is expired.
 				match inner.live_topics.topic_info(&topic) {
