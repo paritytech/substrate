@@ -29,7 +29,7 @@ grandpa = { package = "finality-grandpa", version = "0.7.2", features = ["derive
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../keyring" }
-test_client = { package = "substrate-test-client", path = "../test-client"}
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 env_logger = "0.6"
 
 [features]
