@@ -355,7 +355,7 @@ fn rewards_should_work() {
 		// session reward is the same,
 		assert_eq!(Staking::current_session_reward(), session_reward);
 		// though 2 will be deducted while stashed in the era reward due to delay
-		assert_eq!(Staking::current_era_reward(), 2*session_reward - delay);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward); // - delay);
 
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
@@ -364,8 +364,8 @@ fn rewards_should_work() {
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
-		assert_eq!(Balances::total_balance(&10), 1 + (3*session_reward - delay)/2);
-		assert_eq!(Balances::total_balance(&2), 500 + (3*session_reward - delay)/2);
+		assert_eq!(Balances::total_balance(&10), 1 + (3*session_reward)/2);
+		assert_eq!(Balances::total_balance(&2), 500 + (3*session_reward)/2);
 	});
 }
 
