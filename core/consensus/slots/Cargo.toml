@@ -15,7 +15,7 @@ safety-primitives = { package = "substrate-consensus-safety-primitives", path = 
 consensus_srml = { package = "srml-consensus", path = "../../../srml/consensus" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures = "0.1.17"
-tokio = "0.1.7"
+tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
 log = "0.4"
 

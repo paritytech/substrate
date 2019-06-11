@@ -27,7 +27,7 @@ grandpa = { package = "finality-grandpa", git = "https://github.com/paritytech/f
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 node-runtime = { path = "../../../node/runtime" }
 futures = "0.1.17"
-tokio = "0.1.7"
+tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
 log = "0.4"
 parity-codec = "3.5.1"
@@ -39,4 +39,5 @@ network = { package = "substrate-network", path = "../../network", features = ["
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }
+tokio = "0.1.7"
 env_logger = "0.6"

@@ -124,12 +124,14 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			active_council: vec![],
 			candidacy_bond: 10 * DOLLARS,
 			voter_bond: 1 * DOLLARS,
+			voting_fee: 2 * DOLLARS,
 			present_slash_per_voter: 1 * CENTS,
 			carry_count: 6,
 			presentation_duration: 1 * DAYS,
 			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
+			decay_ratio: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
 		}),
 		timestamp: Some(TimestampConfig {
@@ -234,6 +236,7 @@ pub fn testnet_genesis(
 	const STASH: u128 = 1 << 20;
 	const ENDOWMENT: u128 = 1 << 20;
 
+	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 	let mut contract_config = ContractConfig {
 		signed_claim_handicap: 2,
 		rent_byte_price: 4,
@@ -299,12 +302,14 @@ pub fn testnet_genesis(
 				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
+			voting_fee: 5,
 			present_slash_per_voter: 1,
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,
 			term_duration: 1000000,
-			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
+			desired_seats: council_desired_seats,
+			decay_ratio: council_desired_seats / 3,
 			inactive_grace_period: 1,
 		}),
 		timestamp: Some(TimestampConfig {

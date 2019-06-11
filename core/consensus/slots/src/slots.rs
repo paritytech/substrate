@@ -26,7 +26,7 @@ use inherents::{InherentData, InherentDataProviders};
 use log::warn;
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
-use tokio::timer::Delay;
+use tokio_timer::Delay;
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Option<Duration> {
