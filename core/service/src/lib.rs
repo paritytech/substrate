@@ -375,7 +375,7 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}));
+		}).select(exit.clone()).then(|_| Ok(())));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
