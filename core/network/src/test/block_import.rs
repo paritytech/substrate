@@ -78,7 +78,7 @@ fn async_import_queue_drops() {
 	for _ in 0..100 {
 		let verifier = Arc::new(PassThroughVerifier(true));
 		let mut queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None, None, None);
-		queue.start(Box::new(TestLink{})).unwrap();
+		//queue.start(Box::new(TestLink{})).unwrap();
 		drop(queue);
 	}
 }
