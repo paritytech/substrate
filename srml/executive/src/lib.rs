@@ -82,7 +82,7 @@ use primitives::traits::{
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
 	ValidateUnsigned, DigestItem,
 };
-use primitives::weights::Weighable;
+use primitives::weights::{Weighable, MAX_TRANSACTIONS_WEIGHT};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 use srml_support::{Dispatchable, traits::MakePayment};
@@ -90,8 +90,6 @@ use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 
 mod internal {
-	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
-	pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024; // 25% of max transactions weight
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -267,7 +265,7 @@ where
 
 		// Check the weight of the block if that extrinsic is applied.
 		let weight = xt.weight(encoded_len);
-		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
+		if <system::Module<System>>::all_extrinsics_weight() + weight > MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
@@ -558,7 +556,7 @@ mod tests {
 			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
 			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
 			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
+			let len = if should_fail { (MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
 				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 				assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);

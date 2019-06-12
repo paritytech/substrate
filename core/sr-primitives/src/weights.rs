@@ -28,6 +28,11 @@
 /// expression must evaluate to.
 pub type Weight = u32;
 
+/// Maximum block saturation: 4mb
+pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
+/// Target block saturation: 25% of max block saturation = 1mb
+pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024;
+
 /// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
 ///

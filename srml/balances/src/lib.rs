@@ -159,18 +159,14 @@ use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
-use primitives::weights::Weight;
-use primitives::Permill;
+use primitives::weights::{Weight, IDEAL_TRANSACTIONS_WEIGHT};
+use primitives::{Permill, Perbill};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-
-// TODO: fix import here, remove restatement of const
-// use srml_executive::internal::IDEAL_TRANSACTIONS_WEIGHT;
-pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024; // 25% of max transactions weight
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -1043,17 +1039,19 @@ where
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
-		let VARIABILITY_FEE = Permill::from_parts(40);
-		let VARIABILITY_FEE_SQUARED = Permill::from_parts(16);
+		// 40/1000000 = 4/100000 = 0.00004
+		let variability_fee = Permill::from_parts(40);
+		// 0.00004^2 = 0.0000000016 = 16/1000000000
+		let variability_fee_squared = Perbill::from_parts(16);
 		let potential_weight = <system::Module<T>>::all_extrinsics_weight() + weight;
-		let saturation_diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
-		let first_term = VARIABILITY_FEE * saturation_diff; // TODO: divide by 1000000 * 10
-		let second_term = VARIABILITY_FEE_SQUARED * saturation_diff * saturation_diff / 2; // TODO: ^ditto
+		let diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
+		let first_term = variability_fee * saturation_diff;
+		let second_term = variability_fee_squared * saturation_diff * saturation_diff / 2;
 		let fee_multiplier = 1 + first_term + second_term;
 		let transaction_fee = weight * fee_multiplier;
 		let imbalance = Self::withdraw(
 			transactor,
-			T::Balance::from(transaction_fee),
+			transaction_fee.into(),
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive
 		)?;
