@@ -19,7 +19,7 @@
 use primitives::sr25519::{Public, Signature};
 use babe_primitives::BABE_ENGINE_ID;
 use runtime_primitives::{
-	traits::DigestItem as _1, generic::{DigestItem, OpaqueDigestItemId}
+	traits::DigestItem as _, generic::{DigestItem, OpaqueDigestItemId}
 };
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
