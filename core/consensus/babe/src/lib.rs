@@ -31,7 +31,6 @@ use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use consensus_common::ExtraVerification;
 use consensus_common::import_queue::{
 	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
@@ -835,14 +834,13 @@ pub fn import_queue<B, C, E>(
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
-	extra: E,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<BabeImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=sr25519::Public>,
-	E: 'static + ExtraVerification<B>,
+	E: 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -850,7 +848,6 @@ pub fn import_queue<B, C, E>(
 	let verifier = Arc::new(
 		BabeVerifier {
 			client: client.clone(),
-			extra,
 			inherent_data_providers,
 			timestamps: Default::default(),
 			config,
