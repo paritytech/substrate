@@ -237,7 +237,7 @@ pub mod ext {
 			key_len: u32,
 			value_data: *mut u8,
 			value_len: u32,
-			value_offset: u32,
+			value_offset: u32
 		) -> u32;
 		/// Gets the trie root of the storage.
 		fn ext_storage_root(result: *mut u8);
@@ -261,7 +261,7 @@ pub mod ext {
 			key_data: *const u8,
 			key_len: u32,
 			value_data: *const u8,
-			value_len: u32,
+			value_len: u32
 		);
 		/// A child storage function.
 		///
@@ -272,7 +272,7 @@ pub mod ext {
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
-			key_len: u32,
+			key_len: u32
 		);
 		/// A child storage function.
 		///
@@ -283,7 +283,7 @@ pub mod ext {
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
-			key_len: u32,
+			key_len: u32
 		) -> u32;
 		/// A child storage function.
 		///
@@ -327,7 +327,7 @@ pub mod ext {
 		fn ext_child_storage_root(
 			storage_key_data: *const u8,
 			storage_key_len: u32,
-			written_out: *mut u32,
+			written_out: *mut u32
 		) -> *mut u8;
 
 		/// The current relay chain identifier.
@@ -338,7 +338,7 @@ pub mod ext {
 			values_data: *const u8,
 			lens_data: *const u32,
 			lens_len: u32,
-			result: *mut u8,
+			result: *mut u8
 		);
 		/// BLAKE2_128 hash
 		fn ext_blake2_128(data: *const u8, len: u32, out: *mut u8);
@@ -357,20 +357,20 @@ pub mod ext {
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8,
+			pubkey_data: *const u8
 		) -> u32;
 		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_sr25519_verify(
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8,
+			pubkey_data: *const u8
 		) -> u32;
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_secp256k1_ecdsa_recover(
 			msg_data: *const u8,
 			sig_data: *const u8,
-			pubkey_data: *mut u8,
+			pubkey_data: *mut u8
 		) -> u32;
 
 		//================================
