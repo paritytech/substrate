@@ -67,6 +67,7 @@ where
 	}
 }
 
+/// Find pre digest in Aura header.
 pub fn find_pre_digest<H, S>(header: &H) -> Result<u64, &str>
 where
 	H: Header,

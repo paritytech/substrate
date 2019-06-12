@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Trait for equivocation proofs.
+/// Trait for authorship of equivocation proofs.
 pub trait EquivocationProof<H, S>
 {
 	/// Create an equivocation proof for AuRa or Babe.
@@ -40,4 +40,9 @@ pub trait EquivocationProof<H, S>
 
 	/// Get the signature for the second header involved in the equivocation.
 	fn second_signature(&self) -> S;
+}
+
+pub enum EquivProof<H, S> {
+	Aura { first_header: H, second_header: H, first_signature: S, second_signature: S },
+	Babe { first_header: H, second_header: H, first_signature: S, second_signature: S },
 }
