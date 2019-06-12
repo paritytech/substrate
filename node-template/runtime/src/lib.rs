@@ -189,7 +189,7 @@ construct_runtime!(
 	{
 		System: system::{default, Config<T>},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,

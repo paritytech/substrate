@@ -51,10 +51,9 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::Encode;
-#[cfg(feature = "std")]
-use parity_codec::Decode;
+use parity_codec::{Encode, Decode};
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
+use rstd::marker::PhantomData;
 use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -62,6 +61,10 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+#[cfg(feature = "std")]
+use std::fmt::Debug;
+#[cfg(feature = "std")]
+use serde::Serialize;
 use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 
 mod mock;
@@ -90,6 +93,20 @@ impl AuraInherentData for InherentData {
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
+}
+
+/// Logs in this module.
+pub type Log<T> = RawLog<T>;
+
+/// Logs in this module.
+///
+/// The type parameter distinguishes logs belonging to two different runtimes,
+/// which should not be mixed.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<T> {
+	/// AuRa inherent digests
+	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for `Aura`.
