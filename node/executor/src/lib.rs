@@ -33,7 +33,7 @@ mod tests {
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AuthorityKeyring, AccountKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
-	use state_machine::{CodeExecutor, Externalities, TestExternalities};
+	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
@@ -51,6 +51,8 @@ mod tests {
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
+
+	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 	fn alice() -> AccountId {
 		AccountKeyring::Alice.into()
@@ -258,7 +260,7 @@ mod tests {
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let three = AccountId::from_raw([3u8; 32]);
-		TestExternalities::new_with_code(code, GenesisConfig {
+		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
@@ -314,7 +316,6 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
-			council_voting: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
@@ -322,7 +323,9 @@ mod tests {
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
-		}.build_storage().unwrap().0)
+		}.build_storage().unwrap().0);
+		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
+		ext
 	}
 
 	fn construct_block(
@@ -879,7 +882,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.storage_changes_root(Default::default(), 0).is_some());
+		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
 	#[test]
@@ -889,7 +892,22 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
-		assert!(t.storage_changes_root(Default::default(), 0).is_some());
+		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+	}
+
+	#[test]
+	fn should_import_block_with_test_client() {
+		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+
+		let client = TestClientBuilder::default()
+			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
+			.0;
+
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	#[cfg(feature = "benchmarks")]

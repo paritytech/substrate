@@ -217,7 +217,7 @@ fn decl_store_extra_genesis(
 
 		let type_infos = get_type_infos(storage_type);
 
-		let mut opt_build;
+		let opt_build;
 		// need build line
 		if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
@@ -295,7 +295,7 @@ fn decl_store_extra_genesis(
 						use #scrate::codec::{Encode, Decode};
 
 						let v = (#builder)(&self);
-						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, &storage);
+						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -305,7 +305,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, storage);
 						}
 					}}
 				},
@@ -316,7 +316,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k1, k2, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, storage);
 						}
 					}}
 				},
@@ -451,12 +451,11 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			impl#fparam_impl #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
 				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
-					use #scrate::rstd::cell::RefCell;
-					let storage = RefCell::new(r);
+					let storage = r;
 
 					#builders
 
-					let r = storage.into_inner();
+					let r = storage;
 
 					#scall(r, c, &self);
 
@@ -607,7 +606,7 @@ fn decl_storage_items(
 				i.linked_map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
-				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher)
+				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher.into_storage_hasher_struct())
 			},
 		};
 		impls.extend(implementation)
@@ -759,14 +758,14 @@ fn store_functions_to_metadata (
 				let hasher = hasher.into_metadata();
 				let k1ty = clean_type_string(&quote!(#key1_type).to_string());
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
-				let k2_hasher = clean_type_string(&key2_hasher.to_string());
+				let k2_hasher = key2_hasher.into_metadata();
 				quote!{
 					#scrate::metadata::StorageFunctionType::DoubleMap {
 						hasher: #scrate::metadata::#hasher,
 						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
-						key2_hasher: #scrate::metadata::DecodeDifferent::Encode(#k2_hasher),
+						key2_hasher: #scrate::metadata::#k2_hasher,
 					}
 				}
 			},
@@ -871,7 +870,7 @@ enum DeclStorageTypeInfosKind<'a> {
 		hasher: HasherKind,
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
-		key2_hasher: TokenStream2,
+		key2_hasher: HasherKind,
 	}
 }
 
@@ -901,7 +900,7 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
-			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },
+			key2_hasher: (&map.key2_hasher).into(),
 		}),
 	};
 

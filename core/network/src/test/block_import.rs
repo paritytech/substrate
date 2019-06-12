@@ -17,7 +17,7 @@
 //! Testing block import logic.
 
 use consensus::import_queue::{import_single_block, BasicQueue, BlockImportError, BlockImportResult};
-use test_client::{self, TestClient};
+use test_client::{self, prelude::*};
 use test_client::runtime::{Block, Hash};
 use runtime_primitives::generic::BlockId;
 use super::*;
@@ -26,9 +26,9 @@ struct TestLink {}
 
 impl Link<Block> for TestLink {}
 
-fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, PeerId, IncomingBlock<Block>) {
+fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let client = test_client::new();
-	let block = client.new_block().unwrap().bake().unwrap();
+	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::File, block).unwrap();
 
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);

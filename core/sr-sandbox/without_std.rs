@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::prelude::*;
-use rstd::{slice, marker, mem};
+use rstd::{slice, marker, mem, vec};
 use rstd::rc::Rc;
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;

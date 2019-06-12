@@ -23,8 +23,8 @@ use fork_tree::ForkTree;
 use network_libp2p::PeerId;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::message;
-use crate::sync::{Context, PeerSync, PeerSyncState};
+use crate::protocol::message;
+use crate::protocol::sync::{Context, PeerSync, PeerSyncState};
 
 // Time to wait before trying to get the same extra data from the same peer.
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
@@ -39,7 +39,7 @@ pub(crate) trait ExtraRequestsEssence<B: BlockT> {
 	/// Name of request type to display in logs.
 	fn type_name(&self) -> &'static str;
 	/// Send network message corresponding to the request.
-	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>);
+	fn send_network_request(&self, protocol: &mut dyn Context<B>, peer: PeerId, request: ExtraRequest<B>);
 	/// Create peer state for peer that is downloading extra data.
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B>;
 }
@@ -69,7 +69,7 @@ impl<B: BlockT> ExtraRequestsAggregator<B> {
 	}
 
 	/// Dispatches all possible pending requests to the given peers.
-	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<PeerId, PeerSync<B>>, protocol: &mut Context<B>) {
+	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<PeerId, PeerSync<B>>, protocol: &mut dyn Context<B>) {
 		self.justifications.dispatch(peers, protocol);
 		self.finality_proofs.dispatch(peers, protocol);
 	}
@@ -132,7 +132,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 	/// extra request for block #10 to a peer at block #2), and we also
 	/// throttle requests to the same peer if a previous justification request
 	/// yielded no results.
-	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<PeerId, PeerSync<B>>, protocol: &mut Context<B>) {
+	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<PeerId, PeerSync<B>>, protocol: &mut dyn Context<B>) {
 		if self.pending_requests.is_empty() {
 			return;
 		}
@@ -373,7 +373,7 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 		"justification"
 	}
 
-	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>) {
+	fn send_network_request(&self, protocol: &mut dyn Context<B>, peer: PeerId, request: ExtraRequest<B>) {
 		protocol.send_block_request(peer, message::generic::BlockRequest {
 			id: 0,
 			fields: message::BlockAttributes::JUSTIFICATION,
@@ -398,7 +398,7 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence<B> {
 		"finality proof"
 	}
 
-	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>) {
+	fn send_network_request(&self, protocol: &mut dyn Context<B>, peer: PeerId, request: ExtraRequest<B>) {
 		protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
 			id: 0,
 			block: request.0,

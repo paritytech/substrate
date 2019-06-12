@@ -16,40 +16,42 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
+#![warn(missing_docs)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use error_chain::{bail, error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
-
 use substrate_primitives::{ed25519::{Pair, Public}, Pair as PairT};
 
-pub use crypto::KEY_ITERATIONS;
+/// Keystore error.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// IO error.
+	Io(io::Error),
+	/// JSON error.
+	Json(serde_json::Error),
+	/// Invalid password.
+	#[display(fmt="Invalid password")]
+	InvalidPassword,
+	/// Invalid BIP39 phrase
+	#[display(fmt="Invalid recovery phrase (BIP39) data")]
+	InvalidPhrase,
+	/// Invalid seed
+	#[display(fmt="Invalid seed")]
+	InvalidSeed,
+}
 
-error_chain! {
-	foreign_links {
-		Io(io::Error);
-		Json(serde_json::Error);
-	}
+/// Keystore Result
+pub type Result<T> = std::result::Result<T, Error>;
 
-	errors {
-		InvalidPassword {
-			description("Invalid password"),
-			display("Invalid password"),
-		}
-		InvalidPhrase {
-			description("Invalid recovery phrase (BIP39) data"),
-			display("Invalid recovery phrase (BIP39) data"),
-		}
-		InvalidSeed {
-			description("Invalid seed"),
-			display("Invalid seed"),
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Io(ref err) => Some(err),
+			Error::Json(ref err) => Some(err),
+			_ => None,
 		}
 	}
 }
@@ -79,7 +81,7 @@ impl Store {
 	/// Create a new key from seed. Do not place it into the store.
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
 		let pair = Pair::from_string(seed, None)
-			.map_err(|_| Error::from(ErrorKind::InvalidSeed))?;
+			.ok().ok_or(Error::InvalidSeed)?;
 		self.additional.insert(pair.public(), pair.clone());
 		Ok(pair)
 	}
@@ -94,9 +96,9 @@ impl Store {
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
 		let pair = Pair::from_phrase(&phrase, Some(password))
-			.map_err(|_| Error::from(ErrorKind::InvalidPhrase))?;
+			.ok().ok_or(Error::InvalidPhrase)?;
 		if &pair.public() != public {
-			bail!(ErrorKind::InvalidPassword);
+			return Err(Error::InvalidPassword);
 		}
 		Ok(pair)
 	}

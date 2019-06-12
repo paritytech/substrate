@@ -72,6 +72,15 @@ impl super::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::SendMessage(who, data));
 	}
 
+	/// Register a message with the gossip service, it isn't broadcast right
+	/// away to any peers, but may be sent to new peers joining or when asked to
+	/// broadcast the topic. Useful to register previous messages on node
+	/// startup.
+	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
+		// NOTE: only required to restore previous state on startup
+		//       not required for tests currently
+	}
+
 	/// Report a peer's cost or benefit after some action.
 	fn report(&self, who: network::PeerId, cost_benefit: i32) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
@@ -136,6 +145,7 @@ fn make_test_network() -> impl Future<Item=Tester,Error=()> {
 	let (bridge, startup_work) = super::NetworkBridge::new(
 		net.clone(),
 		config(),
+		None,
 		Exit,
 	);
 

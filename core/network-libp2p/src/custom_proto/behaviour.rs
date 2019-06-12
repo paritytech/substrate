@@ -412,7 +412,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open };
 			},
@@ -430,7 +430,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: occ_entry.key().clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open: false };
 			},
@@ -551,7 +551,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", incoming.peer_id);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: incoming.peer_id,
-			event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+			event: CustomProtoHandlerIn::Enable,
 		});
 
 		*state = PeerState::Enabled { open: false, connected_point };
@@ -634,7 +634,7 @@ where
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
-					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+					event: CustomProtoHandlerIn::Enable,
 				});
 				*st = PeerState::Enabled { open: false, connected_point };
 			}
@@ -985,7 +985,7 @@ where
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable now that ban has expired", peer_id);
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
+						event: CustomProtoHandlerIn::Enable,
 					});
 					*peer_state = PeerState::Enabled { connected_point, open };
 				}

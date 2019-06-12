@@ -16,72 +16,57 @@
 
 //! Rust executor possible errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use state_machine;
 use serializer;
 use wasmi;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind
-};
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-		Trap(wasmi::Trap) #[doc = "Trap occured during execution"];
-		Wasmi(wasmi::Error) #[doc = "Wasmi loading/instantiating error"];
-	}
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+/// Error type.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Unserializable Data
+	InvalidData(serializer::Error),
+	/// Trap occured during execution
+	Trap(wasmi::Trap),
+	/// Wasmi loading/instantiating error
+	Wasmi(wasmi::Error),
+	/// Error in the API. Parameter is an error message.
+	ApiError(String),
+	/// Method is not found
+	#[display(fmt="Method not found: '{}'", _0)]
+	MethodNotFound(String),
+	/// Code is invalid (expected single byte)
+	#[display(fmt="Invalid Code: {:?}", _0)]
+	InvalidCode(Vec<u8>),
+	/// Could not get runtime version.
+	#[display(fmt="On-chain runtime does not specify version")]
+	VersionInvalid,
+	/// Externalities have failed.
+	#[display(fmt="Externalities error")]
+	Externalities,
+	/// Invalid index.
+	#[display(fmt="Invalid index provided")]
+	InvalidIndex,
+	/// Invalid return type.
+	#[display(fmt="Invalid type returned (should be u64)")]
+	InvalidReturn,
+	/// Runtime failed.
+	#[display(fmt="Runtime error")]
+	Runtime,
+	/// Runtime failed.
+	#[display(fmt="Invalid memory reference")]
+	InvalidMemoryReference,
+}
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
-
-		/// Could not get runtime version.
-		VersionInvalid {
-			description("Runtime version error"),
-			display("On-chain runtime does not specify version"),
-		}
-
-		/// Externalities have failed.
-		Externalities {
-			description("externalities failure"),
-			display("Externalities error"),
-		}
-
-		/// Invalid index.
-		InvalidIndex {
-			description("index given was not in range"),
-			display("Invalid index provided"),
-		}
-
-		/// Invalid return type.
-		InvalidReturn {
-			description("u64 was not returned"),
-			display("Invalid type returned (should be u64)"),
-		}
-
-		/// Runtime failed.
-		Runtime {
-			description("runtime failure"),
-			display("Runtime error"),
-		}
-
-		/// Runtime failed.
-		InvalidMemoryReference {
-			description("invalid memory reference"),
-			display("Invalid memory reference"),
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::InvalidData(ref err) => Some(err),
+			Error::Trap(ref err) => Some(err),
+			Error::Wasmi(ref err) => Some(err),
+			_ => None,
 		}
 	}
 }

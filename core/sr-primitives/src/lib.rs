@@ -25,12 +25,13 @@ pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+pub use rstd;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use rstd::ops;
+use rstd::{prelude::*, ops};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -38,6 +39,8 @@ use codec::{Encode, Decode};
 pub mod testing;
 
 pub mod traits;
+use traits::{SaturatedConversion, UniqueSaturatedInto};
+
 pub mod generic;
 pub mod transaction_validity;
 
@@ -102,8 +105,28 @@ impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
-	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		_child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String> {
 		storage.extend(self);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		Ok(self)
+	}
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	)-> Result<(), String> {
+		storage.extend(self.0);
+		child_storage.extend(self.1);
 		Ok(())
 	}
 }
@@ -139,27 +162,30 @@ impl Permill {
 
 impl<N> ops::Mul<N> for Permill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let million = <N as traits::As<u64>>::sa(1_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let million: N = 1_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(million.clone());
 
-			// `rem` is inferior to one million, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one million, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one million, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one million, thus the product is less than 10^12
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000;
+			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / million) * part + rem_multiplied_divided
@@ -228,27 +254,30 @@ impl Perbill {
 
 impl<N> ops::Mul<N> for Perbill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let billion: N = 1_000_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(billion.clone());
 
-			// `rem` is inferior to one billion, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one billion, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one billion, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000_000;
+			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / billion) * part + rem_multiplied_divided
@@ -314,8 +343,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {
@@ -584,6 +613,69 @@ macro_rules! impl_outer_config {
 	}
 }
 
+// NOTE [`PreRuntime` and `Consensus` are special]
+//
+// We MUST treat `PreRuntime` and `Consensus` variants specially, as they:
+//
+// * have more parameters (both in `generic::DigestItem` and in runtimes)
+// * have a `PhantomData` parameter in the runtime, but not in `generic::DigestItem`
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern_2 {
+	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
+	};
+	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
+	};
+	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$internal::$module($module::RawLog::$name(ref $v1))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_pattern {
+	(PreRuntime $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::PreRuntime($engine_id, $binder)
+	};
+	(Consensus $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::Consensus($engine_id, $binder)
+	};
+	($name:ident $engine_id:pat, $binder:pat) => {
+		$crate::generic::DigestItem::$name($binder)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr {
+	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, Default::default()))
+	};
+	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::Consensus($engine_id, $binder, Default::default()))
+	};
+	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
+		$internal::$module($module::RawLog::$name($binder))
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_expr_2 {
+	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::PreRuntime($v1, $v2)
+	};
+	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::Consensus($v1, $v2)
+	};
+	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
+		$crate::generic::DigestItemRef::$name($v1)
+	};
+}
+
 /// Generates enum that contains all possible log entries for the runtime.
 /// Every individual module of the runtime that is mentioned, must
 /// expose a `Log` and `RawLog` enums.
@@ -604,7 +696,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:tt ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -623,7 +715,7 @@ macro_rules! impl_outer_log {
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
 			$(
-				$module($module::Log<$trait $(, $instance)? >),
+				$module($module::Log <$trait $(, $instance)?>),
 			)*
 		}
 
@@ -635,8 +727,8 @@ macro_rules! impl_outer_log {
 			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 				match self.0 {
 					$($(
-					$internal::$module($module::RawLog::$sitem(ref v)) =>
-						Some($crate::generic::DigestItemRef::$sitem(v)),
+					$crate::__parse_pattern_2!($sitem $module $internal a b) =>
+						Some($crate::__parse_expr_2!($sitem $module $internal a b)),
 					)*)*
 					_ => None,
 				}
@@ -654,25 +746,38 @@ macro_rules! impl_outer_log {
 			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 				self.dref().and_then(|dref| dref.as_changes_trie_root())
 			}
+
+			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
+				self.dref().and_then(|dref| dref.as_pre_runtime())
+			}
 		}
 
 		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-			/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
-			/// a system item which is supported by the runtime, it is returned.
-			/// Otherwise we expect a `Other` log item. Trying to convert from anything other
-			/// will lead to panic in runtime, since the runtime does not supports this 'system'
-			/// log item.
+			/// Converts `generic::DigestItem` into `$name`. If
+			/// `generic::DigestItem` represents a system item which is
+			/// supported by the runtime, it is returned. Otherwise we expect a
+			/// `Other`, `PreDigest`, or `Consensus` log item. Trying to convert
+			/// from anything else will lead to panic at runtime, since the
+			/// runtime does not supports this 'system' log item.
 			#[allow(unreachable_patterns)]
 			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
 				match gen {
 					$($(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name($internal::$module($module::RawLog::$sitem(value))),
+					$crate::__parse_pattern!($sitem b, a) =>
+						$name($crate::__parse_expr!($sitem b, $module $internal a)),
 					)*)*
-					_ => gen.as_other()
-						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name)
-						.expect("not allowed to fail in runtime"),
+					_ => {
+						if let Some(s) = gen.as_other()
+							.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
+							.map($name)
+						{
+							s
+						} else {
+							panic!("we only reach here if the runtime did not handle a digest; \
+									runtimes are required to handle all digests they receive; qed"
+									)
+						}
+					}
 				}
 			}
 		}
@@ -701,16 +806,16 @@ macro_rules! impl_outer_log {
 		}
 
 		$(
-			impl From<$module::Log<$trait $(, $instance)? >> for $name {
+			impl From<$module::Log<$trait $(, $instance)?>> for $name {
 				/// Converts single module log item into `$name`.
 				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					$name(x.into())
 				}
 			}
 
-			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
+			impl From<$module::Log<$trait $(, $instance)?>> for InternalLog {
 				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)?>) -> Self {
 					InternalLog::$module(x)
 				}
 			}
@@ -898,13 +1003,8 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn per_things_operate_in_output_type() {
-		use super::Perbill;
-
-		assert_eq!(Perbill::one() * 255_u64, 255);
-		// panics
-		assert_ne!(Perbill::one() * 255_u8, 255);
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]

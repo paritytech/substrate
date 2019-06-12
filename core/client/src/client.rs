@@ -29,14 +29,15 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock},
 };
 use consensus::{
-	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock,
+	Error as ConsensusError, ImportBlock,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
 };
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem
+	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
+	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	SaturatedConversion, One, DigestFor,
 };
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{
@@ -82,7 +83,11 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
-type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type StorageUpdate<B, Block> = <
+	<
+		<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation
+			as BlockImportOperation<Block, Blake2Hasher>
+	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
 /// Execution strategies settings.
@@ -119,7 +124,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
-	import_lock: Arc<Mutex<()>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	execution_strategies: ExecutionStrategies,
@@ -146,13 +150,17 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// Get storage changes event stream.
 	///
 	/// Passing `None` as `filter_keys` subscribes to all storage changes.
-	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
+	fn storage_changes_notification_stream(&self,
+		filter_keys: Option<&[StorageKey]>
+	) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Fetch block body by ID.
 pub trait BlockBody<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
-	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn block_body(&self,
+		id: &BlockId<Block>
+	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
 /// Client info
@@ -160,10 +168,6 @@ pub trait BlockBody<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: ChainInfo<Block>,
-	/// Best block number in the queue.
-	pub best_queued_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>,
-	/// Best queued block hash.
-	pub best_queued_hash: Option<Block::Hash>,
 }
 
 /// Block status.
@@ -242,11 +246,15 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block, RA>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT<Hash=H256>,
+) -> error::Result<Client<
+	in_mem::Backend<Block, Blake2Hasher>,
+	LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>,
+	Block,
+	RA
+>> where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -286,7 +294,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
-			info!("Initializing Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
+				genesis_block.header().state_root(),
+				genesis_block.header().hash()
+			);
 			op.set_block_data(
 				genesis_block.deconstruct().0,
 				Some(vec![]),
@@ -302,7 +313,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
-			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategies,
 			_phantom: Default::default(),
@@ -328,32 +338,51 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self.backend
 	}
 
-	/// Expose reference to import lock
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn import_lock(&self) -> Arc<Mutex<()>> {
-		self.import_lock.clone()
-	}
-
-	/// Return storage entry keys in state in a block of given hash with given prefix.
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given hash.
+	/// Given a `BlockId` and a key, return the value under the key in that block.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
 
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	pub fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key_prefix: &StorageKey
+	) -> error::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(&child_storage_key.0, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
+		Ok(keys)
+	}
+
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	pub fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key: &StorageKey
+	) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
+			.child_storage(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.map(StorageData))
+	}
+
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
 		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
-			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
+			.expect("None is returned if there's no value stored for the given key;\
+				':code' key is always defined; qed").0)
 	}
 
 	/// Get the RuntimeVersion at a given block.
@@ -392,7 +421,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// AND returning execution proof.
 	///
 	/// No changes are made.
-	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+	pub fn execution_proof(&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8]
+	) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
@@ -400,22 +433,34 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Reads given header and generates CHT-based header proof.
 	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
-		self.header_proof_with_cht_size(id, cht::SIZE)
+		self.header_proof_with_cht_size(id, cht::size())
 	}
 
 	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+	pub fn block_hash(&self,
+		block_number: <<Block as BlockT>::Header as HeaderT>::Number
+	) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
-	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	pub fn header_proof_with_cht_size(
+		&self,
+		id: &BlockId<Block>,
+		cht_size: NumberFor<Block>,
+	) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
 		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+		let headers = cht_range.map(|num| self.block_hash(num));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
 		Ok((header, proof))
 	}
@@ -433,14 +478,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some((config, storage)) => (config, storage),
 			None => return Ok(None),
 		};
- 		let first = first.as_();
-		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		if first > last_num {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
- 		let finalized_number = self.backend.blockchain().info()?.finalized_number;
-		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.as_());
-		let first = As::sa(::std::cmp::max(first, oldest));
+		let finalized_number = self.backend.blockchain().info().finalized_number;
+		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
+		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
 	}
 
@@ -453,20 +497,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher>(
+		key_changes::<_, Blake2Hasher, _>(
 			&config,
 			&*storage,
-			first.as_(),
+			first,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
 				number: last_number,
 			},
-			self.backend.blockchain().info()?.best_number.as_(),
+			self.backend.blockchain().info().best_number,
 			&key.0)
-		.and_then(|r| r.map(|r| r.map(|(block, tx)| (As::sa(block), tx))).collect::<Result<_, _>>())
+		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
@@ -490,7 +534,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			min,
 			max,
 			key,
-			cht::SIZE,
+			cht::size(),
 		)
 	}
 
@@ -502,21 +546,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		min: Block::Hash,
 		max: Block::Hash,
 		key: &StorageKey,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a ChangesTrieStorage<Blake2Hasher>,
-			min: u64,
+			storage: &'a dyn ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>,
+			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
-			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn build_anchor(&self, hash: H256) -> Result<ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+				self.storage.build_anchor(hash)
+			}
+
+			fn root(
+				&self,
+				anchor: &ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+				block: NumberFor<Block>,
+			) -> Result<Option<H256>, String> {
 				let root = self.storage.root(anchor, block)?;
 				if block < self.min {
 					if let Some(ref root) = root {
 						self.required_roots_proofs.lock().insert(
-							As::sa(block),
+							block,
 							root.clone()
 						);
 					}
@@ -525,7 +577,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
 			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -536,19 +588,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
-			min: min_number.as_(),
+			min: min_number,
 			required_roots_proofs: Mutex::new(BTreeMap::new()),
 		};
 
 		let max_number = ::std::cmp::min(
-			self.backend.blockchain().info()?.best_number,
+			self.backend.blockchain().info().best_number,
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
 		);
 
 		// fetch key changes proof
-		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.as_();
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.as_();
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
+		let first_number = self.backend.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(first))?;
+		let last_number = self.backend.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(last))?;
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
 			&config,
 			&recording_storage,
 			first_number,
@@ -556,7 +610,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: convert_hash(&last),
 				number: last_number,
 			},
-			max_number.as_(),
+			max_number,
 			&key.0
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
@@ -577,7 +631,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Generate CHT-based proof for roots of changes tries at given blocks.
 	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 		blocks: I
 	) -> error::Result<Vec<Vec<u8>>> {
 		// most probably we have touched several changes tries that are parts of the single CHT
@@ -596,12 +650,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
 	fn changes_trie_roots_proof_at_cht(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 		cht_num: NumberFor<Block>,
 		blocks: Vec<NumberFor<Block>>
 	) -> error::Result<Vec<Vec<u8>>> {
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+		let roots = cht_range
+			.map(|num| self.header(&BlockId::Number(num))
 			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
 		Ok(proof)
@@ -619,26 +680,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Create a new block, built on the head of the chain.
 	pub fn new_block(
-		&self
+		&self,
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
-		block_builder::BlockBuilder::new(self)
+		block_builder::BlockBuilder::new(self, inherent_digests)
 	}
 
 	/// Create a new block, built on top of `parent`.
 	pub fn new_block_at(
-		&self, parent: &BlockId<Block>
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, false)
+		block_builder::BlockBuilder::at_block(parent, &self, false, inherent_digests)
 	}
 
 	/// Create a new block, built on top of `parent` with proof recording enabled.
@@ -647,14 +711,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// These recorded trie nodes can be used by a third party to proof the
 	/// output of this block builder without having access to the full storage.
 	pub fn new_block_at_with_proof_recording(
-		&self, parent: &BlockId<Block>
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, true)
+		block_builder::BlockBuilder::at_block(parent, &self, true, inherent_digests)
 	}
 
 	/// Lock the import lock, and run operations inside.
@@ -663,7 +729,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Err: From<error::Error>,
 	{
 		let inner = || {
-			let _import_lock = self.import_lock.lock();
+			let _import_lock = self.backend.get_import_lock().lock();
 
 			let mut op = ClientImportOperation {
 				op: self.backend.begin_operation()?,
@@ -750,7 +816,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let hash = import_headers.post().hash();
-		let height: u64 = import_headers.post().number().as_();
+		let height = (*import_headers.post().number()).saturated_into::<u64>();
 
 		*self.importing_block.write() = Some(hash);
 
@@ -798,7 +864,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let (last_best, last_best_number) = {
-			let info = self.backend.blockchain().info()?;
+			let info = self.backend.blockchain().info();
 			(info.best_hash, info.best_number)
 		};
 
@@ -1071,7 +1137,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		justification: Option<Justification>,
 		notify: bool,
 	) -> error::Result<()> {
-		let last_best = self.backend.blockchain().info()?.best_hash;
+		let last_best = self.backend.blockchain().info().best_hash;
 		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
 	}
@@ -1084,7 +1150,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// while performing major synchronization work.
 	pub fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
 		self.lock_import_and_run(|operation| {
-			let last_best = self.backend.blockchain().info()?.best_hash;
+			let last_best = self.backend.blockchain().info().best_hash;
 			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
 		})
@@ -1097,13 +1163,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Get blockchain info.
-	pub fn info(&self) -> error::Result<ClientInfo<Block>> {
-		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
-		Ok(ClientInfo {
+	pub fn info(&self) -> ClientInfo<Block> {
+		let info = self.backend.blockchain().info();
+		ClientInfo {
 			chain: info,
-			best_queued_hash: None,
-			best_queued_number: None,
-		})
+		}
 	}
 
 	/// Get block status.
@@ -1165,7 +1229,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		};
 
-		let genesis_hash = self.backend.blockchain().info()?.genesis_hash;
+		let genesis_hash = self.backend.blockchain().info().genesis_hash;
 		if genesis_hash == target_hash { return Ok(Vec::new()); }
 
 		let mut current_hash = target_hash;
@@ -1174,7 +1238,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0..max_generation.as_() {
+		for _generation in 0..max_generation.saturated_into() {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
@@ -1188,7 +1252,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
-		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info()?.best_number))?
+		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c)))
@@ -1196,11 +1260,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> error::Result<Block::Header> {
+		let parent_header = self.backend.blockchain().expect_header(*parent)?;
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
-			self.backend.blockchain().expect_block_number_from_id(parent)? + As::sa(1),
+			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
 			Default::default(),
 			Default::default(),
-			self.backend.blockchain().expect_block_hash_from_id(&parent)?,
+			parent_header.hash(),
 			Default::default(),
 		))
 	}
@@ -1216,7 +1281,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 		self.backend.blockchain().header(id)
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info<Block>> {
+	fn info(&self) -> blockchain::Info<Block> {
 		self.backend.blockchain().info()
 	}
 
@@ -1237,7 +1302,7 @@ impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
-	fn cache(&self) -> Option<Arc<Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn Cache<Block>>> {
 		self.backend.blockchain().cache()
 	}
 }
@@ -1330,7 +1395,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
-		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+		}).map_err(|e| ConsensusError::ClientImport(e.to_string()).into())
 	}
 
 	/// Check block preconditions.
@@ -1340,7 +1405,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 		match self.block_status(&BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
@@ -1348,7 +1413,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		}
 
 		match self.block_status(&BlockId::Hash(hash))
-			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
@@ -1366,7 +1431,7 @@ impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	fn current_height(&self) -> Self::BlockNumber {
-		self.backend.blockchain().info().map(|i| i.best_number).unwrap_or_else(|_| Zero::zero())
+		self.backend.blockchain().info().best_number
 	}
 }
 
@@ -1411,17 +1476,14 @@ where
 /// where 'longest' is defined as the highest number of blocks
 pub struct LongestChain<B, Block> {
 	backend: Arc<B>,
-	import_lock: Arc<Mutex<()>>,
 	_phantom: PhantomData<Block>
 }
 
 impl<B, Block> Clone for LongestChain<B, Block> {
 	fn clone(&self) -> Self {
 		let backend = self.backend.clone();
-		let import_lock = self.import_lock.clone();
 		LongestChain {
 			backend,
-			import_lock,
 			_phantom: Default::default()
 		}
 	}
@@ -1433,19 +1495,15 @@ where
 	Block: BlockT<Hash=H256>,
 {
 	/// Instantiate a new LongestChain for Backend B
-	pub fn new(backend: Arc<B>, import_lock: Arc<Mutex<()>>) -> Self {
+	pub fn new(backend: Arc<B>) -> Self {
 		LongestChain {
 			backend,
-			import_lock,
 			_phantom: Default::default()
 		}
 	}
 
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info : ChainInfo<Block> = match self.backend.blockchain().info() {
-			Ok(i) => i,
-			Err(e) => return Err(error::Error::from_blockchain(Box::new(e)))
-		};
+		let info : ChainInfo<Block> = self.backend.blockchain().info();
 		Ok(self.backend.blockchain().header(BlockId::Hash(info.best_hash))?
 			.expect("Best block header must always exist"))
 	}
@@ -1485,9 +1543,9 @@ where
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
-			let _import_lock = self.import_lock.lock();
+			let _import_lock = self.backend.get_import_lock().lock();
 
-			let info = self.backend.blockchain().info()?;
+			let info = self.backend.blockchain().info();
 
 			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
@@ -1584,14 +1642,14 @@ where
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
 		LongestChain::leaves(self)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 
 	fn best_chain(&self)
 		-> Result<<Block as BlockT>::Header, ConsensusError>
 	{
 		LongestChain::best_block_header(&self)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 
 	fn finality_target(
@@ -1600,7 +1658,7 @@ where
 		maybe_max_number: Option<NumberFor<Block>>
 	) -> Result<Option<Block::Hash>, ConsensusError> {
 		LongestChain::best_containing(self, target_hash, maybe_max_number)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }
 
@@ -1649,11 +1707,12 @@ pub(crate) mod tests {
 	use primitives::blake2_256;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient, AccountKeyring};
 	use consensus::{BlockOrigin, SelectChain};
-	use test_client::client::backend::Backend as TestBackend;
-	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
+	use test_client::{
+		prelude::*,
+		client::backend::Backend as TestBackend,
+		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
+	};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1674,10 +1733,10 @@ pub(crate) mod tests {
 
 		// prepare client ang import blocks
 		let mut local_roots = Vec::new();
-		let remote_client = test_client::new_with_changes_trie();
+		let remote_client = TestClientBuilder::new().set_support_changes_trie(true).build();
 		let mut nonces: HashMap<_, u64> = Default::default();
 		for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
-			let mut builder = remote_client.new_block().unwrap();
+			let mut builder = remote_client.new_block(Default::default()).unwrap();
 			for (from, to) in block_transfers {
 				builder.push_transfer(Transfer {
 					from: from.into(),
@@ -1734,14 +1793,14 @@ pub(crate) mod tests {
 
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&BlockId::Number(client.info().chain.best_number),
 				AccountKeyring::Alice.into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&BlockId::Number(client.info().chain.best_number),
 				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			0
@@ -1752,18 +1811,18 @@ pub(crate) mod tests {
 	fn block_builder_works_with_no_transactions() {
 		let client = test_client::new();
 
-		let builder = client.new_block().unwrap();
+		let builder = client.new_block(Default::default()).unwrap();
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert_eq!(client.info().chain.best_number, 1);
 	}
 
 	#[test]
 	fn block_builder_works_with_transactions() {
 		let client = test_client::new();
 
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -1774,18 +1833,21 @@ pub(crate) mod tests {
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
+		assert_eq!(client.info().chain.best_number, 1);
+		assert_ne!(
+			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+			client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&BlockId::Number(client.info().chain.best_number),
 				AccountKeyring::Alice.into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&BlockId::Number(client.info().chain.best_number),
 				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			42
@@ -1796,7 +1858,7 @@ pub(crate) mod tests {
 	fn block_builder_does_not_include_invalid() {
 		let client = test_client::new();
 
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -1814,8 +1876,11 @@ pub(crate) mod tests {
 
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
+		assert_eq!(client.info().chain.best_number, 1);
+		assert_ne!(
+			client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+			client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		);
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
 
@@ -1824,17 +1889,14 @@ pub(crate) mod tests {
 		// block tree:
 		// G
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = test_client::client::LongestChain::new(
-			client.backend().clone(),
-			client.import_lock()
+		let genesis_hash = client.info().chain.genesis_hash;
+
+		assert_eq!(
+			genesis_hash.clone(),
+			longest_chain_select.finality_target(genesis_hash.clone(), None).unwrap().unwrap()
 		);
-
-
-		assert_eq!(genesis_hash.clone(), longest_chain_select.finality_target(
-			genesis_hash.clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -1842,16 +1904,14 @@ pub(crate) mod tests {
 		// block tree:
 		// G
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
-		let uninserted_block = client.new_block().unwrap().bake().unwrap();
-		let backend = client.backend().as_in_memory();
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(backend),
-				client.import_lock());
+		let uninserted_block = client.new_block(Default::default()).unwrap().bake().unwrap();
 
-		assert_eq!(None, longest_chain_select.finality_target(
-			uninserted_block.hash().clone(), None).unwrap());
+		assert_eq!(
+			None,
+			longest_chain_select.finality_target(uninserted_block.hash().clone(), None).unwrap()
+		);
 	}
 
 	#[test]
@@ -1861,11 +1921,11 @@ pub(crate) mod tests {
 		let client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block().unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 		let v: Vec<H256> = Vec::new();
 		assert_eq!(v, client.uncles(a2.hash(), 3).unwrap());
@@ -1881,27 +1941,27 @@ pub(crate) mod tests {
 		let client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
-		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 		// A3 -> A4
-		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+		let a4 = client.new_block_at(&BlockId::Hash(a3.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 		// A4 -> A5
-		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+		let a5 = client.new_block_at(&BlockId::Hash(a4.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 		// A1 -> B2
-		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -1913,15 +1973,15 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// B2 -> B3
-		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		// B3 -> B4
-		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+		let b4 = client.new_block_at(&BlockId::Hash(b3.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 		// // B2 -> C3
-		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -1933,7 +1993,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
-		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -1944,7 +2004,7 @@ pub(crate) mod tests {
 		let d2 = builder.bake().unwrap();
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		let genesis_hash = client.info().chain.genesis_hash;
 
 		let uncles1 = client.uncles(a4.hash(), 10).unwrap();
 		assert_eq!(vec![b2.hash(), d2.hash()], uncles1);
@@ -1970,28 +2030,21 @@ pub(crate) mod tests {
 		// block tree:
 		// G -> A1 -> A2
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block().unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		let genesis_hash = client.info().chain.genesis_hash;
 
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(client.backend().as_in_memory()),
-				client.import_lock());
-
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			a1.hash(), None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			a2.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(a2.hash(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -2001,30 +2054,30 @@ pub(crate) mod tests {
 		//      A1 -> B2 -> B3 -> B4
 		//	          B2 -> C3
 		//	    A1 -> D2
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
-		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 		// A3 -> A4
-		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+		let a4 = client.new_block_at(&BlockId::Hash(a3.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 		// A4 -> A5
-		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+		let a5 = client.new_block_at(&BlockId::Hash(a4.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 		// A1 -> B2
-		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -2036,15 +2089,15 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// B2 -> B3
-		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		// B3 -> B4
-		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+		let b4 = client.new_block_at(&BlockId::Hash(b3.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 		// // B2 -> C3
-		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -2056,7 +2109,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
-		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -2067,13 +2120,9 @@ pub(crate) mod tests {
 		let d2 = builder.bake().unwrap();
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
-		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
+		assert_eq!(client.info().chain.best_hash, a5.hash());
 
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = test_client::client::LongestChain::new(
-				Arc::new(client.backend().as_in_memory()),
-				client.import_lock());
-
+		let genesis_hash = client.info().chain.genesis_hash;
 		let leaves = longest_chain_select.leaves().unwrap();
 
 		assert!(leaves.contains(&a5.hash()));
@@ -2289,24 +2338,19 @@ pub(crate) mod tests {
 		// block tree:
 		// G -> A1 -> A2
 
-		let client = test_client::new();
+		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block().unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = test_client::client::LongestChain::new(
-			Arc::new(client.backend().as_in_memory()),
-			client.import_lock()
-		);
+		let genesis_hash = client.info().chain.genesis_hash;
 
-		assert_eq!(a2.hash(), longest_chain_select.finality_target(
-			genesis_hash, Some(10)).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, Some(10)).unwrap().unwrap());
 	}
 
 	#[test]
@@ -2331,35 +2375,38 @@ pub(crate) mod tests {
 		let client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block().unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
 		let justification = vec![1, 2, 3];
-		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
 		assert_eq!(
-			client.backend().blockchain().last_finalized().unwrap(),
+			blockchain.last_finalized().unwrap(),
 			a3.hash(),
 		);
 
 		assert_eq!(
-			client.backend().blockchain().justification(BlockId::Hash(a3.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
-			client.backend().blockchain().justification(BlockId::Hash(a1.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
-			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
 	}

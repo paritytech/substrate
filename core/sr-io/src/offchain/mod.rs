@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,19 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Initialization errors.
+//! A collection of higher lever helpers for offchain workers.
 
-use client;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed
-};
-
-error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
-	}
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-	}
-}
+pub mod http;
