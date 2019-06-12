@@ -31,7 +31,6 @@ use crate::block_import::{
 };
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use parity_codec::Encode;
-use parking_lot::Mutex;
 
 use std::sync::Arc;
 use std::thread;
@@ -98,7 +97,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 }
 
 /// Blocks import queue API.
-pub trait ImportQueue<B: BlockT>: Send + Sync {
+pub trait ImportQueue<B: BlockT>: Send {
 	/// Start background work for the queue as necessary.
 	///
 	/// This is called automatically by the network service when synchronization
@@ -116,11 +115,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 
 /// Basic block import queue that performs import in the caller thread.
 pub struct BasicSyncQueue<B: BlockT, V: Verifier<B>> {
-	data: Arc<BasicSyncQueueData<B, V>>,
-}
-
-struct BasicSyncQueueData<B: BlockT, V: Verifier<B>> {
-	link: Mutex<Option<Box<dyn Link<B>>>>,
+	link: Option<Box<dyn Link<B>>>,
 	block_import: SharedBlockImport<B>,
 	verifier: Arc<V>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -135,23 +130,21 @@ impl<B: BlockT, V: Verifier<B>> BasicSyncQueue<B, V> {
 		finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	) -> Self {
 		BasicSyncQueue {
-			data: Arc::new(BasicSyncQueueData {
-				link: Mutex::new(None),
-				block_import,
-				verifier,
-				justification_import,
-				finality_proof_import,
-			}),
+			link: None,
+			block_import,
+			verifier,
+			justification_import,
+			finality_proof_import,
 		}
 	}
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V> {
 	fn start(&mut self, mut link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
-		if let Some(justification_import) = self.data.justification_import.as_ref() {
+		if let Some(justification_import) = self.justification_import.as_ref() {
 			justification_import.on_start(&mut *link);
 		}
-		*self.data.link.lock() = Some(link);
+		self.link = Some(link);
 		Ok(())
 	}
 
@@ -161,14 +154,13 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 		}
 
 		let (imported, count, results) = import_many_blocks(
-			&*self.data.block_import,
+			&*self.block_import,
 			origin,
 			blocks,
-			self.data.verifier.clone(),
+			self.verifier.clone(),
 		);
 
-		let mut link_ref = self.data.link.lock();
-		let link = match link_ref.as_mut() {
+		let link = match self.link.as_mut() {
 			Some(link) => link,
 			None => {
 				trace!(target: "sync", "Trying to import blocks before starting import queue");
@@ -183,8 +175,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 
 	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		import_single_justification(
-			&mut *self.data.link.lock(),
-			&self.data.justification_import,
+			&mut self.link,
+			&self.justification_import,
 			who,
 			hash,
 			number,
@@ -194,14 +186,14 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
 		let result = import_single_finality_proof(
-			&self.data.finality_proof_import,
-			&*self.data.verifier,
+			&self.finality_proof_import,
+			&*self.verifier,
 			&who,
 			hash,
 			number,
 			finality_proof,
 		);
-		if let Some(link) = self.data.link.lock().as_mut() {
+		if let Some(link) = self.link.as_mut() {
 			link.finality_proof_imported(who, (hash, number), result);
 		}
 	}
