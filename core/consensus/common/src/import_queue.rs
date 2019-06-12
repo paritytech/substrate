@@ -147,9 +147,9 @@ impl<B: BlockT, V: Verifier<B>> BasicSyncQueue<B, V> {
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V> {
-	fn start(&mut self, link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
+	fn start(&mut self, mut link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
 		if let Some(justification_import) = self.data.justification_import.as_ref() {
-			justification_import.on_start(&*link);
+			justification_import.on_start(&mut *link);
 		}
 		*self.data.link.lock() = Some(link);
 		Ok(())
@@ -167,8 +167,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 			self.data.verifier.clone(),
 		);
 
-		let link_ref = self.data.link.lock();
-		let link = match link_ref.as_ref() {
+		let mut link_ref = self.data.link.lock();
+		let link = match link_ref.as_mut() {
 			Some(link) => link,
 			None => {
 				trace!(target: "sync", "Trying to import blocks before starting import queue");
@@ -176,14 +176,14 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 			},
 		};
 
-		process_import_results(&**link, results);
+		process_import_results(&mut **link, results);
 
 		trace!(target: "sync", "Imported {} of {}", imported, count);
 	}
 
 	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		import_single_justification(
-			&*self.data.link.lock(),
+			&mut *self.data.link.lock(),
 			&self.data.justification_import,
 			who,
 			hash,
@@ -201,7 +201,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 			number,
 			finality_proof,
 		);
-		if let Some(link) = self.data.link.lock().as_ref() {
+		if let Some(link) = self.data.link.lock().as_mut() {
 			link.finality_proof_imported(who, (hash, number), result);
 		}
 	}
@@ -428,7 +428,7 @@ impl<B: BlockT> BlockImporter<B> {
 			},
 			BlockImportMsg::ImportJustification(who, hash, number, justification) => {
 				import_single_justification(
-					&self.link,
+					&mut self.link,
 					&self.justification_import,
 					who,
 					hash,
@@ -439,15 +439,15 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportMsg::ImportFinalityProof(who, hash, number, finality_proof) => {
 				self.handle_import_finality_proof(who, hash, number, finality_proof)
 			},
-			BlockImportMsg::Start(link, sender) => {
+			BlockImportMsg::Start(mut link, sender) => {
 				if let Some(finality_proof_request_builder) = self.finality_proof_request_builder.take() {
 					link.set_finality_proof_request_builder(finality_proof_request_builder);
 				}
 				if let Some(justification_import) = self.justification_import.as_ref() {
-					justification_import.on_start(&*link);
+					justification_import.on_start(&mut *link);
 				}
 				if let Some(finality_proof_import) = self.finality_proof_import.as_ref() {
-					finality_proof_import.on_start(&*link);
+					finality_proof_import.on_start(&mut *link);
 				}
 				self.link = Some(link);
 				let _ = sender.send(Ok(()));
@@ -476,7 +476,7 @@ impl<B: BlockT> BlockImporter<B> {
 	}
 
 	fn handle_worker_msg(&mut self, msg: BlockImportWorkerMsg<B>) -> bool {
-		let link = match self.link.as_ref() {
+		let link = match self.link.as_mut() {
 			Some(link) => link,
 			None => {
 				trace!(target: "sync", "Received import result while import-queue has no link");
@@ -502,7 +502,7 @@ impl<B: BlockT> BlockImporter<B> {
 					=> unreachable!("Import Worker does not send Import*/Shutdown messages; qed"),
 		};
 
-		process_import_results(&**link, results);
+		process_import_results(&mut **link, results);
 		true
 	}
 
@@ -608,37 +608,37 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
 	/// Block imported.
-	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
+	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Batch of blocks imported, with or without error.
-	fn blocks_processed(&self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
+	fn blocks_processed(&mut self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
 	/// Justification import result.
-	fn justification_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
+	fn justification_imported(&mut self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
 	/// Clear all pending justification requests.
-	fn clear_justification_requests(&self) {}
+	fn clear_justification_requests(&mut self) {}
 	/// Request a justification for the given block.
-	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
+	fn request_justification(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
 	///
 	/// Even though we have asked for finality proof of block A, provider could return proof of
 	/// some earlier block B, if the proof for A was too large. The sync module should continue
 	/// asking for proof of A in this case.
 	fn finality_proof_imported(
-		&self,
+		&mut self,
 		_who: Origin,
 		_request_block: (B::Hash, NumberFor<B>),
 		_finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
 	) {}
 	/// Request a finality proof for the given block.
-	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
+	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Remember finality proof request builder on start.
-	fn set_finality_proof_request_builder(&self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
+	fn set_finality_proof_request_builder(&mut self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
 	/// Adjusts the reputation of the given peer.
-	fn report_peer(&self, _who: Origin, _reputation_change: i32) {}
+	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
-	fn restart(&self) {}
+	fn restart(&mut self) {}
 	/// Synchronization request has been processed.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn synchronized(&self) {}
+	fn synchronized(&mut self) {}
 }
 
 /// Block import successful result.
@@ -667,7 +667,7 @@ pub enum BlockImportError {
 
 /// Imports single notification and send notification to the link (if provided).
 fn import_single_justification<B: BlockT>(
-	link: &Option<Box<dyn Link<B>>>,
+	link: &mut Option<Box<dyn Link<B>>>,
 	justification_import: &Option<SharedJustificationImport<B>>,
 	who: Origin,
 	hash: B::Hash,
@@ -689,7 +689,7 @@ fn import_single_justification<B: BlockT>(
 			}).is_ok()
 	}).unwrap_or(false);
 
-	if let Some(ref link) = link {
+	if let Some(ref mut link) = link {
 		link.justification_imported(who, &hash, number, success);
 	}
 }
@@ -723,7 +723,7 @@ fn import_single_finality_proof<B: BlockT, V: Verifier<B>>(
 
 /// Process result of block(s) import.
 fn process_import_results<B: BlockT>(
-	link: &dyn Link<B>,
+	link: &mut dyn Link<B>,
 	results: Vec<(
 		Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 		B::Hash,

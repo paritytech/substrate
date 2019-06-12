@@ -111,7 +111,7 @@ impl WaitLink {
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
+	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {
 		self.wait_send.send(())
 			.expect("Unable to notify main process; if the main process panicked then this thread would already be dead as well. qed.");
 	}

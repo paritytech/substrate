@@ -97,15 +97,15 @@ pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
-	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
+	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
-	fn blocks_processed(&self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::BlocksProcessed(processed_blocks, has_error));
 	}
 
-	fn justification_imported(&self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
 			info!("Invalid justification provided by {} for #{}", who, hash);
@@ -114,15 +114,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		}
 	}
 
-	fn clear_justification_requests(&self) {
+	fn clear_justification_requests(&mut self) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::ClearJustificationRequests);
 	}
 
-	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
-	fn request_finality_proof(&self, hash: &B::Hash, number: NumberFor<B>) {
+	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::RequestFinalityProof(
 			hash.clone(),
 			number,
@@ -130,7 +130,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 	}
 
 	fn finality_proof_imported(
-		&self,
+		&mut self,
 		who: PeerId,
 		request_block: (B::Hash, NumberFor<B>),
 		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
@@ -147,15 +147,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		}
 	}
 
-	fn report_peer(&self, who: PeerId, reputation_change: i32) {
+	fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
 		let _ = self.network_sender.unbounded_send(NetworkMsg::ReportPeer(who, reputation_change));
 	}
 
-	fn restart(&self) {
+	fn restart(&mut self) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::RestartSync);
 	}
 
-	fn set_finality_proof_request_builder(&self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+	fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::SetFinalityProofRequestBuilder(request_builder));
 	}
 }
