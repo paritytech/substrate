@@ -56,6 +56,8 @@ use test_client::{self, AccountKeyring};
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
 
+type AuthorityId = primitives::sr25519::Public;
+
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
@@ -706,7 +708,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<test_runtime::AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()
