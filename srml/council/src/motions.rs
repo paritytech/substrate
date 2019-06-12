@@ -120,6 +120,10 @@ decl_module! {
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
 		}
 
+		/// # <weight>
+		/// - Bounded storage reads and writes.
+		/// - Argument `threshold` has bearing on weight.
+		/// # </weight>
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -145,6 +149,10 @@ decl_module! {
 			}
 		}
 
+		/// # <weight>
+		/// - Bounded storage read and writes.
+		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
+		/// # </weight>
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 
@@ -326,8 +334,8 @@ mod tests {
 	use hex_literal::hex;
 
 	#[test]
-	fn basic_environment_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_basic_environment_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(CouncilMotions::proposals(), Vec::<H256>::new());
@@ -340,7 +348,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -374,7 +382,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -397,8 +405,8 @@ mod tests {
 	}
 
 	#[test]
-	fn ignoring_non_council_proposals_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_ignoring_non_council_proposals_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())), "proposer not on council");
@@ -406,8 +414,8 @@ mod tests {
 	}
 
 	#[test]
-	fn ignoring_non_council_votes_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_ignoring_non_council_votes_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -417,8 +425,8 @@ mod tests {
 	}
 
 	#[test]
-	fn ignoring_bad_index_council_vote_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_ignoring_bad_index_council_vote_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(3);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -428,8 +436,8 @@ mod tests {
 	}
 
 	#[test]
-	fn revoting_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_revoting_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -462,8 +470,8 @@ mod tests {
 	}
 
 	#[test]
-	fn disapproval_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_disapproval_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -491,8 +499,8 @@ mod tests {
 	}
 
 	#[test]
-	fn approval_works() {
-		with_externalities(&mut new_test_ext(true), || {
+	fn motions_approval_works() {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();

@@ -68,9 +68,7 @@ pub fn build_transport(
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
 		.with_timeout(Duration::from_secs(20))
-		// TODO: pass the error directly, instead of calling `to_string()`
-		// https://github.com/libp2p/rust-libp2p/issues/1162
-		.map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))
+		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 		.boxed();
 
 	(transport, sinks)

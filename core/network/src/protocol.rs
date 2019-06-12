@@ -24,16 +24,16 @@ use runtime_primitives::traits::{
 	CheckedSub, SaturatedConversion
 };
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
-use crate::message::{
-	self, BlockRequest as BlockRequestMessage,
+use message::{
+	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
 };
-use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
-use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
-use crate::specialization::NetworkSpecialization;
-use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
+use message::{BlockAttributes, Direction, FromBlock, RequestId};
+use message::generic::{Message as GenericMessage, ConsensusMessage};
+use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
+use specialization::NetworkSpecialization;
+use sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
 use rustc_hex::ToHex;
@@ -43,7 +43,15 @@ use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::{FetchChecker, ChangesProof};
-use crate::{error, util::LruHashSet};
+use crate::error;
+use util::LruHashSet;
+
+mod util;
+pub mod consensus_gossip;
+pub mod message;
+pub mod on_demand;
+pub mod specialization;
+pub mod sync;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
@@ -845,13 +853,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				network_out.disconnect_peer(who);
 				return;
 			}
+
 			if self.config.roles.is_light() {
+				// we're not interested in light peers
+				if status.roles.is_light() {
+					debug!(target: "sync", "Peer {} is unable to serve light requests", who);
+					network_out.report_peer(who.clone(), i32::min_value());
+					network_out.disconnect_peer(who);
+					return;
+				}
+
+				// we don't interested in peers that are far behind us
 				let self_best_block = self
 					.context_data
 					.chain
 					.info()
-					.best_queued_number
-					.unwrap_or_else(|| Zero::zero());
+					.chain.best_number;
 				let blocks_difference = self_best_block
 					.checked_sub(&status.best_number)
 					.unwrap_or_else(Zero::zero)

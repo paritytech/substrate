@@ -311,7 +311,7 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, blake2_256, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
-	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
+	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
 	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;

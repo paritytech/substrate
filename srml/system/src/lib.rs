@@ -475,7 +475,7 @@ impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
-	/// This will update storage entries that correpond to the specified topics.
+	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let extrinsic_index = Self::extrinsic_index();

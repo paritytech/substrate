@@ -12,8 +12,8 @@ byteorder = "1.3"
 bytes = "0.4"
 fnv = "1.0"
 futures = "0.1"
-libp2p = { version = "0.9.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
-parking_lot = "0.7.1"
+libp2p = { version = "0.9.1", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+parking_lot = "0.8.0"
 lazy_static = "1.2"
 log = "0.4"
 rand = "0.6"

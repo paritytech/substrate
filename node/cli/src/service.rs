@@ -26,6 +26,7 @@ use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, Nothing
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::{Pair as PairT, ed25519};
+use futures::prelude::*;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
@@ -92,7 +93,7 @@ construct_service_factory! {
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or(ServiceError::SelectChainRequired)?;
-					executor.spawn(start_aura(
+					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client,
@@ -100,10 +101,10 @@ construct_service_factory! {
 						block_import.clone(),
 						proposer,
 						service.network(),
-						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
-					)?);
+					)?;
+					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -205,10 +206,7 @@ construct_service_factory! {
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 				#[allow(deprecated)]
-				Ok(LongestChain::new(
-					client.backend().clone(),
-					client.import_lock()
-				))
+				Ok(LongestChain::new(client.backend().clone()))
 			}
 		},
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
