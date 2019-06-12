@@ -504,7 +504,7 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for crate::generic::DigestItem<H> {
+impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
