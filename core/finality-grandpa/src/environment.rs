@@ -40,7 +40,6 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use transaction_pool::txpool::{self, PoolApi};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -305,10 +304,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T>
 	pub(crate) transaction_pool: Arc<T>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T> 
-where
-	T: PoolApi,
-	<T as PoolApi>::Api: txpool::ChainApi,
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T>
 {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
@@ -336,8 +332,6 @@ where
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	T: PoolApi,
-	<T as PoolApi>::Api: txpool::ChainApi,
 	RA: Send + Sync,
 
 {
@@ -469,11 +463,10 @@ where
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	T: PoolApi,
-	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 	Client<B, E, Block, RA>: HeaderBackend<Block>,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
+	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;	
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
 
