@@ -18,7 +18,9 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, generic::DigestItem as GenDigestItem, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use primitives::{
+	BuildStorage, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}
+};
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -30,9 +32,9 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<Signal<u64>> for DigestItem {
-	fn from(log: Signal<u64>) -> DigestItem {
-		GenDigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
+impl From<Signal<u64>> for DigestItem<H256> {
+	fn from(log: Signal<u64>) -> DigestItem<H256> {
+		DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 	}
 }
 
@@ -49,12 +51,10 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
-	type Log = DigestItem;
 }
 
 mod grandpa {

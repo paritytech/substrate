@@ -380,7 +380,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnInitialize};
-	use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
+	use primitives::testing::{Header, UintAuthorityId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -438,12 +438,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
 		type Moment = u64;

@@ -18,7 +18,7 @@
 
 use primitives::{BuildStorage, Perbill};
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
-use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
+use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency};
@@ -61,12 +61,10 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

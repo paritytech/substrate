@@ -20,7 +20,7 @@
 #![forbid(unsafe_code)]
 pub use timestamp;
 
-use rstd::{result, prelude::*, marker::PhantomData};
+use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating}};
@@ -30,8 +30,6 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-#[cfg(feature = "std")]
-use serde::Serialize;
 use babe_primitives::BABE_ENGINE_ID;
 
 pub use babe_primitives::AuthorityId;

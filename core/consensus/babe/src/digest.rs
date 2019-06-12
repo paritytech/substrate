@@ -18,9 +18,7 @@
 
 use primitives::sr25519::{Public, Signature};
 use babe_primitives::BABE_ENGINE_ID;
-use runtime_primitives::{
-	traits::DigestItem as _, generic::{DigestItem, OpaqueDigestItemId}
-};
+use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
 use schnorrkel::{

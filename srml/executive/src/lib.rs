@@ -381,7 +381,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, DigestItem, Header, Block};
+	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
 	use hex_literal::hex;
@@ -406,12 +406,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;

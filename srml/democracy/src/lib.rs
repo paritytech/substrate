@@ -919,7 +919,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::testing::Header;
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 
@@ -948,12 +948,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

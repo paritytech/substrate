@@ -47,7 +47,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
-use runtime_primitives::traits::{Block as BlockT, Digest, Header, NumberFor, DigestItem};
+use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;

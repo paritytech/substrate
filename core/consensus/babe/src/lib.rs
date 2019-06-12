@@ -34,7 +34,7 @@ pub use consensus_common::SyncOracle;
 use consensus_common::{ExtraVerification, well_known_cache_keys::Id as CacheKeyId};
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
+	Block, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps,
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
@@ -181,14 +181,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem,
-	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
-		Hash=B::Hash,
-	>,
+	H: Header<Hash=B::Hash>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -233,10 +228,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash>>,
-		Hash=B::Hash,
-	>,
+	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,

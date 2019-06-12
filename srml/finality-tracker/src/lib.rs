@@ -263,7 +263,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::testing::Header;
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
 	use lazy_static::lazy_static;
@@ -290,12 +290,10 @@ mod tests {
 				type BlockNumber = u64;
 				type Hash = H256;
 				type Hashing = BlakeTwo256;
-				type Digest = Digest;
 				type AccountId = u64;
 				type Lookup = IdentityLookup<u64>;
 				type Header = Header;
 				type Event = ();
-				type Log = DigestItem;
 			}
 
 			type System = system::Module<Test>;

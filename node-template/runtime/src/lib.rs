@@ -79,7 +79,7 @@ pub mod opaque {
 		}
 	}
 	/// Opaque block header type.
-	pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash>>;
+	pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// Opaque block type.
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
@@ -120,8 +120,6 @@ impl system::Trait for Runtime {
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header digest type.
-	type Digest = generic::Digest<Log>;
 	/// The header type.
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
@@ -201,7 +199,7 @@ type Context = system::ChainContext<Runtime>;
 /// The address format for describing accounts.
 type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.

@@ -53,7 +53,6 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use parity_codec::{Encode, Decode};
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
-use rstd::marker::PhantomData;
 use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -61,10 +60,6 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-#[cfg(feature = "std")]
-use std::fmt::Debug;
-#[cfg(feature = "std")]
-use serde::Serialize;
 use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 
 mod mock;

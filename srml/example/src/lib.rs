@@ -490,7 +490,7 @@ mod tests {
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
 		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -508,12 +508,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

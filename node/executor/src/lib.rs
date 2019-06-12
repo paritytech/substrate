@@ -37,9 +37,9 @@ mod tests {
 	use primitives::{twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Digest, DigestItem};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, session, system, staking, timestamp, treasury, contract};
+	use {balances, indices, system, staking, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,

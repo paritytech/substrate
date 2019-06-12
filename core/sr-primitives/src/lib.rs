@@ -44,6 +44,9 @@ use traits::{SaturatedConversion, UniqueSaturatedInto};
 pub mod generic;
 pub mod transaction_validity;
 
+/// Re-export these since they're only "kind of" generic.
+pub use generic::{DigestItem, Digest};
+
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
 
@@ -640,18 +643,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::H256;
 	use crate::codec::{Encode, Decode};
-
-	pub trait RuntimeT {
-		type Id;
-	}
-
-	pub struct Runtime;
-
-	impl RuntimeT for Runtime {
-		type Id = u64;
-	}
 
 	macro_rules! per_thing_mul_upper_test {
 		($num_type:tt, $per:tt) => {
@@ -668,22 +660,6 @@ mod tests {
 			// bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
-		}
-	}
-
-	#[test]
-	fn impl_outer_log_works() {
-		// encode/decode regular item
-		let b1: Log = b::RawLog::B1::<u64>(777).into();
-		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		assert_eq!(b1, decoded_b1);
-
-		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256> = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		match generic_b1 {
-			super::generic::DigestItem::Other(_) => (),
-			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 	}
 

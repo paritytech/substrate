@@ -72,12 +72,10 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
-	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
