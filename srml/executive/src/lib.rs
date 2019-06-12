@@ -82,12 +82,11 @@ use primitives::traits::{
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
 	ValidateUnsigned,
 };
-use srml_support::{Dispatchable, traits::MakePayment, storage};
+use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
-use substrate_primitives::storage::well_known_keys;
 
 mod internal {
 	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
@@ -253,10 +252,8 @@ where
 			return Err(internal::ApplyError::FullBlock);
 		}
 
-		let extrinsic_count =
-			storage::unhashed::get(well_known_keys::MAX_EXTRINSICS_LIMIT).unwrap_or(internal::MAX_EXTRINSICS_LIMIT);
 		// Check the extrinsics count of the block if that extrinsic is applied.
-		if <system::Module<System>>::extrinsic_count()  > extrinsic_count {
+		if <system::Module<System>>::extrinsic_count() > internal::MAX_EXTRINSICS_LIMIT {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
