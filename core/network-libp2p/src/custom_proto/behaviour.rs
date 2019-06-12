@@ -23,7 +23,9 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{
+	borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, time::Duration, time::Instant,
+};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
 

@@ -121,15 +121,33 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+				vec![0u8; 32]
+			},
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => {
+				vec![70u8; 16]
+			},
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			}
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -154,15 +172,33 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+				vec![0u8; 32]
+			},
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => {
+				vec![70u8; 16]
+			},
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			}
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -187,8 +223,12 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -224,8 +264,12 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -815,8 +859,12 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -826,9 +874,11 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -837,8 +887,12 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -848,9 +902,11 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
@@ -883,7 +939,8 @@ mod tests {
 		let block1 = changes_trie_block();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
+		WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}

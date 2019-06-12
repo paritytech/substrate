@@ -112,7 +112,9 @@ trait ReadPrimitive<T: Sized> {
 impl ReadPrimitive<u32> for MemoryInstance {
 	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, UserError> {
 		use byteorder::{LittleEndian, ByteOrder};
-		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| UserError("Invalid attempt to read_primitive"))?))
+		let result = self.get(offset, 4)
+			.map_err(|_| UserError("Invalid attempt to read_primitive"))?;
+		Ok(LittleEndian::read_u32(&result))
 	}
 }
 
@@ -164,20 +166,44 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
-		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
+		let value = this.memory.get(value_data, value_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
 		if let Some(_preimage) = this.hash_lookup.get(&key) {
-			debug_trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(
+				target: "wasm-trace",
+				"*** Setting storage: %{} -> {}   [k={}]",
+				::primitives::hexdisplay::ascii_format(&_preimage),
+				HexDisplay::from(&value),
+				HexDisplay::from(&key),
+			);
 		} else {
-			debug_trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(
+				target: "wasm-trace",
+				"*** Setting storage:  {} -> {}   [k={}]",
+				::primitives::hexdisplay::ascii_format(&key),
+				HexDisplay::from(&value),
+				HexDisplay::from(&key),
+			);
 		}
 		this.ext.set_storage(key, value);
 		Ok(())
 	},
-	ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
-		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_child_storage"))?;
+	ext_set_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *const u8,
+		value_len: u32
+	) => {
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
+		let value = this.memory.get(value_data, value_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine value in ext_set_child_storage"))?;
 		if let Some(_preimage) = this.hash_lookup.get(&key) {
 			debug_trace!(
 				target: "wasm-trace", "*** Setting child storage: {} -> %{} -> {}   [k={}]",
@@ -202,12 +228,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.set_child_storage(storage_key, key, value);
 		Ok(())
 	},
-	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
+	ext_clear_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32
+	) => {
 		let storage_key = this.memory.get(
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_storage"))?;
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_child_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_clear_child_storage"))?;
 		debug_trace!(target: "wasm-trace", "*** Clearing child storage: {} -> {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -224,7 +256,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
 		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]",
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
@@ -235,15 +268,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
 		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
-	ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32 => {
+	ext_exists_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32
+	) -> u32 => {
 		let storage_key = this.memory.get(
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
 		let storage_key = ChildStorageKey::from_vec(storage_key)
 			.ok_or_else(||
 				UserError("ext_exists_child_storage: child storage key is not valid")
@@ -251,7 +291,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(if this.ext.exists_child_storage(storage_key, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
-		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
@@ -291,7 +332,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32)? as u32;
-			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
+			this.memory.set(offset, &value)
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_storage"))?;
 			Ok(offset)
@@ -302,7 +344,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
-	ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
+	ext_get_allocated_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
 		let storage_key = this.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -337,7 +385,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32)? as u32;
-			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
+			this.memory.set(offset, &value)
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_child_storage"))?;
 			Ok(offset)
@@ -348,8 +397,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	// return u32::max_value() if no value exists for the key.
-	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
+	ext_get_storage_into(
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *mut u8,
+		value_len: u32,
+		value_offset: u32
+	) -> u32 => {
+		let key = this.memory.get(key_data, key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = this.ext.storage(&key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]",
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -368,14 +424,23 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
-			this.memory.set(value_data, &value[..written]).map_err(|_| UserError("Invalid attempt to set value in ext_get_storage_into"))?;
+			this.memory.set(value_data, &value[..written])
+				.map_err(|_| UserError("Invalid attempt to set value in ext_get_storage_into"))?;
 			Ok(written as u32)
 		} else {
 			Ok(u32::max_value())
 		}
 	},
 	// return u32::max_value() if no value exists for the key.
-	ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
+	ext_get_child_storage_into(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *mut u8,
+		value_len: u32,
+		value_offset: u32
+	) -> u32 => {
 		let storage_key = this.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -410,7 +475,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
-			this.memory.set(value_data, &value[..written]).map_err(|_| UserError("Invalid attempt to set value in ext_get_child_storage_into"))?;
+			this.memory.set(value_data, &value[..written])
+				.map_err(|_| UserError("Invalid attempt to set value in ext_get_child_storage_into"))?;
 			Ok(written as u32)
 		} else {
 			Ok(u32::max_value())
@@ -418,11 +484,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
-		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
+		this.memory.set(result, r.as_ref())
+			.map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
-	ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
+	ext_child_storage_root(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let storage_key = ChildStorageKey::from_slice(&*storage_key)
 			.ok_or_else(||
 				UserError("ext_child_storage_root: child storage key is not valid")
@@ -430,7 +502,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let value = this.ext.child_storage_root(storage_key);
 
 		let offset = this.heap.allocate(value.len() as u32)? as u32;
-		this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
+		this.memory.set(offset, &value)
+			.map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
 		this.memory.write_primitive(written_out, value.len() as u32)
 			.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
 		Ok(offset)
@@ -446,13 +519,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let r = this.ext.storage_changes_root(parent_hash)
 			.map_err(|_| UserError("Invaid parent_hash passed to ext_storage_changes_root"))?;
 		if let Some(r) = r {
-			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+			this.memory.set(result, &r[..])
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
 			Ok(1)
 		} else {
 			Ok(0)
 		}
 	},
-	ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+	ext_blake2_256_enumerated_trie_root(
+		values_data: *const u8,
+		lens_data: *const u32,
+		lens_len: u32,
+		result: *mut u8
+	) => {
 		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
 			.collect::<::std::result::Result<Vec<u32>, UserError>>()?
@@ -464,7 +543,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			)
 			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
 		let r = ordered_trie_root::<Blake2Hasher, _, _>(values.into_iter());
-		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_blake2_256_enumerated_trie_root"))?;
+		this.memory.set(result, &r[..])
+			.map_err(|_| UserError("Invalid attempt to set memory in ext_blake2_256_enumerated_trie_root"))?;
 		Ok(())
 	},
 	ext_chain_id() -> u64 => {
@@ -477,7 +557,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
-			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_64"))?;
+			let key = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get key in ext_twox_64"))?;
 			let hashed_key = twox_64(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
 				if let Ok(_skey) = str::from_utf8(&key) {
@@ -491,7 +572,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			hashed_key
 		};
 
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_64"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_twox_64"))?;
 		Ok(())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
@@ -501,7 +583,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
-			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
+			let key = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
 				&if let Ok(_skey) = str::from_utf8(&key) {
@@ -515,16 +598,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			hashed_key
 		};
 
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_128"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_twox_128"))?;
 		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result: [u8; 32] = if len == 0 {
 			twox_256(&[0u8; 0])
 		} else {
-			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
+			let mem = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?;
+			twox_256(&mem)
 		};
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_256"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_twox_256"))?;
 		Ok(())
 	},
 	ext_blake2_128(data: *const u8, len: u32, out: *mut u8) => {
@@ -533,39 +620,50 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
-			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_blake2_128"))?;
+			let key = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get key in ext_blake2_128"))?;
 			let hashed_key = blake2_128(&key);
 			this.hash_lookup.insert(hashed_key.to_vec(), key);
 			hashed_key
 		};
 
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_128"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_blake2_128"))?;
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result: [u8; 32] = if len == 0 {
 			blake2_256(&[0u8; 0])
 		} else {
-			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
+			let mem = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?;
+			blake2_256(&mem)
 		};
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
 		Ok(())
 	},
 	ext_keccak_256(data: *const u8, len: u32, out: *mut u8) => {
 		let result: [u8; 32] = if len == 0 {
 			tiny_keccak::keccak256(&[0u8; 0])
 		} else {
-			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?)
+			let mem = this.memory.get(data, len as usize)
+				.map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?;
+			tiny_keccak::keccak256(&mem)
 		};
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak_256"))?;
+		this.memory.set(out, &result)
+			.map_err(|_| UserError("Invalid attempt to set result in ext_keccak_256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
-		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_ed25519_verify"))?;
+		this.memory.get_into(sig_data, &mut sig[..])
+			.map_err(|_| UserError("Invalid attempt to get signature in ext_ed25519_verify"))?;
 		let mut pubkey = [0u8; 32];
-		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_ed25519_verify"))?;
-		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| UserError("Invalid attempt to get pubkey in ext_ed25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
 
 		Ok(if ed25519::Pair::verify_weak(&sig, &msg, &pubkey) {
 			0
@@ -575,10 +673,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
-		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_sr25519_verify"))?;
+		this.memory.get_into(sig_data, &mut sig[..])
+			.map_err(|_| UserError("Invalid attempt to get signature in ext_sr25519_verify"))?;
 		let mut pubkey = [0u8; 32];
-		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
-		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
 
 		Ok(if sr25519::Pair::verify_weak(&sig, &msg, &pubkey) {
 			0
@@ -588,7 +689,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
 		let mut sig = [0u8; 65];
-		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
+		this.memory.get_into(sig_data, &mut sig[..])
+			.map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
 		let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
 			Ok(rs) => rs,
 			_ => return Ok(1),
@@ -600,14 +702,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 
 		let mut msg = [0u8; 32];
-		this.memory.get_into(msg_data, &mut msg[..]).map_err(|_| UserError("Invalid attempt to get message in ext_secp256k1_ecdsa_recover"))?;
+		this.memory.get_into(msg_data, &mut msg[..])
+			.map_err(|_| UserError("Invalid attempt to get message in ext_secp256k1_ecdsa_recover"))?;
 
 		let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
 			Ok(pk) => pk,
 			_ => return Ok(3),
 		};
 
-		this.memory.set(pubkey_data, &pubkey.serialize()[1..65]).map_err(|_| UserError("Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover"))?;
+		this.memory.set(pubkey_data, &pubkey.serialize()[1..65])
+			.map_err(|_| UserError("Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover"))?;
 
 		Ok(0)
 	},
@@ -986,7 +1090,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.instance_teardown(instance_idx)?;
 		Ok(())
 	},
-	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
+	ext_sandbox_invoke(
+		instance_idx: u32,
+		export_ptr: *const u8,
+		export_len: usize,
+		args_ptr: *const u8,
+		args_len: usize,
+		return_val_ptr: *const u8,
+		return_val_len: usize,
+		state: usize
+	) -> u32 => {
 		use parity_codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);

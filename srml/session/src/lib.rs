@@ -388,7 +388,8 @@ mod tests {
 
 	thread_local!{
 		static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
-		static AUTHORITIES: RefCell<Vec<UintAuthorityId>> = RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+		static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
+			RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
 		static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
 	}

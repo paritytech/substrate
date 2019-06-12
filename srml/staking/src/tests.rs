@@ -378,7 +378,6 @@ fn multi_era_reward_should_work() {
 		.nominate(false)
 		.build(),
 	|| {
-		let delay = 1;
 		let session_reward = 10;
 
 		// This is set by the test config builder.
@@ -390,37 +389,21 @@ fn multi_era_reward_should_work() {
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
-		let mut block = 3;
-		// Block 3 => Session 1 => Era 0
-		System::set_block_number(block);
-		Timestamp::set_timestamp(block*5);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 1);
+		start_session(1);
 
 		// session triggered: the reward value stashed should be 10
 		assert_eq!(Staking::current_session_reward(), session_reward);
 		assert_eq!(Staking::current_era_reward(), session_reward);
 
-		block = 6; // Block 6 => Session 2 => Era 0
-		System::set_block_number(block);
-		Timestamp::set_timestamp(block*5 + delay);	// a little late.
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 2);
+		start_session(2);
 
 		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), 2*session_reward); // - delay);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward);
 
-		block = 9; // Block 9 => Session 3 => Era 1
-		System::set_block_number(block);
-		Timestamp::set_timestamp(block*5);  // back to being punktlisch. no delayss
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::current_index(), 3);
+		start_session(3);
 
 		// 1 + sum of of the session rewards accumulated
-		let recorded_balance = 1 + 3*session_reward; // - delay;
+		let recorded_balance = 1 + 3*session_reward;
 		assert_eq!(Balances::total_balance(&10), recorded_balance);
 
 		// the reward for next era will be: session_reward * slot_stake
@@ -428,14 +411,13 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Staking::current_session_reward(), new_session_reward);
 
 		// fast forward to next era:
-		block=12; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
-		block=15; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
+		start_session(5);
 
 		// intermediate test.
 		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
 
 		// new era is triggered here.
-		block=18; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::on_initialize(System::block_number());
+		start_session(6);
 
 		// pay time
 		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
@@ -898,7 +880,12 @@ fn reward_destination_works() {
 		// Check the balance of the stash account
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Check how much is at stake
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000,
+			active: 1000,
+			unlocking: vec![],
+		}));
 		// Check current session reward is 10
 		let session_reward0 = 3 * Staking::current_session_reward(); // 10
 
@@ -911,7 +898,12 @@ fn reward_destination_works() {
 		// Check that reward went to the stash account of validator
 		assert_eq!(Balances::free_balance(&11), 1000 + session_reward0);
 		// Check that amount at stake increased accordingly
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + session_reward0, active: 1000 + session_reward0, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + session_reward0,
+			active: 1000 + session_reward0,
+			unlocking: vec![],
+		}));
 		// Update current session reward
 		let session_reward1 = 3 * Staking::current_session_reward(); // 1010 (1* slot_stake)
 
@@ -929,7 +921,12 @@ fn reward_destination_works() {
 		// Record this value
 		let recorded_stash_balance = 1000 + session_reward0 + session_reward1;
 		// Check that amount at stake is NOT increased
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + session_reward0, active: 1000 + session_reward0, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + session_reward0,
+			active: 1000 + session_reward0,
+			unlocking: vec![],
+		}));
 
 		// Change RewardDestination to Controller
 		<Payee<Test>>::insert(&11, RewardDestination::Controller);
@@ -947,7 +944,12 @@ fn reward_destination_works() {
 		// Check that reward went to the controller account
 		assert_eq!(Balances::free_balance(&10), 1 + session_reward2);
 		// Check that amount at stake is NOT increased
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + session_reward0, active: 1000 + session_reward0, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + session_reward0,
+			active: 1000 + session_reward0,
+			unlocking: vec![],
+		}));
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(&11), recorded_stash_balance);
 	});
@@ -1039,7 +1041,12 @@ fn bond_extra_works() {
 		// Check that account 10 is bonded to account 11
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Check how much is at stake
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000,
+			active: 1000,
+			unlocking: vec![],
+		}));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1047,12 +1054,22 @@ fn bond_extra_works() {
 		// Call the bond_extra function from controller, add only 100
 		assert_ok!(Staking::bond_extra(Origin::signed(11), 100));
 		// There should be 100 more `total` and `active` in the ledger
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + 100,
+			active: 1000 + 100,
+			unlocking: vec![],
+		}));
 
 		// Call the bond_extra function with a large number, should handle it
 		assert_ok!(Staking::bond_extra(Origin::signed(11), u64::max_value()));
 		// The full amount of the funds should now be in the total and active
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000000, active: 1000000, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000000,
+			active: 1000000,
+			unlocking: vec![],
+		}));
 	});
 }
 
@@ -1085,13 +1102,23 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		start_era(1);
 
 		// Initial state of 10
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000,
+			active: 1000,
+			unlocking: vec![],
+		}));
 		assert_eq!(Staking::stakers(&11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
 		Staking::bond_extra(Origin::signed(11), 100).unwrap();
 
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + 100,
+			active: 1000 + 100,
+			unlocking: vec![],
+		}));
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
@@ -1101,7 +1128,12 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_eq!(Staking::current_era(), 2);
 
 		// ledger should be the same.
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + 100,
+			active: 1000 + 100,
+			unlocking: vec![],
+		}));
 		// Exposure is now updated.
 		assert_eq!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
@@ -1609,7 +1641,11 @@ fn bond_with_no_staked_value() {
 
 		// Stingy one is selected
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
-		assert_eq!(Staking::stakers(1), Exposure { own: 1, total: 501, others: vec![IndividualExposure { who: 3, value: 500}]});
+		assert_eq!(Staking::stakers(1), Exposure {
+			own: 1,
+			total: 501,
+			others: vec![IndividualExposure { who: 3, value: 500}],
+		});
 		// New slot stake.
 		assert_eq!(Staking::slot_stake(), 501);
 
