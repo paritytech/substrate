@@ -16,9 +16,11 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_client::{self, TestClient};
-use test_client::runtime::{H256, Block, Header};
-use consensus::BlockOrigin;
+use test_client::{
+	prelude::*,
+	consensus::BlockOrigin,
+	runtime::{H256, Block, Header},
+};
 
 #[test]
 fn should_return_header() {

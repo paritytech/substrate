@@ -634,7 +634,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
-	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer, TestClientBuilder};
+	use substrate_test_runtime_client::{prelude::*, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {

@@ -21,7 +21,7 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../core/
 
 [dev-dependencies]
 env_logger = "0.6"
-test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 
 [features]
 default = []

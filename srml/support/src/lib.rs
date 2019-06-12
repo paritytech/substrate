@@ -467,7 +467,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("u64"),
-					key2_hasher: DecodeDifferent::Encode("blake2_256"),
+					key2_hasher: StorageHasher::Blake2_256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
@@ -482,7 +482,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: DecodeDifferent::Encode("twox_128"),
+					key2_hasher: StorageHasher::Twox128,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
@@ -497,7 +497,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: DecodeDifferent::Encode("twox_256"),
+					key2_hasher: StorageHasher::Twox256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
@@ -512,7 +512,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("Vec<u32>"),
-					key2_hasher: DecodeDifferent::Encode("blake2_256"),
+					key2_hasher: StorageHasher::Blake2_256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
