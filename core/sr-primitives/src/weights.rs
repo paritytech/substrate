@@ -16,7 +16,7 @@
 
 //! Primitives for transaction weighting.
 //!
-//! Each dispatch function withing `decl_module!` can now have an optional
+//! Each dispatch function within `decl_module!` can now have an optional
 //! `#[weight = $x]` attribute. $x can be any object that implements the
 //! [`Weighable`] trait. By default, All transactions are annotated by
 //! `#[weight = TransactionWeight::default()]`.
