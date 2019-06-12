@@ -31,7 +31,7 @@ use client::blockchain::HeaderBackend;
 /// Trait to submit report calls to the transaction pool.
 pub trait SubmitReport<C, Block> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(transaction_pool: &Self, client: &C, report_call: Call);
+	fn submit_report_call(&self, client: &C, report_call: Call);
 }
 
 impl<C, Block, T: PoolApi> SubmitReport<C, Block> for T 
@@ -40,12 +40,12 @@ where
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
 	C: HeaderBackend<Block>,
 {
-	fn submit_report_call(transaction_pool: &Self, client: &C, report_call: Call) {
+	fn submit_report_call(&self, client: &C, report_call: Call) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool {:?}", report_call);
 		let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 		if let Some(uxt) = Decode::decode(&mut extrinsic.encode().as_slice()) {
 			let block_id = BlockId::<Block>::number(client.info().best_number);
-			if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
+			if let Err(e) = self.submit_one(&block_id, uxt) {
 				info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
 			}
 		} else {

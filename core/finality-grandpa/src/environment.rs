@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::ops::Deref;
 
 use log::{debug, warn, info};
 use parity_codec::{Decode, Encode};
@@ -47,7 +48,7 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
-use consensus_safety::submit_report_call;
+use consensus_safety::SubmitReport;
 use node_runtime::{Call, GrandpaCall};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
@@ -737,23 +738,22 @@ where
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		let proof = (self.set_id, round, equivocation).encode();
-		submit_report_call(
-			&self.inner,
-			&self.transaction_pool,
+		self.transaction_pool.submit_report_call(
+			self.inner.deref(),
 			Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof)),
 		);
 	}
 
 	fn precommit_equivocation(
 		&self,
-		_round: u64,
+		round: u64,
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		submit_report_call(
-			&self.inner,
-			&self.transaction_pool,
-			Call::Grandpa(GrandpaCall::report_precommit_equivocation(equivocation.encode())),
+		let proof = (self.set_id, round, equivocation).encode();
+		self.transaction_pool.submit_report_call(
+			self.inner.deref(),
+			Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof.encode())),
 		);
 	}
 }

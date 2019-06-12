@@ -78,7 +78,7 @@ use slots::{
 };
 use safety_primitives::AuthorEquivProof;
 use node_runtime::{Call, AuraCall};
-use consensus_safety::submit_report_call;
+use consensus_safety::SubmitReport;
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
@@ -373,7 +373,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
 where
-	T: PoolApi,
+	T: PoolApi + SubmitReport<C, B>,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
@@ -424,9 +424,8 @@ where
 					equiv_proof.second_header().hash(),
 				);
 				transaction_pool.as_ref().map(|txpool|
-					submit_report_call(
+					txpool.submit_report_call(
 						client,
-						txpool,
 						Call::Aura(AuraCall::report_equivocation(equiv_proof.encode())),
 					)
 				);
