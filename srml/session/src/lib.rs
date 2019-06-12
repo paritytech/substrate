@@ -264,8 +264,16 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// Sets the session key of a validator (function caller) to `key`.
+		/// Sets the session key(s) of the function caller to `key`.
+		/// Allows an account to set its session key prior to becoming a validator.
 		/// This doesn't take effect until the next session.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - One extra DB entry.
+		/// # </weight>
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
