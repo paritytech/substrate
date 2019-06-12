@@ -28,7 +28,7 @@
 /// expression must evaluate to.
 pub type Weight = u32;
 
-/// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of the
+/// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
 ///
 /// Both the outer Call enum and the per-module individual ones will implement this.
