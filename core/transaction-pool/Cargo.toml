@@ -17,4 +17,4 @@ txpool = { package = "substrate-transaction-graph", path = "./graph" }
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }

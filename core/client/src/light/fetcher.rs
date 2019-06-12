@@ -491,7 +491,7 @@ pub mod tests {
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
 	use test_client::{
-		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;

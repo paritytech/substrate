@@ -68,6 +68,7 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./scripts/gitlab/check_runtime.sh
+  allow_failure:                   true
 
 
 check-line-width:
@@ -78,7 +79,7 @@ check-line-width:
     - /^[0-9]+$/
   script:
     - ./scripts/gitlab/check_line_width.sh
-  allow_failure:                   false
+  allow_failure:                   true
 
 
 cargo-audit:
