@@ -343,14 +343,30 @@ srml_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent},
-		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
-		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module3: module3::{Module, Call},
+		System: system::{
+			Module, Call, Event, Log(ChangesTrieRoot)
+		},
+		Module1_1: module1::<Instance1>::{
+			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent
+		},
+		Module1_2: module1::<Instance2>::{
+			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(ChangesTrieRoot), Inherent
+		},
+		Module2: module2::{
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent
+		},
+		Module2_1: module2::<Instance1>::{
+			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent
+		},
+		Module2_2: module2::<Instance2>::{
+			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent
+		},
+		Module2_3: module2::<Instance3>::{
+			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent
+		},
+		Module3: module3::{
+			Module, Call
+		},
 	}
 );
 

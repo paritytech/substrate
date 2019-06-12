@@ -111,6 +111,10 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
+pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
+pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
+pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+
 pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
 );
@@ -125,10 +129,10 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
+	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
 		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
@@ -145,10 +149,10 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
+	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
@@ -157,7 +161,12 @@ where
 		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
 	}
 
-	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash, digest: &Digest<System::Hash>) {
+	fn initialize_block_impl(
+		block_number: &System::BlockNumber,
+		parent_hash: &System::Hash,
+		extrinsics_root: &System::Hash,
+		digest: &Digest<System::Hash>,
+	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 	}
@@ -244,7 +253,11 @@ where
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+	fn apply_extrinsic_with_len(
+		uxt: Block::Extrinsic,
+		encoded_len: usize,
+		to_note: Option<Vec<u8>>,
+	) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
@@ -441,7 +454,14 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, Runtime, ()>;
+	type Executive = super::Executive<
+		Runtime,
+		Block<TestXt>,
+		system::ChainContext<Runtime>,
+		balances::Module<Runtime>,
+		Runtime,
+		()
+	>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
@@ -458,8 +478,13 @@ mod tests {
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
-			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-				[69u8; 32].into(), Digest::default()));
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
@@ -527,7 +552,13 @@ mod tests {
 		let mut t = new_test_ext();
 		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69));
 		with_externalities(&mut t, || {
-			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
@@ -542,7 +573,13 @@ mod tests {
 			let encoded = xt2.encode();
 			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
-				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+				Executive::initialize_block(&Header::new(
+					1,
+					H256::default(),
+					H256::default(),
+					[69u8; 32].into(),
+					Digest::default(),
+				));
 				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 				Executive::apply_extrinsic(xt).unwrap();

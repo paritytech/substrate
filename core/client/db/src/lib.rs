@@ -419,7 +419,11 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
+	fn reset_storage(
+		&mut self,
+		top: StorageOverlay,
+		children: ChildrenStorageOverlay
+	) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
@@ -528,7 +532,13 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(&self, config: &ChangesTrieConfiguration, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
+	pub fn prune(
+		&self,
+		config: &ChangesTrieConfiguration,
+		tx: &mut DBTransaction,
+		block_hash: Block::Hash,
+		block_num: NumberFor<Block>,
+	) {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,

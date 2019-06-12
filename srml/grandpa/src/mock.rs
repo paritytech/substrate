@@ -18,7 +18,12 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, generic::DigestItem as GenDigestItem, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use primitives::{
+	BuildStorage,
+	generic::DigestItem as GenDigestItem,
+	traits::IdentityLookup,
+	testing::{Digest, DigestItem, Header, UintAuthorityId}
+};
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};

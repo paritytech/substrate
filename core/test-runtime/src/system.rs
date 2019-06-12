@@ -303,10 +303,18 @@ mod tests {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Alice.to_raw_public().to_vec(),
-			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Bob.to_raw_public().to_vec(),
-			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Charlie.to_raw_public().to_vec(),
-			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
+				AuthorityKeyring::Alice.to_raw_public().to_vec()
+			},
+			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
+				AuthorityKeyring::Bob.to_raw_public().to_vec()
+			},
+			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
+				AuthorityKeyring::Charlie.to_raw_public().to_vec()
+			},
+			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			}
 		])
 	}
 

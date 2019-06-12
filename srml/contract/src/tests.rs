@@ -997,7 +997,8 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 	)
 )
 "#;
-const HASH_CHECK_DEFAULT_RENT_ALLOWANCE: [u8; 32] = hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
+const HASH_CHECK_DEFAULT_RENT_ALLOWANCE: [u8; 32] =
+	hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
 
 #[test]
 fn default_rent_allowance_on_create() {

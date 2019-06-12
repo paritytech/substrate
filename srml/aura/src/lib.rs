@@ -62,8 +62,6 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 #[cfg(feature = "std")]
-use std::fmt::Debug;
-#[cfg(feature = "std")]
 use serde::Serialize;
 use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
 

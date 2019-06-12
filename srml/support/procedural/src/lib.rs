@@ -55,7 +55,8 @@ use proc_macro::TokenStream;
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
-///   /!\ Be careful with each key in the map that is inserted in the trie `$hash(module_name ++ " " ++ storage_name ++ encoding(key))`.
+///   /!\ Be careful with each key in the map that is inserted in the trie
+///   `$hash(module_name ++ " " ++ storage_name ++ encoding(key))`.
 ///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
