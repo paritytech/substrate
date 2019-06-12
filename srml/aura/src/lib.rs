@@ -73,7 +73,7 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 use aura_primitives::{
 	AuraEquivocationProof, CompatibleDigestItem, slot_author, find_pre_digest
 };
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 #[cfg(feature = "std")]
 use serde::Serialize;
 

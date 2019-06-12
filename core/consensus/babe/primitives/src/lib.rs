@@ -20,7 +20,7 @@
 
 use runtime_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 use parity_codec::{Encode, Decode};
 
 /// The `ConsensusEngineId` of BABE.
@@ -81,7 +81,7 @@ pub struct BabeEquivocationProof<H, S> {
 	second_signature: S,
 }
 
-impl<H, S> EquivocationProof<H, S> for BabeEquivocationProof<H, S>
+impl<H, S> AuthorEquivProof<H, S> for BabeEquivocationProof<H, S>
 where
 	H: Clone,
 	S: Clone,

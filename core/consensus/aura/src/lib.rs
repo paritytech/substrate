@@ -76,7 +76,7 @@ use slots::{
 	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now,
 	check_equivocation, SlotData,
 };
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 use node_runtime::{Call, AuraCall};
 use consensus_safety::submit_report_call;
 

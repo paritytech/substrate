@@ -20,7 +20,7 @@ use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header, Verify};
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 use std::sync::Arc;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -62,7 +62,7 @@ pub fn check_equivocation<C, H, E, V>(
 		C: AuxStore,
 		V: Verify + Encode + Decode + Clone,
 		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
-		E: EquivocationProof<H, V>,
+		E: AuthorEquivProof<H, V>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -90,7 +90,7 @@ pub fn check_equivocation<C, H, E, V>(
 		if prev_signer == &signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof::new(
+				return Ok(Some(AuthorEquivProof::new(
 					prev_header.clone(),
 					header.clone(),
 					prev_signature.clone(),
@@ -139,7 +139,7 @@ mod test {
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
 	use std::sync::Arc;
-	use safety_primitives::EquivocationProof;
+	use safety_primitives::AuthorEquivProof;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 

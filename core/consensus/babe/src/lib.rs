@@ -83,7 +83,7 @@ use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 use transaction_pool::txpool::{self, PoolApi};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 // use node_runtime::{Call, BabeCall};
 // use consensus_safety::submit_report_call;
 

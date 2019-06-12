@@ -21,7 +21,7 @@
 use substrate_client::decl_runtime_apis;
 use runtime_primitives::ConsensusEngineId;
 use parity_codec::{Encode, Decode};
-use safety_primitives::EquivocationProof;
+use safety_primitives::AuthorEquivProof;
 
 mod digest;
 pub use digest::{CompatibleDigestItem, find_pre_digest};
@@ -49,7 +49,7 @@ pub struct AuraEquivocationProof<H, S> {
 	second_signature: S,
 }
 
-impl<H, S> EquivocationProof<H, S> for AuraEquivocationProof<H, S>
+impl<H, S> AuthorEquivProof<H, S> for AuraEquivocationProof<H, S>
 where
 	H: Clone,
 	S: Clone,
