@@ -239,6 +239,7 @@
 //! - [Session](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
 //! stored in the Session module's `Validators` at the end of each era.
 
+#![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
