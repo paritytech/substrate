@@ -28,25 +28,28 @@ use runtime_primitives::generic::BlockId;
 use log::{error, warn, debug, info, trace};
 use client::blockchain::HeaderBackend;
 
-/// Submit report call to the transaction pool.
-pub fn submit_report_call<C, T, Block>(
-	client: &Arc<C>,
-	transaction_pool: &Arc<T>,
-	report_call: Call,
-) where
-	T: PoolApi,
-	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
+/// Trait to submit report calls to the transaction pool.
+pub trait SubmitReport<C, Block> {
+	/// Submit report call to the transaction pool.
+	fn submit_report_call(transaction_pool: &Self, client: &C, report_call: Call);
+}
+
+impl<C, Block, T: PoolApi> SubmitReport<C, Block> for T 
+where 
 	Block: BlockT + 'static,
+	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
 	C: HeaderBackend<Block>,
 {
-	info!(target: "accountable-safety", "Submitting report call to tx pool {:?}", report_call);
-	let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-	if let Some(uxt) = Decode::decode(&mut extrinsic.encode().as_slice()) {
-		let block_id = BlockId::<Block>::number(client.info().best_number);
-		if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
-			info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
+	fn submit_report_call(transaction_pool: &Self, client: &C, report_call: Call) {
+		info!(target: "accountable-safety", "Submitting report call to tx pool {:?}", report_call);
+		let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+		if let Some(uxt) = Decode::decode(&mut extrinsic.encode().as_slice()) {
+			let block_id = BlockId::<Block>::number(client.info().best_number);
+			if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
+				info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
+			}
+		} else {
+			info!(target: "accountable-safety", "Error decoding report call");
 		}
-	} else {
-		info!(target: "accountable-safety", "Error decoding report call");
 	}
 }
