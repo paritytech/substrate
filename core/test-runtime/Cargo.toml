@@ -29,7 +29,7 @@ consensus_authorities = { package = "substrate-consensus-authorities", path = ".
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
-substrate-test-client = { path = "../test-client" }
+substrate-test-runtime-client = { path = "./client" }
 
 [features]
 default = [

@@ -120,6 +120,10 @@ decl_module! {
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
 		}
 
+		/// # <weight>
+		/// - Bounded storage reads and writes.
+		/// - Argument `threshold` has bearing on weight.
+		/// # </weight>
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -145,6 +149,10 @@ decl_module! {
 			}
 		}
 
+		/// # <weight>
+		/// - Bounded storage read and writes.
+		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
+		/// # </weight>
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 

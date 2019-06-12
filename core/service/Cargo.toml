@@ -32,7 +32,7 @@ tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
 [dev-dependencies]
-substrate-test-client = { path = "../test-client" }
+substrate-test-runtime-client = { path = "../test-runtime/client" }
 node-executor = { path = "../../node/executor" }
 node-primitives = { path = "../../node/primitives" }
 node-runtime = { path = "../../node/runtime" }

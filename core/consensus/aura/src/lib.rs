@@ -40,7 +40,7 @@ use consensus_common::import_queue::{
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
-	runtime_api::{ApiExt, Core as CoreApi},
+	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
 };

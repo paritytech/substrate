@@ -29,7 +29,5 @@ tokio = "0.1.7"
 assert_matches = "1.1"
 futures = "0.1.17"
 sr-io = { path = "../sr-io" }
-test_client = { package = "substrate-test-client", path = "../test-client" }
-test_runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
-consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 rustc-hex = "2.0"
