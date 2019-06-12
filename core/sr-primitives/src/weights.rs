@@ -18,7 +18,7 @@
 //!
 //! Each dispatch function within `decl_module!` can now have an optional
 //! `#[weight = $x]` attribute. $x can be any object that implements the
-//! [`Weighable`] trait. By default, All transactions are annotated by
+//! `Weighable` trait. By default, All transactions are annotated by
 //! `#[weight = TransactionWeight::default()]`.
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
@@ -39,8 +39,10 @@ pub trait Weighable {
 	fn weight(&self, len: usize) -> Weight;
 }
 
-/// Default weight calculator.
-/// This is tailored for the Polkadot use case. Users may replace it with anything.
+/// Default type used as the weight representative in a `#[weight = x]` attribute.
+///
+/// A user may pass in any other type that implements [`Weighable`]. If not, the `Default`
+/// implementation of [`TransactionWeight`] is used.
 pub enum TransactionWeight {
 	/// Basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
