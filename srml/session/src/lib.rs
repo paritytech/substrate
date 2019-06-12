@@ -161,8 +161,16 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Sets the session key of a validator (function caller) to `key`.
+		/// Sets the session key of the function caller to `key`.
+		/// Allows an account to set its session key prior to becoming a validator.
 		/// This doesn't take effect until the next session.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - One extra DB entry.
+		/// # </weight>
 		fn set_key(origin, key: T::SessionKey) {
 			let who = ensure_signed(origin)?;
 			// set new value for next session
@@ -170,11 +178,15 @@ decl_module! {
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
+		///
+		/// Dispatch origin of this call must be _root_.
 		fn set_length(#[compact] new: T::BlockNumber) {
 			<NextSessionLength<T>>::put(new);
 		}
 
 		/// Forces a new session.
+		///
+		/// Dispatch origin of this call must be _root_.
 		fn force_new_session(apply_rewards: bool) -> Result {
 			Self::apply_force_new_session(apply_rewards)
 		}
