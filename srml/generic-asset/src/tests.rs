@@ -1,24 +1,25 @@
 // Copyright (C) 2019 Centrality Investments Limited
-// This file is part of CENNZnet.
-//
-// This program is free software: you can redistribute it and/or modify
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
+
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//
+
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 //! Tests for the module.
 
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{new_test_ext, ExtBuilder, GenericAsset, Origin, Test};
+use crate::mock::{new_test_ext, ExtBuilder, GenericAsset, Origin, System, Test, TestEvent};
 use runtime_io::with_externalities;
 use support::{assert_noop, assert_ok};
 
@@ -1221,6 +1222,126 @@ fn create_should_reserve_stake_asset() {
 				GenericAsset::reserved_balance(&GenericAsset::staking_asset_id(), &1),
 				GenericAsset::create_asset_stake()
 			);
+		},
+	);
+}
+
+#[test]
+fn update_permission_should_raise_event() {
+	// Arrange
+	let staking_asset_id = 16000;
+	let asset_id = 1000;
+	let origin = 1;
+	let initial_balance = 1000;
+	let permissions = PermissionLatest {
+		update: Owner::Address(origin),
+		mint: Owner::Address(origin),
+		burn: Owner::Address(origin),
+	};
+
+	with_externalities(
+		&mut ExtBuilder::default()
+			.next_asset_id(asset_id)
+			.free_balance((staking_asset_id, origin, initial_balance))
+			.build(),
+		|| {
+			assert_ok!(GenericAsset::create(
+				Origin::signed(origin),
+				AssetOptions {
+					initial_issuance: 0,
+					permissions: permissions.clone(),
+				}
+			));
+
+			// Act
+			assert_ok!(GenericAsset::update_permission(
+				Origin::signed(origin),
+				asset_id,
+				permissions.clone()
+			));
+
+			// Assert
+			assert!(System::events().iter().any(|record| record.event
+				== TestEvent::generic_asset(RawEvent::PermissionUpdated(asset_id, permissions.clone()))));
+		},
+	);
+}
+
+#[test]
+fn mint_should_raise_event() {
+	// Arrange
+	let staking_asset_id = 16000;
+	let asset_id = 1000;
+	let origin = 1;
+	let initial_balance = 1000;
+	let permissions = PermissionLatest {
+		update: Owner::Address(origin),
+		mint: Owner::Address(origin),
+		burn: Owner::Address(origin),
+	};
+	let to = 2;
+	let amount = 100;
+
+	with_externalities(
+		&mut ExtBuilder::default()
+			.next_asset_id(asset_id)
+			.free_balance((staking_asset_id, origin, initial_balance))
+			.build(),
+		|| {
+			assert_ok!(GenericAsset::create(
+				Origin::signed(origin),
+				AssetOptions {
+					initial_issuance: 0,
+					permissions: permissions.clone(),
+				}
+			));
+
+			// Act
+			assert_ok!(GenericAsset::mint(Origin::signed(origin), asset_id, to, amount));
+
+			// Assert
+			assert!(System::events()
+				.iter()
+				.any(|record| record.event == TestEvent::generic_asset(RawEvent::Minted(asset_id, to, amount))));
+		},
+	);
+}
+
+#[test]
+fn burn_should_raise_event() {
+	// Arrange
+	let staking_asset_id = 16000;
+	let asset_id = 1000;
+	let origin = 1;
+	let initial_balance = 1000;
+	let permissions = PermissionLatest {
+		update: Owner::Address(origin),
+		mint: Owner::Address(origin),
+		burn: Owner::Address(origin),
+	};
+	let amount = 100;
+
+	with_externalities(
+		&mut ExtBuilder::default()
+			.next_asset_id(asset_id)
+			.free_balance((staking_asset_id, origin, initial_balance))
+			.build(),
+		|| {
+			assert_ok!(GenericAsset::create(
+				Origin::signed(origin),
+				AssetOptions {
+					initial_issuance: amount,
+					permissions: permissions.clone(),
+				}
+			));
+
+			// Act
+			assert_ok!(GenericAsset::burn(Origin::signed(origin), asset_id, origin, amount));
+
+			// Assert
+			assert!(System::events()
+				.iter()
+				.any(|record| record.event == TestEvent::generic_asset(RawEvent::Burned(asset_id, origin, amount))));
 		},
 	);
 }

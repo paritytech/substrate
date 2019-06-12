@@ -128,7 +128,7 @@
 //!			amount,
 //!			WithdrawReason::TransactionPayment,
 //!			ExistenceRequirement::KeepAlive,
-//!	)?;
+//!		)?;
 //! 	// ...
 //! 	Ok(())
 //! }
@@ -335,7 +335,10 @@ decl_module! {
 			let permissions: PermissionVersions<T::AccountId> = new_permission.into();
 
 			if Self::check_permission(&asset_id, &origin, &PermissionType::Update) {
-				<Permissions<T>>::insert(asset_id, permissions);
+				<Permissions<T>>::insert(asset_id, &permissions);
+
+				Self::deposit_event(RawEvent::PermissionUpdated(asset_id, permissions.into()));
+
 				Ok(())
 			} else {
 				return Err("Origin does not have enough permission to update permissions.");
@@ -357,6 +360,8 @@ decl_module! {
 
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 				Self::set_free_balance(&asset_id, &to, value);
+
+				Self::deposit_event(RawEvent::Minted(asset_id, to, amount));
 
 				Ok(())
 			} else {
@@ -381,6 +386,8 @@ decl_module! {
 				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
 
 				Self::set_free_balance(&asset_id, &to, value);
+
+				Self::deposit_event(RawEvent::Burned(asset_id, to, amount));
 
 				Ok(())
 			} else {
@@ -468,7 +475,7 @@ decl_event!(
 		Created(AssetId, AccountId, AssetOptions),
 		/// Asset transfer succeeded (asset_id, from, to, amount).
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Asset permission updated (asset_id, new permission).
+		/// Asset permission updated (asset_id, new_permissions).
 		PermissionUpdated(AssetId, PermissionLatest<AccountId>),
 		/// New asset minted (asset_id, account, amount).
 		Minted(AssetId, AccountId, Balance),

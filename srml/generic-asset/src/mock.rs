@@ -1,18 +1,19 @@
 // Copyright (C) 2019 Centrality Investments Limited
-// This file is part of CENNZnet.
-//
-// This program is free software: you can redistribute it and/or modify
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
+
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//
+
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 //! Mocks for the module.
 
 #![cfg(test)]
@@ -23,7 +24,7 @@ use primitives::{
 	BuildStorage,
 };
 use substrate_primitives::{Blake2Hasher, H256};
-use support::impl_outer_origin;
+use support::{impl_outer_event, impl_outer_origin};
 
 use super::*;
 
@@ -47,17 +48,29 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
-	type Event = ();
+	type Event = TestEvent;
 	type Log = DigestItem;
 }
 
 impl Trait for Test {
 	type Balance = u64;
 	type AssetId = u32;
-	type Event = ();
+	type Event = TestEvent;
+}
+
+mod generic_asset {
+	pub use crate::Event;
+}
+
+impl_outer_event! {
+	pub enum TestEvent for Test {
+		generic_asset<T>,
+	}
 }
 
 pub type GenericAsset = Module<Test>;
+
+pub type System = system::Module<Test>;
 
 pub struct ExtBuilder {
 	asset_id: u32,
