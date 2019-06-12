@@ -285,6 +285,10 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
+	/// This field is used only in test code, but maintaining different
+	/// instantiation paths or field names is too much hassle, hence
+	/// we allow it to be unused.
+	#[cfg_attr(not(test), allow(unused))]
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 	import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
@@ -474,6 +478,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(ProtocolMsg::BlockImported(info.chain.best_hash, header));
 	}
 
+	#[cfg(test)]
 	fn on_block_imported(
 		&self,
 		hash: <Block as BlockT>::Hash,
@@ -495,6 +500,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Get protocol status.
+	#[cfg(test)]
 	fn protocol_status(&self) -> ProtocolStatus<Block> {
 		self.protocol_status.read().clone()
 	}
@@ -611,6 +617,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Announce a block to peers.
+	#[cfg(test)]
 	fn announce_block(&self, block: Hash) {
 		self.net_proto_channel.send_from_client(ProtocolMsg::AnnounceBlock(block));
 	}

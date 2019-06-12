@@ -757,7 +757,7 @@ mod tests {
 	use super::*;
 	use consensus_common::SelectChain;
 	use runtime_primitives::traits::BlindCheckable;
-	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}, TestClientBuilder};
+	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
