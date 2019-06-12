@@ -42,7 +42,7 @@ pub trait Weighable {
 /// Default weight calculator.
 /// This is tailored for the Polkadot use case. Users may replace it with anything.
 pub enum TransactionWeight {
-	/// basic weight (base, byte).
+	/// Basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
 	Basic(Weight, Weight),
 	/// Maximum fee. This implies that this transaction _might_ get included but
