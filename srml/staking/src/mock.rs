@@ -198,26 +198,24 @@ impl ExtBuilder {
 			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+		let stake_21 = if self.fair { 1000 } else { 2000 };
+		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
+		let status_41 = if self.validator_pool {
+			StakerStatus::<AccountId>::Validator
+		} else {
+			StakerStatus::<AccountId>::Idle
+		};
+		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
 			current_era: self.current_era,
-			stakers: if self.validator_pool {
-				vec![
-					(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountId>::Validator),
-					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountId>::Validator } else { StakerStatus::<AccountId>::Idle }),
-					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountId>::Validator } else { StakerStatus::<AccountId>::Idle }),
-					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountId>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountId>::Nominator(vec![]) })
-				]
-			} else {
-				vec![
-					(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountId>::Validator),
-					(31, 30, 1, StakerStatus::<AccountId>::Validator),
-					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountId>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountId>::Nominator(vec![]) })
-				]
-			},
+			stakers: vec![
+				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
+				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
+				(41, 40, balance_factor * 1000, status_41),
+				// nominator
+				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
+			],
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			session_reward: Perbill::from_millionths((1000000 * self.reward / balance_factor) as u32),
