@@ -31,7 +31,7 @@ use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use consensus_common::{ExtraVerification, well_known_cache_keys::Id as CacheKeyId};
+use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, DigestItemFor, ProvideRuntimeApi,
@@ -511,14 +511,13 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<C, E> {
+pub struct BabeVerifier<C> {
 	client: Arc<C>,
-	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
 	threshold: u64,
 }
 
-impl<C, E> BabeVerifier<C, E> {
+impl<C> BabeVerifier<C> {
 	fn check_inherents<B: Block>(
 		&self,
 		block: B,
@@ -543,23 +542,10 @@ impl<C, E> BabeVerifier<C, E> {
 	}
 }
 
-/// No-op extra verification.
-#[derive(Debug, Clone, Copy)]
-pub struct NothingExtra;
-
-impl<B: Block> ExtraVerification<B> for NothingExtra {
-	type Verified = Result<(), String>;
-
-	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
-		Ok(())
-	}
-}
-
-impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
+impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem,
-	E: ExtraVerification<B>,
 {
 	fn verify(
 		&self,
@@ -588,11 +574,6 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		let parent_hash = *header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
-		let extra_verification = self.extra.verify(
-			&header,
-			body.as_ref().map(|x| &x[..]),
-		);
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -632,8 +613,6 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
-
-				extra_verification.into_future().wait()?;
 
 				// `Consensus` is the Babe-specific authorities change log.
 				// It's an encoded `Vec<AuthorityId>`, the same format as is stored in the cache,
@@ -830,7 +809,7 @@ mod tests {
 
 	impl TestNetFactory for BabeTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = BabeVerifier<PeersFullClient, NothingExtra>;
+		type Verifier = BabeVerifier<PeersFullClient>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -859,7 +838,6 @@ mod tests {
 			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
-				extra: NothingExtra,
 				inherent_data_providers,
 				threshold: config.threshold(),
 			})

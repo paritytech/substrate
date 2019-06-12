@@ -87,9 +87,10 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use primitives::weights::Weighable;
 
 mod internal {
-	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
+	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -177,7 +178,8 @@ where
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
-			n > System::BlockNumber::zero() && <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
+			n > System::BlockNumber::zero()
+			&& <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
@@ -204,6 +206,7 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
@@ -261,8 +264,9 @@ where
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
-		// Check the size of the block if that extrinsic is applied.
-		if <system::Module<System>>::all_extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
+		// Check the weight of the block if that extrinsic is applied.
+		let weight = xt.weight(encoded_len);
+		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
@@ -272,7 +276,6 @@ where
 			if index != &expected_index { return Err(
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
-
 			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
@@ -563,13 +566,13 @@ mod tests {
 	}
 
 	#[test]
-	fn block_size_limit_enforced() {
+	fn block_weight_limit_enforced() {
 		let run_test = |should_fail: bool| {
 			let mut t = new_test_ext();
 			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
 			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
 			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
+			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
 				Executive::initialize_block(&Header::new(
 					1,
@@ -585,11 +588,11 @@ mod tests {
 
 				if should_fail {
 					assert!(res.is_err());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 28);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
 				} else {
 					assert!(res.is_ok());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 56);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
 				}
 			});
@@ -597,6 +600,21 @@ mod tests {
 
 		run_test(false);
 		run_test(true);
+	}
+
+	#[test]
+	fn default_block_weight() {
+		let xt = primitives::testing::TestXt(None, 0, Call::set_balance(33, 69, 69));
+		let mut t = new_test_ext();
+		with_externalities(&mut t, || {
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			Executive::apply_extrinsic(xt.clone()).unwrap();
+			assert_eq!(
+				<system::Module<Runtime>>::all_extrinsics_weight(),
+				3 * (0 /*base*/ + 22 /*len*/ * 1 /*byte*/)
+			);
+		});
 	}
 
 	#[test]

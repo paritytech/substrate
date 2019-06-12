@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Democratic system: Handles administration of general stakeholder voting.
-
+#![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
