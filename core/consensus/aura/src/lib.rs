@@ -28,7 +28,7 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{
 	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash,
-	fmt::Debug
+	fmt::Debug, ops::Deref,
 };
 
 use parity_codec::{Encode, Decode};
@@ -410,7 +410,7 @@ where
 			if let Some(equiv_proof) = check_equivocation::<
 				_, _, AuraEquivocationProof<B::Header, P::Signature>, P::Signature,
 			>(
-				client,
+				client.deref(),
 				slot_now,
 				slot_num,
 				header.clone(),

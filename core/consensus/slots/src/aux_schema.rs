@@ -21,7 +21,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header, Verify};
 use safety_primitives::AuthorEquivProof;
-use std::sync::Arc;
+use std::ops::Deref;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -31,7 +31,7 @@ pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
 pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
-fn load_decode<C, T>(backend: &Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
+fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	where
 		C: AuxStore,
 		T: Decode,
@@ -50,7 +50,7 @@ fn load_decode<C, T>(backend: &Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, E, V>(
-	backend: &Arc<C>,
+	backend: &C,
 	slot_now: u64,
 	slot: u64,
 	header: H,
@@ -75,13 +75,13 @@ pub fn check_equivocation<C, H, E, V>(
 
 	// Get headers of this slot.
 	let mut headers_with_sig = load_decode::<_, Vec<(H, V, V::Signer)>>(
-		backend,
+		backend.deref(),
 		&curr_slot_key[..],
 	)?.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();
-	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
+	let first_saved_slot = load_decode::<_, u64>(backend.deref(), &slot_header_start[..])?
 		.unwrap_or(slot);
 
 	for (prev_header, prev_signature, prev_signer) in headers_with_sig.iter() {
