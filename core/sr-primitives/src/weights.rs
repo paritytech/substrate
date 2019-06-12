@@ -35,7 +35,7 @@ pub type Weight = u32;
 /// The outer enum simply calls the inner ones based on call type.
 pub trait Weighable {
 	/// Return the weight of this call.
-	/// The `len` argument is the number of bytes in the transaction/call.
+	/// The `len` argument is the encoded length of the transaction/call.
 	fn weight(&self, len: usize) -> Weight;
 }
 
