@@ -251,6 +251,7 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
+use sr_primitives::weights::TransactionWeight;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
