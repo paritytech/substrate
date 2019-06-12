@@ -20,6 +20,7 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::weights::{Weighable, Weight};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -237,5 +238,11 @@ impl<Call> Applyable for TestXt<Call> where
 	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.2, self.0)
+	}
+}
+impl<Call> Weighable for TestXt<Call> {
+	fn weight(&self, len: usize) -> Weight {
+		// for testing: weight == size.
+		len as Weight
 	}
 }

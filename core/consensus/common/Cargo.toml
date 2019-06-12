@@ -21,7 +21,7 @@ parity-codec = { version = "3.3", features = ["derive"] }
 parking_lot = "0.8.0"
 
 [dev-dependencies]
-test_client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 
 [features]
 default = []

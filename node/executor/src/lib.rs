@@ -895,6 +895,21 @@ mod tests {
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
+	#[test]
+	fn should_import_block_with_test_client() {
+		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+
+		let client = TestClientBuilder::default()
+			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
+			.0;
+
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
+		client.import(BlockOrigin::Own, block).unwrap();
+	}
+
 	#[cfg(feature = "benchmarks")]
 	mod benches {
 		use super::*;

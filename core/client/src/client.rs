@@ -1709,8 +1709,9 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
-		TestClient, AccountKeyring, client::backend::Backend as TestBackend, TestClientBuilder,
-		BlockBuilderExt, runtime::{self, Block, Transfer, RuntimeApi, TestAPI}
+		prelude::*,
+		client::backend::Backend as TestBackend,
+		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
 	/// Returns tuple, consisting of:

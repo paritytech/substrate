@@ -18,6 +18,7 @@
 //! stage.
 
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use crate::weights::{Weighable, Weight};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -32,8 +33,7 @@ pub struct CheckedExtrinsic<AccountId, Index, Call> {
 	pub function: Call,
 }
 
-impl<AccountId, Index, Call> traits::Applyable
-	for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call>
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
@@ -53,5 +53,14 @@ where
 
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.function, self.signed.map(|x| x.0))
+	}
+}
+
+impl<AccountId, Index, Call> Weighable for CheckedExtrinsic<AccountId, Index, Call>
+where
+	Call: Weighable,
+{
+	fn weight(&self, len: usize) -> Weight {
+		self.function.weight(len)
 	}
 }
