@@ -91,6 +91,7 @@ use system::extrinsics_root;
 
 mod internal {
 	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
+	pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024; // 25% of max transactions weight
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -277,7 +278,7 @@ where
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 			// pay any fees
-			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::make_payment(sender, weight).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
@@ -350,8 +351,9 @@ where
 
 		match (xt.sender(), xt.index()) {
 			(Some(sender), Some(index)) => {
+				let weight = xt.weight(encoded_len);
 				// pay any fees
-				if Payment::make_payment(sender, encoded_len).is_err() {
+				if Payment::make_payment(sender, weight).is_err() {
 					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 				}
 

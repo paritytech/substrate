@@ -159,12 +159,18 @@ use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
+use primitives::weights::Weight;
+use primitives::Permill;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+
+// TODO: fix import here, remove restatement of const
+// use srml_executive::internal::IDEAL_TRANSACTIONS_WEIGHT;
+pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024; // 25% of max transactions weight
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -273,10 +279,6 @@ decl_storage! {
 		pub TransferFee get(transfer_fee) config(): T::Balance;
 		/// The fee required to create an account.
 		pub CreationFee get(creation_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
@@ -1040,12 +1042,18 @@ where
 }
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let encoded_len = T::Balance::from(encoded_len as u32);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
+	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
+		let VARIABILITY_FEE = Permill::from_parts(40);
+		let VARIABILITY_FEE_SQUARED = Permill::from_parts(16);
+		let potential_weight = <system::Module<T>>::all_extrinsics_weight() + weight;
+		let saturation_diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
+		let first_term = VARIABILITY_FEE * saturation_diff; // TODO: divide by 1000000 * 10
+		let second_term = VARIABILITY_FEE_SQUARED * saturation_diff * saturation_diff / 2; // TODO: ^ditto
+		let fee_multiplier = 1 + first_term + second_term;
+		let transaction_fee = weight * fee_multiplier;
 		let imbalance = Self::withdraw(
 			transactor,
-			transaction_fee,
+			T::Balance::from(transaction_fee),
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive
 		)?;
