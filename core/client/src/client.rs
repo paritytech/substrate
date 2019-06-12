@@ -496,7 +496,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if first > last_num {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
- 		let finalized_number = self.backend.blockchain().info().finalized_number;
+		let finalized_number = self.backend.blockchain().info().finalized_number;
 		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
 		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
@@ -1723,8 +1723,9 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
-		TestClient, AccountKeyring, client::backend::Backend as TestBackend, TestClientBuilder,
-		BlockBuilderExt, runtime::{self, Block, Transfer, RuntimeApi, TestAPI}
+		prelude::*,
+		client::backend::Backend as TestBackend,
+		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
 	/// Returns tuple, consisting of:

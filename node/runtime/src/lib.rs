@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 92,
-	impl_version: 93,
+	spec_version: 93,
+	impl_version: 95,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -182,8 +182,11 @@ impl council::Trait for Runtime {
 	type Event = Event;
 	type BadPresentation = ();
 	type BadReaper = ();
+	type BadVoterIndex = ();
+	type LoserCandidate = ();
 	type OnMembersChanged = CouncilMotions;
 }
+
 
 impl council::motions::Trait for Runtime {
 	type Origin = Origin;

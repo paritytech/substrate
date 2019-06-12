@@ -32,7 +32,7 @@ pub use impl_serde::serialize as bytes;
 /// Therefore `KeySpace` should only be the result of a call to
 /// `KeySpaceGenerator` trait `generate_keyspace` method.
 /// The uniqueness property allows to move child trie between trie node
-/// by only changing child trie root and `KeySpace` in the child trie 
+/// by only changing child trie root and `KeySpace` in the child trie
 /// encoded information.
 pub type KeySpace = Vec<u8>;
 
@@ -154,7 +154,7 @@ impl parity_codec::Decode for ChildTrieRead {
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 pub struct ChildTrie {
-	/// `KeySpace` for this child trie, see [`KeySpace`] for details. 
+	/// `KeySpace` for this child trie, see [`KeySpace`] for details.
 	keyspace: KeySpace,
 	/// Child trie current root, in case of modification
 	/// this is not updated.
@@ -187,7 +187,7 @@ impl ChildTrie {
 	/// By using a `KeySpaceGenerator` it does not allow setting an existing `KeySpace`.
 	/// If a new trie is created (see `is_new` method), the trie is not commited and
 	/// another call to this method will create a new trie.
-	/// 
+	///
 	/// This can be quite unsafe for user, so use with care (write new trie information
 	/// as soon as possible).
 	pub fn fetch_or_new(
@@ -234,7 +234,7 @@ impl ChildTrie {
 	pub fn parent_slice(&self) -> &[u8] {
 		Self::parent_key_slice(&self.parent)
 	}
-	/// Function to access the full key buffer pointing to 
+	/// Function to access the full key buffer pointing to
 	/// a child trie. This contains technical information
 	/// and should only be used for backend implementation.
 	pub fn parent_trie(&self) -> &ParentTrie {
@@ -250,7 +250,7 @@ impl ChildTrie {
 		&self.keyspace
 	}
 	/// Encoder for the child trie, with a new root value.
-	/// The child trie current root value is not updated (if 
+	/// The child trie current root value is not updated (if
 	/// content is commited the child trie will need to be fetch
 	/// again for update).
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
