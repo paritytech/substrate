@@ -38,11 +38,11 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use primitives::{
-	generic::{OpaqueDigestItemId, DigestItem}, traits::{Digest, DigestItem as _1, CurrentHeight}
+	generic::{DigestItem, OpaqueDigestItemId}, traits::CurrentHeight
 };
 use fg_primitives::{ScheduledChange, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
-use system::ensure_signed;
+use system::{ensure_signed, DigestOf};
 
 mod mock;
 mod tests;
@@ -249,18 +249,18 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &T::Digest) -> Option<Signal<T::BlockNumber>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
 		digest.convert_first(|l| l.try_to::<Signal<T::BlockNumber>>(id))
 	}
 
-	pub fn pending_change(digest: &T::Digest)
+	pub fn pending_change(digest: &DigestOf<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
 	}
 
-	pub fn forced_change(digest: &T::Digest)
+	pub fn forced_change(digest: &DigestOf<T>)
 		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())

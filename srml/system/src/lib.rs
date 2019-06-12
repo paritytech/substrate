@@ -76,8 +76,8 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::{generic::DigestItem, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, CurrentHeight, BlockNumberToHash,
+use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
+	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
 }};
 #[cfg(any(feature = "std", test))]
@@ -166,10 +166,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
-	/// Collection of (light-client-relevant) logs for a block to be included verbatim in the block header.
-	type Digest:
-		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash=Self::Hash, Item=Self::Log>;
-
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 
@@ -184,17 +180,14 @@ pub trait Trait: 'static + Eq + Clone {
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
-		Digest = Self::Digest
 	>;
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
-
-	/// A piece of information that can be part of the digest (as a digest item).
-	type Log: traits::DigestItem<Hash=Self::Hash> + From<DigestItem<Self::Hash>>;
 }
 
-pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
+pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -332,7 +325,7 @@ decl_storage! {
 		/// Extrinsics root of the current block, also part of the block header.
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
-		Digest get(digest): T::Digest;
+		Digest get(digest): DigestOf<T>;
 		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
@@ -544,7 +537,7 @@ impl<T: Trait> Module<T> {
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
 		txs_root: &T::Hash,
-		digest: &T::Digest,
+		digest: &DigestOf<T>,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -579,8 +572,7 @@ impl<T: Trait> Module<T> {
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
-			let item = DigestItem::ChangesTrieRoot(storage_changes_root);
-			let item = <T as Trait>::Log::from(item);
+			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
 			digest.push(item);
 		}
 
@@ -596,9 +588,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	pub fn deposit_log(item: <T::Digest as traits::Digest>::Item) {
+	pub fn deposit_log(item: DigestItemOf<T>) {
 		let mut l = <Digest<T>>::get();
-		traits::Digest::push(&mut l, item);
+		l.push(item);
 		<Digest<T>>::put(l);
 	}
 

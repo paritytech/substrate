@@ -36,9 +36,10 @@ use consensus::{
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	BlockNumberToHash, ApiRef, ProvideRuntimeApi,
 	SaturatedConversion, One, DigestFor,
 };
+use runtime_primitives::generic::DigestItem;
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{
 	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,

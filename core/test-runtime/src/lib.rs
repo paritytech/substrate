@@ -165,11 +165,11 @@ pub type Index = u64;
 /// The item of a block digest.
 pub type DigestItem = runtime_primitives::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
+pub type Digest = runtime_primitives::generic::Digest<H256>;
 /// A test block.
 pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, DigestItem>;
+pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {

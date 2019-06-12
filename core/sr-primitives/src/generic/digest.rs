@@ -22,43 +22,54 @@ use serde::Serialize;
 use rstd::prelude::*;
 
 use crate::ConsensusEngineId;
-use crate::codec::{Decode, Encode, Codec, Input};
-use crate::traits::{self, Member, DigestItem as DigestItemT};
+use crate::codec::{Decode, Encode, Input};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct Digest<Item> {
+pub struct Digest<Hash: Encode + Decode> {
 	/// A list of logs in the digest.
-	pub logs: Vec<Item>,
+	pub logs: Vec<DigestItem<Hash>>,
 }
 
-impl<Item> Default for Digest<Item> {
+impl<Item: Encode + Decode> Default for Digest<Item> {
 	fn default() -> Self {
 		Digest { logs: Vec::new(), }
 	}
 }
 
-impl<Item> traits::Digest for Digest<Item> where
-	Item: DigestItemT + Codec
-{
-	type Hash = Item::Hash;
-	type Item = Item;
-
-	fn logs(&self) -> &[Self::Item] {
+impl<Hash: Encode + Decode> Digest<Hash> {
+	/// Get reference to all digest items.
+	pub fn logs(&self) -> &[DigestItem<Hash>] {
 		&self.logs
 	}
 
-	fn push(&mut self, item: Self::Item) {
+	/// Push new digest item.
+	pub fn push(&mut self, item: DigestItem<Hash>) {
 		self.logs.push(item);
 	}
 
-	fn pop(&mut self) -> Option<Self::Item> {
+	/// Pop a digest item.
+	pub fn pop(&mut self) -> Option<DigestItem<Hash>> {
 		self.logs.pop()
+	}
+
+	/// Get reference to the first digest item that matches the passed predicate.
+	pub fn log<T: ?Sized, F: Fn(&DigestItem<Hash>) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+		self.logs().iter()
+			.filter_map(predicate)
+			.next()
+	}
+
+	/// Get a conversion of the first digest item that successfully converts using the function.
+	pub fn convert_first<T, F: Fn(&DigestItem<Hash>) -> Option<T>>(&self, predicate: F) -> Option<T> {
+		self.logs().iter()
+			.filter_map(predicate)
+			.next()
 	}
 }
 
-/*
+
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
@@ -86,155 +97,8 @@ pub enum DigestItem<Hash> {
 	/// by runtimes.
 	Seal(ConsensusEngineId, Vec<u8>),
 
-	/// Any 'non-system' digest item, opaque to the native code.
+	/// Some other thing. Unsupported and experimental.
 	Other(Vec<u8>),
-}
-*/
-
-// Macro black magic.
-macro_rules! gen_digest_type {
-	(
-		$( #[doc = $main_docs:tt] )*
-		pub enum $main:ident $(<$($main_params: tt),+>)? { }
-		$(
-			$( #[doc = $doc_attr:tt] )*
-			pub enum $n:ident $(<$($t: tt),+>)? {
-				$(
-					$( #[doc = $variant_doc:tt] )*
-					$variant:ident(($($interior: ty),*), $q: tt),
-				)*
-			}
-		)+
-	) => {
-		$( #[doc = $main_docs] )*
-		#[derive(PartialEq, Eq, Clone)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		pub enum $main $(<$($main_params),+>)? {
-			$(
-				$(
-					$( #[doc = $variant_doc] )*
-					$variant($($interior),*),
-				)*
-			)*
-		}
-
-		gen_digest_type! {
-			@internal
-			$main : $main $(<$($main_params),+>)? => $(
-				$( #[doc = $doc_attr] )*
-				pub enum $n $(<$($t),+>)? {
-					$(
-						$( #[doc = $variant_doc] )*
-						$variant(($($interior),*), $q),
-					)*
-				}
-			)+
-		}
-	};
-	(
-		@internal
-		$main_id:tt : $main:ty => $(
-			$( #[doc = $doc_attr:tt] )*
-			pub enum $n:ident $(<$($t: tt),+>)? {
-				$(
-					$( #[doc = $variant_doc:tt] )*
-					$variant:ident(($($interior: ty),*), $q: tt),
-				)*
-			}
-		)+
-	) => {
-		$(
-			$( #[doc = $doc_attr] )*
-			#[derive(PartialEq, Eq, Clone)]
-			#[cfg_attr(feature = "std", derive(Debug))]
-			pub enum $n $(<$($t),+>)? {
-				$(
-					$( #[doc = $variant_doc] )*
-					$variant($($interior),*),
-				)*
-			}
-
-			impl<Hash> From<$n $(<$($t),*>)?>
-				for $main {
-				fn from(digest: $n $(<$($t),+>)?) -> Self {
-					match digest {
-						$(
-							$n::$variant $q => $main_id::$variant $q,
-						)*
-					}
-				}
-			}
-		)*
-	};
-}
-
-gen_digest_type! {
-	/// Digest item that is able to encode/decode 'system' digest items and
-	/// provide opaque access to other items.
-	///
-	/// For all variants that include a `ConsensusEngineId`, consensus engine
-	/// implementations **MUST** ignore digests that have a `ConsensusEngineId`
-	/// that is not theirs.  Node implementations **MUST** reject digests that
-	/// have a `ConsensusEngineId` that corresponds to a consensus engine not in
-	/// use.  Node implementations **MUST** reject blocks as malformed if they
-	/// reject any of the block’s digest.  If the runtime supports this, the
-	/// node that issued the block **SHOULD** be reported as having committed
-	/// severe misbehavior and punished accordingly.  The invalid block, or its
-	/// hash, **SHOULD** constitute adequate proof of such misbehavior.
-	pub enum DigestItem<Hash> {}
-
-	/// A digest item that can be produced by consensus engines. Consensus
-	/// engine implementations **MUST NOT** push digests not in this variant.
-	/// This **SHOULD** be detected at compile time. If it is not, the behavior
-	/// of the blockchain is undefined.
-	pub enum ConsensusDigest {
-		/// An inherent digest.
-		///
-		/// These are messages from the consensus engine to the runtime,
-		/// although the consensus engine can (and should) read them itself to
-		/// avoid code and state duplication. It is erroneous for a runtime to
-		/// produce these, but this is checked at compile time. Runtimes can
-		/// (and should) trust these, as with any other inherent. Consensus
-		/// engines MUST verify them.
-		PreRuntime((ConsensusEngineId, Vec<u8>), (a, b)),
-
-		/// Put a Seal on it. This **MUST** come after all other `DigestItem`
-		/// variants. There **MUST** be at most one `Seal` per consensus engine,
-		/// and its `ConsensusEngineId` **MUST** be that of the consensus engine
-		/// that produced it. Runtimes will not see this variant.
-		Seal((ConsensusEngineId, Vec<u8>), (a, b)),
-	}
-
-	/// A digest item that can be produced by runtimes. Runtime mplementations
-	/// **MUST NOT** push digests not in this variant. This **SHOULD** be
-	/// detected at compile time.  If it is not, the behavior of the blockchain
-	/// is undefined.
-	pub enum RuntimeDigest {
-		/// A message from the runtime to the consensus engine. This MUST NOT be
-		/// generated by the native code of any consensus engine, but this is
-		/// caught at compile time. The `ConsensusEngineId` is that of the
-		/// consensus engine for which this digest is intended. Consensus
-		/// engines MUST ignore digests with `ConsensusEngineId`s other than
-		/// their own.
-		Consensus((ConsensusEngineId, Vec<u8>), (a, b)),
-
-		/// Any 'non-system' digest item, opaque to the native code.  Runtimes
-		/// MUST verify these, and reject any they did not produce.  These MUST
-		/// NOT be produced by native code.
-		Other((Vec<u8>), (a)),
-	}
-
-	/// A digest item that is reserved for the SRML. Only the SRML is allowed to
-	/// push these digests. Consensus engines and third-party runtime code
-	/// **MUST NOT** push digests in this variant. This **SHOULD** be detected
-	/// at compile time. If it is not, the behavior of the blockchain is
-	/// undefined.
-	pub enum SystemDigest<Hash> {
-		/// System digest item that contains the root of changes trie at given
-		/// block. It is created for every block iff runtime supports changes
-		/// trie creation.
-		ChangesTrieRoot((Hash), (a)),
-	}
 }
 
 #[cfg(feature = "std")]
@@ -245,7 +109,6 @@ impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
 		})
 	}
 }
-
 
 /// A 'referencing view' for digest item. Does not own its contents. Used by
 /// final runtime implementations for encoding/decoding its log items.
@@ -301,16 +164,8 @@ pub enum OpaqueDigestItemId<'a> {
 }
 
 impl<Hash> DigestItem<Hash> {
-	/// Returns Some if `self` is a `DigestItem::Other`.
-	pub fn as_other(&self) -> Option<&Vec<u8>> {
-		match *self {
-			DigestItem::Other(ref v) => Some(v),
-			_ => None,
-		}
-	}
-
 	/// Returns a 'referencing view' for this digest item.
-	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash> {
+	pub fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash> {
 		match *self {
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
 			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
@@ -319,38 +174,43 @@ impl<Hash> DigestItem<Hash> {
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
-}
 
-impl<
-	Hash: Codec + Member,
-> traits::DigestItem for DigestItem<Hash> {
-	type Hash = Hash;
-
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
+	pub fn as_changes_trie_root(&self) -> Option<&Hash> {
 		self.dref().as_changes_trie_root()
 	}
 
-	fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &[u8])> {
+	/// Returns `Some` if this entry is the `PreRuntime` entry.
+	pub fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &[u8])> {
 		self.dref().as_pre_runtime()
 	}
 
-	fn as_consensus(&self) -> Option<(ConsensusEngineId, &[u8])> {
+	/// Returns `Some` if this entry is the `Consensus` entry.
+	pub fn as_consensus(&self) -> Option<(ConsensusEngineId, &[u8])> {
 		self.dref().as_consensus()
 	}
 
-	fn as_seal(&self) -> Option<(ConsensusEngineId, &[u8])> {
+	/// Returns `Some` if this entry is the `Seal` entry.
+	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &[u8])> {
 		self.dref().as_seal()
 	}
 
-	fn as_other(&self) -> Option<&[u8]> {
-		self.dref().as_other()
+	/// Returns Some if `self` is a `DigestItem::Other`.
+	pub fn as_other(&self) -> Option<&[u8]> {
+		match *self {
+			DigestItem::Other(ref v) => Some(&v[..]),
+			_ => None,
+		}
 	}
 
-	fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&[u8]> {
+	/// Returns the opaque data contained in the item if `Some` if this entry has the id given.
+	pub fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&[u8]> {
 		self.dref().try_as_raw(id)
 	}
 
-	fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+	/// Returns the data contained in the item if `Some` if this entry has the id given, decoded
+	/// to the type provided `T`.
+	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
 		self.dref().try_to::<T>(id)
 	}
 }
@@ -388,7 +248,7 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 	}
 }
 
-impl<'a, Hash: Codec + Member> DigestItemRef<'a, Hash> {
+impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `ChangesTrieRoot`.
 	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
 		match *self {

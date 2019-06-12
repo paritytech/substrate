@@ -24,6 +24,7 @@ use runtime_io;
 use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
+use crate::generic::{Digest, DigestItem};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -33,7 +34,6 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::{ConsensusEngineId, generic::OpaqueDigestItemId};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -407,7 +407,8 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
+		+ Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
 	type Hasher: Hasher<Out=Self::Output>;
@@ -503,7 +504,7 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
-impl<I> CheckEqual for I where I: DigestItem {
+impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for crate::generic::DigestItem<H> {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -610,8 +611,6 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
-	/// Digest type
-	type Digest: Digest<Hash = Self::Hash> + Codec;
 
 	/// Creates new header.
 	fn new(
@@ -619,7 +618,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Digest<Self::Hash>,
 	) -> Self;
 
 	/// Returns a reference to the header number.
@@ -643,9 +642,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
-	fn digest(&self) -> &Self::Digest;
+	fn digest(&self) -> &Digest<Self::Hash>;
 	/// Get a mutable reference to the digest.
-	fn digest_mut(&mut self) -> &mut Self::Digest;
+	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -691,9 +690,9 @@ pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
-pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
+pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
 /// Extract the digest item type for a block.
-pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -746,67 +745,6 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
-}
-
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
-	/// Hash of the items.
-	type Hash: Member;
-	/// Digest item type.
-	type Item: DigestItem<Hash = Self::Hash>;
-
-	/// Get reference to all digest items.
-	fn logs(&self) -> &[Self::Item];
-	/// Push new digest item.
-	fn push(&mut self, item: Self::Item);
-	/// Pop a digest item.
-	fn pop(&mut self) -> Option<Self::Item>;
-
-	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
-		self.logs().iter()
-			.filter_map(predicate)
-			.next()
-	}
-
-	/// Get a conversion of the first digest item that successfully converts using the function.
-	fn convert_first<T, F: Fn(&Self::Item) -> Option<T>>(&self, predicate: F) -> Option<T> {
-		self.logs().iter()
-			.filter_map(predicate)
-			.next()
-	}
-}
-
-/// Single digest item. Could be any type that implements `Member` and provides methods
-/// for casting member to 'system' log items, known to substrate.
-///
-/// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
-	/// `ChangesTrieRoot` payload.
-	type Hash: Member;
-
-	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
-
-	/// Returns `Some` if this entry is the `PreRuntime` entry.
-	fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &[u8])>;
-
-	/// Returns `Some` if this entry is the `Consensus` entry.
-	fn as_consensus(&self) -> Option<(ConsensusEngineId, &[u8])>;
-
-	/// Returns `Some` if this entry is the `Seal` entry.
-	fn as_seal(&self) -> Option<(ConsensusEngineId, &[u8])>;
-
-	/// Returns `Some` if this entry is the `Other` entry.
-	fn as_other(&self) -> Option<&[u8]>;
-
-	/// Returns the opaque data contained in the item if `Some` if this entry has the id given.
-	fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&[u8]>;
-
-	/// Returns the data contained in the item if `Some` if this entry has the id given, decoded
-	/// to the type provided `T`.
-	fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

@@ -29,7 +29,7 @@ use std::{sync::Arc, thread, collections::HashMap};
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use parking_lot::Mutex;
 use runtime_primitives::{Justification, traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Digest,
+	Block as BlockT, Header as HeaderT, NumberFor,
 }};
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId, block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,

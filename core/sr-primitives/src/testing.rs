@@ -20,7 +20,7 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
-use crate::generic::DigestItem as GenDigestItem;
+use crate::generic;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -45,31 +45,10 @@ impl OpaqueKeys for UintAuthorityId {
 }
 
 /// Digest item
-pub type DigestItem = GenDigestItem<H256>;
+pub type DigestItem = generic::DigestItem<H256>;
 
 /// Header Digest
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
-pub struct Digest {
-	/// Generated logs
-	pub logs: Vec<DigestItem>,
-}
-
-impl traits::Digest for Digest {
-	type Hash = H256;
-	type Item = DigestItem;
-
-	fn logs(&self) -> &[Self::Item] {
-		&self.logs
-	}
-
-	fn push(&mut self, item: Self::Item) {
-		self.logs.push(item);
-	}
-
-	fn pop(&mut self) -> Option<Self::Item> {
-		self.logs.pop()
-	}
-}
+pub type Digest = generic::Digest<H256>;
 
 /// Block Header
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
@@ -92,7 +71,6 @@ impl traits::Header for Header {
 	type Number = u64;
 	type Hashing = BlakeTwo256;
 	type Hash = H256;
-	type Digest = Digest;
 
 	fn number(&self) -> &Self::Number { &self.number }
 	fn set_number(&mut self, num: Self::Number) { self.number = num }
@@ -106,15 +84,15 @@ impl traits::Header for Header {
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
-	fn digest(&self) -> &Self::Digest { &self.digest }
-	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
+	fn digest(&self) -> &Digest { &self.digest }
+	fn digest_mut(&mut self) -> &mut Digest { &mut self.digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest,
+		digest: Digest,
 	) -> Self {
 		Header {
 			number,

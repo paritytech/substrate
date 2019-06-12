@@ -123,11 +123,9 @@ impl system::Trait for Runtime {
 	/// The header digest type.
 	type Digest = generic::Digest<Log>;
 	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type Event = Event;
-	/// The ubiquitous log type.
-	type Log = Log;
 	/// The ubiquitous origin type.
 	type Origin = Origin;
 }
@@ -182,14 +180,14 @@ impl template::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash>) where
+	pub enum Runtime where
 		Block = Block,
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Config<T>},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp), Log(PreRuntime)},
+		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,
