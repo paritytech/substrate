@@ -26,7 +26,6 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{Bounded, Zero};
-use substrate_primitives::child_trie::ChildTrie;
 use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;
@@ -147,10 +146,9 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// see issue FIXME #2744 to only use keyspace generator
 				// and remove trie_id field (replaces parameter by 
 				// `TrieIdFromParentCounter(&address),`).
-				let child_trie = ChildTrie::fetch_or_new(
-					&mut TempKeyspaceGen(&new_info.trie_id[..]),
-					|pk| { child::child_trie(pk) },
-					&p_key[..],
+				let child_trie = child::fetch_or_new_pending(
+					&mut TempKeyspaceGen(new_info.trie_id.as_ref()),
+					p_key.as_ref(),
 				);
 
 				if !changed.storage.is_empty() {

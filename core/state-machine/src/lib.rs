@@ -1179,7 +1179,7 @@ mod tests {
 		);
 
 		assert_eq!(ext.child_trie(&b"testchild"[..]), None);
-		let child_trie = ChildTrie::fetch_or_new(
+		let child_trie = ChildTrie::fetch_or_new_pending(
 			&mut TestKeySpaceGenerator::new(),
 			|_| None,
 			b"testchild",
@@ -1293,8 +1293,8 @@ mod tests {
 		use std::collections::HashSet;
 
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, &[0x01]);
-		let child_trie2 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, &[0x23]);
+		let child_trie1 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, &[0x01]);
+		let child_trie2 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, &[0x23]);
 		let mut tr1 = {
 			let mut ttrie = test_trie();
 			let backend = ttrie.as_trie_backend().unwrap();

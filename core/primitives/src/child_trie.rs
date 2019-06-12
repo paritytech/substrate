@@ -182,7 +182,7 @@ impl ChildTrie {
 	pub fn parent_key_slice(p: &ParentTrie) -> &[u8] {
 		&p[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
-	/// Constructor to use for building a new child trie.
+	/// Method for fetching or initiating a new child trie.
 	///
 	/// By using a `KeySpaceGenerator` it does not allow setting an existing `KeySpace`.
 	/// If a new trie is created (see `is_new` method), the trie is not commited and
@@ -190,7 +190,7 @@ impl ChildTrie {
 	///
 	/// This can be quite unsafe for user, so use with care (write new trie information
 	/// as soon as possible).
-	pub fn fetch_or_new(
+	pub fn fetch_or_new_pending(
 		keyspace_builder: &mut impl KeySpaceGenerator,
 		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
 		parent: &[u8],

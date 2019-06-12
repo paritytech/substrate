@@ -288,8 +288,8 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, b"sub1");
-		let child_trie2 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, b"sub2");
+		let child_trie1 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, b"sub1");
+		let child_trie2 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, b"sub2");
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
 			.chain((28..65).map(|i| (Some(child_trie1.clone()), vec![i], Some(vec![i]))))
 			.chain((10..15).map(|i| (Some(child_trie2.clone()), vec![i], Some(vec![i]))))

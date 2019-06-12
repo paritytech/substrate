@@ -20,6 +20,7 @@ use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use substrate_primitives::child_trie::ChildTrie;
 use substrate_primitives::child_trie::ChildTrieReadRef;
+use substrate_primitives::child_trie::KeySpaceGenerator;
 use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
@@ -446,8 +447,23 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, ChildTrie, ChildTrieReadRef};
+	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, ChildTrie, ChildTrieReadRef,
+		KeySpaceGenerator};
 
+	/// Method for fetching or initiating a new child trie.
+	pub fn fetch_or_new_pending(
+		keyspace_builder: &mut impl KeySpaceGenerator,
+		parent: &[u8],
+	) -> ChildTrie {
+		ChildTrie::fetch_or_new_pending(
+			keyspace_builder,
+			|pk| { child_trie(pk) },
+			parent,
+		)
+	}
+
+	/// Fetch a child trie return None if no child trie for
+	/// this storage key.
 	pub fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
 		runtime_io::child_trie(storage_key)
 	}
