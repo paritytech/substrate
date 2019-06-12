@@ -945,21 +945,21 @@ mod tests {
 	}
 
 	impl Link<Block> for TestLink {
-		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
+		fn block_imported(&mut self, _hash: &Hash, _number: NumberFor<Block>) {
 			let _ = self.sender.send(LinkMsg::BlockImported);
 		}
 		fn finality_proof_imported(
-			&self,
+			&mut self,
 			_: Origin,
 			_: (Hash, NumberFor<Block>),
 			_: Result<(Hash, NumberFor<Block>), ()>,
 		) {
 			let _ = self.sender.send(LinkMsg::FinalityProofImported);
 		}
-		fn report_peer(&self, _: Origin, _: i32) {
+		fn report_peer(&mut self, _: Origin, _: i32) {
 			let _ = self.sender.send(LinkMsg::Disconnected);
 		}
-		fn restart(&self) {
+		fn restart(&mut self) {
 			let _ = self.sender.send(LinkMsg::Restarted);
 		}
 	}
