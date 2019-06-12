@@ -287,7 +287,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// we allow it to be unused.
 	#[cfg_attr(not(test), allow(unused))]
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
-	import_queue: Box<BasicQueue<Block>>,
+	import_queue: Mutex<Box<BasicQueue<Block>>>,
 	pub data: D,
 	best_hash: Mutex<Option<H256>>,
 	finalized_hash: Mutex<Option<H256>>,
@@ -432,7 +432,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		client: PeersClient,
-		import_queue: Box<BasicQueue<Block>>,
+		mut import_queue: Box<BasicQueue<Block>>,
 		use_tokio: bool,
 		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
@@ -456,7 +456,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			protocol_status,
 			peer_id: PeerId::random(),
 			client,
-			import_queue,
+			import_queue: Mutex::new(import_queue),
 			net_proto_channel,
 			data,
 			best_hash: Mutex::new(None),
@@ -530,7 +530,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Synchronize with import queue.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn import_queue_sync(&self) {
-		self.import_queue.synchronize();
+		self.import_queue.lock().synchronize();
 		let _ = self.net_proto_channel.wait_sync();
 	}
 
@@ -658,7 +658,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			);
 			let header = block.header.clone();
 			at = hash;
-			self.import_queue.import_blocks(
+			self.import_queue.lock().import_blocks(
 				origin,
 				vec![IncomingBlock {
 					origin: None,
@@ -801,7 +801,7 @@ pub trait TestNetFactory: Sized {
 	fn add_peer(
 		&mut self,
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
-		import_queue: Box<BasicQueue<Block>>,
+		mut import_queue: Box<BasicQueue<Block>>,
 		tx_pool: EmptyTransactionPool,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,

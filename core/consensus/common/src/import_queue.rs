@@ -103,15 +103,15 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	///
 	/// This is called automatically by the network service when synchronization
 	/// begins.
-	fn start(&self, _link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
+	fn start(&mut self, _link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
 		Ok(())
 	}
 	/// Import bunch of blocks.
-	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
+	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
-	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification);
+	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification);
 	/// Import block finality proof.
-	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>);
+	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>);
 }
 
 /// Basic block import queue that performs import in the caller thread.
@@ -147,7 +147,7 @@ impl<B: BlockT, V: Verifier<B>> BasicSyncQueue<B, V> {
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V> {
-	fn start(&self, link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
+	fn start(&mut self, link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
 		if let Some(justification_import) = self.data.justification_import.as_ref() {
 			justification_import.on_start(&*link);
 		}
@@ -155,7 +155,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 		Ok(())
 	}
 
-	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -181,7 +181,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 		trace!(target: "sync", "Imported {} of {}", imported, count);
 	}
 
-	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
+	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		import_single_justification(
 			&*self.data.link.lock(),
 			&self.data.justification_import,
@@ -192,7 +192,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicSyncQueue<B, V
 		)
 	}
 
-	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
+	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
 		let result = import_single_finality_proof(
 			&self.data.finality_proof_import,
 			&*self.data.verifier,
@@ -287,7 +287,7 @@ impl<B: BlockT> BasicQueue<B> {
 }
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
-	fn start(&self, link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
+	fn start(&mut self, link: Box<dyn Link<B>>) -> Result<(), std::io::Error> {
 		let connect_err = || Err(std::io::Error::new(
 			std::io::ErrorKind::Other,
 			"Failed to connect import queue threads",
@@ -301,7 +301,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		}
 	}
 
-	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -311,13 +311,13 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		}
 	}
 
-	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
+	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		if let Some(ref sender) = self.sender {
 			let _ = sender.send(BlockImportMsg::ImportJustification(who.clone(), hash, number, justification));
 		}
 	}
 
-	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
+	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
 		if let Some(ref sender) = self.sender {
 			let _ = sender.send(BlockImportMsg::ImportFinalityProof(who, hash, number, finality_proof));
 		}
