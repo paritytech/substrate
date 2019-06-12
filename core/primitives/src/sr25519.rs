@@ -409,9 +409,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<
-		I: Iterator<Item=DeriveJunction>
-	>(
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
 		phrase: &str,
 		password: Option<&str>,
 		path: I

@@ -46,25 +46,21 @@ trait Crypto {
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
-			return
-		}
-		if let Ok(pair) = Self::Pair::from_string(uri, password) {
+		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
 			println!("Secret Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
-			return
-		}
-		if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
+		} else if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
 			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
 				HexDisplay::from(&public.as_ref()),
 				public.to_ss58check()
 			);
-			return
+		} else {
+			println!("Invalid phrase/URI given");
 		}
-		println!("Invalid phrase/URI given");
 	}
 }
 
