@@ -15,16 +15,20 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use std::io;
+use std::{fs, io, path::Path};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use log::{warn, debug, error, info};
+use libp2p::core::swarm::NetworkBehaviour;
+use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{start_service, parse_str_addr, Service as Libp2pNetService, ServiceEvent as Libp2pNetServiceEvent};
-use network_libp2p::{RegisteredProtocol, NetworkState};
+use crate::custom_proto::{CustomProto, CustomProtoOut};
+use crate::{behaviour::Behaviour, parse_str_addr, ProtocolId};
+use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
+use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode, config::NetworkConfiguration};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -40,12 +44,14 @@ use crate::config::Params;
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
+mod tests;
+
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
-pub use network_libp2p::PeerId;
+pub use libp2p::PeerId;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -187,7 +193,9 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Channel for networking messages processed by the background thread.
 	network_chan: mpsc::UnboundedSender<NetworkMsg<B>>,
 	/// Network service
-	network: Arc<Mutex<Libp2pNetService<Message<B>>>>,
+	network: Arc<Mutex<Swarm<B>>>,
+	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
+	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
@@ -227,19 +235,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
-		let registered = RegisteredProtocol::new(params.protocol_id, &versions);
 
 		// Start the main service.
-		let (network, peerset) = match start_service(params.network_config, registered) {
-			Ok((network, peerset)) => (Arc::new(Mutex::new(network)), peerset),
-			Err(err) => {
-				warn!("Error starting network: {}", err);
-				return Err(err.into())
-			},
-		};
+		let (network, bandwidth, peerset) =
+			match start_service::<B, _>(params.network_config, params.protocol_id, &versions) {
+				Ok((network, bandwidth, peerset)) => (Arc::new(Mutex::new(network)), bandwidth, peerset),
+				Err(err) => {
+					warn!("Error starting network: {}", err);
+					return Err(err.into())
+				},
+			};
 
 		let service = Arc::new(NetworkService {
 			status_sinks: status_sinks.clone(),
+			bandwidth,
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			network_chan,
@@ -278,20 +287,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	/// Returns the downloaded bytes per second averaged over the past few seconds.
-	#[inline]
 	pub fn average_download_per_sec(&self) -> u64 {
-		self.network.lock().average_download_per_sec()
+		self.bandwidth.average_download_per_sec()
 	}
 
 	/// Returns the uploaded bytes per second averaged over the past few seconds.
-	#[inline]
 	pub fn average_upload_per_sec(&self) -> u64 {
-		self.network.lock().average_upload_per_sec()
+		self.bandwidth.average_upload_per_sec()
 	}
 
 	/// Returns the network identity of the node.
 	pub fn local_peer_id(&self) -> PeerId {
-		self.network.lock().peer_id().clone()
+		Swarm::<B>::local_peer_id(&*self.network.lock()).clone()
 	}
 
 	/// Called when a new block is imported by the client.
@@ -404,7 +411,58 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Netwo
 	}
 
 	fn network_state(&self) -> NetworkState {
-		self.network.lock().state()
+		let mut swarm = self.network.lock();
+		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
+
+		let connected_peers = {
+			let swarm = &mut *swarm;
+			open.iter().filter_map(move |peer_id| {
+				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
+					.into_iter().collect();
+
+				let endpoint = if let Some(e) = swarm.node(peer_id).map(|i| i.endpoint()) {
+					e.clone().into()
+				} else {
+					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
+						and debug information about {:?}", peer_id);
+					return None
+				};
+
+				Some((peer_id.to_base58(), NetworkStatePeer {
+					endpoint,
+					version_string: swarm.node(peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
+					enabled: swarm.user_protocol().is_enabled(&peer_id),
+					open: swarm.user_protocol().is_open(&peer_id),
+					known_addresses,
+				}))
+			}).collect()
+		};
+
+		let not_connected_peers = {
+			let swarm = &mut *swarm;
+			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
+				.cloned().collect::<Vec<_>>();
+			list.into_iter().map(move |peer_id| {
+				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+					version_string: swarm.node(&peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
+					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
+						.into_iter().collect(),
+				})
+			}).collect()
+		};
+
+		NetworkState {
+			peer_id: Swarm::<B>::local_peer_id(&swarm).to_base58(),
+			listened_addresses: Swarm::<B>::listeners(&swarm).cloned().collect(),
+			external_addresses: Swarm::<B>::external_addresses(&swarm).cloned().collect(),
+			average_download_per_sec: self.bandwidth.average_download_per_sec(),
+			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
+			connected_peers,
+			not_connected_peers,
+			peerset: swarm.user_protocol_mut().peerset_debug_info(),
+		}
 	}
 
 	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
@@ -533,7 +591,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	protocol: Protocol<B, S, H>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, S>>,
-	network_service: Arc<Mutex<Libp2pNetService<Message<B>>>>,
+	network_service: Arc<Mutex<Swarm<B>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<dyn ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -556,16 +614,16 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Implementation of `protocol::NetworkOut` using the available local variables.
-		struct Context<'a, B: BlockT>(&'a mut Libp2pNetService<Message<B>>, &'a PeersetHandle);
+		struct Context<'a, B: BlockT>(&'a mut Swarm<B>, &'a PeersetHandle);
 		impl<'a, B: BlockT> NetworkOut<B> for Context<'a, B> {
 			fn report_peer(&mut self, who: PeerId, reputation: i32) {
 				self.1.report_peer(who, reputation)
 			}
 			fn disconnect_peer(&mut self, who: PeerId) {
-				self.0.drop_node(&who)
+				self.0.user_protocol_mut().disconnect_peer(&who)
 			}
 			fn send_message(&mut self, who: PeerId, message: Message<B>) {
-				self.0.send_custom_message(&who, message)
+				self.0.user_protocol_mut().send_packet(&who, message)
 			}
 		}
 
@@ -598,11 +656,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			match self.network_port.poll() {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(NetworkMsg::Outgoing(who, outgoing_message)))) =>
-					self.network_service.lock().send_custom_message(&who, outgoing_message),
+					self.network_service.lock().user_protocol_mut().send_packet(&who, outgoing_message),
 				Ok(Async::Ready(Some(NetworkMsg::ReportPeer(who, reputation)))) =>
 					self.peerset.report_peer(who, reputation),
 				Ok(Async::Ready(Some(NetworkMsg::DisconnectPeer(who)))) =>
-					self.network_service.lock().drop_node(&who),
+					self.network_service.lock().user_protocol_mut().disconnect_peer(&who),
 
 				#[cfg(any(test, feature = "test-helpers"))]
 				Ok(Async::Ready(Some(NetworkMsg::Synchronized))) => {}
@@ -672,19 +730,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(Libp2pNetServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. }))) => {
+				Ok(Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { peer_id, version, .. }))) => {
 					debug_assert!(
 						version <= protocol::CURRENT_VERSION as u8
 						&& version >= protocol::MIN_VERSION as u8
 					);
-					self.protocol.on_peer_connected(&mut network_out, peer_id, debug_info);
+					self.protocol.on_peer_connected(&mut network_out, peer_id);
 					CustomMessageOutcome::None
 				}
-				Ok(Async::Ready(Some(Libp2pNetServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
-					self.protocol.on_peer_disconnected(&mut network_out, peer_id, debug_info);
+				Ok(Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { peer_id, .. }))) => {
+					self.protocol.on_peer_disconnected(&mut network_out, peer_id);
 					CustomMessageOutcome::None
 				},
-				Ok(Async::Ready(Some(Libp2pNetServiceEvent::CustomMessage { peer_id, message, .. }))) =>
+				Ok(Async::Ready(Some(CustomProtoOut::CustomMessage { peer_id, message }))) =>
 					self.protocol.on_custom_message(
 						&mut network_out,
 						&*self.transaction_pool,
@@ -692,7 +750,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 						message,
 						self.finality_proof_provider.as_ref().map(|p| &**p)
 					),
-				Ok(Async::Ready(Some(Libp2pNetServiceEvent::Clogged { peer_id, messages, .. }))) => {
+				Ok(Async::Ready(Some(CustomProtoOut::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {
 						debug!(target: "sync", "{:?}", msg);
@@ -723,4 +781,94 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 		Ok(Async::NotReady)
 	}
+}
+
+/// The libp2p swarm, customized for our needs.
+type Swarm<B> = libp2p::core::Swarm<
+	Boxed<(PeerId, StreamMuxerBox), io::Error>,
+	Behaviour<CustomProto<Message<B>, Substream<StreamMuxerBox>>, CustomProtoOut<Message<B>>, Substream<StreamMuxerBox>>
+>;
+
+/// Starts the substrate libp2p service.
+///
+/// Returns a stream that must be polled regularly in order for the networking to function.
+fn start_service<B: BlockT, Pid: Into<ProtocolId>>(
+	config: NetworkConfiguration,
+	protocol_id: Pid,
+	versions: &[u8],
+) -> Result<(Swarm<B>, Arc<transport::BandwidthSinks>, peerset::PeersetHandle), io::Error> {
+
+	if let Some(ref path) = config.net_config_path {
+		fs::create_dir_all(Path::new(path))?;
+	}
+
+	// List of multiaddresses that we know in the network.
+	let mut known_addresses = Vec::new();
+	let mut bootnodes = Vec::new();
+	let mut reserved_nodes = Vec::new();
+
+	// Process the bootnodes.
+	for bootnode in config.boot_nodes.iter() {
+		match parse_str_addr(bootnode) {
+			Ok((peer_id, addr)) => {
+				bootnodes.push(peer_id.clone());
+				known_addresses.push((peer_id, addr));
+			},
+			Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
+		}
+	}
+
+	// Initialize the reserved peers.
+	for reserved in config.reserved_nodes.iter() {
+		if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
+			reserved_nodes.push(peer_id.clone());
+			known_addresses.push((peer_id, addr));
+		} else {
+			warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
+		}
+	}
+
+	// Build the peerset.
+	let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset::PeersetConfig {
+		in_peers: config.in_peers,
+		out_peers: config.out_peers,
+		bootnodes,
+		reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
+		reserved_nodes,
+	});
+
+	// Private and public keys configuration.
+	if let NodeKeyConfig::Secp256k1(_) = config.node_key {
+		warn!(target: "sub-libp2p", "Secp256k1 keys are deprecated in favour of ed25519");
+	}
+	let local_identity = config.node_key.clone().into_keypair()?;
+	let local_public = local_identity.public();
+	let local_peer_id = local_public.clone().into_peer_id();
+	info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
+
+	// Build the swarm.
+	let (mut swarm, bandwidth) = {
+		let user_agent = format!("{} ({})", config.client_version, config.node_name);
+		let proto = CustomProto::new(protocol_id, versions, peerset);
+		let behaviour = Behaviour::new(proto, user_agent, local_public, known_addresses, config.enable_mdns);
+		let (transport, bandwidth) = transport::build_transport(
+			local_identity,
+			config.wasm_external_transport
+		);
+		(Swarm::<B>::new(transport, behaviour, local_peer_id.clone()), bandwidth)
+	};
+
+	// Listen on multiaddresses.
+	for addr in &config.listen_addresses {
+		if let Err(err) = Swarm::<B>::listen_on(&mut swarm, addr.clone()) {
+			warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
+		}
+	}
+
+	// Add external addresses.
+	for addr in &config.public_addresses {
+		Swarm::<B>::add_external_address(&mut swarm, addr.clone());
+	}
+
+	Ok((swarm, bandwidth, peerset_handle))
 }
