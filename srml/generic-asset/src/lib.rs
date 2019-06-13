@@ -301,7 +301,7 @@ decl_module! {
 			let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
 
 			// The last available id serves as the overflow mark and won't be used.
-			let next_id = id.checked_add(&One::one()).ok_or_else(||"No new assets id available.")?;
+			let next_id = id.checked_add(&One::one()).ok_or_else(|| "No new assets id available.")?;
 
 			// Force to reserve cennz.
 			Self::reserve(&Self::staking_asset_id(), &origin, Self::create_asset_stake())?;
@@ -324,7 +324,8 @@ decl_module! {
 		}
 
 		/// Updates permission for a given `asset_id` and an account.
-		/// The origin must have `update` permission.
+		///
+		/// The `origin` must have `update` permission.
 		fn update_permission(
 			origin,
 			#[compact] asset_id: T::AssetId,
@@ -341,7 +342,7 @@ decl_module! {
 
 				Ok(())
 			} else {
-				return Err("Origin does not have enough permission to update permissions.");
+				Err("Origin does not have enough permission to update permissions.")
 			}
 		}
 
@@ -350,7 +351,6 @@ decl_module! {
 		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
 			let origin = ensure_signed(origin)?;
 			if Self::check_permission(&asset_id, &origin, &PermissionType::Mint) {
-
 				let original_free_balance = Self::free_balance(&asset_id, &to);
 				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
 				let new_total_issuance = current_total_issuance.checked_add(&amount)
@@ -365,12 +365,13 @@ decl_module! {
 
 				Ok(())
 			} else {
-				return Err("The origin does not have permission to mint an asset, Permission error.");
+				Err("The origin does not have permission to mint an asset.")
 			}
 		}
 
 		/// Burns an asset, decreases its total issuance.
-		/// The origin must have `burn` permissions.
+		///
+		/// The `origin` must have `burn` permissions.
 		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
 			let origin = ensure_signed(origin)?;
 
@@ -391,7 +392,7 @@ decl_module! {
 
 				Ok(())
 			} else {
-				return Err("The origin does not have permission to burn an asset, Permission error.");
+				Err("The origin does not have permission to burn an asset.")
 			}
 		}
 
@@ -528,7 +529,7 @@ impl<T: Trait> Module<T> {
 			asset_id
 		};
 
-		let account_id = from_account.unwrap_or_else(Default::default);
+		let account_id = from_account.unwrap_or_default();
 		let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
 
 		<TotalIssuance<T>>::insert(asset_id, &options.initial_issuance);
