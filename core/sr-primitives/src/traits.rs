@@ -832,7 +832,7 @@ pub trait OpaqueKeys {
 
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
 /// e.g.
-/// ```
+/// ```nocompile
 /// count!(println ("{}",) foo, bar, baz);
 /// // Will result in three `println!`s: "0", "1" and "2".
 /// ```
