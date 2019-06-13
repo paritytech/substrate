@@ -62,6 +62,7 @@ impl GenesisConfig {
 		if let Some(ref changes_trie_config) = self.changes_trie_config {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
+		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		map
 	}
 }
