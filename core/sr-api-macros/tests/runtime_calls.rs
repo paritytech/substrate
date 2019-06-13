@@ -16,6 +16,7 @@
 
 use test_client::{
 	prelude::*,
+	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
 use runtime_primitives::{
@@ -190,4 +191,17 @@ fn record_proof_works() {
 		"Core_execute_block",
 		&block.encode(),
 	).expect("Executes block while using the proof backend");
+}
+
+#[test]
+fn returns_mutable_static() {
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().chain.best_number);
+
+	let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
+	assert_eq!(ret, 33);
+
+	let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
+	assert_eq!(ret, 34);
 }
