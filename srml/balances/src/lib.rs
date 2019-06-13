@@ -102,9 +102,8 @@
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
 //!
-//! pub type CurrencyOf<T> = <T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>;
-//! pub type BalanceOf<T> = CurrencyOf<T>::Balance;
-//! pub type NegativeImbalanceOf<T> = CurrencyOf<T>::NegativeImbalance;
+//! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+//! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 //!
 //! # fn main() {}
 //! ```

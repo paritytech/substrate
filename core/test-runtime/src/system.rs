@@ -71,25 +71,24 @@ pub fn take_block_number() -> Option<BlockNumber> {
 	Number::take()
 }
 
+#[derive(Copy, Clone)]
+enum Mode {
+	Verify,
+	Overwrite,
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn polish_block(block: &mut Block) {
-	execute_block_with_state_root_handler(block, |mut header| {
-		header.state_root = storage_root().into();
-	});
+	execute_block_with_state_root_handler(block, Mode::Overwrite);
 }
 
 pub fn execute_block(mut block: Block) {
-	execute_block_with_state_root_handler(&mut block, |header| {
-		// check storage root.
-		let storage_root = storage_root().into();
-		info_expect_equal_hash(&storage_root, &header.state_root);
-		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
-	});
+	execute_block_with_state_root_handler(&mut block, Mode::Verify);
 }
 
 fn execute_block_with_state_root_handler(
 	block: &mut Block,
-	f: impl FnOnce(&mut Header)
+	mode: Mode,
 ) {
 	let header = &mut block.header;
 
@@ -98,7 +97,11 @@ fn execute_block_with_state_root_handler(
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
-	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
+	if let Mode::Overwrite = mode {
+		header.extrinsics_root = txs_root;
+	} else {
+		assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
+	}
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
@@ -107,7 +110,14 @@ fn execute_block_with_state_root_handler(
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
-	f(header);
+	if let Mode::Overwrite = mode {
+		header.state_root = storage_root().into();
+	} else {
+		// check storage root.
+		let storage_root = storage_root().into();
+		info_expect_equal_hash(&storage_root, &header.state_root);
+		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
+	}
 
 	// check digest
 	let digest = &mut header.digest;
