@@ -593,7 +593,7 @@ fn slash_reserved_should_return_none() {
 fn repatriate_reserved_return_amount_substracted_by_slash_amount() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
-		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 130), Ok(30));
+		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 130), 30);
 	});
 }
 
@@ -608,7 +608,7 @@ fn repatriate_reserved_return_amount_substracted_by_slash_amount() {
 fn repatriate_reserved_return_none() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
-		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 90), Ok(0),);
+		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 90), 0);
 	});
 }
 
@@ -663,7 +663,7 @@ fn mint_should_throw_permission_error() {
 
 		assert_noop!(
 			GenericAsset::mint(Origin::signed(origin), asset_id, to_account, amount),
-			"The origin does not have permission to mint an asset, Permission error."
+			"The origin does not have permission to mint an asset."
 		);
 	});
 }
@@ -729,7 +729,7 @@ fn burn_should_throw_permission_error() {
 
 			assert_noop!(
 				GenericAsset::burn(Origin::signed(origin), asset_id, to_account, amount),
-				"The origin does not have permission to burn an asset, Permission error."
+				"The origin does not have permission to burn an asset."
 			);
 		},
 	);

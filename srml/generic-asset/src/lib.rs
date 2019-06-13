@@ -59,7 +59,7 @@
 //! the functionality that you need, you can avoid coupling with the Generic Asset module.
 //!
 //! - `Currency`: Functions for dealing with a fungible assets system.
-//! - `ReservedCurrency`: Functions for dealing with assets that can be reserved from an account.
+//! - `ReservableCurrency`: Functions for dealing with assets that can be reserved from an account.
 //! - `LockableCurrency`: Functions for dealing with accounts that allow liquidity restrictions.
 //! - `Imbalance`: Functions for handling imbalances between total issuance in the system and account balances.
 //! Must be used when a function creates new assets (e.g. a reward) or destroys some assets (e.g. a system fee).
@@ -124,11 +124,11 @@
 //! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
 //! 	// ...
 //! 	T::Currency::withdraw(
-//!			transactor,
-//!			amount,
-//!			WithdrawReason::TransactionPayment,
-//!			ExistenceRequirement::KeepAlive,
-//!		)?;
+//! 		transactor,
+//! 		amount,
+//! 		WithdrawReason::TransactionPayment,
+//! 		ExistenceRequirement::KeepAlive,
+//! 	)?;
 //! 	// ...
 //! 	Ok(())
 //! }
@@ -656,8 +656,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Move up to `amount` from reserved balance of account `who` to free balance of account
-	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
-	/// returned.
+	/// `beneficiary`.
 	///
 	/// As much funds up to `amount` will be moved as possible. If this is less than `amount`, then
 	/// the `remaining` would be returned, else `Zero::zero()`.
@@ -666,7 +665,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		beneficiary: &T::AccountId,
 		amount: T::Balance,
-	) -> rstd::result::Result<T::Balance, &'static str> {
+	) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(b, amount);
 
@@ -676,7 +675,7 @@ impl<T: Trait> Module<T> {
 
 		let new_reserve_balance = b - slash;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
-		Ok(amount - slash)
+		amount - slash
 	}
 
 	/// Check permission to perform burn, mint or update.
@@ -684,7 +683,7 @@ impl<T: Trait> Module<T> {
 	/// # Arguments
 	/// * `asset_id`:  A `T::AssetId` type that contains the `asset_id`, which has the permission embedded.
 	/// * `who`: A `T::AccountId` type that contains the `account_id` for which to check permissions.
-	/// * `what`: A string slice that contains the permission type.
+	/// * `what`: The permission to check.
 	///
 	pub fn check_permission(asset_id: &T::AssetId, who: &T::AccountId, what: &PermissionType) -> bool {
 		let permission_versions: PermissionVersions<T::AccountId> = Self::get_permission(asset_id);
@@ -1160,8 +1159,11 @@ where
 	U: AssetIdProvider<AssetId = T::AssetId>,
 {
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		// TODO: check with lock
-		<Module<T>>::free_balance(&U::asset_id(), &who) >= value
+		Self::free_balance(who)
+			.checked_sub(&value)
+			.map_or(false, |new_balance|
+				<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance).is_ok()
+			)
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
@@ -1189,7 +1191,7 @@ where
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, &'static str> {
-		<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value)
+		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value))
 	}
 }
 
