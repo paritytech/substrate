@@ -22,7 +22,7 @@ runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
 parking_lot = "0.8.0"
 log = "0.4"
-rhododendron = { version = "0.5.0", features = ["codec"] }
+rhododendron = { version = "0.6.0", features = ["codec"], git = "https://github.com/paritytech/rhododendron", branch = "stas-codec-4-0" }
 exit-future = "0.1"
 
 [dev-dependencies]

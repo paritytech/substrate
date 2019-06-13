@@ -21,7 +21,7 @@ memory-db = { version = "0.12.2", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 
 [dev-dependencies]
-trie-bench = { version = "0.12" }
+trie-bench = { version = "0.13", git = "https://github.com/paritytech/trie", branch = "stas-codec-4-0" }
 trie-standardmap = { version = "0.12" }
 keccak-hasher = { version = "0.12" }
 criterion = "0.2"
