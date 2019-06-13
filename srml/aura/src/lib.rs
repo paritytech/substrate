@@ -182,8 +182,7 @@ pub trait Trait: timestamp::Trait
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 	type Signature: Verify + Encode + Decode + Clone;
-	type DigestItem: CompatibleDigestItem<Self::Signature>
-		+ DigestItem<Hash = Self::Hash>;
+	type DigestItem: CompatibleDigestItem + DigestItem<Hash = Self::Hash>;
 	type Digest: Digest<Item = Self::DigestItem, Hash = Self::Hash> + Codec;
 	type Header: Header<Digest = <Self as Trait>::Digest, Hash = Self::Hash>;
 }
@@ -212,7 +211,7 @@ where
 	T: Trait,
 	<T as Trait>::Signature: Verify<Signer = P>,
 	<<T as Trait>::Signature as Verify>::Signer: Encode + Decode + Clone + PartialEq,
-	<<<T as Trait>::Header as Header>::Digest as Digest>::Item: CompatibleDigestItem<T::Signature>,
+	<<<T as Trait>::Header as Header>::Digest as Digest>::Item: CompatibleDigestItem,
 	P: Encode + Decode + Clone + PartialEq,
 {
 	if let Ok(slot_num) = find_pre_digest(header) {
