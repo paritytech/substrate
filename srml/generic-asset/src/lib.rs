@@ -191,7 +191,7 @@ pub trait Subtrait: system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDebug;
-	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy+ From<u32>;
+	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 }
 
 impl<T: Trait> Subtrait for T {
