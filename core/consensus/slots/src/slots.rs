@@ -23,29 +23,32 @@ use consensus_common::Error;
 use futures::prelude::*;
 use futures::try_ready;
 use inherents::{InherentData, InherentDataProviders};
-use log::warn;
+
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 use tokio_timer::Delay;
 
 /// Returns current duration since unix epoch.
-pub fn duration_now() -> Option<Duration> {
+pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
 
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH)
-		.map_err(|e| {
-			warn!(
-				"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-				now, e
-			);
-		})
-		.ok()
+	match now.duration_since(SystemTime::UNIX_EPOCH) {
+		Ok(s) => s,
+		Err(e) => panic!(
+			"Current time {:?} is before unix epoch. Something is wrong: {:?}",
+			now, e
+		),
+	}
 }
 
 /// Get the slot for now.
-pub fn slot_now(slot_duration: u64) -> Option<u64> {
-	duration_now().map(|s| s.as_secs() / slot_duration)
+pub fn slot_now(slot_duration: u64, offset: Duration, is_positive: bool) -> u64 {
+	if is_positive {
+		duration_now() + offset
+	} else {
+		duration_now() - offset
+	}.as_secs() / slot_duration
 }
 
 /// Returns the duration until the next slot, based on current duration since
@@ -112,11 +115,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 		self.inner_delay = match self.inner_delay.take() {
 			None => {
 				// schedule wait.
-				let wait_until = match duration_now() {
-					None => return Ok(Async::Ready(None)),
-					Some(now) => Instant::now() + time_until_next(now, slot_duration),
-				};
-
+				let wait_until = Instant::now() + time_until_next(duration_now(), slot_duration);
 				Some(Delay::new(wait_until))
 			}
 			Some(d) => Some(d),

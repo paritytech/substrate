@@ -291,8 +291,8 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 		Box::new(proposal_work.map(move |b| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
-			let slot_after_building = slot_now(slot_duration);
-			if slot_after_building != Some(slot_num) {
+			let slot_after_building = slot_now(slot_duration, Default::default(), true);
+			if slot_after_building != slot_num {
 				info!(
 					"Discarding proposal for slot {}; block production took too long",
 					slot_num

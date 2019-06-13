@@ -40,7 +40,7 @@ use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}, convert::TryFrom};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
@@ -348,8 +348,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		Box::new(proposal_work.map(move |b| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
-			let slot_after_building = slot_now(slot_duration);
-			if slot_after_building != Some(slot_num) {
+			let slot_after_building = slot_now(slot_duration, Default::default(), true);
+			if slot_after_building != slot_num {
 				info!(
 					target: "babe",
 					"Discarding proposal for slot {}; block production took too long",
@@ -645,24 +645,25 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
-
-				// We do not produce an `Instant` synthetically, so this cannot panic.
-				let slot_num: u32 = u32::try_from(slot_num)
-					.expect("FIXME: We cannot handle slot numbers above u32::MAX yet!");
+				const INVERSE_NANO: u32 = 1000_000_000;
 				let mut timestamps = self.timestamps.lock();
 				// Remainder of this block is a critical section.
 				let num_timestamps = timestamps.1.len();
 				if num_timestamps as u64 >= self.config.0.median_required_blocks {
-					let mut new_list: Vec<_> = timestamps.1.iter().enumerate().map(|(_counter, &(t, sl)): (usize, &(Instant, u64))| {
-						t + Duration::from_secs(self.config.get())
-							.checked_mul(slot_num - sl as u32)
-							.expect("we assume duration cannot overflow; qed")
-					}).collect();
+					let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
+							let offset: u128 = u128::from(self.config.get())
+								.checked_mul(INVERSE_NANO.into())
+								.and_then(|x| x.checked_mul(u128::from(slot_num) - u128::from(sl)))
+								.expect("we cannot have timespans long enough for this to overflow; qed");
+							let nanos = (offset % u128::from(INVERSE_NANO)) as u32;
+							let secs = (offset / u128::from(INVERSE_NANO)) as u64;
+							t + Duration::new(secs, nanos)
+						}).collect();
 					// FIXME use a selection algorithm instead of a full sorting algorithm.
 					new_list.sort_unstable();
 					let &median = new_list
 						.get(num_timestamps / 2)
-						.expect("we have at least one timestamp, so this is a valid indx; qed");
+						.expect("we have at least one timestamp, so this is a valid index; qed");
 					drop(new_list);
 					std::mem::replace(&mut timestamps.1, Default::default());
 					// Compute the (relative!) start time of the blockchain ―
