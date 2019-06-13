@@ -35,7 +35,7 @@ use std::ops::Range;
 use std::collections::{HashMap, VecDeque};
 use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;

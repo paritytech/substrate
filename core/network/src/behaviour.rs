@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::DiscoveryNetBehaviour;
+use crate::{debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, protocols_handler::IntoProtocolsHandler, PublicKey};
@@ -22,17 +22,11 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
-use libp2p::kad::{Kademlia, KademliaOut};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
-use libp2p::multiaddr::Protocol;
-use log::{debug, info, trace, warn};
-use std::{cmp, iter, time::Duration};
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, clock::Clock};
+use log::warn;
+use std::iter;
 use void;
-
-mod debug_info;
 
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
@@ -65,28 +59,15 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	) -> Self {
 		let debug_info = debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone());
 
-		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
-		for (peer_id, addr) in &known_addresses {
-			kademlia.add_address(peer_id, addr.clone());
-		}
-
 		if enable_mdns {
 			#[cfg(target_os = "unknown")]
 			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
 		}
 
-		let clock = Clock::new();
 		Behaviour {
 			user_protocol: UserBehaviourWrap(user_protocol),
 			debug_info,
-			discovery: DiscoveryBehaviour {
-				user_defined: known_addresses,
-				kademlia,
-				next_kad_random_query: Delay::new(clock.now()),
-				duration_to_next_kad: Duration::from_secs(1),
-				clock,
-				local_peer_id: local_public_key.into_peer_id(),
-			},
+			discovery: DiscoveryBehaviour::new(local_public_key, known_addresses),
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
@@ -105,14 +86,12 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 
 	/// Returns the list of nodes that we know exist in the network.
 	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
-		self.discovery.kademlia.kbuckets_entries()
+		self.discovery.known_peers()
 	}
 
 	/// Adds a hard-coded address for the given peer, that never expires.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
-		if self.discovery.user_defined.iter().all(|(p, a)| *p != peer_id && *a != addr) {
-			self.discovery.user_defined.push((peer_id, addr));
-		}
+		self.discovery.add_known_address(peer_id, addr)
 	}
 
 	/// Borrows `self` and returns a struct giving access to the information about a node.
@@ -165,33 +144,20 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<debug_in
 			info.listen_addrs.truncate(30);
 		}
 		for addr in &info.listen_addrs {
-			self.discovery.kademlia.add_address(&peer_id, addr.clone());
+			self.discovery.add_self_reported_address(&peer_id, addr.clone());
 		}
 		self.user_protocol.0.add_discovered_nodes(iter::once(peer_id.clone()));
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<KademliaOut>
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<DiscoveryOut>
 	for Behaviour<TBehaviour, TBehaviourEv, TSubstream>
 	where TBehaviour: DiscoveryNetBehaviour {
-	fn inject_event(&mut self, out: KademliaOut) {
+	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
-			KademliaOut::Discovered { .. } => {}
-			KademliaOut::KBucketAdded { peer_id, .. } => {
+			DiscoveryOut::Discovered(peer_id) => {
 				self.user_protocol.0.add_discovered_nodes(iter::once(peer_id));
 			}
-			KademliaOut::FindNodeResult { key, closer_peers } => {
-				trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
-					key, closer_peers.len());
-				if closer_peers.is_empty() {
-					warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
-						results");
-				}
-			}
-			// We never start any other type of query.
-			KademliaOut::GetProvidersResult { .. } => {}
-			KademliaOut::GetValueResult(_) => {}
-			KademliaOut::PutValueResult(_) => {}
 		}
 	}
 }
@@ -285,122 +251,5 @@ impl<TInner: NetworkBehaviour> NetworkBehaviour for UserBehaviourWrap<TInner> {
 	}
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.0.inject_new_external_addr(addr)
-	}
-}
-
-/// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
-pub struct DiscoveryBehaviour<TSubstream> {
-	/// User-defined list of nodes and their addresses. Typically includes bootstrap nodes and
-	/// reserved nodes.
-	user_defined: Vec<(PeerId, Multiaddr)>,
-	/// Kademlia requests and answers.
-	kademlia: Kademlia<TSubstream>,
-	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Delay,
-	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
-	duration_to_next_kad: Duration,
-	/// `Clock` instance that uses the current execution context's source of time.
-	clock: Clock,
-	/// Identity of our local node.
-	local_peer_id: PeerId,
-}
-
-impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite,
-{
-	type ProtocolsHandler = <Kademlia<TSubstream> as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <Kademlia<TSubstream> as NetworkBehaviour>::OutEvent;
-
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NetworkBehaviour::new_handler(&mut self.kademlia)
-	}
-
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		let mut list = self.user_defined.iter()
-			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
-			.collect::<Vec<_>>();
-		list.extend(self.kademlia.addresses_of_peer(peer_id));
-		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
-		if list.is_empty() {
-			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
-				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer in k-buckets), \
-					and no address was found", peer_id);
-			} else {
-				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer not in k-buckets), \
-					and no address was found", peer_id);
-			}
-		}
-		list
-	}
-
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
-	}
-
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
-	}
-
-	fn inject_replaced(&mut self, peer_id: PeerId, closed: ConnectedPoint, opened: ConnectedPoint) {
-		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
-	}
-
-	fn inject_node_event(
-		&mut self,
-		peer_id: PeerId,
-		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
-	) {
-		NetworkBehaviour::inject_node_event(&mut self.kademlia, peer_id, event)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		let new_addr = addr.clone()
-			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "Discovered new external address for our node: {}", new_addr);
-	}
-
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		info!(target: "sub-libp2p", "No longer listening on {}", addr);
-	}
-
-	fn poll(
-		&mut self,
-		params: &mut PollParameters,
-	) -> Async<
-		NetworkBehaviourAction<
-			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	> {
-		// Poll Kademlia.
-		match self.kademlia.poll(params) {
-			Async::Ready(action) => return Async::Ready(action),
-			Async::NotReady => (),
-		}
-
-		// Poll the stream that fires when we need to start a random Kademlia query.
-		loop {
-			match self.next_kad_random_query.poll() {
-				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(_)) => {
-					let random_peer_id = PeerId::random();
-					debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-						{:?}", random_peer_id);
-					self.kademlia.find_node(random_peer_id);
-
-					// Reset the `Delay` to the next random.
-					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
-					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
-						Duration::from_secs(60));
-				},
-				Err(err) => {
-					warn!(target: "sub-libp2p", "Kademlia query timer errored: {:?}", err);
-					break
-				}
-			}
-		}
-
-		Async::NotReady
 	}
 }

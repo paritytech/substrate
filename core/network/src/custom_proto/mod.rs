@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use self::behaviour::{CustomProto, CustomProtoOut};
-pub use self::upgrade::{CustomMessage, RegisteredProtocol};
+pub use self::upgrade::CustomMessage;
 
 mod behaviour;
 mod handler;

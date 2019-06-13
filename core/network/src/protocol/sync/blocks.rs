@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor, One};
 use crate::message;
 
