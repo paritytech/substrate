@@ -13,7 +13,6 @@ runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 [features]
 default = [
 	"std",
-	"runtime/include-wasm-blob",
 ]
 std = [
 	"runtime/std",

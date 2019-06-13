@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Substrate test runtime reexported for WebAssembly compile.
-
-#![cfg_attr(not(feature = "std"), no_std)]
-
-pub use substrate_test_runtime::*;
+fn main() {
+	wasm_builder_runner::build_current_project("wasm_binary.rs", "../utils/wasm-builder");
+}
