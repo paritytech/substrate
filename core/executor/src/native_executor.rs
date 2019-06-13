@@ -133,7 +133,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 #[derive(Debug)]
-pub struct NativeExecutor<D: NativeExecutionDispatch> {
+pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
 	/// The fallback executor in case native isn't available.

@@ -316,7 +316,6 @@ mod tests {
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
-			council_voting: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
@@ -894,6 +893,21 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+	}
+
+	#[test]
+	fn should_import_block_with_test_client() {
+		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+
+		let client = TestClientBuilder::default()
+			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
+			.0;
+
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	#[cfg(feature = "benchmarks")]

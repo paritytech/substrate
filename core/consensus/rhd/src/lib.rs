@@ -32,6 +32,9 @@
 
 #![cfg(feature="rhd")]
 // FIXME #1020 doesn't compile
+// NOTE: this is the legacy constant used for transaction size. No longer used except
+// for the rhd code which is not updated. Placed here for compatibility.
+const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

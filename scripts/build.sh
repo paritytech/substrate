@@ -17,8 +17,8 @@ cd -- "$ROOT"                                   # scripts
 for SRC in "${SRCS[@]}"                         # SRCS=("core/executor/wasm" "node/runtime/wasm" "node-template/runtime/wasm"	"core/test-runtime/wasm")
 do
   echo "*** Building wasm binaries in $SRC"
-  cd "$PROJECT_ROOT/$SRC"                       # 
-  
+  cd "$PROJECT_ROOT/$SRC"
+
   ./build.sh "$@"
 
   cd - >> /dev/null

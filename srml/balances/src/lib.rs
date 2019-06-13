@@ -346,6 +346,21 @@ decl_module! {
 		/// of the transfer, the account will be reaped.
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
+		///
+		/// # <weight>
+		/// - Dependent on arguments but not critical, given proper implementations for
+		///   input config types. See related functions below.
+		/// - It contains a limited number of reads and writes internally and no complex computation.
+		///
+		/// Related functions:
+		///
+		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
+		///   - Transferring balances to accounts that did not exist before will cause
+		///      `T::OnNewAccount::on_new_account` to be called.
+		///   - Removing enough funds from an account will trigger
+		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///
+		/// # </weight>
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -364,6 +379,11 @@ decl_module! {
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
+		///
+		/// # <weight>
+		/// - Independent of the arguments.
+		/// - Contains a limited number of reads and writes.
+		/// # </weight>
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] free: T::Balance,
@@ -700,6 +720,10 @@ where
 		<FreeBalance<T, I>>::get(who)
 	}
 
+	// # <weight>
+	// Despite iterating over a list of locks, they are limited by the number of
+	// lock IDs, which means the number of runtime modules that intend to use and create locks.
+	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,

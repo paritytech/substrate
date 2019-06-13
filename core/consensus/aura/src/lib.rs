@@ -40,7 +40,7 @@ use consensus_common::import_queue::{
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
-	runtime_api::{ApiExt, Core as CoreApi},
+	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
 };
@@ -56,7 +56,7 @@ use inherents::{InherentDataProviders, InherentData};
 use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future};
-use tokio::timer::Timeout;
+use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use srml_aura::{
@@ -65,13 +65,13 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
+use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 
 pub use aura_primitives::*;
-pub use consensus_common::{SyncOracle, ExtraVerification};
+pub use consensus_common::SyncOracle;
+pub use digest::CompatibleDigestItem;
 
 mod digest;
-use digest::CompatibleDigestItem;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -125,7 +125,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -133,7 +133,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
-	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
@@ -156,25 +155,26 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
 		block_import,
 		env,
 		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	register_aura_inherent_data_provider(
+		&inherent_data_providers,
+		slot_duration.0.slot_duration()
+	)?;
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible>(
 		slot_duration.0,
 		select_chain,
-		Arc::new(worker),
+		worker,
 		sync_oracle,
-		on_exit,
 		inherent_data_providers
-	)
+	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
@@ -183,7 +183,6 @@ struct AuraWorker<C, E, I, P, SO> {
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 }
 
@@ -207,13 +206,6 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
-
-	fn on_start(
-		&self,
-		slot_duration: u64
-	) -> Result<(), consensus_common::Error> {
-		register_aura_inherent_data_provider(&self.inherent_data_providers, slot_duration)
-	}
 
 	fn on_slot(
 		&self,
@@ -454,14 +446,13 @@ fn check_header<C, B: Block, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E, P> {
+pub struct AuraVerifier<C, P> {
 	client: Arc<C>,
-	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
-impl<C, E, P> AuraVerifier<C, E, P>
+impl<C, P> AuraVerifier<C, P>
 	where P: Send + Sync + 'static
 {
 	fn check_inherents<B: Block>(
@@ -513,24 +504,11 @@ impl<C, E, P> AuraVerifier<C, E, P>
 	}
 }
 
-/// No-op extra verification.
-#[derive(Debug, Clone, Copy)]
-pub struct NothingExtra;
-
-impl<B: Block> ExtraVerification<B> for NothingExtra {
-	type Verified = Result<(), String>;
-
-	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
-		Ok(())
-	}
-}
-
 #[forbid(deprecated)]
-impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
+impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode,
@@ -550,11 +528,6 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		let parent_hash = *header.parent_hash();
 		let authorities = self.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
-		let extra_verification = self.extra.verify(
-			&header,
-			body.as_ref().map(|x| &x[..]),
-		);
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -596,8 +569,6 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
-				extra_verification.into_future().wait()?;
-
 				let new_authorities = pre_header.digest()
 					.log(DigestItem::as_authorities_change)
 					.map(|digest| digest.to_vec());
@@ -626,7 +597,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	}
 }
 
-impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
+impl<B, C, P> Authorities<B> for AuraVerifier<C, P> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -705,21 +676,19 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, E, P>(
+pub fn import_queue<B, C, P>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
-	extra: E,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
@@ -730,7 +699,6 @@ pub fn import_queue<B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
-			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
 		}
@@ -802,7 +770,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, NothingExtra, sr25519::Pair>;
+		type Verifier = AuraVerifier<PeersFullClient, sr25519::Pair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -829,7 +797,6 @@ mod tests {
 					assert_eq!(slot_duration.get(), SLOT_DURATION);
 					Arc::new(AuraVerifier {
 						client,
-						extra: NothingExtra,
 						inherent_data_providers,
 						phantom: Default::default(),
 					})
@@ -886,7 +853,6 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
-				client.import_lock().clone(),
 			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
@@ -903,7 +869,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
@@ -911,7 +877,6 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
-				futures::empty(),
 				inherent_data_providers,
 				false,
 			).expect("Starts aura");
@@ -924,7 +889,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync_without_disconnects();

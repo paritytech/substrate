@@ -17,7 +17,7 @@ panic-handler = { package = "substrate-panic-handler", path = "../panic-handler"
 wasmi = { version = "0.4.3" }
 byteorder = "1.1"
 lazy_static = "1.0"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 log = "0.4"
 libsecp256k1 = "0.2.1"
 tiny-keccak = "1.4.2"

@@ -16,7 +16,7 @@ ctrlc = { version = "3.0", features = ["termination"] }
 log = "0.4"
 tokio = "0.1"
 exit-future = "0.1"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 parity-codec = "3.3"
 trie-root = "0.12.2"
 sr-io = { path = "../core/sr-io" }
