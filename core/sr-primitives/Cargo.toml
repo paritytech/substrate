@@ -16,7 +16,7 @@ log = { version = "0.4", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
-primitive-types = { version = "0.4", git = "https://github.com/paritytech/parity-common", branch = "stas-primitive-types-codec-4-0" }
+primitive-types = "0.4"
 
 [features]
 default = ["std"]
