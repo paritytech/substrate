@@ -1240,14 +1240,3 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<Nominators<T>>::remove(stash);
 	}
 }
-/*
-// TODO: manage Aura reporting an offline validator somehow
-impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
-	fn handle_report(reported_indices: Vec<u32>) {
-		for validator_index in reported_indices {
-			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
-			Self::on_offline_validator(v, 1);
-		}
-	}
-}
-*/

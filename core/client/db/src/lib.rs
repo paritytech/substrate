@@ -1410,7 +1410,6 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use runtime_primitives::generic::DigestItem;
 		use runtime_primitives::testing::Digest;
 
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
