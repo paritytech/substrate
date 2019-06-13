@@ -24,7 +24,8 @@ use rstd::prelude::*;
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId,
+	Signature, AuthoritySignature,
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -43,6 +44,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::{OpaqueMetadata, ed25519};
+use consensus_aura::AuraEquivProof;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -372,6 +374,10 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+
+		fn construct_equiv_report_call(proof: AuraEquivProof<<Block as BlockT>::Header, ed25519::Signature>) -> Vec<u8> {
+			vec![]
 		}
 	}
 

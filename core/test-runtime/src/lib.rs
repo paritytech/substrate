@@ -42,9 +42,10 @@ use runtime_primitives::{
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
 	},
 };
+use consensus_aura::AuraEquivProof;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{sr25519, OpaqueMetadata};
+use primitives::{sr25519, ed25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -457,6 +458,10 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+
+				fn construct_equiv_report_call(proof: AuraEquivProof<<Block as BlockT>::Header, ed25519::Signature>) -> Vec<u8> {
+					vec![]
+				}
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
@@ -605,6 +610,10 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+
+				fn construct_equiv_report_call(proof: AuraEquivProof<<Block as BlockT>::Header,  ed25519::Signature>) -> Vec<u8> {
+					vec![]
+				}
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {

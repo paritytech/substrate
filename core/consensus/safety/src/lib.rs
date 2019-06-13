@@ -20,7 +20,7 @@
 
 use client;
 use transaction_pool::txpool::{self, PoolApi};
-use node_runtime::{UncheckedExtrinsic, Call};
+// use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
 use std::sync::Arc;
 use runtime_primitives::traits::{Block as BlockT};
@@ -31,7 +31,7 @@ use client::blockchain::HeaderBackend;
 /// Trait to submit report calls to the transaction pool.
 pub trait SubmitReport<C, Block> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, report_call: Call);
+	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]);
 }
 
 impl<C, Block, T: PoolApi> SubmitReport<C, Block> for T 
@@ -40,10 +40,10 @@ where
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block>,
 	C: HeaderBackend<Block>,
 {
-	fn submit_report_call(&self, client: &C, report_call: Call) {
-		info!(target: "accountable-safety", "Submitting report call to tx pool {:?}", report_call);
-		let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-		if let Some(uxt) = Decode::decode(&mut extrinsic.encode().as_slice()) {
+	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
+		info!(target: "accountable-safety", "Submitting report call to tx pool");
+		// let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+		if let Some(uxt) = Decode::decode(&mut extrinsic) {
 			let block_id = BlockId::<Block>::number(client.info().best_number);
 			if let Err(e) = self.submit_one(&block_id, uxt) {
 				info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);

@@ -34,8 +34,8 @@ pub use consensus_common::SyncOracle;
 use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
-	SimpleBitOps,
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi,
+	AuthorityIdFor, SimpleBitOps,
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
 use runtime_support::serde::{Serialize, Deserialize};
@@ -459,7 +459,7 @@ where
 	T: PoolApi,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<Hash=B::Hash>,
-	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
+	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B> + ProvideRuntimeApi,
 	<B as Block>::Header: Header,
 {
 	trace!(target: "babe", "Checking header");

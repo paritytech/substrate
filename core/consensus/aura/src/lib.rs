@@ -378,7 +378,8 @@ where
 	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature> + DigestItem<Hash=B::Hash>,
-	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
+	C: client::backend::AuxStore + client::blockchain::HeaderBackend<B> + ProvideRuntimeApi,
+	C::Api: AuraApi<B>,
 	<<P as Pair>::Signature as Verify>::Signer: 
 		Encode + Decode + Clone + AsRef<<P as Pair>::Public> + PartialEq + Send + Sync,
 {
@@ -408,7 +409,7 @@ where
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
 			if let Some(equiv_proof) = check_equivocation::<
-				_, _, AuraEquivocationProof<B::Header, P::Signature>, P::Signature,
+				_, _, AuraEquivProof<B::Header, P::Signature>, P::Signature,
 			>(
 				client.deref(),
 				slot_now,
@@ -423,10 +424,11 @@ where
 					equiv_proof.first_header().hash(),
 					equiv_proof.second_header().hash(),
 				);
+				let block_id = BlockId::number(client.info().best_number);
 				transaction_pool.as_ref().map(|txpool|
 					txpool.submit_report_call(
 						client,
-						Call::Aura(AuraCall::report_equivocation(equiv_proof.encode())),
+						client.runtime_api().construct_equiv_report_call(&block_id, equiv_proof).unwrap().as_slice(),
 					)
 				);
 			} else {
@@ -477,7 +479,7 @@ where
 	) -> Result<(), String> 
 	where
 		C: ProvideRuntimeApi,
-		C::Api: BlockBuilderApi<B>,
+		C::Api: BlockBuilderApi<B> + AuraApi<B>,
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -536,7 +538,7 @@ impl<B: Block, C, E, P, T> Verifier<B> for AuraVerifier<C, E, P, T> where
 	T: PoolApi + Send + Sync,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
-	C::Api: BlockBuilderApi<B>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode + Clone + Verify<Signer = P::Public>,

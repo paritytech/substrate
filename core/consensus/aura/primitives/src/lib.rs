@@ -19,9 +19,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_client::decl_runtime_apis;
-use runtime_primitives::ConsensusEngineId;
+use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT};
+use primitives::ed25519::Signature;
 use parity_codec::{Encode, Decode};
 use safety_primitives::AuthorEquivProof;
+use rstd::prelude::Vec;
 
 mod digest;
 pub use digest::{CompatibleDigestItem, find_pre_digest};
@@ -37,19 +39,22 @@ decl_runtime_apis! {
 		///
 		/// Dynamic slot duration may be supported in the future.
 		fn slot_duration() -> u64;
+
+		/// Construct a call to report the equivocation.
+		fn construct_equiv_report_call(proof: AuraEquivProof<<Block as BlockT>::Header, Signature>) -> Vec<u8>;
 	}
 }
 
-/// Represents an AuRa equivocation proof.
+/// Represents an equivocation proof for AuRa.
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct AuraEquivocationProof<H, S> {
+pub struct AuraEquivProof<H, S> {
 	first_header: H,
 	second_header: H,
 	first_signature: S,
 	second_signature: S,
 }
 
-impl<H, S> AuthorEquivProof<H, S> for AuraEquivocationProof<H, S>
+impl<H, S> AuthorEquivProof<H, S> for AuraEquivProof<H, S>
 where
 	H: Clone,
 	S: Clone,
@@ -61,7 +66,7 @@ where
 		first_signature: S,
 		second_signature: S,
 	) -> Self {
-		AuraEquivocationProof {
+		AuraEquivProof {
 			first_header,
 			second_header,
 			first_signature,

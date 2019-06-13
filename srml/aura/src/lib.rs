@@ -71,7 +71,7 @@ use inherents::{
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use aura_primitives::{
-	AuraEquivocationProof, CompatibleDigestItem, slot_author, find_pre_digest
+	AuraEquivProof, CompatibleDigestItem, slot_author, find_pre_digest
 };
 use safety_primitives::AuthorEquivProof;
 #[cfg(feature = "std")]
@@ -228,15 +228,15 @@ where
 	None
 }
 
-fn handle_equivocation_proof<T>(proof: &Vec<u8>) -> TransactionValidity
+fn handle_equivocation_proof<T>(mut proof: &[u8]) -> TransactionValidity
 where
 	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as Verify>::Signer>,
 	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as Verify>::Signer>>,
 	<<T as Trait>::Signature as Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
 	let maybe_equivocation_proof: 
-		Option<AuraEquivocationProof::<<T as Trait>::Header, <T as Trait>::Signature>> =
-			Decode::decode(&mut proof.as_slice());
+		Option<AuraEquivProof::<<T as Trait>::Header, <T as Trait>::Signature>> =
+			Decode::decode(&mut proof);
 
 	if let Some(equivocation_proof) = maybe_equivocation_proof {
 		let authorities = <consensus::Module<T>>::authorities();
