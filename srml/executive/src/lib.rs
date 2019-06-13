@@ -431,6 +431,7 @@ mod tests {
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
+		type WeightToFee = ();
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = MetaEvent;

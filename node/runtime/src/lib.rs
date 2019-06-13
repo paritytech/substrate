@@ -33,6 +33,7 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
+use runtime_primitives::weights::{Weight, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
 };
@@ -86,6 +87,24 @@ impl Convert<u128, u128> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u128 { x * Self::factor() }
 }
 
+pub struct WeightToFeeHandler;
+
+impl Convert<Weight, Balance> for WeightToFeeHandler {
+	fn convert(weight: Weight) -> Balance {
+		// 40/1000000 = 4/100000 = 0.00004
+		let variability_fee = Permill::from_parts(40);
+		// 0.00004^2 = 0.0000000016 = 16/1000000000
+		let variability_fee_squared = Perbill::from_parts(16);
+		let potential_weight = <system::Module<Runtime>>::all_extrinsics_weight() + weight;
+		let diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
+		let first_term = variability_fee * diff;
+		let second_term = variability_fee_squared * diff.pow(2) / 2;
+		let fee_multiplier = 1 + first_term + second_term;
+		let transaction_fee = weight * fee_multiplier;
+		transaction_fee.into()
+	}
+}
+
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = Index;
@@ -113,6 +132,7 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
+	type WeightToFee = WeightToFeeHandler;
 	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;

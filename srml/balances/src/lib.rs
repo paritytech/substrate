@@ -156,7 +156,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+	Zero, Convert, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
 use primitives::weights::{Weight, IDEAL_TRANSACTIONS_WEIGHT};
@@ -173,6 +173,9 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDebug + From<Self::BlockNumber>;
 
+	/// Handler for converting transactions weights to fees
+	type WeightToFee: Convert<Weight, Self::Balance>;
+
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
@@ -187,6 +190,9 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDebug + From<Self::BlockNumber>;
+
+	/// Handler for converting transaction weights to fees
+	type WeightToFee: Convert<Weight, Self::Balance>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -213,6 +219,7 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
+	type WeightToFee = T::WeightToFee;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
 }
@@ -647,6 +654,7 @@ mod imbalances {
 	}
 }
 
+
 // TODO: #2052
 // Somewhat ugly hack in order to gain access to module's `increase_total_issuance_by`
 // using only the Subtrait (which defines only the types that are not dependent
@@ -682,6 +690,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
+	type WeightToFee = T::WeightToFee;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
@@ -1039,16 +1048,7 @@ where
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
-		// 40/1000000 = 4/100000 = 0.00004
-		let variability_fee = Permill::from_parts(40);
-		// 0.00004^2 = 0.0000000016 = 16/1000000000
-		let variability_fee_squared = Perbill::from_parts(16);
-		let potential_weight = <system::Module<T>>::all_extrinsics_weight() + weight;
-		let diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
-		let first_term = variability_fee * diff;
-		let second_term = variability_fee_squared * diff.pow(2) / 2;
-		let fee_multiplier = 1 + first_term + second_term;
-		let transaction_fee = weight * fee_multiplier;
+		let transaction_fee = T::WeightToFee::convert(weight);
 		let imbalance = Self::withdraw(
 			transactor,
 			transaction_fee.into(),
