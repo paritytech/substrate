@@ -14,17 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg(test)]
+
 use futures::{future, stream, prelude::*, try_ready};
+use libp2p::core::swarm::ExpandedSwarm;
 use rand::seq::SliceRandom;
+use runtime_primitives::traits::Block as BlockT;
 use std::{io, time::Duration, time::Instant};
-use substrate_network_libp2p::{CustomMessage, Multiaddr, multiaddr::Protocol, ServiceEvent, build_multiaddr};
+use test_client::runtime::Block;
+use crate::protocol::message::generic::Message;
+use crate::{Multiaddr, multiaddr::Protocol, build_multiaddr};
+use crate::custom_proto::CustomProtoOut;
+use super::{start_service, Swarm};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p::Service<TMsg>>
-	where TMsg: CustomMessage + Send + 'static
-{
-	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
+fn build_nodes<B: BlockT>(num: usize, base_port: u16) -> Vec<Swarm<B>> {
+	let mut result: Vec<Swarm<B>> = Vec::with_capacity(num);
 	let mut first_addr = None::<Multiaddr>;
 
 	for index in 0 .. num {
@@ -32,22 +38,21 @@ fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p
 
 		if let Some(first_addr) = first_addr.as_ref() {
 			boot_nodes.push(first_addr.clone()
-				.with(Protocol::P2p(result[0].peer_id().clone().into()))
+				.with(Protocol::P2p(ExpandedSwarm::local_peer_id(&result[0]).clone().into()))
 				.to_string());
 		}
 
-		let config = substrate_network_libp2p::NetworkConfiguration {
+		let config = crate::config::NetworkConfiguration {
 			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(base_port + index as u16)]],
 			boot_nodes,
-			..substrate_network_libp2p::NetworkConfiguration::default()
+			..crate::config::NetworkConfiguration::default()
 		};
 
 		if first_addr.is_none() {
 			first_addr = Some(config.listen_addresses.iter().next().unwrap().clone());
 		}
 
-		let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"tst"[..], &[1]);
-		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
+		result.push(start_service::<B, _>(config, &b"tst"[..], &[1]).unwrap().0);
 	}
 
 	result
@@ -56,7 +61,7 @@ fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p
 #[test]
 fn basic_two_nodes_connectivity() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2, 50400).into_iter();
+		let mut l = build_nodes::<Block>(2, 50400).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -64,7 +69,7 @@ fn basic_two_nodes_connectivity() {
 
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		match try_ready!(service1.poll()) {
-			Some(ServiceEvent::OpenedCustomProtocol { version, .. }) => {
+			Some(CustomProtoOut::CustomProtocolOpen { version, .. }) => {
 				assert_eq!(version, 1);
 				Ok(Async::Ready(()))
 			},
@@ -74,7 +79,7 @@ fn basic_two_nodes_connectivity() {
 
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		match try_ready!(service2.poll()) {
-			Some(ServiceEvent::OpenedCustomProtocol { version, .. }) => {
+			Some(CustomProtoOut::CustomProtocolOpen { version, .. }) => {
 				assert_eq!(version, 1);
 				Ok(Async::Ready(()))
 			},
@@ -96,7 +101,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	const NUM_PACKETS: u32 = 5000;
 
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2, 50450).into_iter();
+		let mut l = build_nodes::<Block>(2, 50450).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -105,9 +110,12 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
+				Some(CustomProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
-						service1.send_custom_message(&peer_id, vec![(n % 256) as u8]);
+						service1.user_protocol_mut().send_packet(
+							&peer_id,
+							Message::ChainSpecific(vec![(n % 256) as u8])
+						);
 					}
 				},
 				_ => panic!(),
@@ -119,8 +127,8 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service2.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { .. }) => {},
-				Some(ServiceEvent::CustomMessage { message, .. }) => {
+				Some(CustomProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(CustomProtoOut::CustomMessage { message: Message::ChainSpecific(message), .. }) => {
 					assert_eq!(message.len(), 1);
 					packet_counter += 1;
 					if packet_counter == NUM_PACKETS {
@@ -144,25 +152,21 @@ fn many_nodes_connectivity() {
 	// increased in the `NetworkConfiguration`.
 	const NUM_NODES: usize = 25;
 
-	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES, 50500)
+	let mut futures = build_nodes::<Block>(NUM_NODES, 50500)
 		.into_iter()
 		.map(move |mut node| {
 			let mut num_connecs = 0;
 			stream::poll_fn(move || -> io::Result<_> {
 				loop {
-					const MAX_BANDWIDTH: u64 = NUM_NODES as u64 * 2048;		// 2kiB/s/node
-					assert!(node.average_download_per_sec() < MAX_BANDWIDTH);
-					assert!(node.average_upload_per_sec() < MAX_BANDWIDTH);
-
 					match try_ready!(node.poll()) {
-						Some(ServiceEvent::OpenedCustomProtocol { .. }) => {
+						Some(CustomProtoOut::CustomProtocolOpen { .. }) => {
 							num_connecs += 1;
 							assert!(num_connecs < NUM_NODES);
 							if num_connecs == NUM_NODES - 1 {
 								return Ok(Async::Ready(Some(true)))
 							}
 						}
-						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {
+						Some(CustomProtoOut::CustomProtocolClosed { .. }) => {
 							let was_success = num_connecs == NUM_NODES - 1;
 							num_connecs -= 1;
 							if was_success && num_connecs < NUM_NODES - 1 {
@@ -200,7 +204,7 @@ fn many_nodes_connectivity() {
 #[test]
 fn basic_two_nodes_requests_in_parallel() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2, 50550).into_iter();
+		let mut l = build_nodes::<Block>(2, 50550).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -211,7 +215,7 @@ fn basic_two_nodes_requests_in_parallel() {
 		let mut to_send = Vec::new();
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
 			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-			to_send.push(msg);
+			to_send.push(Message::ChainSpecific(msg));
 		}
 		to_send
 	};
@@ -224,9 +228,9 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
+				Some(CustomProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
-						service1.send_custom_message(&peer_id, msg);
+						service1.user_protocol_mut().send_packet(&peer_id, msg);
 					}
 				},
 				_ => panic!(),
@@ -237,8 +241,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service2.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { .. }) => {},
-				Some(ServiceEvent::CustomMessage { message, .. }) => {
+				Some(CustomProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(CustomProtoOut::CustomMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| *m == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
@@ -260,7 +264,7 @@ fn reconnect_after_disconnect() {
 	// check that the disconnect worked, and finally check whether they successfully reconnect.
 
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2, 50350).into_iter();
+		let mut l = build_nodes::<Block>(2, 50350).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -281,19 +285,19 @@ fn reconnect_after_disconnect() {
 			let mut service1_not_ready = false;
 
 			match service1.poll().unwrap() {
-				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+				Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { .. })) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
 							if service2_state == ServiceState::FirstConnec {
-								service1.drop_node(service2.peer_id());
+								service1.user_protocol_mut().disconnect_peer(ExpandedSwarm::local_peer_id(&service2));
 							}
 						},
 						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+				Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { .. })) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -305,19 +309,19 @@ fn reconnect_after_disconnect() {
 			}
 
 			match service2.poll().unwrap() {
-				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+				Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { .. })) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
 							if service1_state == ServiceState::FirstConnec {
-								service1.drop_node(service2.peer_id());
+								service1.user_protocol_mut().disconnect_peer(ExpandedSwarm::local_peer_id(&service2));
 							}
 						},
 						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+				Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { .. })) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |

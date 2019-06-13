@@ -170,13 +170,21 @@ pub fn import_blocks<F, E, R>(
 
 		block_count = b;
 		if b % 1000 == 0 {
-			info!("#{}", b);
+			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
 	let mut link = WaitLink::new();
 	tokio::run(futures::future::poll_fn(move || {
+		let blocks_before = link.imported_blocks;
 		queue.poll_actions(&mut link);
+		if link.imported_blocks / 1000 != blocks_before / 1000 {
+			info!(
+				"#{} blocks were imported (#{} left)",
+				link.imported_blocks,
+				count - link.imported_blocks
+			);
+		}
 		if link.imported_blocks >= count {
 			Ok(Async::Ready(()))
 		} else {

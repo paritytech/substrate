@@ -43,7 +43,7 @@ use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessage
 use futures::{prelude::*, sync::{mpsc, oneshot}};
 use log::info;
 use crate::message::Message;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
@@ -370,10 +370,10 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 type MessageFilter = dyn Fn(&NetworkMsg<Block>) -> bool;
 
 pub enum FromNetworkMsg<B: BlockT> {
-	/// A peer connected, with debug info.
-	PeerConnected(PeerId, String),
-	/// A peer disconnected, with debug info.
-	PeerDisconnected(PeerId, String),
+	/// A peer connected.
+	PeerConnected(PeerId),
+	/// A peer disconnected.
+	PeerDisconnected(PeerId),
 	/// A custom message from another peer.
 	CustomMessage(PeerId, Message<B>),
 	/// Synchronization request.
@@ -572,12 +572,12 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone()));
 	}
 
 	/// Called on disconnect from other indicated peer.
 	fn on_disconnect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
@@ -904,12 +904,12 @@ pub trait TestNetFactory: Sized {
 
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
 					let outcome = match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
-							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerConnected(peer_id)) => {
+							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
-							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerDisconnected(peer_id)) => {
+							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>

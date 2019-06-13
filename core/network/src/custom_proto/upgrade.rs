@@ -62,11 +62,6 @@ impl<TMessage> RegisteredProtocol<TMessage> {
 			marker: PhantomData,
 		}
 	}
-
-	/// Returns the ID of the protocol.
-	pub fn id(&self) -> &ProtocolId {
-		&self.id
-	}
 }
 
 impl<TMessage> Clone for RegisteredProtocol<TMessage> {
@@ -93,8 +88,6 @@ pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 	requires_poll_complete: bool,
 	/// The underlying substream.
 	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>>,
-	/// Id of the protocol.
-	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
@@ -105,14 +98,7 @@ pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 }
 
 impl<TMessage, TSubstream> RegisteredProtocolSubstream<TMessage, TSubstream> {
-	/// Returns the protocol id.
-	#[inline]
-	pub fn protocol_id(&self) -> &ProtocolId {
-		&self.protocol_id
-	}
-
 	/// Returns the version of the protocol that was negotiated.
-	#[inline]
 	pub fn protocol_version(&self) -> u8 {
 		self.protocol_version
 	}
@@ -310,7 +296,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 			send_queue: VecDeque::new(),
 			requires_poll_complete: false,
 			inner: framed.fuse(),
-			protocol_id: self.id,
 			protocol_version: info.version,
 			clogged_fuse: false,
 			marker: PhantomData,
@@ -338,7 +323,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 			send_queue: VecDeque::new(),
 			requires_poll_complete: false,
 			inner: framed.fuse(),
-			protocol_id: self.id,
 			protocol_version: info.version,
 			clogged_fuse: false,
 			marker: PhantomData,
