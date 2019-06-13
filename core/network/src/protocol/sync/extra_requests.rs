@@ -20,7 +20,7 @@ use log::{trace, warn};
 use client::error::Error as ClientError;
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use fork_tree::ForkTree;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::protocol::message;

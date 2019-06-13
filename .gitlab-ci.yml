@@ -153,7 +153,6 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
