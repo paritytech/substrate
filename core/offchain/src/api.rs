@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use client::backend::OffchainStorage;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::Decode;
@@ -37,9 +38,9 @@ enum ExtMessage {
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api {
+pub(crate) struct Api<S> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
-	db: client_db::offchain::LocalStorage,
+	db: S,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -48,7 +49,10 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 	Default::default()
 }
 
-impl OffchainExt for Api {
+const KEYS_PREFIX: &[u8] = b"keys";
+const STORAGE_PREFIX: &[u8] = b"storage";
+
+impl<S: OffchainStorage> OffchainExt for Api<S> {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
 		self.sender
 			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
@@ -93,16 +97,16 @@ impl OffchainExt for Api {
 		unavailable_yet("random_seed")
 	}
 
-	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
-		unavailable_yet("local_storage_set")
+	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) {
+		self.db.set(STORAGE_PREFIX, key, value)
 	}
 
-	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
-		unavailable_yet("local_storage_compare_and_set")
+	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) {
+		self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
 	}
 
-	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
-		unavailable_yet("local_storage_get")
+	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+		self.db.get(STORAGE_PREFIX, key)
 	}
 
 	fn http_request_start(
@@ -173,11 +177,11 @@ pub(crate) struct AsyncApi<A: ChainApi> {
 
 impl<A: ChainApi> AsyncApi<A> {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
-	pub fn new(
+	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
-		db: client_db::offchain::LocalStorage,
+		db: S,
 		at: BlockId<A::Block>,
-	) -> (Api, AsyncApi<A>) {
+	) -> (Api<S>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
 		let api = Api {
@@ -228,13 +232,15 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use client_db::offchain::LocalStorage;
 
-	fn offchain_api() -> (AsyncApi, Api<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
+		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 
-		Api::new(pool, BlockId::Number(0))
+		AsyncApi::new(pool, db, BlockId::Number(0))
 	}
 
 	#[test]
@@ -249,7 +255,21 @@ mod tests {
 
 		// then
 		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
+	}
 
-		// then
+	#[test]
+	fn should_compare_and_set_local_storage() {
+		// given
+		let mut api = offchain_api().0;
+		let key = b"test";
+		api.local_storage_set(key, b"value");
+
+		// when
+		api.local_storage_compare_and_set(key, b"val", b"xxx");
+		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
+
+		// when
+		api.local_storage_compare_and_set(key, b"value", b"xxx");
+		assert_eq!(api.local_storage_get(key), Some(b"xxx".to_vec()));
 	}
 }

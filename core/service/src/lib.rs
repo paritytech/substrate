@@ -32,6 +32,8 @@ use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::BlockchainEvents;
+use client::backend::Backend;
+use client::runtime_api::BlockT;
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -49,11 +51,10 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
-use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient,
+	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
@@ -82,7 +83,11 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
+		ComponentClient<Components>,
+		ComponentOffchainStorage<Components>,
+		ComponentBlock<Components>>
+	>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
 
@@ -219,6 +224,7 @@ impl<Components: components::Components> Service<Components> {
 			},
 			(true, None) => {
 				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				None
 			},
 			_ => None,
 		};

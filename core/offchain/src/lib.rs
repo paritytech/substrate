@@ -56,18 +56,18 @@ pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
 #[derive(Debug)]
-pub struct OffchainWorkers<C, Block: traits::Block> {
+pub struct OffchainWorkers<C, S, Block: traits::Block> {
 	client: Arc<C>,
-	db: client_db::offchain::LocalStorage,
+	db: S,
 	executor: TaskExecutor,
 	_block: PhantomData<Block>,
 }
 
-impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
+impl<C, S, Block: traits::Block> OffchainWorkers<C, S, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
-		db: client_db::offchain::LocalStorage,
+		db: S,
 		executor: TaskExecutor,
 	) -> Self {
 		Self {
@@ -79,8 +79,9 @@ impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	}
 }
 
-impl<C, Block> OffchainWorkers<C, Block> where
+impl<C, S, Block> OffchainWorkers<C, S, Block> where
 	Block: traits::Block,
+	S: client::backend::OffchainStorage + 'static,
 	C: ProvideRuntimeApi,
 	C::Api: OffchainWorkerApi<Block>,
 {
@@ -124,9 +125,10 @@ mod tests {
 		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
+		let db = client_db::offchain::LocalStorage::new_test();
 
 		// when
-		let offchain = OffchainWorkers::new(client, runtime.executor());
+		let offchain = OffchainWorkers::new(client, db, runtime.executor());
 		offchain.on_block_imported(&0u64, &pool);
 
 		// then

@@ -128,8 +128,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	type State: StateBackend<H>;
 	/// Changes trie storage.
 	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block, H>;
-	/// Offchain Workers data storage.
-	type OffchainStorage;
+	/// Offchain workers local storage.
+	type OffchainStorage: OffchainStorage;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -178,6 +178,21 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
+}
+
+/// Offchain workers local storage.
+pub trait OffchainStorage: Clone + Send + Sync {
+	/// Persist a value in storage under given key and prefix.
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+
+	/// Retrieve a value from storage under given key and prefix.
+	fn get(&mut self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Replace the value in storage only if
+	/// TODO [ToDr] this should return a result if it was successfuly set
+	/// TODO [ToDr] Should take `Option` for old_value to detect if set for the first time?
+	///             We don't suport `remove` though!
+	fn compare_and_set(&mut self, prefix: &[u8], key: &[u8], old_value: &[u8], new_value: &[u8]);
 }
 
 /// Changes trie storage that supports pruning.
