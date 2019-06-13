@@ -531,26 +531,6 @@ macro_rules! __decl_outer_dispatch {
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		System: $module:ident::{
-			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		$crate::__decl_outer_dispatch!(
-			$runtime;
-			$( $parsed_modules :: $parsed_name ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			Call $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}

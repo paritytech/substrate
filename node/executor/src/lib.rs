@@ -508,6 +508,10 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((alice(), 0)),
+					function: Call::System(system::Call::remark(vec![0; 120000])),
 				}
 			]
 		)
@@ -819,7 +823,7 @@ mod tests {
 		assert!(
 			WasmExecutor::new().call(
 				&mut t,
-				8,
+				4,
 				COMPACT_CODE,
 				"Core_execute_block",
 				&big_block().0

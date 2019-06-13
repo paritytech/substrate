@@ -27,9 +27,7 @@ fn system_digest_item_encoding() {
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::ChangesTrieRoot
 		2,
-		// number of items in authorities set
-		0,
-		// authorities
+		// trie root
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
