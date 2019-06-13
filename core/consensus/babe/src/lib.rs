@@ -976,7 +976,7 @@ mod tests {
 	#[test]
 	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
-		let sig = sr25519::Pair::generate().sign(b"");
+		let sig = sr25519::Pair::generate().0.sign(b"");
 		let bad_seal: Item = DigestItem::Seal([0; 4], sig);
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
@@ -992,7 +992,7 @@ mod tests {
 	#[test]
 	fn sig_is_not_pre_digest() {
 		drop(env_logger::try_init());
-		let sig = sr25519::Pair::generate().sign(b"");
+		let sig = sr25519::Pair::generate().0.sign(b"");
 		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig);
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_some())
@@ -1002,7 +1002,7 @@ mod tests {
 	fn can_author_block() {
 		drop(env_logger::try_init());
 		let randomness = &[];
-		let pair = sr25519::Pair::generate();
+		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
 		loop {
 			match claim_slot(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
