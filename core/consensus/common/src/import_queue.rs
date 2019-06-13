@@ -29,7 +29,7 @@ use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 	FinalityProofImport, FinalityProofRequestBuilder,
 };
-use crossbeam_channel::{self as channel, Receiver, Sender};
+use crossbeam_channel::{self as channel, Sender};
 use parity_codec::Encode;
 use futures::{prelude::*, sync::mpsc};
 use std::sync::Arc;
@@ -119,9 +119,9 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// sequentially in a separate thread, with pluggable verification.
 pub struct BasicQueue<B: BlockT> {
 	/// Channel to send messages to the background thread.
-	sender: Option<Sender<BlockImportWorkerMsg<B>>>,
-	/// Channel to receive messages from the background thread.
-	result_port: mpsc::UnboundedReceiver<BlockImportWorkerMsg<B>>,
+	sender: Option<Sender<ToWorkerMsg<B>>>,
+	/// Results coming from the worker thread.
+	result_port: BufferedLinkReceiver<B>,
 	/// Sent through the link as soon as possible.
 	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 }
@@ -130,7 +130,7 @@ impl<B: BlockT> Drop for BasicQueue<B> {
 	fn drop(&mut self) {
 		if let Some(sender) = self.sender.take() {
 			let (shutdown_sender, shutdown_receiver) = channel::unbounded();
-			if sender.send(BlockImportWorkerMsg::Shutdown(shutdown_sender)).is_ok() {
+			if sender.send(ToWorkerMsg::Shutdown(shutdown_sender)).is_ok() {
 				let _ = shutdown_receiver.recv();
 			}
 		}
@@ -165,7 +165,7 @@ impl<B: BlockT> BasicQueue<B> {
 		finality_proof_import: Option<SharedFinalityProofImport<B>>,
 		finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	) -> Self {
-		let (result_sender, result_port) = mpsc::unbounded();
+		let (result_sender, result_port) = buffered_link();
 		let worker_sender = BlockImportWorker::new(
 			result_sender,
 			verifier,
@@ -188,7 +188,7 @@ impl<B: BlockT> BasicQueue<B> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn synchronize(&self) {
 		if let Some(ref sender) = self.sender {
-			let _ = sender.send(BlockImportWorkerMsg::Synchronize);
+			let _ = sender.send(ToWorkerMsg::Synchronize);
 		}
 	}
 }
@@ -201,20 +201,20 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 
 		if let Some(ref sender) = self.sender {
 			trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-			let _ = sender.send(BlockImportWorkerMsg::ImportBlocks(origin, blocks));
+			let _ = sender.send(ToWorkerMsg::ImportBlocks(origin, blocks));
 		}
 	}
 
 	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		if let Some(ref sender) = self.sender {
-			let _ = sender.send(BlockImportWorkerMsg::ImportJustification(who.clone(), hash, number, justification));
+			let _ = sender.send(ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification));
 		}
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
 		if let Some(ref sender) = self.sender {
 			trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
-			let _ = sender.send(BlockImportWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof));
+			let _ = sender.send(ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof));
 		}
 	}
 
@@ -223,70 +223,23 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 			link.set_finality_proof_request_builder(fprb);
 		}
 
-		// TODO: call that thing
-		/*if let Some(justification_import) = self.justification_import.as_ref() {
-			justification_import.on_start(&mut *link);
-		}
-		if let Some(finality_proof_import) = self.finality_proof_import.as_ref() {
-			finality_proof_import.on_start(&mut *link);
-		}*/
-
-		loop {
-			let msg = if let Ok(Async::Ready(Some(msg))) = self.result_port.poll() {
-				msg
-			} else {
-				break
-			};
-
-			let results = match msg {
-				BlockImportWorkerMsg::ImportedBlocks(results) => results,
-				BlockImportWorkerMsg::ImportedFinalityProof(who, request_block, finalization_result) => {
-					link.finality_proof_imported(who, request_block, finalization_result);
-					continue
-				},
-				BlockImportWorkerMsg::ImportedJustification(who, hash, number, success) => {
-					link.justification_imported(who, &hash, number, success);
-					continue
-				},
-				#[cfg(any(test, feature = "test-helpers"))]
-				BlockImportWorkerMsg::Synchronize => {
-					trace!(target: "sync", "Synchronizing link");
-					link.synchronized();
-					continue
-				},
-				BlockImportWorkerMsg::ImportBlocks(_, _)
-					| BlockImportWorkerMsg::ImportFinalityProof(_, _, _, _)
-					| BlockImportWorkerMsg::ImportJustification(_, _, _, _)
-					| BlockImportWorkerMsg::Shutdown(_)
-						=> unreachable!("Import Worker does not send Import*/Shutdown messages; qed"),
-			};
-
-			process_import_results(link, results);
-		}
+		self.result_port.poll_actions(link);
 	}
 }
 
-// TODO: wtf these attributes
-#[cfg_attr(test, derive(Debug))]
-pub enum BlockImportWorkerMsg<B: BlockT> {
+/// Message destinated to the background worker.
+#[derive(Debug)]
+enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
-	ImportedBlocks(
-		Vec<(
-			Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
-			B::Hash,
-		)>,
-	),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
-	ImportedJustification(Origin, B::Hash, NumberFor<B>, bool),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	ImportedFinalityProof(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	Shutdown(Sender<()>),
 	#[cfg(any(test, feature = "test-helpers"))]
 	Synchronize,
 }
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
-	result_sender: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+	result_sender: BufferedLinkSender<B>,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
@@ -295,48 +248,50 @@ struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 
 impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	fn new(
-		result_sender: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+		result_sender: BufferedLinkSender<B>,
 		verifier: Arc<V>,
 		block_import: SharedBlockImport<B>,
 		justification_import: Option<SharedJustificationImport<B>>,
 		finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	) -> Sender<BlockImportWorkerMsg<B>> {
+	) -> Sender<ToWorkerMsg<B>> {
 		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
 			.name("ImportQueueWorker".into())
 			.spawn(move || {
-				let worker = BlockImportWorker {
+				let mut worker = BlockImportWorker {
 					result_sender,
 					verifier,
 					justification_import,
 					block_import,
 					finality_proof_import,
 				};
+				if let Some(justification_import) = worker.justification_import.as_ref() {
+					justification_import.on_start(&mut worker.result_sender);
+				}
+				if let Some(finality_proof_import) = worker.finality_proof_import.as_ref() {
+					finality_proof_import.on_start(&mut worker.result_sender);
+				}
 				for msg in port.iter() {
 					// Working until all senders have been dropped...
 					match msg {
-						BlockImportWorkerMsg::ImportBlocks(origin, blocks) => {
+						ToWorkerMsg::ImportBlocks(origin, blocks) => {
 							worker.import_a_batch_of_blocks(origin, blocks);
 						},
-						BlockImportWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
+						ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
 							worker.import_finality_proof(who, hash, number, proof);
 						},
-						BlockImportWorkerMsg::ImportJustification(who, hash, number, justification) => {
+						ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
 							worker.import_justification(who, hash, number, justification);
 						}
-						BlockImportWorkerMsg::Shutdown(result_sender) => {
+						ToWorkerMsg::Shutdown(result_sender) => {
 							let _ = result_sender.send(());
 							break;
 						},
 						#[cfg(any(test, feature = "test-helpers"))]
-						BlockImportWorkerMsg::Synchronize => {
+						ToWorkerMsg::Synchronize => {
 							trace!(target: "sync", "Sending sync message");
-							let _ = worker.result_sender.unbounded_send(BlockImportWorkerMsg::Synchronize);
+							worker.result_sender.synchronized();
 						},
-						BlockImportWorkerMsg::ImportedBlocks(_)
-							| BlockImportWorkerMsg::ImportedFinalityProof(_, _, _)
-							| BlockImportWorkerMsg::ImportedJustification(_, _, _, _)
-								=> unreachable!("Import Worker does not receive the Imported* messages; qed"),
 					}
 				}
 			})
@@ -344,7 +299,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		sender
 	}
 
-	fn import_a_batch_of_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+	fn import_a_batch_of_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		let (imported, count, results) = import_many_blocks(
 			&*self.block_import,
 			origin,
@@ -352,16 +307,81 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			self.verifier.clone(),
 		);
 
-		let _ = self
-			.result_sender
-			.unbounded_send(BlockImportWorkerMsg::ImportedBlocks(results));
-
 		trace!(target: "sync", "Imported {} of {}", imported, count);
+
+		let mut has_error = false;
+		let mut hashes = vec![];
+		for (result, hash) in results {
+			hashes.push(hash);
+
+			if has_error {
+				continue;
+			}
+
+			if result.is_err() {
+				has_error = true;
+			}
+
+			match result {
+				Ok(BlockImportResult::ImportedKnown(number)) => self.result_sender.block_imported(&hash, number),
+				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
+					self.result_sender.block_imported(&hash, number);
+
+					if aux.clear_justification_requests {
+						trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
+						self.result_sender.clear_justification_requests();
+					}
+
+					if aux.needs_justification {
+						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
+						self.result_sender.request_justification(&hash, number);
+					}
+
+					if aux.bad_justification {
+						if let Some(peer) = who {
+							info!("Sent block with bad justification to import");
+							self.result_sender.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
+						}
+					}
+
+					if aux.needs_finality_proof {
+						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
+						self.result_sender.request_finality_proof(&hash, number);
+					}
+				},
+				Err(BlockImportError::IncompleteHeader(who)) => {
+					if let Some(peer) = who {
+						info!("Peer sent block with incomplete header to import");
+						self.result_sender.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
+						self.result_sender.restart();
+					}
+				},
+				Err(BlockImportError::VerificationFailed(who, e)) => {
+					if let Some(peer) = who {
+						info!("Verification failed from peer: {}", e);
+						self.result_sender.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
+						self.result_sender.restart();
+					}
+				},
+				Err(BlockImportError::BadBlock(who)) => {
+					if let Some(peer) = who {
+						info!("Bad block");
+						self.result_sender.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
+						self.result_sender.restart();
+					}
+				},
+				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
+					self.result_sender.restart();
+				},
+			};
+		}
+
+		self.result_sender.blocks_processed(hashes, has_error);
 	}
 
-	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
-		let result = finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, verifier)
+	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
+		let result = self.finality_proof_import.as_ref().map(|finality_proof_import| {
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
 				.map_err(|e| {
 					debug!(
 						"Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}",
@@ -374,13 +394,10 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		}).unwrap_or(Err(()));
 
 		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
-
-		let _ = self
-			.result_sender
-			.unbounded_send(BlockImportWorkerMsg::ImportedFinalityProof(who, (hash, number), result));
+		self.result_sender.finality_proof_imported(who, (hash, number), result);
 	}
 
-	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
+	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		let success = self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
@@ -396,9 +413,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 				}).is_ok()
 		}).unwrap_or(false);
 
-		let _ = self
-			.result_sender
-			.unbounded_send(BlockImportWorkerMsg::ImportedJustification(who, hash, number, success));
+		self.result_sender.justification_imported(who, &hash, number, success);
 	}
 }
 
@@ -439,6 +454,139 @@ pub trait Link<B: BlockT>: Send {
 	fn synchronized(&mut self) {}
 }
 
+/// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
+/// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
+/// them to another link.
+pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
+	let (tx, rx) = mpsc::unbounded();
+	let tx = BufferedLinkSender { tx };
+	let rx = BufferedLinkReceiver { rx };
+	(tx, rx)
+}
+
+/// See [`buffered_link`].
+pub struct BufferedLinkSender<B: BlockT> {
+	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+}
+
+/// Internal buffered message.
+enum BlockImportWorkerMsg<B: BlockT> {
+	BlockImported(B::Hash, NumberFor<B>),
+	BlocksProcessed(Vec<B::Hash>, bool),
+	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
+	ClearJustificationRequests,
+	RequestJustification(B::Hash, NumberFor<B>),
+	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
+	RequestFinalityProof(B::Hash, NumberFor<B>),
+	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
+	ReportPeer(Origin, i32),
+	Restart,
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronized,
+}
+
+impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
+	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlockImported(hash.clone(), number));
+	}
+
+	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
+	}
+
+	fn justification_imported(&mut self, who: Origin, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success));
+	}
+
+	fn clear_justification_requests(&mut self) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ClearJustificationRequests);
+	}
+
+	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+	}
+
+	fn finality_proof_imported(
+		&mut self,
+		who: Origin,
+		request_block: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {
+		let msg = BlockImportWorkerMsg::FinalityProofImported(who, request_block, finalization_result);
+		let _ = self.tx.unbounded_send(msg);
+	}
+
+	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
+	}
+
+	fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::SetFinalityProofRequestBuilder(request_builder));
+	}
+
+	fn report_peer(&mut self, who: Origin, reputation_change: i32) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ReportPeer(who, reputation_change));
+	}
+
+	fn restart(&mut self) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
+	}
+
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn synchronized(&mut self) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Synchronized);
+	}
+}
+
+/// See [`buffered_link`].
+pub struct BufferedLinkReceiver<B: BlockT> {
+	rx: mpsc::UnboundedReceiver<BlockImportWorkerMsg<B>>,
+}
+
+impl<B: BlockT> BufferedLinkReceiver<B> {
+	/// Polls for the buffered link actions. Any enqueued action will be propagated to the link
+	/// passed as parameter.
+	///
+	/// This method should behave in a way similar to `Future::poll`. It can register the current
+	/// task and notify later when more actions are ready to be polled. To continue the comparison,
+	/// it is as if this method always returned `Ok(Async::NotReady)`.
+	pub fn poll_actions(&mut self, link: &mut dyn Link<B>) {
+		loop {
+			let msg = if let Ok(Async::Ready(Some(msg))) = self.rx.poll() {
+				msg
+			} else {
+				break
+			};
+
+			match msg {
+				BlockImportWorkerMsg::BlockImported(hash, number) =>
+					link.block_imported(&hash, number),
+				BlockImportWorkerMsg::BlocksProcessed(blocks, has_error) =>
+					link.blocks_processed(blocks, has_error),
+				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
+					link.justification_imported(who, &hash, number, success),
+				BlockImportWorkerMsg::ClearJustificationRequests =>
+					link.clear_justification_requests(),
+				BlockImportWorkerMsg::RequestJustification(hash, number) =>
+					link.request_justification(&hash, number),
+				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
+					link.finality_proof_imported(who, block, result),
+				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
+					link.request_finality_proof(&hash, number),
+				BlockImportWorkerMsg::SetFinalityProofRequestBuilder(builder) =>
+					link.set_finality_proof_request_builder(builder),
+				BlockImportWorkerMsg::ReportPeer(who, reput) =>
+					link.report_peer(who, reput),
+				BlockImportWorkerMsg::Restart =>
+					link.restart(),
+				#[cfg(any(test, feature = "test-helpers"))]
+				BlockImportWorkerMsg::Synchronized =>
+					link.synchronized(),
+			}
+		}
+	}
+}
+
 /// Block import successful result.
 #[derive(Debug, PartialEq)]
 pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
@@ -461,84 +609,6 @@ pub enum BlockImportError {
 	UnknownParent,
 	/// Other Error.
 	Error,
-}
-
-/// Process result of block(s) import.
-fn process_import_results<B: BlockT>(
-	link: &mut dyn Link<B>,
-	results: Vec<(
-		Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
-		B::Hash,
-	)>,
-)
-{
-	let mut has_error = false;
-	let mut hashes = vec![];
-	for (result, hash) in results {
-		hashes.push(hash);
-
-		if has_error {
-			continue;
-		}
-
-		if result.is_err() {
-			has_error = true;
-		}
-
-		match result {
-			Ok(BlockImportResult::ImportedKnown(number)) => link.block_imported(&hash, number),
-			Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
-				link.block_imported(&hash, number);
-
-				if aux.clear_justification_requests {
-					trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
-					link.clear_justification_requests();
-				}
-
-				if aux.needs_justification {
-					trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
-					link.request_justification(&hash, number);
-				}
-
-				if aux.bad_justification {
-					if let Some(peer) = who {
-						info!("Sent block with bad justification to import");
-						link.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
-					}
-				}
-
-				if aux.needs_finality_proof {
-					trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
-					link.request_finality_proof(&hash, number);
-				}
-			},
-			Err(BlockImportError::IncompleteHeader(who)) => {
-				if let Some(peer) = who {
-					info!("Peer sent block with incomplete header to import");
-					link.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
-					link.restart();
-				}
-			},
-			Err(BlockImportError::VerificationFailed(who, e)) => {
-				if let Some(peer) = who {
-					info!("Verification failed from peer: {}", e);
-					link.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
-					link.restart();
-				}
-			},
-			Err(BlockImportError::BadBlock(who)) => {
-				if let Some(peer) = who {
-					info!("Bad block");
-					link.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
-					link.restart();
-				}
-			},
-			Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
-				link.restart();
-			},
-		};
-	}
-	link.blocks_processed(hashes, has_error);
 }
 
 /// Import several blocks at once, returning import result for each block.
