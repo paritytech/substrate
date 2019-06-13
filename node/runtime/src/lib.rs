@@ -27,7 +27,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId,
 	Signature, AuthoritySignature,
 };
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivProof, Equivocation, Prevote, Precommit};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -368,6 +368,13 @@ impl_runtime_apis! {
 
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 			Grandpa::grandpa_authorities()
+		}
+
+		fn construct_prevote_equiv_report_call(proof: GrandpaEquivProof<Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>,ed25519::Signature>>) -> Vec<u8> {
+			vec![]
+		}
+		fn construct_precommit_equiv_report_call(proof: GrandpaEquivProof<Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>,ed25519::Signature>>) -> Vec<u8> {
+			vec![]
 		}
 	}
 

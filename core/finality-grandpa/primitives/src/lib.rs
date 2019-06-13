@@ -109,5 +109,16 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+
+		/// Construct a call to report the equivocation.
+		fn construct_prevote_equiv_report_call(proof: GrandpaEquivProof<Equivocation<AuthorityId, Prevote<Block::Hash, NumberFor<Block>>,ed25519::Signature>>) -> Vec<u8>;
+		fn construct_precommit_equiv_report_call(proof: GrandpaEquivProof<Equivocation<AuthorityId, Precommit<Block::Hash, NumberFor<Block>>,ed25519::Signature>>) -> Vec<u8>;
 	}
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct GrandpaEquivProof<E> {
+	pub set_id: u64,
+	pub round: u64,
+	pub equivocation: E,
 }

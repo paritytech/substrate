@@ -121,7 +121,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
+pub fn start_aura<B, C, SC, E, I, SO, Error, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<ed25519::Pair>,
 	client: Arc<C>,

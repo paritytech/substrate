@@ -58,7 +58,7 @@ use log::{debug, info, warn};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError,
+	error::Error as ClientError, runtime_api::ConstructRuntimeApi,
 };
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
@@ -472,13 +472,14 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	RA: Send + Sync + 'static,
+	<RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
+	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 	T: PoolApi + Send + Sync + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
@@ -745,13 +746,14 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	RA: Send + Sync + 'static,
+	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
+	<RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 	T: PoolApi + txpool::ChainApi<Block=Block> + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
