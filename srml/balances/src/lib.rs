@@ -1045,8 +1045,8 @@ impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 		let variability_fee_squared = Perbill::from_parts(16);
 		let potential_weight = <system::Module<T>>::all_extrinsics_weight() + weight;
 		let diff = potential_weight - IDEAL_TRANSACTIONS_WEIGHT;
-		let first_term = variability_fee * saturation_diff;
-		let second_term = variability_fee_squared * saturation_diff * saturation_diff / 2;
+		let first_term = variability_fee * diff;
+		let second_term = variability_fee_squared * diff.pow(2) / 2;
 		let fee_multiplier = 1 + first_term + second_term;
 		let transaction_fee = weight * fee_multiplier;
 		let imbalance = Self::withdraw(
