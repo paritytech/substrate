@@ -81,6 +81,7 @@ impl system::Trait for Test {
 }
 impl balances::Trait for Test {
 	type Balance = u64;
+	type WeightToFee = ();
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;

@@ -532,6 +532,7 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
+		type WeightToFee = ();
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();

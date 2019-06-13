@@ -159,8 +159,7 @@ use primitives::traits::{
 	Zero, Convert, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
-use primitives::weights::{Weight, IDEAL_TRANSACTIONS_WEIGHT};
-use primitives::{Permill, Perbill};
+use primitives::weights::Weight;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;

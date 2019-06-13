@@ -47,6 +47,7 @@ impl system::Trait for Runtime {
 }
 impl Trait for Runtime {
 	type Balance = u64;
+	type WeightToFee = ();
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
@@ -110,8 +111,6 @@ impl ExtBuilder {
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
-			transaction_base_fee: self.transaction_base_fee,
-			transaction_byte_fee: self.transaction_byte_fee,
 			balances: if self.monied {
 				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
 			} else {

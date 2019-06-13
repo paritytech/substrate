@@ -168,6 +168,8 @@ impl timestamp::Trait for Runtime {
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = u128;
+	/// To convert transaction weight to fee
+	type WeightToFee = ();
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
