@@ -27,7 +27,7 @@ use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use crate::config::Roles;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
@@ -644,7 +644,7 @@ pub mod tests {
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
-	use network_libp2p::PeerId;
+	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, OnDemandCore, OnDemandNetwork, RequestData};
 	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
 
