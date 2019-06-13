@@ -16,8 +16,8 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use test_client::{
-	DefaultTestClientBuilderExt, TestClientBuilder,
-    TestClientBuilderExt, runtime::TestAPI
+    DefaultTestClientBuilderExt, TestClientBuilder,
+    TestClientBuilderExt, runtime::TestAPI,
 };
 use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
 use state_machine::ExecutionStrategy;
