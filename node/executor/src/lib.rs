@@ -273,8 +273,6 @@ mod tests {
 				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 			}),
 			balances: Some(BalancesConfig {
-				transaction_base_fee: 1,
-				transaction_byte_fee: 0,
 				balances: vec![
 					(alice(), 111),
 					(bob(), 100),

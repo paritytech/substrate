@@ -464,8 +464,6 @@ mod tests {
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
-			transaction_base_fee: 10,
-			transaction_byte_fee: 0,
 			balances: vec![(1, 111)],
 			existential_deposit: 0,
 			transfer_fee: 0,

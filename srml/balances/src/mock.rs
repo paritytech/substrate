@@ -57,8 +57,6 @@ impl Trait for Runtime {
 }
 
 pub struct ExtBuilder {
-	transaction_base_fee: u64,
-	transaction_byte_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -68,8 +66,6 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -90,11 +86,6 @@ impl ExtBuilder {
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
 		self.creation_fee = creation_fee;
-		self
-	}
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
 		self
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
