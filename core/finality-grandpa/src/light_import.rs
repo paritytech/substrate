@@ -572,7 +572,7 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 			self.0.on_start(link)
 		}
 
