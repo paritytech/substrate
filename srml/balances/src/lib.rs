@@ -653,7 +653,6 @@ mod imbalances {
 	}
 }
 
-
 // TODO: #2052
 // Somewhat ugly hack in order to gain access to module's `increase_total_issuance_by`
 // using only the Subtrait (which defines only the types that are not dependent
@@ -1050,7 +1049,7 @@ impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 		let transaction_fee = T::WeightToFee::convert(weight);
 		let imbalance = Self::withdraw(
 			transactor,
-			transaction_fee.into(),
+			transaction_fee,
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive
 		)?;
