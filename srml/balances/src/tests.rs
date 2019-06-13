@@ -99,7 +99,7 @@ fn lock_value_extension_should_work() {
 
 #[test]
 fn lock_reasons_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).transaction_fees(0, 1).build(), || {
+	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
 		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));

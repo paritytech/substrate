@@ -476,7 +476,7 @@ mod tests {
 			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
@@ -494,7 +494,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("5ba497e45e379d80a4524f9509d224e9c175d0fa30f3491481e7e44a6a758adf").into(),
+					state_root: hex!("f1abdf2b1192e089c432b48a7dd4b35adf732ad756eb6771fbb74e014f36d7e3").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -577,6 +577,125 @@ mod tests {
 
 		run_test(false);
 		run_test(true);
+	}
+
+	#[test]
+	fn block_weight_multiple_checks() {
+
+		let run_test = |overflow_tx: i8| {
+			let mut t = new_test_ext();
+			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+			let xt1 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+			let xt2 = primitives::testing::TestXt(Some(1), 2, Call::transfer(33, 69));
+			let xt3 = primitives::testing::TestXt(Some(1), 3, Call::transfer(33, 69));
+			let xt4 = primitives::testing::TestXt(Some(1), 4, Call::transfer(33, 69));
+			let xt5 = primitives::testing::TestXt(Some(1), 5, Call::transfer(33, 69));
+
+			match overflow_tx {
+				0 => {
+						let encoded = xt.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT + 1) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+
+							let res = Executive::apply_extrinsic_with_len(xt, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
+						});
+					},
+				1 => {
+						let encoded = xt1.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT - 27) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							
+							Executive::apply_extrinsic(xt).unwrap();
+							let res = Executive::apply_extrinsic_with_len(xt1, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 28);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+						});
+					},
+				2 => {
+						let encoded = xt2.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT - 55) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							
+							Executive::apply_extrinsic(xt).unwrap();
+							Executive::apply_extrinsic(xt1).unwrap();
+							let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 56);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+						});
+					},
+				3 => {
+						let encoded = xt3.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT - 83) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							
+							Executive::apply_extrinsic(xt).unwrap();
+							Executive::apply_extrinsic(xt1).unwrap();
+							Executive::apply_extrinsic(xt2).unwrap();
+							let res = Executive::apply_extrinsic_with_len(xt3, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 84);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(3));
+						});
+					},
+				4 => {
+						let encoded = xt4.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT - 111) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							
+							Executive::apply_extrinsic(xt).unwrap();
+							Executive::apply_extrinsic(xt1).unwrap();
+							Executive::apply_extrinsic(xt2).unwrap();
+							Executive::apply_extrinsic(xt3).unwrap();
+							let res = Executive::apply_extrinsic_with_len(xt4, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 112);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(4));
+						});
+					},
+				5 => {
+						let encoded = xt5.encode();
+						let len = (MAX_TRANSACTIONS_WEIGHT - 139) as usize;
+						with_externalities(&mut t, || {
+							Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+							
+							Executive::apply_extrinsic(xt).unwrap();
+							Executive::apply_extrinsic(xt1).unwrap();
+							Executive::apply_extrinsic(xt2).unwrap();
+							Executive::apply_extrinsic(xt3).unwrap();
+							Executive::apply_extrinsic(xt4).unwrap();
+							let res = Executive::apply_extrinsic_with_len(xt5, len, Some(encoded));
+							assert!(res.is_err());
+							assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 140);
+							assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(5));
+						});
+					}
+				_ => {assert!(true);}
+			}
+		};
+
+		run_test(0);
+		run_test(1);
+		run_test(2);
+		run_test(3);
+		run_test(4);
+		run_test(5);
+		assert!(true);
 	}
 
 	#[test]
