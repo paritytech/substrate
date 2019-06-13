@@ -190,7 +190,7 @@ pub trait Subtrait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug + From<u32>;
+		+ MaybeSerializeDebug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy+ From<u32>;
 }
 
