@@ -198,8 +198,6 @@ impl ExtBuilder {
 			.0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
 				balances: vec![],
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,

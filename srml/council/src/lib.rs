@@ -177,8 +177,6 @@ mod tests {
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 			t.extend(balances::GenesisConfig::<Test>{
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),

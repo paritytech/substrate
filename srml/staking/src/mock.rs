@@ -191,8 +191,6 @@ impl ExtBuilder {
 					(100, 2000 * balance_factor),
 					(101, 2000 * balance_factor),
 			],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
 			creation_fee: 0,
