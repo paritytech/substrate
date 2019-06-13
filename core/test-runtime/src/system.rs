@@ -288,30 +288,24 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, twox_128, blake2_256, TestExternalities};
-	use parity_codec::{Joiner, KeyedVec};
+	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
 	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
-	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
 
 	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
+		let authorities = vec![
+			AuthorityKeyring::Alice.to_raw_public(),
+			AuthorityKeyring::Bob.to_raw_public(),
+			AuthorityKeyring::Charlie.to_raw_public()
+		];
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
-				AuthorityKeyring::Alice.to_raw_public().to_vec()
-			},
-			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
-				AuthorityKeyring::Bob.to_raw_public().to_vec()
-			},
-			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => {
-				AuthorityKeyring::Charlie.to_raw_public().to_vec()
-			},
+			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 			}

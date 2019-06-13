@@ -501,7 +501,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{StorageKey, well_known_keys};
+	use primitives::storage::StorageKey;
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -555,6 +555,8 @@ pub mod tests {
 		OkCallFetcher,
 	>;
 
+	const FAKE_AUTHORITY_COUNT: &'static [u8] = b"";
+
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
 		// prepare remote client
 		let remote_client = test_client::new();
@@ -564,10 +566,10 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::AUTHORITY_COUNT.to_vec()))
+		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(FAKE_AUTHORITY_COUNT.to_vec()))
 			.unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, FAKE_AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -623,7 +625,7 @@ pub mod tests {
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
+			key: FAKE_AUTHORITY_COUNT.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
