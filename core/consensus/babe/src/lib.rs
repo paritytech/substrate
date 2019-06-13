@@ -652,7 +652,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 				if num_timestamps as u64 >= self.config.0.median_required_blocks {
 					let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
 							let offset: u128 = u128::from(self.config.get())
-								.checked_mul(INVERSE_NANO.into())
+								.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
 								.and_then(|x| x.checked_mul(u128::from(slot_num) - u128::from(sl)))
 								.expect("we cannot have timespans long enough for this to overflow; qed");
 							let nanos = (offset % u128::from(INVERSE_NANO)) as u32;
