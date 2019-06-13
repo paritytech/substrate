@@ -179,7 +179,7 @@ pub trait Trait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug + From<u32>;
+		+ MaybeSerializeDebug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy + From<u32>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
