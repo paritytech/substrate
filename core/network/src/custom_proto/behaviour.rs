@@ -24,6 +24,7 @@ use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem};
+use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
 
