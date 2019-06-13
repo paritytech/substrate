@@ -982,7 +982,7 @@ mod tests {
 	fn can_author_block() {
 		drop(env_logger::try_init());
 		let randomness = &[];
-		let pair = sr25519::Pair::generate();
+		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
 		loop {
 			match claim_slot(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
