@@ -104,9 +104,21 @@ pub trait ImportQueue<B: BlockT>: Send {
 	/// Import bunch of blocks.
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
-	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification);
+	fn import_justification(
+		&mut self,
+		who: Origin,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification
+	);
 	/// Import block finality proof.
-	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>);
+	fn import_finality_proof(
+		&mut self,
+		who: Origin,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		finality_proof: Vec<u8>
+	);
 	/// Polls for actions to perform on the network.
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
@@ -115,8 +127,8 @@ pub trait ImportQueue<B: BlockT>: Send {
 	fn poll_actions(&mut self, link: &mut dyn Link<B>);
 }
 
-/// Interface to a basic block import queue that is importing blocks
-/// sequentially in a separate thread, with pluggable verification.
+/// Interface to a basic block import queue that is importing blocks sequentially in a separate
+/// thread, with pluggable verification.
 pub struct BasicQueue<B: BlockT> {
 	/// Channel to send messages to the background thread.
 	sender: Option<Sender<ToWorkerMsg<B>>>,
@@ -137,27 +149,11 @@ impl<B: BlockT> Drop for BasicQueue<B> {
 	}
 }
 
-/// "BasicQueue" is a wrapper around a channel sender to the "BlockImporter".
-/// "BasicQueue" itself does not keep any state or do any importing work, and
-/// can therefore be send to other threads.
-///
-/// "BasicQueue" implements "ImportQueue" by sending messages to the
-/// "BlockImporter", which runs in it's own thread.
-///
-/// The "BlockImporter" is responsible for handling incoming requests from the
-/// "BasicQueue". Some of these requests are handled by the "BlockImporter"
-/// itself, such as "is_importing", "status", and justifications.
-///
-/// The "import block" work will be offloaded to a single "BlockImportWorker",
-/// running in another thread. Offloading the work is done via a channel,
-/// ensuring blocks in this implementation are imported sequentially and in
-/// order (as received by the "BlockImporter").
-///
-/// As long as the "BasicQueue" is not dropped, the "BlockImporter" will keep
-/// running. The "BlockImporter" owns a sender to the "BlockImportWorker",
-/// ensuring that the worker is kept alive until that sender is dropped.
 impl<B: BlockT> BasicQueue<B> {
 	/// Instantiate a new basic queue, with given verifier.
+	///
+	/// This crates a background thread, and calls `on_start` on the justification importer and
+	/// finality proof importer.
 	pub fn new<V: 'static + Verifier<B>>(
 		verifier: Arc<V>,
 		block_import: SharedBlockImport<B>,
@@ -205,7 +201,13 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		}
 	}
 
-	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
+	fn import_justification(
+		&mut self,
+		who: Origin,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification
+	) {
 		if let Some(ref sender) = self.sender {
 			let _ = sender.send(ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification));
 		}
@@ -328,7 +330,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 					self.result_sender.block_imported(&hash, number);
 
 					if aux.clear_justification_requests {
-						trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
+						trace!(
+							target: "sync",
+							"Block imported clears all pending justification requests {}: {:?}",
+							number,
+							hash
+						);
 						self.result_sender.clear_justification_requests();
 					}
 
@@ -397,7 +404,13 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		self.result_sender.finality_proof_imported(who, (hash, number), result);
 	}
 
-	fn import_justification(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
+	fn import_justification(
+		&mut self,
+		who: Origin,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification
+	) {
 		let success = self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
@@ -494,8 +507,15 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
 	}
 
-	fn justification_imported(&mut self, who: Origin, hash: &B::Hash, number: NumberFor<B>, success: bool) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success));
+	fn justification_imported(
+		&mut self,
+		who: Origin,
+		hash: &B::Hash,
+		number: NumberFor<B>,
+		success: bool
+	) {
+		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
+		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn clear_justification_requests(&mut self) {
