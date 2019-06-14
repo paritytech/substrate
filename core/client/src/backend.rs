@@ -188,11 +188,10 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	/// Retrieve a value from storage under given key and prefix.
 	fn get(&mut self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Replace the value in storage only if
-	/// TODO [ToDr] this should return a result if it was successfuly set
-	/// TODO [ToDr] Should take `Option` for old_value to detect if set for the first time?
-	///             We don't suport `remove` though!
-	fn compare_and_set(&mut self, prefix: &[u8], key: &[u8], old_value: &[u8], new_value: &[u8]);
+	/// Replace the value in storage if given old_value matches the current one.
+	///
+	/// Returns `true` if the value has been set and false otherwise.
+	fn compare_and_set(&mut self, prefix: &[u8], key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
 }
 
 /// Changes trie storage that supports pruning.

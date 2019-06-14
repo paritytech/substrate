@@ -792,6 +792,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(offset)
 	},
+	ext_local_storage_compare_and_set(
+		key: *const u8,
+		key_len: u32,
+		old_value: *const u8,
+		old_value_len: u32,
+		new_value: *const u8,
+		new_value_len: u32
+	) -> u32 => {
+		unimplemented!()
+	},
 	ext_http_request_start(
 		method: *const u8,
 		method_len: u32,

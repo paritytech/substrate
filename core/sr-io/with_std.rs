@@ -320,7 +320,7 @@ impl OffchainApi for () {
 		}, "local_storage_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		with_offchain(|ext| {
 			ext.local_storage_compare_and_set(key, old_value, new_value)
 		}, "local_storage_compare_and_set can be called only in the offchain worker context")

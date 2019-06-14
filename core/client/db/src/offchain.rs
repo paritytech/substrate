@@ -75,22 +75,23 @@ impl client::backend::OffchainStorage for LocalStorage {
 			.map(|v| v.to_vec())
 	}
 
-	fn compare_and_set(&mut self, prefix: &[u8], item_key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn compare_and_set(&mut self, prefix: &[u8], item_key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
 		let mut key_lock = {
 			let mut locks = self.locks.lock();
 			locks.entry(key.clone()).or_default().clone()
 		};
 
+		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			let replace = self.db.get(columns::OFFCHAIN, &key)
+			is_set = self.db.get(columns::OFFCHAIN, &key)
 				.ok()
 				.and_then(|x| x)
 				.map(|v| &*v == old_value)
 				.unwrap_or(true);
 
-			if replace {
+			if is_set {
 				self.set(prefix, item_key, new_value)
 			}
 		}
@@ -100,6 +101,8 @@ impl client::backend::OffchainStorage for LocalStorage {
 		if let Some(_) = Arc::get_mut(&mut key_lock) {
 			locks.remove(&key);
 		}
+
+		is_set
 	}
 }
 
@@ -117,7 +120,7 @@ mod tests {
 		storage.set(prefix, key, value);
 		assert_eq!(storage.get(prefix, key), Some(value.to_vec()));
 
-		storage.compare_and_set(prefix, key, value, b"asd");
+		assert_eq!(storage.compare_and_set(prefix, key, value, b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}

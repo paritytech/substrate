@@ -126,7 +126,14 @@ impl_stubs!(
 			Err(sandbox::Error::OutOfBounds) => 3,
 		};
 		[code].to_vec()
-	}
+	},
+	test_local_storage => |_| {
+		let run = || -> Option<()> {
+			runtime_io::local_storage_get(b"test")?;
+		};
+
+		[run().map(|_| 1_u8).unwrap_or(0_u8)].to_vec()
+	},
 );
 
 fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {

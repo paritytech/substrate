@@ -415,6 +415,10 @@ pub mod ext {
 		fn ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32);
 
 		/// Write a value to local storage in atomic fashion.
+		///
+		/// # Returns
+		/// - `0` in case the value has been set
+		/// - `1` if the `old_value` didn't match
 		fn ext_local_storage_compare_and_set(
 			key: *const u8,
 			key_len: u32,
@@ -422,7 +426,7 @@ pub mod ext {
 			old_value_len: u32,
 			new_value: *const u8,
 			new_value_len: u32
-		);
+		) -> u32;
 
 		/// Read a value from local storage.
 		///
@@ -910,7 +914,7 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		unsafe {
 			ext_local_storage_compare_and_set.get()(
 				key.as_ptr(),
@@ -919,7 +923,7 @@ impl OffchainApi for () {
 				old_value.len() as u32,
 				new_value.as_ptr(),
 				new_value.len() as u32,
-			)
+			) == 0
 		}
 	}
 

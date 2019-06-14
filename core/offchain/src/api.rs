@@ -101,7 +101,7 @@ impl<S: OffchainStorage> OffchainExt for Api<S> {
 		self.db.set(STORAGE_PREFIX, key, value)
 	}
 
-	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
 	}
 
@@ -265,11 +265,11 @@ mod tests {
 		api.local_storage_set(key, b"value");
 
 		// when
-		api.local_storage_compare_and_set(key, b"val", b"xxx");
+		assert_eq!(api.local_storage_compare_and_set(key, b"val", b"xxx"), false);
 		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
 
 		// when
-		api.local_storage_compare_and_set(key, b"value", b"xxx");
+		assert_eq!(api.local_storage_compare_and_set(key, b"value", b"xxx"), true);
 		assert_eq!(api.local_storage_get(key), Some(b"xxx".to_vec()));
 	}
 }
