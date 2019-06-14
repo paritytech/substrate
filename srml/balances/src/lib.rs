@@ -377,10 +377,10 @@ decl_module! {
 
 		/// Set the balances of a given account.
 		///
-		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
+		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
+		/// also decrease the total issuance of the system (`TotalIssuance`).
 		/// If the new free or reserved balance is below the existential deposit,
-		/// it will also decrease the total issuance of the system (`TotalIssuance`)
-		/// and reset the account nonce (`system::AccountNonce`).
+		/// it will reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
 		///
