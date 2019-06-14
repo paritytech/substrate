@@ -51,19 +51,18 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::{Encode, Decode};
-use srml_support::storage::StorageValue;
-use srml_support::{decl_storage, decl_module};
-use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
+use parity_codec::Encode;
+use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
+use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
 use timestamp::OnTimestampSet;
-use rstd::marker::PhantomData;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
 #[cfg(feature = "std")]
-use serde::Serialize;
+use parity_codec::Decode;
 
 mod mock;
 mod tests;
@@ -91,20 +90,6 @@ impl AuraInherentData for InherentData {
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
-}
-
-/// Logs in this module.
-pub type Log<T> = RawLog<T>;
-
-/// Logs in this module.
-///
-/// The type parameter distinguishes logs belonging to two different runtimes,
-/// which should not be mixed.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<T> {
-	/// AuRa inherent digests
-	PreRuntime([u8; 4], Vec<u8>, PhantomData<T>),
 }
 
 /// Provides the slot duration inherent data for `Aura`.
@@ -166,17 +151,54 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
+
+	/// The identifier type for an authority.
+	type AuthorityId: Member + Parameter + Default;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
+
+		/// The current authorities
+		pub Authorities get(authorities) config(): Vec<T::AuthorityId>;
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+}
+
+impl<T: Trait> Module<T> {
+	fn change_authorities(new: Vec<T::AuthorityId>) {
+		<Authorities<T>>::put(&new);
+
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::AuthoritiesChange(new).encode()
+		);
+		<system::Module<T>>::deposit_log(log.into());
+	}
+}
+
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+	type Key = T::AuthorityId;
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	{
+		// instant changes
+		if changed {
+			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+			let last_authorities = <Module<T>>::authorities();
+			if next_authorities != last_authorities {
+				Self::change_authorities(next_authorities);
+			}
+		}
+	}
+	fn on_disabled(_i: usize) {
+		// ignore?
+	}
 }
 
 /// A report of skipped authorities in Aura.

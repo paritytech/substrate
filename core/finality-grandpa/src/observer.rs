@@ -27,7 +27,7 @@ use log::{debug, info, warn};
 use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
-use substrate_primitives::{ed25519::Public as AuthorityId, H256, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::{
 	AuthoritySignature, global_communication, CommandOrError, Config, environment,
@@ -37,6 +37,7 @@ use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
+use fg_primitives::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 

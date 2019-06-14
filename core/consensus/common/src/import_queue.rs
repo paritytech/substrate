@@ -25,24 +25,16 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use crate::block_import::{
+use std::{sync::Arc, thread, collections::HashMap};
+use crossbeam_channel::{self as channel, Receiver, Sender};
+use parking_lot::Mutex;
+use runtime_primitives::{Justification, traits::{
+	Block as BlockT, Header as HeaderT, NumberFor,
+}};
+use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId, block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 	FinalityProofImport, FinalityProofRequestBuilder,
-};
-use crossbeam_channel::{self as channel, Receiver, Sender};
-use parity_codec::Encode;
-use parking_lot::Mutex;
-
-use std::sync::Arc;
-use std::thread;
-
-use runtime_primitives::traits::{
-	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor, Digest,
-};
-use runtime_primitives::Justification;
-
-use crate::error::Error as ConsensusError;
-use parity_codec::alloc::collections::hash_map::HashMap;
+}};
 
 /// Reputation change for peers which send us a block with an incomplete header.
 const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
@@ -94,7 +86,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String>;
+	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
 
 /// Blocks import queue API.
@@ -906,7 +898,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
-	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, block.body)
+	let (import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
@@ -917,8 +909,8 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		})?;
 
 	let mut cache = HashMap::new();
-	if let Some(authorities) = new_authorities {
-		cache.insert(crate::well_known_cache_keys::AUTHORITIES, authorities.encode());
+	if let Some(keys) = maybe_keys {
+		cache.extend(keys.into_iter());
 	}
 
 	import_error(import_handle.import_block(import_block, cache))
@@ -979,7 +971,7 @@ mod tests {
 			header: B::Header,
 			justification: Option<Justification>,
 			body: Option<Vec<B::Extrinsic>>,
-		) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+		) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((ImportBlock {
 				origin,
 				header,

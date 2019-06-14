@@ -32,8 +32,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block, DigestFor};
+use runtime_primitives::traits::{Block, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -54,14 +53,6 @@ pub use block_import::{
 };
 pub use select_chain::SelectChain;
 
-/// Trait for getting the authorities at a given block.
-pub trait Authorities<B: Block> {
-	type Error: std::error::Error + Send + 'static;
-
-	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
-}
-
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
 	/// The proposer type this creates.
@@ -71,7 +62,7 @@ pub trait Environment<B: Block> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
+	fn init(&self, parent_header: &B::Header)
 		-> Result<Self::Proposer, Self::Error>;
 }
 

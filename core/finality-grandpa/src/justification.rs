@@ -25,12 +25,11 @@ use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use substrate_primitives::{H256, ed25519, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher};
+use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};
 use crate::communication;
-
-use ed25519::Public as AuthorityId;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
