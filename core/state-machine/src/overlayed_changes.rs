@@ -59,10 +59,8 @@ pub struct OverlayedChangeSet {
 	pub children: HashMap<KeySpace, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, ChildTrie)>,
 	/// Association from parent storage location to keyspace,
 	/// for freshly added child_trie.
-	pub pending_child: HashMap<Vec<u8>, KeySpace>,
-	/// Child that got moved (nodes are pending removal).
-	/// TODO EMCH fuse with pending_child (puting option<keyspace> in pending).
-	pub moved_child: HashSet<Vec<u8>>,
+	/// If value is none the child is moved or deleted.
+	pub pending_child: HashMap<Vec<u8>, Option<KeySpace>>,
 }
 
 #[cfg(test)]
@@ -72,7 +70,6 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 			top: iter.into_iter().collect(),
 			children: Default::default(),
 			pending_child: Default::default(),
-			moved_child: Default::default(),
 		}
 	}
 }
@@ -88,7 +85,6 @@ impl OverlayedChangeSet {
 		self.top.clear();
 		self.children.clear();
 		self.pending_child.clear();
-		self.moved_child.clear();
 	}
 }
 
@@ -145,24 +141,25 @@ impl OverlayedChanges {
 	/// returns a child trie if present
 	pub fn child_trie(&self, storage_key: &[u8]) -> Option<Option<ChildTrie>> {
 
-		if let Some(keyspace) = self.prospective.pending_child.get(storage_key) {
-			let map = self.prospective.children.get(keyspace)
-				.expect("children entry always have a pending association; qed");
-			return Some(Some(map.2.clone()));
+		match self.prospective.pending_child.get(storage_key) {
+			Some(Some(keyspace)) => {
+				let map = self.prospective.children.get(keyspace)
+					.expect("children entry always have a pending association; qed");
+				return Some(Some(map.2.clone()));
+			},
+			Some(None) => return Some(None),
+			None => (),
 		}
 
-		if let Some(keyspace) = self.committed.pending_child.get(storage_key) {
-			let map = self.prospective.children.get(keyspace)
-				.expect("children entry always have a pending association; qed");
-			return Some(Some(map.2.clone()));
-		}
 
-		if self.prospective.moved_child.contains(storage_key) {
-			return Some(None);
-		}
-
-		if self.committed.moved_child.contains(storage_key) {
-			return Some(None);
+		match self.committed.pending_child.get(storage_key) {
+			Some(Some(keyspace)) => {
+				let map = self.committed.children.get(keyspace)
+					.expect("children entry always have a pending association; qed");
+				return Some(Some(map.2.clone()));
+			},
+			Some(None) => return Some(None),
+			None => (),
 		}
 
 		None
@@ -191,12 +188,10 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let p = &mut self.prospective.children;
 		let pc = &mut self.prospective.pending_child;
-		let pm = &mut self.prospective.moved_child;
 		let map_entry = p.entry(child_trie.keyspace().clone())
 			.or_insert_with(|| {
 				let parent = child_trie.parent_slice().to_vec();
-				pm.remove(&parent);
-				pc.insert(parent, child_trie.keyspace().clone());
+				pc.insert(parent, Some(child_trie.keyspace().clone()));
 				(Default::default(), Default::default(), child_trie.clone())
 			});
 		map_entry.1.insert(key, val);
@@ -215,7 +210,7 @@ impl OverlayedChanges {
 	/// is needed).
 	pub(crate) fn set_child_trie(&mut self, child_trie: ChildTrie) -> bool {
 		let extrinsic_index = self.extrinsic_index();
-		if let Some(old_ct) = self.prospective.pending_child
+		if let Some(Some(old_ct)) = self.prospective.pending_child
 			.get(child_trie.parent_slice()) {
 			let old_ct = self.prospective.children.get_mut(old_ct)
 				.expect("children entry always have a pending association; qed");
@@ -227,11 +222,10 @@ impl OverlayedChanges {
 				return false;
 			} else {
 				if child_trie.parent_slice() != old_ct.parent_slice() {
-					self.prospective.moved_child.insert(old_ct.parent_slice().to_vec());
-					self.prospective.pending_child.remove(old_ct.parent_slice());
-					self.prospective.moved_child.remove(child_trie.parent_slice());
 					self.prospective.pending_child
-						.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+						.insert(old_ct.parent_slice().to_vec(), None);
+					self.prospective.pending_child
+						.insert(child_trie.parent_slice().to_vec(), Some(child_trie.keyspace().clone()));
 				}
 				*old_ct = child_trie;
 				if let Some(extrinsic) = extrinsic_index {
@@ -241,9 +235,8 @@ impl OverlayedChanges {
 			}
 		} else {
 			if child_trie.is_new() {
-				self.prospective.moved_child.remove(child_trie.parent_slice());
 				self.prospective.pending_child
-					.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+					.insert(child_trie.parent_slice().to_vec(), Some(child_trie.keyspace().clone()));
 				let mut exts: Option<HashSet<u32>> = Default::default();
 				if let Some(extrinsic) = extrinsic_index {
 					exts.get_or_insert_with(Default::default)
@@ -354,7 +347,6 @@ impl OverlayedChanges {
 				}
 			}
 			self.committed.pending_child.extend(self.prospective.pending_child.drain());
-			self.committed.moved_child.extend(self.prospective.moved_child.drain());
 		}
 	}
 
