@@ -306,7 +306,7 @@ impl<N: SimpleArithmetic + Clone> Rational<N> {
 	// operation of the remainder part in u64 arithmetic. (or u64, u128)
 	fn new(p: N, q: N) -> Self {
 		let mut num = p.clone() % q.clone();
-		let mut int = p - num.clone();
+		let mut int = p.clone() / q.clone();
 		let mut den = q;
 
 		// TODO: this can be improved using some dichotomic search.
