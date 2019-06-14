@@ -2018,3 +2018,23 @@ fn phragmen_large_scale_test_2() {
 		assert_total_expo(5, nom_budget / 2 + c_budget);
 	})
 }
+
+#[test]
+fn rational() {
+	use std::convert::TryInto;
+
+	for &p in [0u32, 1, 2, 0x00ff_ffff, 0xffff_ffff, 0xa000_0000].into_iter() {
+		for &q in [1u32, 2, 0x00ff_ffff, 0xffff_ffff, 0xa000_0000].into_iter() {
+			let r = Rational::new(p, q);
+
+			for &t in [0u32, 1u32, 2, 0x00ff_ffff, 0xffff_ffff, 0xa000_0000].into_iter() {
+				let approx= r.clone().saturating_mul(t);
+				let res: u32 = (p as u64 * t as u64 / q as u64)
+					.try_into().unwrap_or(u32::max_value());
+
+				let err = (approx as i64 - res as i64).abs() as f64 / q as f64;
+				assert!(err < 0.0001);
+			}
+		}
+	}
+}
