@@ -530,7 +530,7 @@ pub struct BabeVerifier<C> {
 	client: Arc<C>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
-	timestamps: Mutex<(Option<Instant>, Vec<(Instant, u64)>)>,
+	timestamps: Mutex<(Option<Duration>, Vec<(Instant, u64)>)>,
 }
 
 impl<C> BabeVerifier<C> {
@@ -669,9 +669,9 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					// Compute the (relative!) start time of the blockchain ―
 					// that is, the issue time of the genesis block that would
 					// give the values we observed.
-					timestamps.0.replace(Instant::now() - ((Instant::now() - median) * self.config.get() as u32));
+					drop(timestamps.0.replace(Instant::now() - median))
 				} else {
-					timestamps.1.push((Instant::now(), slot_now));
+					timestamps.1.push((Instant::now(), slot_now))
 				}
 
 				// FIXME #1019 extract authorities
