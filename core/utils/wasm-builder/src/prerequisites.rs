@@ -56,6 +56,10 @@ fn check_nightly_installed() -> bool {
 			.stdout
 	).unwrap_or_default();
 
+	println!("VERSION: {}", version);
+	println!("VERSION2: {}", version2);
+	panic!();
+
 	version.contains("-nightly") || version2.contains("-nightly")
 }
 
