@@ -27,6 +27,9 @@ consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../.
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
+[build-dependencies]
+wasm-builder-runner = { path = "../../core/utils/wasm-builder-runner" }
+
 [features]
 default = ["std"]
 std = [
@@ -51,3 +54,4 @@ std = [
 	"offchain-primitives/std",
 	"consensus_authorities/std",
 ]
+no_std = []

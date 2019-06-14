@@ -2348,6 +2348,7 @@ dependencies = [
  "substrate-consensus-authorities 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
+ "wasm-builder-runner 2.0.0",
 ]
 
 [[package]]
