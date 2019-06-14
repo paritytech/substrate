@@ -149,7 +149,7 @@ impl<B: Block, H: Hasher> Cache<B, H> {
 	pub fn used_storage_cache_size(&self) -> usize {
 		self.lru_storage.used_size()
 			+ self.lru_child_storage.used_size()
-			//  ignero small hashes storage + self.lru_hashes.used_size()
+			//  ignore small hashes storage and self.lru_hashes.used_size()
 	}
 }
 
