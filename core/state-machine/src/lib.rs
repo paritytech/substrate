@@ -292,7 +292,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) -> bool {
 		unreachable!()
 	}
 

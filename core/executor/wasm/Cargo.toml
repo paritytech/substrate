@@ -8,6 +8,7 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../sr-io", default-features = false }
 sandbox = { package = "sr-sandbox", path = "../../sr-sandbox", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }

@@ -79,6 +79,10 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
+/// A reference tracking state.
+///
+/// It makes sure that the hash we are using stays pinned in storage
+/// until this structure is dropped.
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState,
 	storage: Arc<StorageDb<Block>>,
@@ -697,7 +701,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
 			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
 		};
-		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, config)
+		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -717,7 +721,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
 		};
-		Backend::from_kvdb(
+		Self::from_kvdb(
 			db,
 			canonicalization_delay,
 			&db_setting,

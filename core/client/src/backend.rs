@@ -204,7 +204,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
 
 	/// Retrieve a value from storage under given key and prefix.
-	fn get(&mut self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Replace the value in storage if given old_value matches the current one.
 	///

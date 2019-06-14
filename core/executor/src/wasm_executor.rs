@@ -800,7 +800,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		new_value: *const u8,
 		new_value_len: u32
 	) -> u32 => {
-		unimplemented!()
+		let key = this.memory.get(key, key_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+		let old_value = this.memory.get(old_value, old_value_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+		let new_value = this.memory.get(new_value, new_value_len as usize)
+			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.local_storage_compare_and_set(&key, &old_value, &new_value))
+			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_compare_andset: wasm"))?;
+
+		Ok(if res { 0 } else { 1 })
+
 	},
 	ext_http_request_start(
 		method: *const u8,
@@ -1261,6 +1273,7 @@ mod tests {
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;
 	use primitives::map;
+	use substrate_offchain::testing;
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
@@ -1444,6 +1457,47 @@ mod tests {
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
 			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
+		);
+	}
+
+	#[test]
+	fn offchain_local_storage_should_work() {
+		use substrate_client::backend::OffchainStorage;
+
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let (offchain, state) = testing::TestOffchainExt::new();
+		ext.set_offchain_externalities(offchain);
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
+			vec![0]
+		);
+		assert_eq!(state.read().storage.get(b"", b"test"), Some(vec![]));
+	}
+
+	#[test]
+	fn offchain_http_should_work() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let (offchain, state) = testing::TestOffchainExt::new();
+		ext.set_offchain_externalities(offchain);
+		state.write().expect_request(
+			0,
+			testing::PendingRequest {
+				method: "POST".into(),
+				uri: "http://localhost:12345".into(),
+				body: vec![1, 2, 3, 4],
+				headers: vec![("X-Auth".to_owned(), "test".to_owned())],
+				sent: true,
+				response: vec![1, 2, 3],
+				response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
+				..Default::default()
+			},
+		);
+
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
+			vec![0]
 		);
 	}
 }
