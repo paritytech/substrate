@@ -39,26 +39,20 @@ pub fn check() -> Option<&'static str> {
 }
 
 fn check_nightly_installed() -> bool {
-	let cargo_bin = build_helper::bin::cargo();
-
 	let version = String::from_utf8(
-		Command::new(&cargo_bin)
+		Command::new("cargo")
 			.arg("--version")
 			.output()
 			.expect("Cargo version never fails; qed")
 			.stdout
 	).unwrap_or_default();
 	let version2 = String::from_utf8(
-		Command::new(&cargo_bin)
+		Command::new("cargo")
 			.args(&["+nightly", "--version"])
 			.output()
 			.expect("Cargo version never fails; qed")
 			.stdout
 	).unwrap_or_default();
-
-	println!("VERSION: {}", version);
-	println!("VERSION2: {}", version2);
-	panic!();
 
 	version.contains("-nightly") || version2.contains("-nightly")
 }
@@ -71,8 +65,8 @@ fn check_wasm_toolchain_installed() -> bool {
 	fs::write(&test_file, "fn main() {}").expect("Writing to the test file does not fail; qed");
 
 	let test_file = test_file.display().to_string();
-	Command::new(build_helper::bin::rustc())
-		.args(&["--target=wasm32-unknown-unknown", &test_file, "-o", &out_file])
+	crate::get_nightly_cargo()
+		.args(&["rustc", "--target=wasm32-unknown-unknown", &test_file, "-o", &out_file])
 		.status()
 		.map(|s| s.success())
 		.unwrap_or(false)

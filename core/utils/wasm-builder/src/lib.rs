@@ -25,7 +25,7 @@
 //! - rust nightly + wasm32-unknown-unknown toolchain
 //! - wasm-gc
 
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, process::Command};
 
 mod prerequisites;
 mod wasm_project;
@@ -86,4 +86,15 @@ fn create_out_file(file_name: &str, content: String) {
 		file_name,
 		content
 	).expect("Creating and writing can not fail; qed");
+}
+
+/// Get a cargo command that compiles with nightly
+fn get_nightly_cargo() -> Command {
+	if Command::new("cargo").arg("+nightly").status().map(|s| s.success()).unwrap_or(false) {
+		let mut cmd = Command::new("cargo");
+		cmd.arg("+nightly");
+		cmd
+	} else {
+		Command::new("cargo")
+	}
 }

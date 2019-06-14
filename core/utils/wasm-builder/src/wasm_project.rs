@@ -124,7 +124,7 @@ fn create_project(cargo_manifest: &Path) -> PathBuf {
 /// Build the project to create the WASM binary.
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
-	let mut build_cmd = Command::new(build_helper::bin::cargo());
+	let mut build_cmd = crate::get_nightly_cargo();
 	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", "-C link-arg=--export-table")
