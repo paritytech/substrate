@@ -970,7 +970,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
 	}
 
 	#[test]

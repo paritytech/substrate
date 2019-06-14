@@ -533,7 +533,7 @@ fn run_to_completion_with<F>(
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
 	highest_finalized
@@ -627,7 +627,7 @@ fn finalize_3_voters_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]
@@ -801,7 +801,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]

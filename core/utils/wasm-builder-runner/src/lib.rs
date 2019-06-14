@@ -28,6 +28,15 @@ use std::{env, process::Command, fs, path::{PathBuf, Path}};
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
+/// Environment variable that tells us to create a dummy WASM binary.
+///
+/// This is useful for `cargo check` to speed-up the compilation.
+///
+/// # Caution
+///
+/// Enabling this option will just provide `&[]` as WASM binary.
+const DUMMY_WASM_BINARY_ENV: &str = "BUILD_DUMMY_WASM_BINARY";
+
 /// Build the currently build project as WASM binary.
 ///
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
@@ -52,8 +61,12 @@ pub fn build_current_project(file_name: &str, wasm_builder_path: &str) {
 	let file_path = out_dir.join(file_name);
 	let project_folder = out_dir.join("wasm_build_runner");
 
-	create_project(&project_folder, &file_path, &wasm_builder_path, &manifest_dir);
-	run_project(&project_folder);
+	if check_provide_dummy_wasm_binary() {
+		provide_dummy_wasm_binary(&file_path);
+	} else {
+		create_project(&project_folder, &file_path, &wasm_builder_path, &manifest_dir);
+		run_project(&project_folder);
+	}
 }
 
 fn create_project(
@@ -70,7 +83,7 @@ fn create_project(
 		format!(
 			r#"
 				[package]
-				name = "wasm-build-runner"
+				name = "wasm-build-runner-impl"
 				version = "1.0.0"
 				edition = "2018"
 
@@ -114,4 +127,15 @@ fn run_project(project_folder: &Path) {
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
 	env::var(SKIP_BUILD_ENV).is_ok()
+}
+
+/// Check if we should provide a dummy WASM binary.
+fn check_provide_dummy_wasm_binary() -> bool {
+	env::var(DUMMY_WASM_BINARY_ENV).is_ok()
+}
+
+/// Provide the dummy WASM binary
+fn provide_dummy_wasm_binary(file_path: &Path) {
+	fs::write(file_path, format!("pub const WASM_BINARY: &[u8] = &[];"))
+		.expect("Writing dummy WASM binary should not fail");
 }

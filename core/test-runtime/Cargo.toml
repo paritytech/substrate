@@ -3,6 +3,7 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 log = { version = "0.4", optional = true }
@@ -38,6 +39,7 @@ wasm-builder-runner = { path = "../utils/wasm-builder-runner" }
 default = [
 	"std",
 ]
+no_std = []
 std = [
 	"log",
 	"serde",

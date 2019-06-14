@@ -87,11 +87,14 @@ fn create_project(cargo_manifest: &Path) -> PathBuf {
 				crate-type = ["cdylib"]
 
 				[dependencies]
-				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
+				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false, features = [ "no_std" ] }}
 
 				[profile.release]
 				panic = "abort"
 				lto = true
+
+				[profile.dev]
+				panic = "abort"
 
 				[workspace]
 			"#,

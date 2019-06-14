@@ -72,7 +72,7 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 
 	create_out_file(
 		file_name,
-		format!("const WASM_BINARY: &[u8] = include_bytes!(\"{}\");", wasm_binary.display()),
+		format!("pub const WASM_BINARY: &[u8] = include_bytes!(\"{}\");", wasm_binary.display()),
 	);
 }
 

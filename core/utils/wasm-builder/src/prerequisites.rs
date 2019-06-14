@@ -62,12 +62,13 @@ fn check_nightly_installed() -> bool {
 fn check_wasm_toolchain_installed() -> bool {
 	let temp = tempdir().expect("Creating temp dir does not fail; qed");
 	let test_file = temp.path().join("main.rs");
+	let out_file = temp.path().join("out.wasm").display().to_string();
 
 	fs::write(&test_file, "fn main() {}").expect("Writing to the test file does not fail; qed");
 
-	let test_file = format!("{}", test_file.display());
+	let test_file = test_file.display().to_string();
 	Command::new(build_helper::bin::rustc())
-		.args(&["--target=wasm32-unknown-unknown", &test_file])
+		.args(&["--target=wasm32-unknown-unknown", &test_file, "-o", &out_file])
 		.status()
 		.map(|s| s.success())
 		.unwrap_or(false)
