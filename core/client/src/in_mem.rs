@@ -33,7 +33,7 @@ use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
 use crate::error;
-use crate::backend::{self, NewBlockState};
+use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
 use crate::blockchain::{self, BlockStatus, HeaderBackend};
@@ -515,7 +515,11 @@ where
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()> {
+	fn update_storage(
+		&mut self,
+		_update: StorageCollection,
+		_child_update: ChildStorageCollection,
+	) -> error::Result<()> {
 		Ok(())
 	}
 
