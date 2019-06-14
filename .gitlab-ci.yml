@@ -91,6 +91,13 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
+cargo-check-benches:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - time cargo check --benches
+    - sccache -s
+
 
 cargo-check-subkey:
   stage:                           test
