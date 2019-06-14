@@ -714,6 +714,36 @@ mod tests {
 	}
 
 	#[test]
+	fn fail_on_bad_nonce() {
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+		let xt1 = primitives::testing::TestXt(Some(1), 10, Call::transfer(33, 69));
+		let mut t = new_test_ext();
+		with_externalities(&mut t, || {
+			Executive::apply_extrinsic(xt).unwrap();
+			assert_eq!(Executive::apply_extrinsic(xt1), Err(ApplyError::Future));
+		});
+	}
+
+	#[test]
+	fn validate_signed() {
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+		let valid = TransactionValidity::Valid {
+			priority: 28,
+			requires: vec![],
+			provides: vec![vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+			longevity: 18446744073709551615,
+			propagate: true,
+		};
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			let res = Executive::validate_transaction(xt.clone());
+			assert_eq!(res, valid);
+			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail));
+		});
+	}
+
+	#[test]
 	fn validate_unsigned() {
 		let xt = primitives::testing::TestXt(None, 0, Call::set_balance(33, 69, 69));
 		let valid = TransactionValidity::Valid {
