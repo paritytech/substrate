@@ -59,14 +59,31 @@ fn check_nightly_installed() -> bool {
 
 fn check_wasm_toolchain_installed() -> bool {
 	let temp = tempdir().expect("Creating temp dir does not fail; qed");
-	let test_file = temp.path().join("main.rs");
-	let out_file = temp.path().join("out.wasm").display().to_string();
+	fs::create_dir_all(temp.path().join("src")).expect("Creating src dir does not fail; qed");
 
-	fs::write(&test_file, "fn main() {}").expect("Writing to the test file does not fail; qed");
+	let test_file = temp.path().join("src/lib.rs");
+	let manifest_path = temp.path().join("Cargo.toml");
 
-	let test_file = test_file.display().to_string();
+	fs::write(&manifest_path,
+		r#"
+			[package]
+			name = "wasm-test"
+			version = "1.0.0"
+			edition = "2018"
+
+			[lib]
+			name = "wasm_test"
+			crate-type = ["cdylib"]
+
+			[workspace]
+		"#,
+	).expect("Writing wasm-test manifest does not fail; qed");
+	fs::write(&test_file, "pub fn test() {}")
+		.expect("Writing to the test file does not fail; qed");
+
+	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
-		.args(&["rustc", "--target=wasm32-unknown-unknown", &test_file, "-o", &out_file])
+		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
 		.status()
 		.map(|s| s.success())
 		.unwrap_or(false)
