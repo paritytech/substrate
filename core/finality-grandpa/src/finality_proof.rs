@@ -103,7 +103,7 @@ pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
 }
 
 /// FetchChecker-based implementation of AuthoritySetForFinalityChecker.
-impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<FetchChecker<Block>> {
+impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block>> {
 	fn check_authorities_proof(
 		&self,
 		hash: Block::Hash,
@@ -132,7 +132,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<FetchChecker<B
 /// Finality proof provider for serving network requests.
 pub struct FinalityProofProvider<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
-	authority_provider: Arc<AuthoritySetForFinalityProver<Block>>,
+	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
@@ -147,7 +147,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
 	/// - authority_provider for calling and proving runtime methods.
 	pub fn new(
 		client: Arc<Client<B, E, Block, RA>>,
-		authority_provider: Arc<AuthoritySetForFinalityProver<Block>>,
+		authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 	) -> Self {
 		FinalityProofProvider { client, authority_provider }
 	}
@@ -256,7 +256,7 @@ pub(crate) fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H,
 /// Returns None if there are no finalized blocks unknown to the caller.
 pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Block>, J>(
 	blockchain: &B,
-	authorities_provider: &AuthoritySetForFinalityProver<Block>,
+	authorities_provider: &dyn AuthoritySetForFinalityProver<Block>,
 	authorities_set_id: u64,
 	begin: Block::Hash,
 	end: Block::Hash,
@@ -268,7 +268,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	let begin_number = blockchain.expect_block_number_from_id(&begin_id)?;
 
 	// early-return if we sure that there are no blocks finalized AFTER begin block
-	let info = blockchain.info()?;
+	let info = blockchain.info();
 	if info.finalized_number <= begin_number {
 		trace!(
 			target: "finality",
@@ -416,7 +416,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 	blockchain: &B,
 	current_set_id: u64,
 	current_authorities: Vec<(AuthorityId, u64)>,
-	authorities_provider: &AuthoritySetForFinalityChecker<Block>,
+	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
 	where
@@ -435,7 +435,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 	blockchain: &B,
 	current_set_id: u64,
 	current_authorities: Vec<(AuthorityId, u64)>,
-	authorities_provider: &AuthoritySetForFinalityChecker<Block>,
+	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
 	where
@@ -489,7 +489,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 	blockchain: &B,
 	authority_set: AuthoritiesOrEffects<Block::Header>,
-	authorities_provider: &AuthoritySetForFinalityChecker<Block>,
+	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	proof_fragment: FinalityProofFragment<Block::Header>,
 ) -> ClientResult<AuthoritiesOrEffects<Block::Header>>
 	where

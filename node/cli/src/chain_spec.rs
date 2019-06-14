@@ -18,7 +18,7 @@
 
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
-use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
+use node_runtime::{ConsensusConfig, CouncilSeatsConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
@@ -119,29 +119,20 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 10 * MINUTES,    // 1 day per public referendum
-			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
-			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
-			public_delay: 10 * MINUTES,
-			max_lock_periods: 6,
-		}),
+		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
 			candidacy_bond: 10 * DOLLARS,
 			voter_bond: 1 * DOLLARS,
+			voting_fee: 2 * DOLLARS,
 			present_slash_per_voter: 1 * CENTS,
 			carry_count: 6,
 			presentation_duration: 1 * DAYS,
 			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
+			decay_ratio: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 4 * DAYS,
-			voting_period: 1 * DAYS,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
@@ -245,6 +236,7 @@ pub fn testnet_genesis(
 	const STASH: u128 = 1 << 20;
 	const ENDOWMENT: u128 = 1 << 20;
 
+	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 	let mut contract_config = ContractConfig {
 		signed_claim_handicap: 2,
 		rent_byte_price: 4,
@@ -303,31 +295,22 @@ pub fn testnet_genesis(
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 9,
-			voting_period: 18,
-			minimum_deposit: 10,
-			public_delay: 0,
-			max_lock_periods: 6,
-		}),
+		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
+			voting_fee: 5,
 			present_slash_per_voter: 1,
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,
 			term_duration: 1000000,
-			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
+			desired_seats: council_desired_seats,
+			decay_ratio: council_desired_seats / 3,
 			inactive_grace_period: 1,
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 75,
-			voting_period: 20,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.
@@ -382,7 +365,7 @@ pub fn local_testnet_config() -> ChainSpec {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use service_test;
 	use crate::service::Factory;
@@ -393,13 +376,41 @@ mod tests {
 		genesis
 	}
 
+	fn local_testnet_genesis_instant_single() -> GenesisConfig {
+		let mut genesis = testnet_genesis(
+			vec![
+				get_authority_keys_from_seed("Alice"),
+			],
+			get_account_id_from_seed("Alice"),
+			None,
+			false,
+		);
+		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
+		genesis
+	}
+
+	/// Local testnet config (single validator - Alice)
+	pub fn integration_test_config_with_single_authority() -> ChainSpec {
+		ChainSpec::from_genesis(
+			"Integration Test",
+			"test",
+			local_testnet_genesis_instant_single,
+			vec![],
+			None,
+			None,
+			None,
+			None,
+		)
+	}
+
 	/// Local testnet config (multivalidator Alice + Bob)
-	pub fn integration_test_config() -> ChainSpec {
+	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
 		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
 	}
 
 	#[test]
+	#[ignore]
 	fn test_connectivity() {
-		service_test::connectivity::<Factory>(integration_test_config());
+		service_test::connectivity::<Factory>(integration_test_config_with_two_authorities());
 	}
 }

@@ -388,7 +388,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 /// Method is executed using passed header as environment' current block.
 /// Proof includes both environment preparation proof and method execution proof.
 pub fn prove_execution<Block, S, E>(
-	state: S,
+	mut state: S,
 	header: Block::Header,
 	executor: &E,
 	method: &str,
@@ -399,13 +399,13 @@ pub fn prove_execution<Block, S, E>(
 		S: StateBackend<Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 {
-	let trie_state = state.try_into_trie_backend()
-		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+	let trie_state = state.as_trie_backend()
+		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
-		&trie_state,
+		trie_state,
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
@@ -473,7 +473,7 @@ pub fn check_execution_proof<Header, E, H>(
 #[cfg(test)]
 mod tests {
 	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
+	use test_client::{self, runtime::Header, ClientExt, TestClient};
 	use executor::NativeExecutionDispatch;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
@@ -482,13 +482,6 @@ mod tests {
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
-		type TestClient = test_client::client::Client<
-			test_client::Backend,
-			test_client::Executor,
-			Block,
-			RuntimeApi
-		>;
-
 		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_root = remote_client.state_at(&remote_block_id)

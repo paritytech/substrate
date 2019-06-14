@@ -31,9 +31,7 @@ use std::collections::HashMap;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::BlockchainEvents;
-use client::backend::Backend;
-use client::runtime_api::BlockT;
+use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -43,6 +41,8 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
+use network::SyncProvider;
+use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::Error;
@@ -81,14 +81,14 @@ pub struct Service<Components: components::Components> {
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<Arc<tel::Telemetry>>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
+	_telemetry: Option<tel::Telemetry>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
 		ComponentBlock<Components>>
 	>>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
 
 /// Creates bare client without any networking.
@@ -109,7 +109,7 @@ pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 /// Used to hook on telemetry connection established events.
 pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 	/// Executor to which the hook is spawned.
@@ -161,7 +161,7 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let chain_info = client.info()?.chain;
+		let chain_info = client.info().chain;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -316,11 +316,17 @@ impl<Components: components::Components> Service<Components> {
 		{
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
+			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
 					}
+					let status = transaction_pool_.status();
+					telemetry!(SUBSTRATE_INFO; "txpool.import";
+						"ready" => status.ready,
+						"future" => status.future
+					);
 					Ok(())
 				})
 				.select(exit.clone())
@@ -329,6 +335,56 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.spawn(events);
 		}
 
+		// Periodically notify the telemetry.
+		let transaction_pool_ = transaction_pool.clone();
+		let client_ = client.clone();
+		let network_ = network.clone();
+		let mut sys = System::new();
+		let self_pid = get_current_pid();
+		task_executor.spawn(network.status().for_each(move |sync_status| {
+			let info = client_.info();
+			let best_number = info.chain.best_number.saturated_into::<u64>();
+			let best_hash = info.chain.best_hash;
+			let num_peers = sync_status.num_peers;
+			let txpool_status = transaction_pool_.status();
+			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
+			let bandwidth_download = network_.average_download_per_sec();
+			let bandwidth_upload = network_.average_upload_per_sec();
+
+			#[allow(deprecated)]
+			let backend = (*client_).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
+			// get cpu usage and memory usage of this process
+			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
+				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
+				(proc.cpu_usage(), proc.memory())
+			} else { (0.0, 0) };
+
+			let network_state = network_.network_state();
+
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"network_state" => network_state,
+				"peers" => num_peers,
+				"height" => best_number,
+				"best" => ?best_hash,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
+			);
+
+			Ok(())
+		}).select(exit.clone()).then(|_| Ok(())));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -362,8 +418,9 @@ impl<Components: components::Components> Service<Components> {
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
+				wasm_external_transport: None,
 				on_connect: Box::new(move || {
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
@@ -380,7 +437,11 @@ impl<Components: components::Components> Service<Components> {
 						sink.unbounded_send(()).is_ok()
 					});
 				}),
-			}))
+			});
+			task_executor.spawn(telemetry.clone()
+				.select(exit.clone())
+				.then(|_| Ok(())));
+			telemetry
 		});
 
 		Ok(Service {
@@ -413,7 +474,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
@@ -490,12 +551,7 @@ pub struct TransactionPoolAdapter<C: Components> {
 
 impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
+		Some(BlockId::hash(self.client.info().chain.best_hash))
 	}
 }
 
@@ -638,7 +694,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 				#[allow(deprecated)]
+/// 				Ok(LongestChain::new(client.backend().clone()))
 /// 			}},
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
@@ -765,21 +822,20 @@ macro_rules! construct_service_factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::LongestChain;
 	use consensus_common::SelectChain;
 	use runtime_primitives::traits::BlindCheckable;
-	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}};
+	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
-		let client = Arc::new(substrate_test_client::new());
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
 		let pool = Arc::new(TransactionPool::new(
 			Default::default(),
 			transaction_pool::ChainApi::new(client.clone())
 		));
-		let best = LongestChain::new(client.backend().clone(), client.import_lock())
-			.best_chain().unwrap();
+		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,

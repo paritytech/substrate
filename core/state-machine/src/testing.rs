@@ -37,7 +37,7 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
-	offchain: Option<Box<offchain::Externalities>>,
+	offchain: Option<Box<dyn offchain::Externalities>>,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
@@ -234,7 +234,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		)?.map(|(root, _)| root.clone()))
 	}
 
-	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
+	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain
 			.as_mut()
 			.map(|x| &mut **x as _)

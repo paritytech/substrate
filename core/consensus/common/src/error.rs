@@ -64,7 +64,7 @@ pub enum Error {
 	InvalidJustification,
 	/// Some other error.
 	#[display(fmt="Other error: {}", _0)]
-	Other(Box<error::Error + Send>),
+	Other(Box<dyn error::Error + Send>),
 	/// Error from the client while importing
 	#[display(fmt="Import failed: {}", _0)]
 	ClientImport(String),

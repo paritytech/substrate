@@ -1111,7 +1111,7 @@ impl WasmExecutor {
 	/// This should be used for tests only.
 	pub fn call_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
@@ -1168,7 +1168,7 @@ impl WasmExecutor {
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
@@ -1389,7 +1389,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(blake2_256(b"test"));
+		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
@@ -1415,7 +1415,7 @@ mod tests {
 	fn sr25519_verify_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = sr25519::Pair::from_seed(blake2_256(b"test"));
+		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());

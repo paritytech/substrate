@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Extrinsic helpers for author RPC module.
+
 use primitives::Bytes;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 /// RPC Extrinsic or hash
 ///
 /// Allows to refer to extrinsic either by its raw representation or its hash.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtrinsicOrHash<Hash> {
 	/// The hash of the extrinsic.

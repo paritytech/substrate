@@ -491,7 +491,7 @@ pub mod tests {
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
 	use test_client::{
-		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;
@@ -620,7 +620,7 @@ pub mod tests {
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
 		let (local_checker, remote_block_header, remote_read_proof, authorities_len) = prepare_for_read_proof_check();
-		assert_eq!((&local_checker as &FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
 			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
@@ -631,7 +631,7 @@ pub mod tests {
 	#[test]
 	fn header_proof_is_generated_and_checked() {
 		let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
-		assert_eq!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
 			retry_count: None,
@@ -642,7 +642,7 @@ pub mod tests {
 	fn check_header_proof_fails_if_cht_root_is_invalid() {
 		let (local_checker, _, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
 		remote_block_header.number = 100;
-		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -653,7 +653,7 @@ pub mod tests {
 	fn check_header_proof_fails_if_invalid_header_provided() {
 		let (local_checker, local_cht_root, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
 		remote_block_header.number = 100;
-		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
 			retry_count: None,
@@ -667,9 +667,9 @@ pub mod tests {
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			test_client::LocalExecutor::new(None)
 		);
-		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let local_checker = &local_checker as &dyn FetchChecker<Block>;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -763,9 +763,9 @@ pub mod tests {
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			test_client::LocalExecutor::new(None)
 		);
-		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let local_checker = &local_checker as &dyn FetchChecker<Block>;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();

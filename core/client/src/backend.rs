@@ -26,6 +26,13 @@ use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
+use parking_lot::Mutex;
+
+/// In memory array of storage values.
+pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// In memory arrays of storage values for multiple child tries.
+pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,8 +88,12 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
-	/// Set top level storage changes.
-	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
+	/// Set storage changes.
+	fn update_storage(
+		&mut self,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
+	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 	/// Insert auxiliary keys. Values are `None` if should be deleted.
@@ -178,6 +189,13 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
+
+	/// Gain access to the import lock around this backend.
+	/// _Note_ Backend isn't expected to acquire the lock by itself ever. Rather
+	/// the using components should acquire and hold the lock whenever they do
+	/// something that the import of a block would interfere with, e.g. importing
+	/// a new block or calculating the best head.
+	fn get_import_lock(&self) -> &Mutex<()>;
 }
 
 /// Offchain workers local storage.

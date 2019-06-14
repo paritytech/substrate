@@ -184,7 +184,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.child_storage_root(storage_key, delta)
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
 }
@@ -193,17 +193,17 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<MemoryDB<H>, H>, Box<Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
 where
 	H: Hasher,
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if !db.contains(&root, &[]) {
-		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
+	if db.contains(&root, &[]) {
+		Ok(TrieBackend::new(db, root))
+	} else {
+		Err(Box::new(ExecutionError::InvalidProof))
 	}
-
-	Ok(TrieBackend::new(db, root))
 }
 
 /// Create in-memory storage of proof check backend.
@@ -269,16 +269,16 @@ mod tests {
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
-		let in_memory = in_memory.update(contents);
+		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let trie = in_memory.try_into_trie_backend().unwrap();
+		let trie = in_memory.as_trie_backend().unwrap();
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let proving = ProvingBackend::new(&trie);
+		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof();
@@ -302,7 +302,7 @@ mod tests {
 			.chain((10..15).map(|i| (Some(own2.clone()), vec![i], Some(vec![i]))))
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
-		let in_memory = in_memory.update(contents);
+		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
       in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
@@ -320,7 +320,7 @@ mod tests {
 			vec![i]
 		));
 
-		let trie = in_memory.try_into_trie_backend().unwrap();
+		let trie = in_memory.as_trie_backend().unwrap();
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
@@ -328,7 +328,7 @@ mod tests {
 			vec![i]
 		));
 
-		let proving = ProvingBackend::new(&trie);
+		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof();
@@ -343,7 +343,7 @@ mod tests {
 		assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-		let proving = ProvingBackend::new(&trie);
+		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.child_storage(&own1[..], &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();

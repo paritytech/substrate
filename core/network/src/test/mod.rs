@@ -42,7 +42,7 @@ use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImpor
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
 use crate::message::Message;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
@@ -101,19 +101,21 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: crate::message::Status<Block>) {
-	}
+	fn on_connect(
+		&mut self,
+		_ctx: &mut dyn Context<Block>,
+		_peer_id: PeerId,
+		_status: crate::message::Status<Block>
+	) {}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
-	}
+	fn on_disconnect(&mut self, _ctx: &mut dyn Context<Block>, _peer_id: PeerId) {}
 
 	fn on_message(
 		&mut self,
-		_ctx: &mut Context<Block>,
+		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
-	) {
-	}
+	) {}
 }
 
 pub type PeersFullClient =
@@ -158,7 +160,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn info(&self) -> ClientResult<ClientInfo<Block>> {
+	pub fn info(&self) -> ClientInfo<Block> {
 		match *self {
 			PeersClient::Full(ref client) => client.info(),
 			PeersClient::Light(ref client) => client.info(),
@@ -280,6 +282,10 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
+	/// This field is used only in test code, but maintaining different
+	/// instantiation paths or field names is too much hassle, hence
+	/// we allow it to be unused.
+	#[cfg_attr(not(test), allow(unused))]
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 	import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
@@ -287,13 +293,13 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	finalized_hash: Mutex<Option<H256>>,
 }
 
-type MessageFilter = Fn(&NetworkMsg<Block>) -> bool;
+type MessageFilter = dyn Fn(&NetworkMsg<Block>) -> bool;
 
 pub enum FromNetworkMsg<B: BlockT> {
-	/// A peer connected, with debug info.
-	PeerConnected(PeerId, String),
-	/// A peer disconnected, with debug info.
-	PeerDisconnected(PeerId, String),
+	/// A peer connected.
+	PeerConnected(PeerId),
+	/// A peer disconnected.
+	PeerDisconnected(PeerId),
 	/// A custom message from another peer.
 	CustomMessage(PeerId, Message<B>),
 	/// Synchronization request.
@@ -460,7 +466,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 		let header = self
 			.client
 			.header(&BlockId::Hash(info.chain.best_hash))
@@ -469,6 +475,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(ProtocolMsg::BlockImported(info.chain.best_hash, header));
 	}
 
+	#[cfg(test)]
 	fn on_block_imported(
 		&self,
 		hash: <Block as BlockT>::Hash,
@@ -490,18 +497,19 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Get protocol status.
+	#[cfg(test)]
 	fn protocol_status(&self) -> ProtocolStatus<Block> {
 		self.protocol_status.read().clone()
 	}
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone()));
 	}
 
 	/// Called on disconnect from other indicated peer.
 	fn on_disconnect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
@@ -533,7 +541,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block import notifications.
 	fn send_import_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut best_hash = self.best_hash.lock();
 		match *best_hash {
@@ -549,7 +557,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Send block finalization notifications.
 	fn send_finality_notifications(&self) {
-		let info = self.client.info().expect("In-mem client does not fail");
+		let info = self.client.info();
 
 		let mut finalized_hash = self.finalized_hash.lock();
 		match *finalized_hash {
@@ -600,12 +608,13 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Execute a closure with the consensus gossip.
 	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
+		where F: FnOnce(&mut ConsensusGossip<Block>, &mut dyn Context<Block>) + Send + 'static
 	{
 		self.net_proto_channel.send_from_client(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Announce a block to peers.
+	#[cfg(test)]
 	fn announce_block(&self, block: Hash) {
 		self.net_proto_channel.send_from_client(ProtocolMsg::AnnounceBlock(block));
 	}
@@ -620,7 +629,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
 	{
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
 	}
 
@@ -669,7 +678,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
-		let best_hash = self.client.info().unwrap().chain.best_hash;
+		let best_hash = self.client.info().chain.best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
@@ -762,7 +771,7 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Get finality proof provider (if supported).
-	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<FinalityProofProvider<Block>>> {
+	fn make_finality_proof_provider(&self, _client: PeersClient) -> Option<Arc<dyn FinalityProofProvider<Block>>> {
 		None
 	}
 
@@ -794,7 +803,7 @@ pub trait TestNetFactory: Sized {
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		tx_pool: EmptyTransactionPool,
-		finality_proof_provider: Option<Arc<FinalityProofProvider<Block>>>,
+		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
@@ -819,12 +828,12 @@ pub trait TestNetFactory: Sized {
 			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
 					let outcome = match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
-							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerConnected(peer_id)) => {
+							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
-							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerDisconnected(peer_id)) => {
+							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>

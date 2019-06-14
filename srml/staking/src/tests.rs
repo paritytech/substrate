@@ -16,49 +16,12 @@
 
 //! Tests for the module.
 
-#![cfg(test)]
-
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
-use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
+use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
-
-#[inline]
-fn check_exposure(acc: u64) {
-	let expo = Staking::stakers(&acc);
-	assert_eq!(expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>());
-}
-
-#[inline]
-fn check_exposure_all() {
-	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
-}
-
-#[inline]
-fn assert_total_expo(acc: u64, val: u64) {
-	let expo = Staking::stakers(&acc);
-	assert_eq!(expo.total, val);
-}
-
-#[inline]
-fn bond_validator(acc: u64, val: u64) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc+1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::validate(Origin::signed(acc), ValidatorPrefs::default()));
-}
-
-#[inline]
-fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc+1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::nominate(Origin::signed(acc), target));
-}
 
 #[test]
 fn basic_setup_works() {
@@ -1706,19 +1669,14 @@ fn bond_with_no_staked_value() {
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
-		// Not elected even though we want 3.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
 		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 11).
 		assert_eq!(Staking::slot_stake(), 11);
 
-		// let's make the stingy one elected.
+		// make the stingy one elected.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
@@ -1728,10 +1686,6 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Staking::stakers(1), Exposure { own: 1, total: 501, others: vec![IndividualExposure { who: 3, value: 500}]});
 		// New slot stake.
 		assert_eq!(Staking::slot_stake(), 501);
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(3);
 		Session::check_rotate_session(System::block_number());

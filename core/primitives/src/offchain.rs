@@ -35,8 +35,8 @@ impl TryFrom<u32> for CryptoKind {
 
 	fn try_from(kind: u32) -> Result<Self, Self::Error> {
 		match kind {
-			e if e == CryptoKind::Sr25519 as u8 as u32 => Ok(CryptoKind::Sr25519),
-			e if e == CryptoKind::Ed25519 as u8 as u32 => Ok(CryptoKind::Ed25519),
+			e if e == u32::from(CryptoKind::Sr25519 as u8) => Ok(CryptoKind::Sr25519),
+			e if e == u32::from(CryptoKind::Ed25519 as u8) => Ok(CryptoKind::Ed25519),
 			_ => Err(())
 		}
 	}
@@ -103,7 +103,7 @@ impl From<HttpRequestStatus> for u32 {
 			HttpRequestStatus::Unknown => 0,
 			HttpRequestStatus::DeadlineReached => 10,
 			HttpRequestStatus::Timeout => 20,
-			HttpRequestStatus::Finished(code) => code as u32,
+			HttpRequestStatus::Finished(code) => u32::from(code),
 		}
 	}
 }
@@ -116,7 +116,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 			0 => Ok(HttpRequestStatus::Unknown),
 			10 => Ok(HttpRequestStatus::DeadlineReached),
 			20 => Ok(HttpRequestStatus::Timeout),
-			100...999 => Ok(HttpRequestStatus::Finished(status as u16)),
+			100..=999 => u16::try_from(status).map(HttpRequestStatus::Finished).map_err(|_| ()),
 			_ => Err(()),
 		}
 	}

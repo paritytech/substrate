@@ -20,13 +20,16 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
-use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use crate::backend::{
+	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
+	StorageCollection, ChildStorageCollection,
+};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -38,13 +41,14 @@ use consensus::well_known_cache_keys;
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, F, H> {
+pub struct Backend<S, F, H: Hasher> {
 	blockchain: Arc<Blockchain<S, F>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
+	import_lock: Mutex<()>,
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, S, F, H> {
+pub struct ImportOperation<Block: BlockT, S, F, H: Hasher> {
 	header: Option<Block::Header>,
 	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
@@ -64,19 +68,20 @@ pub struct OnDemandState<Block: BlockT, S, F> {
 }
 
 /// On-demand or in-memory genesis state.
-pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H> {
+pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H: Hasher> {
 	/// On-demand state - storage values are fetched from remote nodes.
 	OnDemand(OnDemandState<Block, S, F>),
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryState<H>),
 }
 
-impl<S, F, H> Backend<S, F, H> {
+impl<S, F, H: Hasher> Backend<S, F, H> {
 	/// Create new light backend.
 	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
 		Self {
 			blockchain,
 			genesis_state: RwLock::new(None),
+			import_lock: Default::default(),
 		}
 	}
 
@@ -86,7 +91,7 @@ impl<S, F, H> Backend<S, F, H> {
 	}
 }
 
-impl<S: AuxStore, F, H> AuxStore for Backend<S, F, H> {
+impl<S: AuxStore, F, H: Hasher> AuxStore for Backend<S, F, H> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -218,6 +223,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
+
+	fn get_import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
+	}
 }
 
 impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
@@ -309,7 +318,11 @@ where
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+	fn update_storage(
+		&mut self,
+		_update: StorageCollection,
+		_child_update: ChildStorageCollection,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -392,7 +405,7 @@ where
 		Vec::new()
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
 }
@@ -487,10 +500,10 @@ where
 		}
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
-			OnDemandOrGenesisState::OnDemand(state) => state.try_into_trie_backend(),
-			OnDemandOrGenesisState::Genesis(state) => state.try_into_trie_backend(),
+			OnDemandOrGenesisState::OnDemand(ref mut state) => state.as_trie_backend(),
+			OnDemandOrGenesisState::Genesis(ref mut state) => state.as_trie_backend(),
 		}
 	}
 }

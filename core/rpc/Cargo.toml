@@ -6,11 +6,12 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.14.0"
-jsonrpc-core = "10.0.1"
-jsonrpc-pubsub = "10.0.1"
-jsonrpc-derive = "10.0.2"
+jsonrpc-core = "12.0.0"
+jsonrpc-core-client = "12.0.0"
+jsonrpc-pubsub = "12.0.0"
+jsonrpc-derive = "12.0.0"
 log = "0.4"
-parking_lot = "0.7.1"
+parking_lot = "0.8.0"
 parity-codec = "3.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -28,7 +29,5 @@ tokio = "0.1.7"
 assert_matches = "1.1"
 futures = "0.1.17"
 sr-io = { path = "../sr-io" }
-test_client = { package = "substrate-test-client", path = "../test-client" }
-test_runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
-consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 rustc-hex = "2.0"
