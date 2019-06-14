@@ -675,12 +675,10 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	type Hashing = T::Hashing;
-	type Digest = T::Digest;
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
-	type Log = T::Log;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;

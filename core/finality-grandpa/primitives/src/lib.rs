@@ -21,17 +21,32 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+#[cfg(feature = "std")]
+use serde::Serialize;
 use parity_codec::{Encode, Decode};
-use substrate_primitives::ed25519;
-use sr_primitives::traits::{DigestFor, NumberFor};
+use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
-use ed25519::Public as AuthorityId;
+/// The grandpa crypto scheme defined via the keypair type.
+#[cfg(feature = "std")]
+pub type AuthorityPair = substrate_primitives::ed25519::Pair;
+
+/// Identity of a Grandpa authority.
+pub type AuthorityId = substrate_primitives::ed25519::Public;
+
+/// Signature for a Grandpa authority.
+pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
+
+/// The `ConsensusEngineId` of GRANDPA.
+pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
+
+/// The weight of an authority.
+pub type AuthorityWeight = u64;
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Debug, PartialEq))]
-#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: Vec<(AuthorityId, u64)>,
@@ -43,14 +58,6 @@ pub struct ScheduledChange<N> {
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
-
-/// Well-known storage keys for GRANDPA.
-pub mod well_known_keys {
-	/// The key for the authorities and weights vector in storage.
-	pub const AUTHORITY_PREFIX: &[u8] = b":grandpa:auth:";
-	/// The key for the authorities count.
-	pub const AUTHORITY_COUNT: &[u8] = b":grandpa:auth:len";
-}
 
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
@@ -107,6 +114,6 @@ decl_runtime_apis! {
 		/// When called at block B, it will return the set of authorities that should be
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
-		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 	}
 }

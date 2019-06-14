@@ -15,7 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use test_client::runtime::TestAPI;
+use test_client::{
+    DefaultTestClientBuilderExt, TestClientBuilder,
+    TestClientBuilderExt, runtime::TestAPI,
+};
 use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
 use state_machine::ExecutionStrategy;
 
@@ -53,13 +56,13 @@ fn sr_api_benchmark(c: &mut Criterion) {
 	});
 
 	c.bench_function("calling function by function pointer in wasm", |b| {
-		let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 		b.iter(|| client.runtime_api().benchmark_indirect_call(&block_id).unwrap())
 	});
 
 	c.bench_function("calling function in wasm", |b| {
-		let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 		b.iter(|| client.runtime_api().benchmark_direct_call(&block_id).unwrap())
 	});

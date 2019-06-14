@@ -82,8 +82,6 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub use fg_primitives::ScheduledChange;
-
 mod authorities;
 mod aux_schema;
 mod communication;
@@ -111,8 +109,10 @@ use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
+use fg_primitives::AuthoritySignature;
 
-use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+// Re-export these two because it's just so damn convenient.
+pub use fg_primitives::{AuthorityId, ScheduledChange};
 
 #[cfg(test)]
 mod tests;

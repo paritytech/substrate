@@ -750,6 +750,7 @@ macro_rules! decl_module {
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		$(#[doc = $doc_attr])*
+		#[allow(unreachable_code)]
 		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
 			{ $( $impl )* }
 			Ok(())

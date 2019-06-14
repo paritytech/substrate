@@ -16,4 +16,3 @@ parity-codec = "3.5.1"
 primitives = { package = "substrate-primitives", path = "../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
-

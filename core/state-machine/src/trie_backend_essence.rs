@@ -21,9 +21,11 @@ use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher};
-use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
-	read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use primitives::child_trie::ChildTrieReadRef;
+use trie::{
+	TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
+	read_trie_value, read_child_trie_value, for_keys_in_child_trie,
+};
 use crate::backend::Consolidate;
 
 /// Patricia trie-based storage trait.

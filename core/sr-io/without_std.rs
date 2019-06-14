@@ -266,7 +266,13 @@ pub mod ext {
 		/// - `u32::max_value()` if the value does not exists.
 		///
 		/// - Otherwise, the number of bytes written for value.
-		fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+		fn ext_get_storage_into(
+			key_data: *const u8,
+			key_len: u32,
+			value_data: *mut u8,
+			value_len: u32,
+			value_offset: u32
+		) -> u32;
 		/// Gets the trie root of the storage.
 		fn ext_storage_root(result: *mut u8);
 		/// Get the change trie root of the current storage overlay at a block with given parent.
@@ -275,7 +281,8 @@ pub mod ext {
 		///
 		/// - `1` if the change trie root was found.
 		/// - `0` if the change trie root was not found.
-		fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32;
+		fn ext_storage_changes_root(
+			parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32;
 
 		/// A child storage function.
 		///
@@ -283,7 +290,7 @@ pub mod ext {
 		///
 		/// A child storage is used e.g. by a contract.
 		fn ext_set_child_storage(
-			prefix_storage_key_data: *const u8,
+			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
 			key_len: u32,
@@ -296,7 +303,7 @@ pub mod ext {
 		///
 		/// A child storage is used e.g. by a contract.
 		fn ext_clear_child_storage(
-			prefix_storage_key_data: *const u8,
+			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
 			key_len: u32
@@ -357,13 +364,22 @@ pub mod ext {
 		/// # Returns
 		///
 		/// - The pointer to the result vector and `written_out` contains its length.
-		fn ext_child_storage_root(prefix_storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
+		fn ext_child_storage_root(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			written_out: *mut u32
+		) -> *mut u8;
 
 		/// The current relay chain identifier.
 		fn ext_chain_id() -> u64;
 
 		/// Calculate a blake2_256 merkle trie root.
-		fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+		fn ext_blake2_256_enumerated_trie_root(
+			values_data: *const u8,
+			lens_data: *const u32,
+			lens_len: u32,
+			result: *mut u8
+		);
 		/// BLAKE2_128 hash
 		fn ext_blake2_128(data: *const u8, len: u32, out: *mut u8);
 		/// BLAKE2_256 hash
@@ -377,11 +393,25 @@ pub mod ext {
 		/// Keccak256 hash
 		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 		/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		fn ext_ed25519_verify(
+			msg_data: *const u8,
+			msg_len: u32,
+			sig_data: *const u8,
+			pubkey_data: *const u8
+		) -> u32;
 		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		fn ext_sr25519_verify(
+			msg_data: *const u8,
+			msg_len: u32,
+			sig_data: *const u8,
+			pubkey_data: *const u8
+		) -> u32;
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
+		fn ext_secp256k1_ecdsa_recover(
+			msg_data: *const u8,
+			sig_data: *const u8,
+			pubkey_data: *mut u8
+		) -> u32;
 
 		//================================
 		// Offchain-worker Context

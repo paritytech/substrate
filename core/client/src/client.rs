@@ -37,9 +37,10 @@ use consensus::{
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	BlockNumberToHash, ApiRef, ProvideRuntimeApi,
 	SaturatedConversion, One, DigestFor,
 };
+use runtime_primitives::generic::DigestItem;
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{
 	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
@@ -60,7 +61,10 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
+use crate::backend::{
+	self, BlockImportOperation, PrunableStateChangesTrieStorage,
+	StorageCollection, ChildStorageCollection
+};
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
 	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
@@ -77,6 +81,7 @@ use crate::genesis;
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
+
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -134,7 +139,15 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 /// Client import operation, a wrapper for the backend.
 pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: backend::Backend<Block, H>> {
 	op: B::BlockImportOperation,
-	notify_imported: Option<(Block::Hash, BlockOrigin, Block::Header, bool, Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>)>,
+	notify_imported: Option<(
+		Block::Hash,
+		BlockOrigin,
+		Block::Header,
+		bool,
+		Option<(
+			StorageCollection,
+			ChildStorageCollection,
+		)>)>,
 	notify_finalized: Vec<Block::Hash>,
 }
 
@@ -151,8 +164,10 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// Get storage changes event stream.
 	///
 	/// Passing `None` as `filter_keys` subscribes to all storage changes.
-	fn storage_changes_notification_stream(&self,
-		filter_keys: Option<&[StorageKey]>
+	fn storage_changes_notification_stream(
+		&self,
+		filter_keys: Option<&[StorageKey]>,
+		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
@@ -364,6 +379,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map_err(|e| error::Error::from_state(Box::new(e)))
 	}
 
+	/// Given a `BlockId` and a key, return the value under the hash in that block.
+	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> error::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.storage_hash(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+		)
+	}
+
 	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
 	pub fn child_storage_keys(
 		&self,
@@ -390,6 +413,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.state_at(id)?
 			.child_storage(child_trie, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
+	}
+
+	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
+	pub fn child_storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key: &StorageKey
+	) -> error::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.child_storage_hash(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+		)
 	}
 
 	/// Get the code at a given block.
@@ -927,7 +962,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.op.update_db_storage(storage_update)?;
 		}
 		if let Some(storage_changes) = storage_changes.clone() {
-			operation.op.update_storage(storage_changes)?;
+			operation.op.update_storage(storage_changes.0, storage_changes.1)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			operation.op.update_changes_trie(changes_update)?;
@@ -956,7 +991,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
 		Option<Option<ChangesUpdate>>,
-		Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+		Option<(
+			Vec<(Vec<u8>, Option<Vec<u8>>)>,
+			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+		)>
 	)>
 		where
 			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
@@ -999,7 +1037,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				overlay.commit_prospective();
 
-				Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
+				let (top, children) = overlay.into_committed();
+				let children = children.map(|(sk, it)| (sk, it.collect())).collect();
+				Ok((Some(storage_update), Some(changes_update), Some((top.collect(), children))))
 			},
 			None => Ok((None, None, None))
 		}
@@ -1098,14 +1138,26 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn notify_imported(
 		&self,
-		notify_import: (Block::Hash, BlockOrigin, Block::Header, bool, Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>),
+		notify_import: (
+			Block::Hash, BlockOrigin,
+			Block::Header,
+			bool,
+			Option<(
+				Vec<(Vec<u8>, Option<Vec<u8>>)>,
+				Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+				)
+			>),
 	) -> error::Result<()> {
 		let (hash, origin, header, is_new_best, storage_changes) = notify_import;
 
 		if let Some(storage_changes) = storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
-				.trigger(&hash, storage_changes.into_iter());
+				.trigger(
+					&hash,
+					storage_changes.0.into_iter(),
+					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+				);
 		}
 
 		let notification = BlockImportNotification::<Block> {
@@ -1481,8 +1533,12 @@ where
 	}
 
 	/// Get storage changes event stream.
-	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>> {
-		Ok(self.storage_notifications.lock().listen(filter_keys))
+	fn storage_changes_notification_stream(
+		&self,
+		filter_keys: Option<&[StorageKey]>,
+		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
+	) -> error::Result<StorageEventStream<Block::Hash>> {
+		Ok(self.storage_notifications.lock().listen(filter_keys, child_filter_keys))
 	}
 }
 
@@ -1719,8 +1775,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use runtime_primitives::traits::DigestItem as DigestItemT;
-	use runtime_primitives::generic::DigestItem;
+	use runtime_primitives::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
