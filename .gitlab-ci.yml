@@ -7,7 +7,6 @@
 
 
 stages:
-  - pre-test
   - test
   - build
   - publish
@@ -58,7 +57,7 @@ variables:
 #### stage:                        test
 
 check-runtime:
-  stage:                           pre-test
+  stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -72,7 +71,7 @@ check-runtime:
 
 
 check-line-width:
-  stage:                           pre-test
+  stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -83,13 +82,22 @@ check-line-width:
 
 
 cargo-audit:
-  stage:                           pre-test
+  stage:                           test
   <<:                              *docker-env
   except:
     - /^[0-9]+$/
   script:
     - cargo audit
   allow_failure:                   true
+
+
+cargo-check-benches:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - ./scripts/build.sh --locked
+    - time cargo check --benches
+    - sccache -s
 
 
 cargo-check-subkey:
