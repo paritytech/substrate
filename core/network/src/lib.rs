@@ -31,6 +31,7 @@ mod discovery;
 mod on_demand_layer;
 #[macro_use]
 mod protocol;
+mod protocol_behaviour;
 mod service;
 mod transport;
 
