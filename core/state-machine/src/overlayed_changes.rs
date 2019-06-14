@@ -61,6 +61,7 @@ pub struct OverlayedChangeSet {
 	/// for freshly added child_trie.
 	pub pending_child: HashMap<Vec<u8>, KeySpace>,
 	/// Child that got moved (nodes are pending removal).
+	/// TODO EMCH fuse with pending_child (puting option<keyspace> in pending).
 	pub moved_child: HashSet<Vec<u8>>,
 }
 
@@ -142,18 +143,26 @@ impl OverlayedChanges {
 	}
 
 	/// returns a child trie if present
-	pub fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
+	pub fn child_trie(&self, storage_key: &[u8]) -> Option<Option<ChildTrie>> {
 
 		if let Some(keyspace) = self.prospective.pending_child.get(storage_key) {
-			if let Some(map) = self.prospective.children.get(keyspace) {
-				 return Some(map.2.clone());
-			}
+			let map = self.prospective.children.get(keyspace)
+				.expect("children entry always have a pending association; qed");
+			return Some(Some(map.2.clone()));
 		}
 
 		if let Some(keyspace) = self.committed.pending_child.get(storage_key) {
-			if let Some(map) = self.committed.children.get(keyspace) {
-				 return Some(map.2.clone());
-			}
+			let map = self.prospective.children.get(keyspace)
+				.expect("children entry always have a pending association; qed");
+			return Some(Some(map.2.clone()));
+		}
+
+		if self.prospective.moved_child.contains(storage_key) {
+			return Some(None);
+		}
+
+		if self.committed.moved_child.contains(storage_key) {
+			return Some(None);
 		}
 
 		None

@@ -176,7 +176,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 					// insertion for creation of the child trie,
 					// this can break in the future and require an
 					// actual backend update here.
-					|_| ,
+					|_| (),
 					&b"test"[..],
 				);
 				storage.1.insert(

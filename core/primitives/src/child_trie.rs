@@ -233,7 +233,7 @@ impl ChildTrie {
 	}
 	/// Return true when the child trie is new and does not contain a root.
 	pub fn is_new(&self) -> bool {
-		self.root.is_some()
+		self.root.is_none()
 	}
 	/// See [`parent_key_slice`].
 	pub fn parent_slice(&self) -> &[u8] {

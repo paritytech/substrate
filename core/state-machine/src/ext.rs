@@ -198,7 +198,7 @@ where
 
 	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.child_trie(storage_key).or_else(||
+		self.overlay.child_trie(storage_key).unwrap_or_else(||
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
@@ -241,7 +241,7 @@ where
 	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
 		// do check for backend
-		let ct = match self.child_trie(ct.parent_trie().as_ref()) {
+		let ct = match self.child_trie(ct.parent_slice()) {
 			Some(ct_old) => if
 				(ct_old.root_initial_value() != ct.root_initial_value()
 				&& !ct.is_new()) ||
