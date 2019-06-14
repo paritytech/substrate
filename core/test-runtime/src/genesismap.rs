@@ -16,11 +16,9 @@
 
 //! Tool for creating the genesis block.
 
-include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
-
 use std::collections::HashMap;
 use runtime_io::{blake2_256, twox_128};
-use super::AccountId;
+use super::{AccountId, WASM_BINARY};
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;

@@ -51,7 +51,7 @@ mod local_executor {
 		pub LocalExecutor,
 		runtime::api::dispatch,
 		runtime::native_version,
-		runtime::genesismap::WASM_BINARY
+		runtime::WASM_BINARY
 	);
 }
 
