@@ -271,7 +271,7 @@ use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
-	Bounded, SaturatedConversion
+	Bounded, SaturatedConversion, SimpleArithmetic,
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -285,6 +285,55 @@ const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
+
+// `rational = int + num/den` with `num < den`
+#[derive(Clone)]
+struct Rational<N> {
+	// Integer part of the fraction
+	int: N,
+	// Numerator
+	num: N,
+	// Denominator
+	den: N,
+}
+
+impl<N: SimpleArithmetic + Clone> Rational<N> {
+	/// Lower precision of the fractional part (num/den) to be able to compute multiplications
+	/// without overflow of the fractional part (num/den part).
+	/// This can be done if num*dem doesn't overflow.
+	// TODO TODO: this could be done with fracional part only decreased
+	// TODO TODO: also instead of a dynamic precision we could enforce u32 precision and do the
+	// operation of the remainder part in u64 arithmetic. (or u64, u128)
+	fn new(p: N, q: N) -> Self {
+		let mut num = p.clone() % q.clone();
+		let int = p - num.clone();
+		let mut den = q;
+
+		// TODO: this can be improved using some dichotomic search.
+		// TODO: this can be improved using great common divisor before losing precision.
+		while den.checked_mul(&num).is_none() {
+			num = num >> 1u32;
+			den = den >> 1u32;
+		}
+
+		Rational { int, num, den }
+	}
+
+	fn saturating_mul(self, b: N) -> N {
+		let integer_part = b.checked_mul(&self.int).unwrap_or_else(|| N::max_value());
+
+		// Operation doesn't overflow because num <= den
+		let divided_multiplied_part = (b.clone() / self.den.clone()) * self.num.clone();
+
+		// Operation doesn't overflow because num * dem doesn't overflow (property set at `new`)
+		let remainder_multiplied_divided_part = ((b % self.den.clone()) * self.num) / self.den;
+
+		// This doesn't overflow as num <= den
+		let fractional_part = divided_multiplied_part + remainder_multiplied_divided_part;
+
+		integer_part.saturating_add(fractional_part)
+	}
+}
 
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -909,10 +958,11 @@ impl<T: Trait> Module<T> {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
+				let rational = Rational::new(rest_slash, total);
 				for i in exposure.others.iter() {
+					let nom_slash= rational.clone().saturating_mul(i.value);
 					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
+					imbalance.subsume(T::Currency::slash(&i.who, nom_slash).0)
 				}
 			}
 		}
@@ -953,12 +1003,12 @@ impl<T: Trait> Module<T> {
 		} else {
 			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
-			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
+			let rational = Rational::new(reward, total);
 			for i in &exposure.others {
-				let nom_payout = safe_mul_rational(i.value);
+				let nom_payout = rational.clone().saturating_mul(i.value);
 				imbalance.maybe_subsume(Self::make_payout(&i.who, nom_payout));
 			}
-			safe_mul_rational(exposure.own)
+			rational.saturating_mul(exposure.own)
 		};
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);
@@ -1010,6 +1060,8 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Reward(reward));
 			let len = validators.len() as u32; // validators length can never overflow u64
 			let len: BalanceOf<T> = len.into();
+			// TODO TODO: would be better to take this from actually imbalance returned by
+			// reward_validator
 			let total_minted = reward * len;
 			let total_rewarded_stake = Self::slot_stake() * len;
 			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
@@ -1192,6 +1244,8 @@ impl<T: Trait> Module<T> {
 				<Validators<T>>::remove(&stash);
 				let _ = Self::apply_force_new_era(false);
 
+				// TODO TODO: would be better to take this from actually imbalance returned by
+				// slash_validator
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
 				RawEvent::OfflineWarning(stash.clone(), slash_count)
