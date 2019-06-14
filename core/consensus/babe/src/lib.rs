@@ -778,7 +778,7 @@ fn claim_slot(
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B>,
 {
 	// no cache => no initialization
 	let cache = match client.cache() {
@@ -788,7 +788,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 
 	// check if we already have initialized the cache
 	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<AuthorityIdFor<B>>> = cache
+	let genesis_authorities: Option<Vec<AuthorityId>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
 		.and_then(|v| Decode::decode(&mut &v[..]));
 	if genesis_authorities.is_some() {
@@ -819,7 +819,7 @@ pub fn import_queue<B, C, E>(
 ) -> Result<BabeImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
+	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem,
 	E: 'static,
 {
