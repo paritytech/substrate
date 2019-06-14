@@ -112,6 +112,12 @@
 //! }
 //! ```
 //!
+//! ## Assumptions
+//!
+//! Below are assumptions that must be held when using this module, otherwise it can exhibits undefined behavior.
+//!
+//! * The total count of assets should be less than `Trait::AssetId::max_value()`.
+//!
 //! ## Related Modules
 //!
 //! * [`System`](../srml_system/index.html)
