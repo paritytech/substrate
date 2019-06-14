@@ -302,9 +302,9 @@ mod tests {
 		});
 	}
 
-  fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
-    SessionKeys(ring.to_owned().into(), ring.to_owned().into())
-  }
+	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
+		SessionKeys(ring.to_owned().into(), ring.to_owned().into())
+	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let three = AccountId::from_raw([3u8; 32]);
