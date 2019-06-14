@@ -81,7 +81,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
-			code: WASM_BINARY.to_vec(),    // FIXME change once we have #1252
+			code: WASM_BINARY.to_vec(),
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
 		system: None,

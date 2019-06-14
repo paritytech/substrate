@@ -1,6 +1,10 @@
 #![no_std]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
+// Make the WASM binary available.
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::slice;
