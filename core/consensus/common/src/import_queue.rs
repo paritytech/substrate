@@ -152,7 +152,7 @@ impl<B: BlockT> Drop for BasicQueue<B> {
 impl<B: BlockT> BasicQueue<B> {
 	/// Instantiate a new basic queue, with given verifier.
 	///
-	/// This crates a background thread, and calls `on_start` on the justification importer and
+	/// This creates a background thread, and calls `on_start` on the justification importer and
 	/// finality proof importer.
 	pub fn new<V: 'static + Verifier<B>>(
 		verifier: Arc<V>,
