@@ -31,18 +31,16 @@ use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use consensus_common::well_known_cache_keys::Id as CacheKeyId;
+use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	Block, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps,
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
-use primitives::{
-	crypto::Pair,
-	sr25519::{Public, Signature, self},
-};
+use primitives::{crypto::Pair, sr25519};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -58,9 +56,8 @@ use schnorrkel::{
 		VRFProof, VRFProofBatchable, VRFInOut,
 	},
 };
-use authorities::AuthoritiesApi;
 use consensus_common::{
-	self, Authorities, BlockImport, Environment, Proposer,
+	self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -83,6 +80,7 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
+pub use babe_primitives::AuthorityId;
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -181,16 +179,11 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 > where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B>,
 	SC: SelectChain<B>,
-	generic::DigestItem<B::Hash, Public, Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
-		Hash=B::Hash,
-	>,
+	H: Header<Hash=B::Hash>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -228,17 +221,14 @@ struct BabeWorker<C, E, I, SO> {
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	B: Block<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<
-		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
-		Hash=B::Hash,
-	>,
+	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -304,7 +294,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let proposer = match env.init(&chain_head, &authorities) {
+			let proposer = match env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -450,7 +440,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
-	authorities: &[Public],
+	authorities: &[AuthorityId],
 	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
@@ -553,10 +543,9 @@ impl<C> BabeVerifier<C> {
 }
 
 impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	Self: Authorities<B>,
+	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
+	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+	DigestItemFor<B>: CompatibleDigestItem,
 {
 	fn verify(
 		&self,
@@ -564,7 +553,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -583,7 +572,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let authorities = self.authorities(&BlockId::Hash(parent_hash))
+		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		// we add one to allow for some small drift.
@@ -625,9 +614,12 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				let new_authorities = pre_header.digest()
-					.log(DigestItem::as_authorities_change)
-					.map(|digest| digest.to_vec());
+				// `Consensus` is the Babe-specific authorities change log.
+				// It's an encoded `Vec<AuthorityId>`, the same format as is stored in the cache,
+				// so no need to decode/re-encode.
+				let maybe_keys = pre_header.digest()
+					.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID)))
+					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 				let import_block = ImportBlock {
 					origin,
@@ -641,7 +633,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 				};
 
 				// FIXME #1019 extract authorities
-				Ok((import_block, new_authorities))
+				Ok((import_block, maybe_keys))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -654,33 +646,21 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	}
 }
 
-impl<B, C> Authorities<B> for BabeVerifier<C> where
-	B: Block,
-	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
-{
-	type Error = ConsensusError;
-
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error> {
-		authorities(self.client.as_ref(), at)
-	}
-}
-
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
-	Vec<AuthorityIdFor<B>>,
+	Vec<AuthorityId>,
 	ConsensusError,
 > where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuthoritiesApi<B>,
+	C::Api: BabeApi<B>,
 {
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<dyn AuthoritiesApi<B>>(at).unwrap_or(false) {
-				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
+			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
+				BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \
 						therefore this is unreachable; qed")
@@ -740,7 +720,7 @@ fn claim_slot(
 	slot_number: u64,
 	genesis_hash: &[u8],
 	epoch: u64,
-	authorities: &[sr25519::Public],
+	authorities: &[AuthorityId],
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
@@ -784,7 +764,7 @@ mod tests {
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
-	type Item = generic::DigestItem<Hash, Public, Signature>;
+	type Item = generic::DigestItem<Hash>;
 	use test_client::AuthorityKeyring;
 
 	type Error = client::error::Error;
@@ -803,7 +783,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Public])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -977,7 +957,7 @@ mod tests {
 	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().0.sign(b"");
-		let bad_seal: Item = DigestItem::Seal([0; 4], sig);
+		let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
 	}
@@ -985,7 +965,7 @@ mod tests {
 	#[test]
 	fn malformed_pre_digest_rejected() {
 		drop(env_logger::try_init());
-		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, Signature([0; 64]));
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 	}
 
@@ -993,7 +973,7 @@ mod tests {
 	fn sig_is_not_pre_digest() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().0.sign(b"");
-		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig);
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_some())
 	}

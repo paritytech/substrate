@@ -46,12 +46,13 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
-use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest, DigestItem,
-	SaturatedConversion
+use runtime_primitives::{
+	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
+	BuildStorage
 };
-use runtime_primitives::BuildStorage;
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
+};
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
@@ -428,7 +429,11 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
+	fn reset_storage(
+		&mut self,
+		top: StorageOverlay,
+		children: ChildrenStorageOverlay
+	) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
@@ -542,7 +547,13 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(&self, config: &ChangesTrieConfiguration, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
+	pub fn prune(
+		&self,
+		config: &ChangesTrieConfiguration,
+		tx: &mut DBTransaction,
+		block_hash: Block::Hash,
+		block_num: NumberFor<Block>,
+	) {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,
@@ -1429,7 +1440,6 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use runtime_primitives::generic::DigestItem;
 		use runtime_primitives::testing::Digest;
 
 		let (changes_root, changes_trie_update) = prepare_changes(changes);

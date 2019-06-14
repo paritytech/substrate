@@ -109,7 +109,7 @@ cargo-check-subkey:
     - cd ./subkey
     - time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
-  
+
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -135,7 +135,7 @@ test-linux-stable-int:
       - $DEPLOY_TAG
   script:
     - ./scripts/build.sh --locked
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace 
+    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
   allow_failure:                   true

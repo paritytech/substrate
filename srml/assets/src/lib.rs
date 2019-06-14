@@ -33,7 +33,8 @@
 //!
 //! ### Terminology
 //!
-//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
+//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the
+//!   account that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
 //! * **Asset destruction:** The process of an account removing its entire holding of an asset.
 //! * **Fungible asset:** An asset whose units are interchangeable.
@@ -45,7 +46,8 @@
 //!
 //! * Issue a unique asset to its creator's account.
 //! * Move assets between accounts.
-//! * Remove an account's balance of an asset when requested by that account's owner and update the asset's total supply.
+//! * Remove an account's balance of an asset when requested by that account's owner and update
+//!   the asset's total supply.
 //!
 //! ## Interface
 //!
@@ -237,7 +239,7 @@ mod tests {
 	use primitives::{
 		BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -255,12 +257,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl Trait for Test {
 		type Event = ();
