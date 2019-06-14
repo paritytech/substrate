@@ -2565,11 +2565,11 @@ pub(crate) mod tests {
 	fn finalizing_diverged_block_should_trigger_reorg() {
 		use test_client::blockchain::HeaderBackend;
 
-		let client = test_client::new();
+		let (client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1 -> A2
 		//   \
-		//    -> B1
+		//    -> B1 -> B2
 		let a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
@@ -2587,9 +2587,8 @@ pub(crate) mod tests {
 		let b1 = b1.bake().unwrap();
 		client.import(BlockOrigin::Own, b1.clone()).unwrap();
 
-		dbg!((a1.header().number(), a1.hash()));
-		dbg!((a2.header().number(), a2.hash()));
-		dbg!((b1.header().number(), b1.hash()));
+		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		#[allow(deprecated)]
 		let blockchain = client.backend().blockchain();
@@ -2610,10 +2609,30 @@ pub(crate) mod tests {
 			b1.hash(),
 		);
 
-		// and also the new best block
+		// and B1 should be the new best block (`finalize_block` as no way of
+		// knowing about B2)
 		assert_eq!(
 			blockchain.info().best_hash,
 			b1.hash(),
+		);
+
+		// `SelectChain` should report B2 as best block though
+		assert_eq!(
+			select_chain.best_chain().unwrap().hash(),
+			b2.hash(),
+		);
+
+		// after we build B3 on top of B2 and import it
+		// it should be the new best block,
+		let b3 = client.new_block_at(
+			&BlockId::Hash(b2.hash()),
+			Default::default(),
+		).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b3.clone()).unwrap();
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			b3.hash(),
 		);
 	}
 }
