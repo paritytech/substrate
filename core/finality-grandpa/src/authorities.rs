@@ -18,18 +18,16 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use substrate_primitives::ed25519;
 use grandpa::voter_set::VoterSet;
 use parity_codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use fg_primitives::AuthorityId;
 
 use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
-
-use ed25519::Public as AuthorityId;
 
 /// A shared authority set.
 pub(crate) struct SharedAuthoritySet<H, N> {
@@ -522,8 +520,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_b = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -587,8 +585,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_c = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_c = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -653,7 +651,7 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -719,8 +717,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId([1; 32]), 5)];
-		let set_b = vec![(AuthorityId([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),

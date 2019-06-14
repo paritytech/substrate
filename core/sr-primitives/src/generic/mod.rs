@@ -37,7 +37,7 @@ pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{
-	Digest, DigestItem, DigestItemRef, ConsensusDigest, RuntimeDigest, SystemDigest,
+	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId
 };
 
 use crate::codec::Encode;

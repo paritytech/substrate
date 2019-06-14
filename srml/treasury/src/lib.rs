@@ -338,7 +338,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::testing::Header;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -352,12 +352,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

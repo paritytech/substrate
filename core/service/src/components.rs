@@ -499,6 +499,8 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: config.database_cache_size.map(|u| u as usize),
 			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+				config.state_cache_child_ratio.map(|v| (v, 100)),
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -591,6 +593,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+				config.state_cache_child_ratio.map(|v| (v, 100)),
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};

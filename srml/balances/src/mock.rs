@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
+use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
@@ -38,12 +38,10 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;

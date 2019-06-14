@@ -146,7 +146,8 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..])).expect("Invalid genesis hash or unrecognised chain identifier"),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+          .expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));

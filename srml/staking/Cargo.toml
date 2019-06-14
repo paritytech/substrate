@@ -13,7 +13,6 @@ rstd = { package = "sr-std", path = "../../core/sr-std", default-features = fals
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
-consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 
