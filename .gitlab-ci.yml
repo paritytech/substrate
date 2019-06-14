@@ -114,7 +114,6 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
@@ -126,7 +125,6 @@ test-linux-stable-int:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace 
         cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
@@ -181,7 +179,6 @@ build-linux-release:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
@@ -211,7 +208,6 @@ build-rust-doc-release:
     - ./crate-docs
   <<:                              *build-only
   script:
-    - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
