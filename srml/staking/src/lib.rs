@@ -317,8 +317,8 @@ impl<N: SimpleArithmetic + Clone> Rational<N> {
 		}
 
 		if num == den {
-			int += 1;
-			num = 0;
+			int += 1u8.into();
+			num = 0u8.into();
 		}
 
 		Rational { int, num, den }
