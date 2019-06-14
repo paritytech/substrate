@@ -359,9 +359,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Disable the validator of index `i`.
-	pub fn disable(i: usize) {
+	pub fn disable_index(i: usize) {
+		println!("Disabling index {}", i);
 		T::SessionHandler::on_disabled(i);
 		<Changed<T>>::put(true);
+	}
+
+	/// Disable the validator identified by `c`. (If using with the staking module, this would be
+	/// their *controller* account.)
+	pub fn disable(c: &T::AccountId) -> rstd::result::Result<(), ()> {
+		println!("Disabling account {:?} from {:?}", c, Self::validators());
+		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 }
 
