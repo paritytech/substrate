@@ -362,8 +362,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 
 	fn storage_hash(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<Block::Hash>> {
-		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(self.storage(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying storage hash at {:?} for key {}", block, HexDisplay::from(&key.0));
+		Ok(self.client.storage_hash(&BlockId::Hash(block), &key)?)
 	}
 
 	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<u64>> {
@@ -398,11 +399,13 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> Result<Option<Block::Hash>> {
-		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(
-			self.child_storage(child_storage_key, key, block)?
-				.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
-		)
+		let block = self.unwrap_or_best(block)?;
+		trace!(
+			target: "rpc", "Querying child storage hash at {:?} for key {}",
+			block,
+			HexDisplay::from(&key.0),
+		);
+		Ok(self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key)?)
 	}
 
 	fn child_storage_size(
@@ -439,7 +442,10 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
-		let stream = match self.client.storage_changes_notification_stream(keys.as_ref().map(|x| &**x)) {
+		let stream = match self.client.storage_changes_notification_stream(
+			keys.as_ref().map(|x| &**x),
+			None
+		) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(error::Error::from(err).into());
@@ -466,7 +472,10 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))
 				.map(|(block, changes)| Ok(StorageChangeSet {
 					block,
-					changes: changes.iter().cloned().collect(),
+					changes: changes.iter()
+						.filter_map(|(o_sk, k, v)| if o_sk.is_none() {
+							Some((k.clone(),v.cloned()))
+						} else { None }).collect(),
 				}));
 
 			sink
@@ -488,7 +497,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(
-				Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])
+			Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())]),
+			None,
 		) {
 			Ok(stream) => stream,
 			Err(err) => {
