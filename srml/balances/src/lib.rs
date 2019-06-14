@@ -142,11 +142,15 @@
 //! ## Genesis config
 //!
 //! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//!
+//! ## Assumptions
+//!
+//! * Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, mem};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
@@ -386,12 +390,26 @@ decl_module! {
 		/// # </weight>
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] free: T::Balance,
-			#[compact] reserved: T::Balance
+			#[compact] new_free: T::Balance,
+			#[compact] new_reserved: T::Balance
 		) {
 			let who = T::Lookup::lookup(who)?;
-			Self::set_free_balance(&who, free);
-			Self::set_reserved_balance(&who, reserved);
+
+			let current_free = <FreeBalance<T, I>>::get(&who);
+			if new_free > current_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - current_free));
+			} else if new_free < current_free {
+				mem::drop(NegativeImbalance::<T, I>::new(current_free - new_free));
+			}
+			Self::set_free_balance(&who, new_free);
+
+			let current_reserved = <ReservedBalance<T, I>>::get(&who);
+			if new_reserved > current_reserved {
+				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - current_reserved));
+			} else if new_reserved < current_reserved {
+				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
+			}
+			Self::set_reserved_balance(&who, new_reserved);
 		}
 	}
 }
