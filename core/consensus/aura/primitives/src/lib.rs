@@ -18,13 +18,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::Codec;
+use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
+
+/// An consensus log item for Aura.
+#[derive(Decode, Encode)]
+pub enum ConsensusLog<AuthorityId: Codec> {
+	/// The authorities have changed.
+	AuthoritiesChange(Vec<AuthorityId>),
+}
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.

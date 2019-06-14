@@ -60,7 +60,7 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::AURA_ENGINE_ID;
+use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
 #[cfg(feature = "std")]
 use parity_codec::Decode;
 
@@ -174,7 +174,10 @@ impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(AURA_ENGINE_ID, new.encode());
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::AuthoritiesChange(new).encode()
+		);
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
