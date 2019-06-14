@@ -95,6 +95,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
+    - ./scripts/build.sh --locked
     - time cargo check --benches
     - sccache -s
 
