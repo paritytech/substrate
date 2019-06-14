@@ -1,13 +1,16 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+#[cfg(not(feature = "std"))]
 extern crate alloc;
-use alloc::vec::Vec;
-use alloc::slice;
+#[cfg(not(feature = "std"))]
+use alloc::{vec::Vec, slice};
+#[cfg(feature = "std")]
+use std::slice;
 
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
