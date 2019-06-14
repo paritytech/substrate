@@ -203,7 +203,12 @@ pub mod ext {
 		/// Set value for key in storage.
 		fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 		/// Get child trie at a storage location.
-		fn ext_get_child_trie(
+		///
+    /// # Returns
+		///
+		/// - `1` if child trie found and content written.
+		/// - `0` otherwhise.
+		fn ext_child_trie(
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			a: *mut *mut u8,
@@ -214,8 +219,12 @@ pub mod ext {
 			f: *mut u32,
 			g: *mut *mut u8,
 			h: *mut u32
-		) -> bool;
+		) -> u32;
 		/// Set child trie return false if there is an attempt to change non empty root.
+		/// # Returns
+		///
+		/// - `1` if set successfull
+		/// - `0` if not
 		fn ext_set_child_trie(
 			a: *const u8,
 			b: u32,
@@ -225,7 +234,7 @@ pub mod ext {
 			f: u32,
 			g: *const u8,
 			h: u32
-		) -> bool;
+		) -> u32;
 		/// Remove key and value from storage.
 		fn ext_clear_storage(key_data: *const u8, key_len: u32);
 		/// Checks if the given key exists in the storage.
@@ -618,7 +627,7 @@ impl StorageApi for () {
 		let mut g = ptr::null_mut();
 		let mut h = 0u32;
 		unsafe {
-			if ext_get_child_trie.get()(
+			if ext_child_trie.get()(
 				storage_key.as_ptr(),
 				storage_key.len() as u32,
 				&mut a as *mut _,
@@ -629,7 +638,7 @@ impl StorageApi for () {
 				&mut f,
 				&mut g as *mut _,
 				&mut h,
-			) {
+			) == 1 {
 				Some(ChildTrie::unsafe_from_ptr_child_trie((a, b, c, d, e, f, g, h)))
 			} else {
 				None
@@ -642,6 +651,7 @@ impl StorageApi for () {
 		unsafe {
 			let p = ct.unsafe_ptr_child_trie();
 			ext_set_child_trie.get()(p.0, p.1, p.2, p.3, p.4, p.5, p.6, p.7)
+				== 1
 		}
 	}
 

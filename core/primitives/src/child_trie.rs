@@ -282,7 +282,17 @@ impl ChildTrie {
 			self.extension.len() as u32,
 		)
 	}
-	/// Function to rebuild child trie accessed from 
+	/// Function to access child trie field unsafely (for memcopy).
+	pub fn unsafe_to_ptr_vec(&self) -> (&[u8], Option<&[u8]>, &[u8], &[u8]) {
+		(
+			self.keyspace.as_ref(),
+			self.root.as_ref().map(|r| r.as_ref()),
+			self.parent.as_ref(),
+			self.extension.as_ref(),
+		)
+	}
+
+	/// Function to rebuild child trie accessed from.
 	pub fn unsafe_from_ptr_child_trie(pct: PtrChildTrieMut) -> Self {
 		let (
 			keyspace,
@@ -302,9 +312,13 @@ impl ChildTrie {
 			ChildTrie { keyspace, root, parent, extension }
 		}
 	}
+	/// Function to rebuild child trie accessed from mem copied field.
+	pub fn unsafe_from_ptr_vecs(a: Vec<u8>, b: Option<Vec<u8>>, c: Vec<u8>, d: Vec<u8>) -> Self {
+		ChildTrie { keyspace: a, root: b , parent: c, extension: d }
+	}
+
 }
 
-// this is redundant with runtime io without_std TODO EMCH move to some util crate
 unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
 	if len == u32::max_value() {
 		None
@@ -337,12 +351,12 @@ type PtrChildTrieMut = (
 	u32,
 );
 
-
 impl AsRef<ChildTrie> for ChildTrie {
 	fn as_ref(&self) -> &ChildTrie {
 		self
 	}
 }
+
 /// Builder for `KeySpace`.
 /// Implementation of this trait must ensure unicity of generated `KeySpace` over the whole runtime context.
 /// In the context of deterministic generation this can be difficult, so

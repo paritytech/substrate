@@ -174,6 +174,74 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
+	ext_child_trie(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			a: *mut *mut u8,
+			b: *mut u32,
+			c: *mut *mut u8,
+			d: *mut u32,
+			e: *mut *mut u8,
+			f: *mut u32,
+			g: *mut *mut u8,
+			h: *mut u32
+	) -> u32 => {
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_child_trie"))?;
+
+			Ok(if let Some(ct) = this.ext.child_trie(&storage_key) {
+
+				let mut alloc_vec =
+					|value: Option<&[u8]>, dest_vec, dest_len| -> std::result::Result<(), UserError> {
+					if let Some(value) = value {
+						let offset = this.heap.allocate(value.len() as u32)? as u32;
+						this.memory.set(offset, &value)
+							.map_err(|_| UserError("Invalid attempt to set memory in ext_child_trie"))?;
+						this.memory.write_primitive(dest_len, value.len() as u32)
+							.map_err(|_| UserError("Invalid attempt to write length in ext_child_trie"))?;
+						this.memory.write_primitive(dest_vec, offset)
+							.map_err(|_| UserError("Invalid attempt to write vec ptr in ext_child_trie"))?;
+					} else {
+						this.memory.write_primitive(dest_len, u32::max_value())
+							.map_err(|_| UserError("Invalid attempt to write failed length in ext_child_trie"))?;
+					}
+					Ok(())
+				};
+				let p = ct.unsafe_to_ptr_vec();
+				alloc_vec(Some(p.0), a, b)?;
+				alloc_vec(p.1, c, d)?;
+				alloc_vec(Some(p.2), e, f)?;
+				alloc_vec(Some(p.3), g, h)?;
+				1
+			} else {
+				0
+			})
+	},
+	ext_set_child_trie(
+			a: *const u8,
+			b: u32,
+			c: *const u8,
+			d: u32,
+			e: *const u8,
+			f: u32,
+			g: *const u8,
+			h: u32
+	) -> u32 => {
+		let f1 = this.memory.get(a, b as usize)
+			.map_err(|_| UserError("Invalid attempt to determine f1 in ext_set_child_trie"))?;
+		let f2 = if d == u32::max_value() {
+			None
+		} else {
+			Some(this.memory.get(c, d as usize)
+				.map_err(|_| UserError("Invalid attempt to determine f2 in ext_set_child_trie"))?)
+		};
+		let f3 = this.memory.get(e, f as usize)
+			.map_err(|_| UserError("Invalid attempt to determine f3 in ext_set_child_trie"))?;
+		let f4 = this.memory.get(g, h as usize)
+			.map_err(|_| UserError("Invalid attempt to determine f4 in ext_set_child_trie"))?;
+		let ct = ChildTrie::unsafe_from_ptr_vecs(f1, f2, f3, f4);
+		Ok(if this.ext.set_child_trie(ct) { 1 } else { 0 })
+	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
