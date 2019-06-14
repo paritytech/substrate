@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,61 +19,30 @@
 #![warn(missing_docs)]
 
 pub mod client_ext;
-#[cfg(feature = "include-wasm-blob")]
-pub mod trait_tests;
-mod block_builder_ext;
 
-pub use client_ext::TestClient;
-pub use block_builder_ext::BlockBuilderExt;
 pub use client::{ExecutionStrategies, blockchain, backend, self};
-pub use executor::{NativeExecutor, self};
-pub use runtime;
+pub use client_db::{Backend, self};
+pub use client_ext::ClientExt;
 pub use consensus;
+pub use executor::{NativeExecutor, self};
 pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
+pub use primitives::Blake2Hasher;
+pub use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+pub use state_machine::ExecutionStrategy;
 
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
+use std::collections::HashMap;
 use futures::future::FutureResult;
-use primitives::Blake2Hasher;
+use hash_db::Hasher;
 use primitives::storage::well_known_keys;
-use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
+	Block as BlockT, NumberFor
 };
-use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use state_machine::ExecutionStrategy;
 use client::LocalCallExecutor;
 
-#[cfg(feature = "include-wasm-blob")]
-mod local_executor {
-	#![allow(missing_docs)]
-	use runtime;
-	use executor::native_executor_instance;
-	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(
-		pub LocalExecutor,
-		runtime::api::dispatch,
-		runtime::native_version,
-		include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
-	);
-}
-
-/// Native executor used for tests.
-#[cfg(feature = "include-wasm-blob")]
-pub use local_executor::LocalExecutor;
-
-/// Test client database backend.
-pub type Backend = client_db::Backend<runtime::Block>;
-
-/// Test client executor.
-#[cfg(feature = "include-wasm-blob")]
-pub type Executor = client::LocalCallExecutor<
-	Backend,
-	executor::NativeExecutor<LocalExecutor>,
->;
-
 /// Test client light database backend.
-pub type LightBackend = client::light::backend::Backend<
-	client_db::light::LightStorage<runtime::Block>,
+pub type LightBackend<Block> = client::light::backend::Backend<
+	client_db::light::LightStorage<Block>,
 	LightFetcher,
 	Blake2Hasher,
 >;
@@ -81,101 +50,85 @@ pub type LightBackend = client::light::backend::Backend<
 /// Test client light fetcher.
 pub struct LightFetcher;
 
-/// Test client light executor.
-#[cfg(feature = "include-wasm-blob")]
-pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor<
-	runtime::Block,
-	LightBackend,
-	client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<
-			client_db::light::LightStorage<runtime::Block>,
-			LightFetcher
-		>,
-		LightFetcher
-	>,
-	client::LocalCallExecutor<
-		client::light::backend::Backend<
-			client_db::light::LightStorage<runtime::Block>,
-			LightFetcher,
-			Blake2Hasher
-		>,
-		executor::NativeExecutor<LocalExecutor>
-	>
->;
+/// A genesis storage initialisation trait.
+pub trait GenesisInit: Default {
+	/// Construct genesis storage.
+	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay);
+}
+
+impl GenesisInit for () {
+	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+		Default::default()
+	}
+}
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<E, B> {
+pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
 	execution_strategies: ExecutionStrategies,
-	genesis_extension: HashMap<Vec<u8>, Vec<u8>>,
-	support_changes_trie: bool,
-	backend: Arc<B>,
-	_phantom: std::marker::PhantomData<E>,
+	genesis_init: G,
+	child_storage_extension: HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
+	backend: Arc<Backend>,
+	_executor: std::marker::PhantomData<Executor>,
 }
 
-#[cfg(feature = "include-wasm-blob")]
-impl<B> TestClientBuilder<LocalExecutor, B> where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+impl<Block, Executor> Default for TestClientBuilder<
+	Executor,
+	Backend<Block>,
+> where
+	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
-	/// Create a new instance of the test client builder using the given backend.
-	pub fn new_with_backend(backend: Arc<B>) -> Self {
-		TestClientBuilder {
-			execution_strategies: ExecutionStrategies::default(),
-			genesis_extension: HashMap::default(),
-			support_changes_trie: false,
-			backend,
-			_phantom: Default::default(),
-		}
+	fn default() -> Self {
+		Self::with_default_backend()
 	}
 }
 
-#[cfg(feature = "include-wasm-blob")]
-impl TestClientBuilder<LocalExecutor, Backend> {
+impl<Block, Executor, G: GenesisInit> TestClientBuilder<
+	Executor,
+	Backend<Block>,
+	G,
+> where
+	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+{
+	/// Create new `TestClientBuilder` with default backend.
+	pub fn with_default_backend() -> Self {
+		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
+		Self::with_backend(backend)
+	}
+}
+
+impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
+	Executor,
+	Backend,
+	G,
+> {
 	/// Create a new instance of the test client builder.
-	pub fn new() -> Self {
+	pub fn with_backend(backend: Arc<Backend>) -> Self {
 		TestClientBuilder {
-			execution_strategies: ExecutionStrategies::default(),
-			genesis_extension: HashMap::default(),
-			support_changes_trie: false,
-			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
-			_phantom: Default::default(),
-		}
-	}
-}
-
-#[cfg(not(feature = "include-wasm-blob"))]
-impl<E, B> TestClientBuilder<E, B> where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
-{
-	/// Create a new instance of the test client builder using the given backend.
-	pub fn new_with_backend(backend: Arc<B>) -> Self {
-		TestClientBuilder {
-			execution_strategies: ExecutionStrategies::default(),
-			genesis_extension: HashMap::default(),
-			support_changes_trie: false,
 			backend,
-			_phantom: Default::default(),
-		}
-	}
-}
-
-#[cfg(not(feature = "include-wasm-blob"))]
-impl<E> TestClientBuilder<E, Backend> {
-	/// Create a new instance of the test client builder.
-	pub fn new() -> Self {
-		TestClientBuilder {
 			execution_strategies: ExecutionStrategies::default(),
-			genesis_extension: HashMap::default(),
-			support_changes_trie: false,
-			backend: Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX)),
-			_phantom: Default::default(),
+			child_storage_extension: Default::default(),
+			genesis_init: Default::default(),
+			_executor: Default::default(),
 		}
 	}
-}
 
-impl<E, B> TestClientBuilder<E, B> where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
-	E: executor::NativeExecutionDispatch
-{
+	/// Alter the genesis storage parameters.
+	pub fn genesis_init_mut(&mut self) -> &mut G {
+		&mut self.genesis_init
+	}
+
+	/// Extend child storage
+	pub fn add_child_storage(
+		mut self,
+		key: impl AsRef<[u8]>,
+		child_key: impl AsRef<[u8]>,
+		value: impl AsRef<[u8]>,
+	) -> Self {
+		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_insert_with(Vec::new);
+		entry.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
+		self
+	}
+
 	/// Set the execution strategy that should be used by all contexts.
 	pub fn set_execution_strategy(
 		mut self,
@@ -191,112 +144,79 @@ impl<E, B> TestClientBuilder<E, B> where
 		self
 	}
 
-	/// Set an extension of the genesis storage.
-	pub fn set_genesis_extension(
-		mut self,
-		extension: HashMap<Vec<u8>, Vec<u8>>
-	) -> Self {
-		self.genesis_extension = extension;
-		self
-	}
-
-	/// Enable/Disable changes trie support.
-	pub fn set_support_changes_trie(mut self, enable: bool) -> Self {
-		self.support_changes_trie = enable;
-		self
-	}
-
-	/// Build the test client.
-	pub fn build(self) -> client::Client<
-		B,
-		client::LocalCallExecutor<B, executor::NativeExecutor<E>>,
-		runtime::Block,
-		runtime::RuntimeApi,
-	> {
-		self.build_with_longest_chain().0
-	}
-
-	/// Build the test client and longest chain as select chain.
-	pub fn build_with_longest_chain(self) -> (
+	/// Build the test client with the given native executor.
+	pub fn build_with_executor<Block, RuntimeApi>(
+		self,
+		executor: Executor,
+	) -> (
 		client::Client<
-			B,
-			client::LocalCallExecutor<B, executor::NativeExecutor<E>>,
-			runtime::Block,
-			runtime::RuntimeApi,
+			Backend,
+			Executor,
+			Block,
+			RuntimeApi,
 		>,
-		client::LongestChain<B, runtime::Block>,
-	) {
-		let executor = NativeExecutor::<E>::new(None);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
+		client::LongestChain<Backend, Block>,
+	) where
+		Executor: client::CallExecutor<Block, Blake2Hasher>,
+		Backend: client::backend::Backend<Block, Blake2Hasher>,
+		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+	{
+
+		let storage = {
+			let mut storage = self.genesis_init.genesis_storage();
+
+			// Add some child storage keys.
+			for (key, value) in self.child_storage_extension {
+				storage.1.insert(
+					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+					value.into_iter().collect(),
+				);
+			}
+
+			storage
+		};
 
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			genesis_storage(self.support_changes_trie, self.genesis_extension),
-			self.execution_strategies,
+			storage,
+			self.execution_strategies
 		).expect("Creates new client");
 
-		#[allow(deprecated)]
 		let longest_chain = client::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
 }
 
-/// Creates new client instance used for tests.
-#[cfg(feature = "include-wasm-blob")]
-pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	TestClientBuilder::new().build()
-}
+impl<E, Backend, G: GenesisInit> TestClientBuilder<
+	client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+	Backend,
+	G,
+> {
+	/// Build the test client with the given native executor.
+	pub fn build_with_native_executor<Block, RuntimeApi, I>(
+		self,
+		executor: I,
+	) -> (
+		client::Client<
+			Backend,
+			client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+			Block,
+			RuntimeApi
+		>,
+		client::LongestChain<Backend, Block>,
+	) where
+		I: Into<Option<executor::NativeExecutor<E>>>,
+		E: executor::NativeExecutionDispatch,
+		Backend: client::backend::Backend<Block, Blake2Hasher>,
+		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+	{
+		let executor = executor.into().unwrap_or_else(|| executor::NativeExecutor::new(None));
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
-/// Creates new light client instance used for tests.
-#[cfg(feature = "include-wasm-blob")]
-pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi> {
-	let storage = client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
-	let backend = Arc::new(LightBackend::new(blockchain.clone()));
-	let executor = NativeExecutor::new(None);
-	let fetcher = Arc::new(LightFetcher);
-	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(blockchain.clone(), fetcher);
-	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
-	client::Client::new(backend, call_executor, genesis_storage(false, Default::default()), Default::default()).unwrap()
-}
-
-fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
-	GenesisConfig::new(support_changes_trie, vec![
-		AuthorityKeyring::Alice.into(),
-		AuthorityKeyring::Bob.into(),
-		AuthorityKeyring::Charlie.into(),
-	], vec![
-		AccountKeyring::Alice.into(),
-		AccountKeyring::Bob.into(),
-		AccountKeyring::Charlie.into(),
-	],
-		1000
-	)
-}
-
-fn genesis_storage(
-	support_changes_trie: bool,
-	extension: HashMap<Vec<u8>, Vec<u8>>
-) -> (StorageOverlay, ChildrenStorageOverlay) {
-	let mut storage = genesis_config(support_changes_trie).genesis_map();
-	storage.extend(extension.into_iter());
-
-	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-		storage.clone().into_iter()
-	);
-	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
-	storage.extend(additional_storage_with_genesis(&block));
-
-	let mut child_storage = ChildrenStorageOverlay::default();
-	child_storage.insert(
-		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect(),
-		vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect()
-	);
-
-	(storage, child_storage)
+		self.build_with_executor(executor)
+	}
 }
 
 impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {

@@ -315,8 +315,8 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total length in bytes for all extrinsics put together, for the current block.
-		AllExtrinsicsLen: Option<u32>;
+		/// Total weight for all extrinsics put together, for the current block.
+		AllExtrinsicsWeight: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -475,7 +475,7 @@ impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
-	/// This will update storage entries that correpond to the specified topics.
+	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let extrinsic_index = Self::extrinsic_index();
@@ -530,9 +530,9 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicCount<T>>::get().unwrap_or_default()
 	}
 
-	/// Gets a total length of all executed extrinsics.
-	pub fn all_extrinsics_len() -> u32 {
-		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	/// Gets a total weight of all executed extrinsics.
+	pub fn all_extrinsics_weight() -> u32 {
+		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
@@ -563,7 +563,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsLen<T>>::kill();
+		<AllExtrinsicsWeight<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -714,10 +714,10 @@ impl<T: Trait> Module<T> {
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsLen<T>>::put(&total_length);
+		<AllExtrinsicsWeight<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block

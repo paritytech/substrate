@@ -1669,19 +1669,14 @@ fn bond_with_no_staked_value() {
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
-		// Not elected even though we want 3.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
 		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 11).
 		assert_eq!(Staking::slot_stake(), 11);
 
-		// let's make the stingy one elected.
+		// make the stingy one elected.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
@@ -1691,10 +1686,6 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Staking::stakers(1), Exposure { own: 1, total: 501, others: vec![IndividualExposure { who: 3, value: 500}]});
 		// New slot stake.
 		assert_eq!(Staking::slot_stake(), 501);
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(3);
 		Session::check_rotate_session(System::block_number());

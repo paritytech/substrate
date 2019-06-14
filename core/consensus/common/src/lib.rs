@@ -126,20 +126,6 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	}
 }
 
-/// Extra verification for blocks.
-pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified, or fails with error if
-	/// not.
-	type Verified: IntoFuture<Item=(),Error=String>;
-
-	/// Do additional verification for this block.
-	fn verify(
-		&self,
-		header: &B::Header,
-		body: Option<&[B::Extrinsic]>,
-	) -> Self::Verified;
-}
-
 /// A list of all well known keys in the cache.
 pub mod well_known_cache_keys {
 	/// The type representing cache keys.

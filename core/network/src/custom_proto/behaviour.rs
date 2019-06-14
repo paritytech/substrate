@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::DiscoveryNetBehaviour;
+use crate::{DiscoveryNetBehaviour, ProtocolId};
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
@@ -23,7 +23,8 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem};
+use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
 
@@ -62,7 +63,7 @@ pub struct CustomProto<TMessage, TSubstream> {
 	protocol: RegisteredProtocol<TMessage>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
-	peerset: substrate_peerset::Peerset,
+	peerset: peerset::Peerset,
 
 	/// List of peers in our state.
 	peers: FnvHashMap<PeerId, PeerState>,
@@ -73,7 +74,7 @@ pub struct CustomProto<TMessage, TSubstream> {
 
 	/// We generate indices to identify incoming connections. This is the next value for the index
 	/// to use when a connection is incoming.
-	next_incoming_index: substrate_peerset::IncomingIndex,
+	next_incoming_index: peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<TMessage>, CustomProtoOut<TMessage>>; 4]>,
@@ -179,7 +180,7 @@ struct IncomingPeer {
 	/// connection corresponding to it has been closed or replaced already.
 	alive: bool,
 	/// Id that the we sent to the peerset.
-	incoming_id: substrate_peerset::IncomingIndex,
+	incoming_id: peerset::IncomingIndex,
 }
 
 /// Event that can be emitted by the `CustomProto`.
@@ -224,15 +225,18 @@ pub enum CustomProtoOut<TMessage> {
 impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
-		protocol: RegisteredProtocol<TMessage>,
-		peerset: substrate_peerset::Peerset,
+		protocol: impl Into<ProtocolId>,
+		versions: &[u8],
+		peerset: peerset::Peerset,
 	) -> Self {
+		let protocol = RegisteredProtocol::new(protocol, versions);
+
 		CustomProto {
 			protocol,
 			peerset,
 			peers: FnvHashMap::default(),
 			incoming: SmallVec::new(),
-			next_incoming_index: substrate_peerset::IncomingIndex(0),
+			next_incoming_index: peerset::IncomingIndex(0),
 			events: SmallVec::new(),
 			marker: PhantomData,
 			clock: Clock::new(),
@@ -514,7 +518,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Function that is called when the peerset wants us to accept an incoming node.
-	fn peerset_report_accept(&mut self, index: substrate_peerset::IncomingIndex) {
+	fn peerset_report_accept(&mut self, index: peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) {
 			self.incoming.remove(pos)
 		} else {
@@ -558,7 +562,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming node.
-	fn peerset_report_reject(&mut self, index: substrate_peerset::IncomingIndex) {
+	fn peerset_report_reject(&mut self, index: peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) {
 			self.incoming.remove(pos)
 		} else {
@@ -939,16 +943,16 @@ where
 		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
 		loop {
 			match self.peerset.poll() {
-				Ok(Async::Ready(Some(substrate_peerset::Message::Accept(index)))) => {
+				Ok(Async::Ready(Some(peerset::Message::Accept(index)))) => {
 					self.peerset_report_accept(index);
 				}
-				Ok(Async::Ready(Some(substrate_peerset::Message::Reject(index)))) => {
+				Ok(Async::Ready(Some(peerset::Message::Reject(index)))) => {
 					self.peerset_report_reject(index);
 				}
-				Ok(Async::Ready(Some(substrate_peerset::Message::Connect(id)))) => {
+				Ok(Async::Ready(Some(peerset::Message::Connect(id)))) => {
 					self.peerset_report_connect(id);
 				}
-				Ok(Async::Ready(Some(substrate_peerset::Message::Drop(id)))) => {
+				Ok(Async::Ready(Some(peerset::Message::Drop(id)))) => {
 					self.peerset_report_disconnect(id);
 				}
 				Ok(Async::Ready(None)) => {

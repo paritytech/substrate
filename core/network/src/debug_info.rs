@@ -133,11 +133,6 @@ impl<'a> Node<'a> {
 	pub fn latest_ping(&self) -> Option<Duration> {
 		self.0.latest_ping
 	}
-
-	/// Generates an arbitrary string containing debug information about the node.
-	pub fn debug_info(&self) -> String {
-		format!("(version: {:?}) through {:?}", self.0.client_version, self.0.endpoint)
-	}
 }
 
 /// Event that can be emitted by the behaviour.

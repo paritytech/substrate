@@ -16,7 +16,7 @@
 
 //! # Example Module
 //!
-//! <!-- Original author of paragraph: @gavofyork --> 
+//! <!-- Original author of paragraph: @gavofyork -->
 //! The Example: A simple example of a runtime module demonstrating
 //! concepts, APIs and structures common to most runtime modules.
 //!
@@ -64,7 +64,7 @@
 //!
 //! \## Overview
 //!
-//! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 --> 
+//! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 -->
 //! // Short description of module purpose.
 //! // Links to Traits that should be implemented.
 //! // What this module is for.
@@ -205,7 +205,7 @@
 //!
 //! \```rust
 //! use <INSERT_CUSTOM_MODULE_NAME>;
-//! 
+//!
 //! pub trait Trait: <INSERT_CUSTOM_MODULE_NAME>::Trait { }
 //! \```
 //!
@@ -251,6 +251,7 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
+use sr_primitives::weights::TransactionWeight;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -388,6 +389,20 @@ decl_module! {
 		// no progress.
 		//
 		// If you don't respect these rules, it is likely that your chain will be attackable.
+		//
+		// Each transaction can optionally indicate a weight. The weight is passed in as a
+		// custom attribute and the value can be anything that implements the `Weighable`
+		// trait. Most often using substrate's default `TransactionWeight` is enough for you.
+		//
+		// A basic weight is a tuple of `(base_weight, byte_weight)`. Upon including each transaction
+		// in a block, the final weight is calculated as `base_weight + byte_weight * tx_size`.
+		// If this value, added to the weight of all included transactions, exceeds `MAX_TRANSACTION_WEIGHT`,
+		// the transaction is not included. If no weight attribute is provided, the `::default()`
+		// implementation of `TransactionWeight` is used.
+		//
+		// The example below showcases a transaction which is relatively costly, but less dependent on
+		// the input, hence `byte_weight` is configured smaller.
+		#[weight = TransactionWeight::Basic(100_000, 10)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;

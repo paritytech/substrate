@@ -111,7 +111,7 @@ pub const SUBSTRATE_INFO: &str = "0";
 pub const CONSENSUS_TRACE: &str = "9";
 pub const CONSENSUS_DEBUG: &str = "5";
 pub const CONSENSUS_WARN: &str = "4";
-pub const CONSENSUS_INFO: &str = "0";
+pub const CONSENSUS_INFO: &str = "1";
 
 /// Telemetry object. Implements `Future` and must be polled regularly.
 /// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
