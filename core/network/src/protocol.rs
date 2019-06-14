@@ -765,8 +765,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let outcome = self.sync.on_block_justification_data(
 				&mut ProtocolContext::new(&mut self.context_data, network_out),
 				peer,
-				request,
-				response,
+				response
 			);
 
 			if let Some((origin, hash, nb, just)) = outcome {
