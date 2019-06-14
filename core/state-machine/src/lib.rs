@@ -165,13 +165,17 @@ pub trait Externalities<H: Hasher> {
 	/// Read child runtime storage.
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// get child trie infos at storage_key
+	/// Get child trie infos at 'storage_key'.
 	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.place_storage(key, Some(value));
 	}
+
+	/// Set child trie infos, can fail if there is an attempt to change a
+	/// non empty child root directly.
+	fn set_child_trie(&mut self, ct: ChildTrie) -> bool;
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
 	fn set_child_storage(&mut self, child_trie: &ChildTrie, key: Vec<u8>, value: Vec<u8>) {
@@ -1179,9 +1183,10 @@ mod tests {
 		);
 
 		assert_eq!(ext.child_trie(&b"testchild"[..]), None);
-		let child_trie = ChildTrie::fetch_or_new_pending(
+		let child_trie = ChildTrie::fetch_or_new(
 			&mut TestKeySpaceGenerator::new(),
 			|_| None,
+			|_| (),
 			b"testchild",
 		);
 		ext.set_child_storage(&child_trie, b"abc".to_vec(), b"def".to_vec());
@@ -1293,8 +1298,8 @@ mod tests {
 		use std::collections::HashSet;
 
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, &[0x01]);
-		let child_trie2 = ChildTrie::fetch_or_new_pending(&mut ks_gen, |_| None, &[0x23]);
+		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), &[0x01]);
+		let child_trie2 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), &[0x23]);
 		let mut tr1 = {
 			let mut ttrie = test_trie();
 			let backend = ttrie.as_trie_backend().unwrap();

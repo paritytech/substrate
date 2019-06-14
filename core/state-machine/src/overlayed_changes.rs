@@ -56,10 +56,12 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, ChildTrie)>,
-	/// association from parent storage location to keyspace,
-	/// for freshly added child_trie
+	pub children: HashMap<KeySpace, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, ChildTrie)>,
+	/// Association from parent storage location to keyspace,
+	/// for freshly added child_trie.
 	pub pending_child: HashMap<Vec<u8>, KeySpace>,
+	/// Child that got moved (nodes are pending removal).
+	pub moved_child: HashSet<Vec<u8>>,
 }
 
 #[cfg(test)]
@@ -69,6 +71,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 			top: iter.into_iter().collect(),
 			children: Default::default(),
 			pending_child: Default::default(),
+			moved_child: Default::default(),
 		}
 	}
 }
@@ -84,6 +87,7 @@ impl OverlayedChangeSet {
 		self.top.clear();
 		self.children.clear();
 		self.pending_child.clear();
+		self.moved_child.clear();
 	}
 }
 
@@ -139,19 +143,14 @@ impl OverlayedChanges {
 
 	/// returns a child trie if present
 	pub fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
-		
-		let prefixed_storage_key = ChildTrie::prefix_parent_key(storage_key);
-		if let Some(keyspace) = self.prospective.pending_child.get(
-			ChildTrie::parent_key_slice(&prefixed_storage_key)
-		) {
+
+		if let Some(keyspace) = self.prospective.pending_child.get(storage_key) {
 			if let Some(map) = self.prospective.children.get(keyspace) {
 				 return Some(map.2.clone());
 			}
 		}
 
-		if let Some(keyspace) = self.committed.pending_child.get(
-			ChildTrie::parent_key_slice(&prefixed_storage_key)
-		) {
+		if let Some(keyspace) = self.committed.pending_child.get(storage_key) {
 			if let Some(map) = self.committed.children.get(keyspace) {
 				 return Some(map.2.clone());
 			}
@@ -183,9 +182,12 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let p = &mut self.prospective.children;
 		let pc = &mut self.prospective.pending_child;
+		let pm = &mut self.prospective.moved_child;
 		let map_entry = p.entry(child_trie.keyspace().clone())
-			.or_insert_with(||{
-				pc.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+			.or_insert_with(|| {
+				let parent = child_trie.parent_slice().to_vec();
+				pm.remove(&parent);
+				pc.insert(parent, child_trie.keyspace().clone());
 				(Default::default(), Default::default(), child_trie.clone())
 			});
 		map_entry.1.insert(key, val);
@@ -196,6 +198,61 @@ impl OverlayedChanges {
 		}
 	}
 
+	/// Try to update child trie. Some changes are not allowed:
+	/// - keyspace
+	/// - root (unless the new is empty then we keep the former)
+	///
+	/// Change of parent key is possible here (if moving a child trie
+	/// is needed).
+	pub(crate) fn set_child_trie(&mut self, child_trie: ChildTrie) -> bool {
+		let extrinsic_index = self.extrinsic_index();
+		if let Some(old_ct) = self.prospective.pending_child
+			.get(child_trie.parent_slice()) {
+			let old_ct = self.prospective.children.get_mut(old_ct)
+				.expect("children entry always have a pending association; qed");
+			let exts = &mut old_ct.0;
+			let old_ct = &mut old_ct.2;
+			if (old_ct.root_initial_value() != child_trie.root_initial_value()
+				&& !child_trie.is_new()) ||
+				old_ct.keyspace() != child_trie.keyspace() {
+				return false;
+			} else {
+				if child_trie.parent_slice() != old_ct.parent_slice() {
+					self.prospective.moved_child.insert(old_ct.parent_slice().to_vec());
+					self.prospective.pending_child.remove(old_ct.parent_slice());
+					self.prospective.moved_child.remove(child_trie.parent_slice());
+					self.prospective.pending_child
+						.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+				}
+				*old_ct = child_trie;
+				if let Some(extrinsic) = extrinsic_index {
+					exts.get_or_insert_with(Default::default)
+						.insert(extrinsic);
+				}
+			}
+		} else {
+			if child_trie.is_new() {
+				self.prospective.moved_child.remove(child_trie.parent_slice());
+				self.prospective.pending_child
+					.insert(child_trie.parent_slice().to_vec(), child_trie.keyspace().clone());
+				let mut exts: Option<HashSet<u32>> = Default::default();
+				if let Some(extrinsic) = extrinsic_index {
+					exts.get_or_insert_with(Default::default)
+						.insert(extrinsic);
+				}
+				self.prospective.children.insert(
+					child_trie.keyspace().to_vec(),
+					(exts, Default::default(), child_trie.clone()),
+				);
+			} else {
+				return false;
+			}
+		}
+		true
+	}
+
+
+
 	/// Clear child storage of given storage key.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
@@ -205,7 +262,7 @@ impl OverlayedChanges {
 	pub(crate) fn clear_child_storage(&mut self, child_trie: &ChildTrie) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(child_trie.keyspace().clone())
-			.or_insert_with(||(Default::default(), Default::default(), child_trie.clone()));
+			.or_insert_with(|| (Default::default(), Default::default(), child_trie.clone()));
 
 		if let Some(extrinsic) = extrinsic_index {
 			map_entry.0.get_or_insert_with(Default::default)
@@ -279,7 +336,7 @@ impl OverlayedChanges {
 			}
 			for (storage_key, (extr, map, sub)) in self.prospective.children.drain() {
 				let entry = self.committed.children.entry(storage_key)
-					.or_insert_with(||(Default::default(), Default::default(), sub));
+					.or_insert_with(|| (Default::default(), Default::default(), sub));
 				entry.1.extend(map.iter().map(|(k, v)| (k.clone(), v.clone())));
 
 				if let Some(prospective_extrinsics) = extr {
@@ -288,6 +345,7 @@ impl OverlayedChanges {
 				}
 			}
 			self.committed.pending_child.extend(self.prospective.pending_child.drain());
+			self.committed.moved_child.extend(self.prospective.moved_child.drain());
 		}
 	}
 

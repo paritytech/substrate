@@ -108,6 +108,11 @@ export_api! {
 		/// Get child trie for a given `storage_key` location, or `None` if undefined.
 		fn child_trie(storage_key: &[u8]) -> Option<ChildTrie>;
 
+		/// Update or create an existing child trie.
+		/// Return false if it could not be updated (eg direct change
+		/// of root is not allowed).
+		fn set_child_trie(ct: ChildTrie) -> bool;
+
 		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned

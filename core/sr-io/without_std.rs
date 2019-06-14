@@ -19,8 +19,9 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, cell::Cell, convert::TryInto};
-use primitives::{offchain, Blake2Hasher, child_trie::{ChildTrie, ChildTrieReadRef}};
+use rstd::{vec::Vec, cell::Cell, convert::TryInto, ptr};
+use primitives::{offchain, Blake2Hasher,
+	child_trie::{ChildTrie, ChildTrieReadRef}};
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -201,6 +202,30 @@ pub mod ext {
 
 		/// Set value for key in storage.
 		fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+		/// Get child trie at a storage location.
+		fn ext_get_child_trie(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			a: *mut *mut u8,
+			b: *mut u32,
+			c: *mut *mut u8,
+			d: *mut u32,
+			e: *mut *mut u8,
+			f: *mut u32,
+			g: *mut *mut u8,
+			h: *mut u32
+		) -> bool;
+		/// Set child trie return false if there is an attempt to change non empty root.
+		fn ext_set_child_trie(
+			a: *const u8,
+			b: u32,
+			c: *const u8,
+			d: u32,
+			e: *const u8,
+			f: u32,
+			g: *const u8,
+			h: u32
+		) -> bool;
 		/// Remove key and value from storage.
 		fn ext_clear_storage(key_data: *const u8, key_len: u32);
 		/// Checks if the given key exists in the storage.
@@ -584,11 +609,42 @@ impl StorageApi for () {
 
 	/// Get child trie at storage key location.
 	fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
-		let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
-		let prefixed_key_cat = ChildTrie::parent_key_slice(&prefixed_key);
-		storage(prefixed_key_cat)
-			.and_then(|enc_node| ChildTrie::decode_node_with_parent(&enc_node, prefixed_key))
+		let mut a = ptr::null_mut();
+		let mut b = 0u32;
+		let mut c = ptr::null_mut();
+		let mut d = 0u32;
+		let mut e = ptr::null_mut();
+		let mut f = 0u32;
+		let mut g = ptr::null_mut();
+		let mut h = 0u32;
+		unsafe {
+			if ext_get_child_trie.get()(
+				storage_key.as_ptr(),
+				storage_key.len() as u32,
+				&mut a as *mut _,
+				&mut b,
+				&mut c as *mut _,
+				&mut d,
+				&mut e as *mut _,
+				&mut f,
+				&mut g as *mut _,
+				&mut h,
+			) {
+				Some(ChildTrie::unsafe_from_ptr_child_trie((a, b, c, d, e, f, g, h)))
+			} else {
+				None
+			}
+		}
 	}
+
+	/// Set child trie. Can fail and return false (eg change of root).
+	fn set_child_trie(ct: ChildTrie) -> bool {
+		unsafe {
+			let p = ct.unsafe_ptr_child_trie();
+			ext_set_child_trie.get()(p.0, p.1, p.2, p.3, p.4, p.5, p.6, p.7)
+		}
+	}
+
 
 	fn child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;

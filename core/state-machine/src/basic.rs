@@ -146,6 +146,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		unreachable!("basic not used for child trie");
 	}
 
+	fn set_child_trie(&mut self, _ct: ChildTrie) -> bool {
+		unreachable!("basic not used for child trie");
+	}
+
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
 		self.inner.retain(|key, _| !key.starts_with(prefix));

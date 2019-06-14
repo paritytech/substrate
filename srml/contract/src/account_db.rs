@@ -146,7 +146,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// see issue FIXME #2744 to only use keyspace generator
 				// and remove trie_id field (replaces parameter by 
 				// `TrieIdFromParentCounter(&address),`).
-				let child_trie = child::fetch_or_new_pending(
+				let child_trie = child::fetch_or_new(
 					&mut TempKeyspaceGen(new_info.trie_id.as_ref()),
 					p_key.as_ref(),
 				);

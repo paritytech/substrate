@@ -451,13 +451,20 @@ pub mod child {
 		KeySpaceGenerator};
 
 	/// Method for fetching or initiating a new child trie.
-	pub fn fetch_or_new_pending(
+	pub fn fetch_or_new(
 		keyspace_builder: &mut impl KeySpaceGenerator,
 		parent: &[u8],
 	) -> ChildTrie {
-		ChildTrie::fetch_or_new_pending(
+		ChildTrie::fetch_or_new(
 			keyspace_builder,
 			|pk| { child_trie(pk) },
+			|ct| {
+				let updated = set_child_trie(ct);
+				// fetch or new create a new child trie
+				// so the child trie creation condition
+				// cannot fail at this point.
+				debug_assert!(updated);
+			},
 			parent,
 		)
 	}
@@ -466,6 +473,14 @@ pub mod child {
 	/// this storage key.
 	pub fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
 		runtime_io::child_trie(storage_key)
+	}
+
+	/// Update or create an existing child trie.
+	/// Warning in case of update this function does not allow:
+	/// - root change
+	/// Return false and do nothing in those cases.
+	pub fn set_child_trie(ct: ChildTrie) -> bool {
+		runtime_io::set_child_trie(ct)
 	}
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.

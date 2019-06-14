@@ -18,6 +18,7 @@
 
 use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
+use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -190,19 +191,23 @@ impl ChildTrie {
 	///
 	/// This can be quite unsafe for user, so use with care (write new trie information
 	/// as soon as possible).
-	pub fn fetch_or_new_pending(
+	pub fn fetch_or_new(
 		keyspace_builder: &mut impl KeySpaceGenerator,
 		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
+		child_trie_update: impl FnOnce(ChildTrie),
 		parent: &[u8],
 	) -> Self {
-		parent_fetcher(parent).unwrap_or_else(|| {
+		parent_fetcher(parent)
+			.unwrap_or_else(|| {
 			let parent = Self::prefix_parent_key(parent);
-			ChildTrie {
+			let ct = ChildTrie {
 				keyspace: keyspace_builder.generate_keyspace(),
 				root: Default::default(),
 				parent,
 				extension: Default::default(),
-			}
+			};
+			child_trie_update(ct.clone());
+			ct
 		})
 	}
 	/// Get a reference to the child trie information
@@ -262,7 +267,76 @@ impl ChildTrie {
 		enc.extend_from_slice(&self.extension[..]);
 		enc
 	}
+
+	/// Function to send child trie without relying on
+	/// contiguous memory.
+	pub fn unsafe_ptr_child_trie(&self) -> PtrChildTrie {
+		(
+			self.keyspace.as_ptr(),
+			self.keyspace.len() as u32,
+			self.root.as_ref().map(|r| r.as_ptr()).unwrap_or(ptr::null()),
+			self.root.as_ref().map(|r| r.len() as u32).unwrap_or(u32::max_value()),
+			self.parent.as_ptr(),
+			self.parent.len() as u32,
+			self.extension.as_ptr(),
+			self.extension.len() as u32,
+		)
+	}
+	/// Function to rebuild child trie accessed from 
+	pub fn unsafe_from_ptr_child_trie(pct: PtrChildTrieMut) -> Self {
+		let (
+			keyspace,
+			kl,
+			root,
+			rl,
+			parent,
+			pl,
+			extension,
+			el,
+		) = pct;
+		unsafe {
+			let keyspace = from_raw_parts(keyspace, kl).expect("non optional; qed");
+			let root = from_raw_parts(root, rl);
+			let parent = from_raw_parts(parent, pl).expect("non optional; qed");
+			let extension = from_raw_parts(extension, el).expect("non optional; qed");
+			ChildTrie { keyspace, root, parent, extension }
+		}
+	}
 }
+
+// this is redundant with runtime io without_std TODO EMCH move to some util crate
+unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
+	if len == u32::max_value() {
+		None
+	} else {
+		Some(<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize))
+	}
+}
+
+/// Pointers repersentation of ChildTrie
+type PtrChildTrie = (
+	*const u8,
+	u32,
+	*const u8,
+	u32,
+	*const u8,
+	u32,
+	*const u8,
+	u32,
+);
+
+/// Mut Pointers repersentation of ChildTrie
+type PtrChildTrieMut = (
+	*mut u8,
+	u32,
+	*mut u8,
+	u32,
+	*mut u8,
+	u32,
+	*mut u8,
+	u32,
+);
+
 
 impl AsRef<ChildTrie> for ChildTrie {
 	fn as_ref(&self) -> &ChildTrie {

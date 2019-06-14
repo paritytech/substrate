@@ -160,6 +160,25 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
+		// do check for backend
+		let ct = match self.child_trie(ct.parent_trie().as_ref()) {
+			Some(ct_old) => if
+				ct_old.root_initial_value() != ct.root_initial_value()
+				&& !ct.is_new() {
+				return false;
+			} else {
+				ct
+			},
+			None => if ct.is_new() {
+				ct
+			} else {
+				return false;
+			},
+		};
+		self.overlay.set_child_trie(ct)
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		if is_child_storage_key(&key) {
 			panic!("Refuse to directly set child storage key");

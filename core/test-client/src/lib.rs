@@ -168,9 +168,15 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 			// Add some child storage keys.
 			for (_key, value) in self.child_storage_extension {
 				// warning: no prefix, next child trie creation will go in same keyspace
-				let child_trie = ChildTrie::fetch_or_new_pending(
+				let child_trie = ChildTrie::fetch_or_new(
 					&mut TestKeySpaceGenerator::new(),
+					// warning current implementation expect empty state
 					|_| None,
+					// warning current implementation relies on key
+					// insertion for creation of the child trie,
+					// this can break in the future and require an
+					// actual backend update here.
+					|_| ,
 					&b"test"[..],
 				);
 				storage.1.insert(

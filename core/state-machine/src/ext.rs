@@ -238,6 +238,27 @@ where
 		self.overlay.set_child_storage(child_trie, key, value);
 	}
 
+	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
+		let _guard = panic_handler::AbortGuard::new(true);
+		// do check for backend
+		let ct = match self.child_trie(ct.parent_trie().as_ref()) {
+			Some(ct_old) => if
+				(ct_old.root_initial_value() != ct.root_initial_value()
+				&& !ct.is_new()) ||
+				ct_old.keyspace() != ct.keyspace() {
+				return false;
+			} else {
+				ct
+			},
+			None => if ct.is_new() {
+				ct
+			} else {
+				return false;
+			},
+		};
+		self.overlay.set_child_trie(ct)
+	}
+
 	fn kill_child_storage(&mut self, child_trie: &ChildTrie) {
 		let _guard = panic_handler::AbortGuard::new(true);
 
