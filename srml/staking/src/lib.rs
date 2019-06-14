@@ -306,7 +306,7 @@ impl<N: SimpleArithmetic + Clone> Rational<N> {
 	// operation of the remainder part in u64 arithmetic. (or u64, u128)
 	fn new(p: N, q: N) -> Self {
 		let mut num = p.clone() % q.clone();
-		let int = p - num.clone();
+		let mut int = p - num.clone();
 		let mut den = q;
 
 		// TODO: this can be improved using some dichotomic search.
@@ -316,19 +316,24 @@ impl<N: SimpleArithmetic + Clone> Rational<N> {
 			den = den >> 1u32;
 		}
 
+		if num == den {
+			int += 1;
+			num = 0;
+		}
+
 		Rational { int, num, den }
 	}
 
 	fn saturating_mul(self, b: N) -> N {
 		let integer_part = b.checked_mul(&self.int).unwrap_or_else(|| N::max_value());
 
-		// Operation doesn't overflow because num <= den
+		// Operation doesn't overflow because num < den
 		let divided_multiplied_part = (b.clone() / self.den.clone()) * self.num.clone();
 
 		// Operation doesn't overflow because num * dem doesn't overflow (property set at `new`)
 		let remainder_multiplied_divided_part = ((b % self.den.clone()) * self.num) / self.den;
 
-		// This doesn't overflow as num <= den
+		// This doesn't overflow as num < den
 		let fractional_part = divided_multiplied_part + remainder_multiplied_divided_part;
 
 		integer_part.saturating_add(fractional_part)
