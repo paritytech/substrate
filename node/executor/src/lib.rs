@@ -127,9 +127,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -160,9 +158,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -193,9 +189,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -230,9 +224,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -826,9 +818,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
@@ -848,9 +838,7 @@ mod tests {
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
