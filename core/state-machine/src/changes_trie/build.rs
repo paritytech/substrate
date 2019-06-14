@@ -77,12 +77,12 @@ fn prepare_extrinsics_input<B, H, Number>(
 			None => continue,
 		};
 
-		// ignore values that have null value at the end of operation AND are not in storage
-		// at the beginning of operation
-		if !changes.storage(key).map(|v| v.is_some()).unwrap_or_default() {
-			if !backend.exists_storage(key).map_err(|e| format!("{}", e))? {
-				continue;
-			}
+		// ignore temporary changes (changes like V1 -> V2 -> V1) by checking if final value differs
+		// from the original one
+		let old_value = backend.storage(key).map_err(|e| format!("{}", e))?;
+		let new_value = changes.storage(key).unwrap_or_default();
+		if old_value.as_ref().map(|v| &**v) == new_value {
+			continue;
 		}
 
 		extrinsic_map.entry(key.clone()).or_default()
@@ -289,9 +289,14 @@ mod test {
 	}
 
 	#[test]
-	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
+	fn build_changes_trie_nodes_ignores_temporary_storage_changes() {
 		let (backend, storage, mut changes) = prepare_for_build();
 
+		// 105: has value 255 in backend && changed to 255 by changes
+		changes.prospective.top.insert(vec![105], OverlayedValue {
+			value: Some(vec![255]),
+			extrinsics: Some(vec![1].into_iter().collect())
+		});
 		// 110: missing from backend, set to None in overlay
 		changes.prospective.top.insert(vec![110], OverlayedValue {
 			value: None,
