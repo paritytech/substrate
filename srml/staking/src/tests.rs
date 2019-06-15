@@ -154,7 +154,7 @@ fn invulnerability_should_work() {
 }
 
 #[test]
-fn offline_should_slash_and_kick() {
+fn offline_should_slash_and_disable() {
 	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
@@ -169,6 +169,8 @@ fn offline_should_slash_and_kick() {
 		assert_eq!(Staking::slash_count(&11), 0);
 		// Account 10 has the funds we just gave it
 		assert_eq!(Balances::free_balance(&11), 1000);
+		// Account 10 is not yet disabled.
+		assert!(!is_disabled(10));
 		// Report account 10 as offline, one greater than unstake threshold
 		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
@@ -176,10 +178,8 @@ fn offline_should_slash_and_kick() {
 		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
 		let slash_base = Staking::offline_slash() * Staking::stakers(11).total;
 		assert_eq!(Balances::free_balance(&11), 1000 - 2_u64.pow(3) * slash_base);
-		// Confirm account 10 has been removed as a validator
-		assert!(!<Validators<Test>>::exists(&11));
-		// A new era is forced due to slashing
-		assert!(Staking::forcing_new_era());
+		// Confirm account 10 has been disabled.
+		assert!(is_disabled(10));
 	});
 }
 
@@ -218,7 +218,7 @@ fn offline_grace_should_delay_slashing() {
 		// User gets slashed
 		assert!(Balances::free_balance(&11) < 70);
 		// New era is forced
-		assert!(Staking::forcing_new_era());
+		assert!(is_disabled(10));
 	});
 }
 
@@ -723,7 +723,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		// Because slashing happened.
-		assert!(Staking::forcing_new_era());
+		assert!(is_disabled(10));
 	});
 }
 
