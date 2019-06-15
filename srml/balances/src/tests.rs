@@ -32,6 +32,14 @@ const ID_2: LockIdentifier = *b"2       ";
 const ID_3: LockIdentifier = *b"3       ";
 
 #[test]
+fn weight_to_fee_works() {
+	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+		// TODO: replace the rhs with some truth value function
+		assert_eq!(<Runtime as Trait>::WeightToFee::convert(900 * 1024), 921598);
+	});
+}
+
+#[test]
 fn basic_locking_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		assert_eq!(Balances::free_balance(&1), 10);

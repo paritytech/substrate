@@ -33,7 +33,7 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::weights::{Weight, MAX_TRANSACTIONS_WEIGHT};
+use runtime_primitives::weights::{Weight, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
 };
@@ -91,24 +91,38 @@ pub struct WeightToFeeHandler;
 
 impl Convert<Weight, Balance> for WeightToFeeHandler {
 	fn convert(weight: Weight) -> Balance {
-		// 0.00004 = 4/100_000 = 40_000/10^9
-		let variability_fee = 40_000;
-		// 0.00004^2 = 16/10^10 ~= 2/10^9
-		let variability_fee_squared = 2;
-		// 25/100 = 250_000_000/10^9
-		let ideal_weight = 250_000_0000; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
-		let potential_weight = {
-			let weight_if_added = <system::Module<Runtime>>::all_extrinsics_weight() + weight;
-			1_000_000_000 * weight_if_added / MAX_TRANSACTIONS_WEIGHT
+		let billion = 1_000_000_000_u128;
+		let from_max_to_per_bill = |x: u128| { x * billion /  MAX_TRANSACTIONS_WEIGHT as u128 };
+		// temporary: weight < ideal
+		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
+		let mut positive = false;
+		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
+		let diff = match ideal.checked_sub(all) {
+			Some(d) => d,
+			None => { positive = true; all - ideal }
 		};
-		let high_fee: bool =  ideal_weight <= potential_weight;
-		let diff = if high_fee { potential_weight - ideal_weight }
-					else { ideal_weight - potential_weight };
-		let first_term = variability_fee * diff;
-		let second_term = variability_fee_squared * diff * diff / 2;
-		let fee_multiplier = if high_fee { Perbill::from_parts(1_000_000_000 + first_term + second_term) }
-								else { Perbill::from_parts(1_000_000_000 - first_term + second_term) };
-		let transaction_fee = fee_multiplier * weight;
+
+		// 0.00004 = 4/100_000 = 40_000/10^9
+		let v = 40_000;
+		// 0.00004^2 = 16/10^10 ~= 2/10^9
+		let v_squared = 2;
+
+		let mut first_term = v * from_max_to_per_bill(diff as u128);
+		first_term = first_term / billion;
+
+		let mut second_term = v_squared * from_max_to_per_bill(diff as u128) * from_max_to_per_bill(diff as u128) / 2;
+		second_term = second_term / billion;
+		second_term = second_term / billion;
+
+		let mut fee_multiplier = billion + second_term;
+		if positive {
+			fee_multiplier += first_term;
+		} else {
+			fee_multiplier -= first_term;
+		}
+
+		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
+		let transaction_fee: u32 = p * weight;
 		transaction_fee.into()
 	}
 }

@@ -19,7 +19,12 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
+use primitives::{
+	weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
+	traits::{IdentityLookup, Convert},
+	testing::{Digest, DigestItem, Header},
+	Perbill,
+};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
@@ -27,6 +32,46 @@ use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
+}
+
+pub struct WeightToFeeHandler;
+
+impl Convert<Weight, u64> for WeightToFeeHandler {
+	fn convert(weight: Weight) -> u64 {
+		let billion = 1_000_000_000_u128;
+		let from_max_to_per_bill = |x: u128| { x * billion /  MAX_TRANSACTIONS_WEIGHT as u128 };
+		// temporary: weight < ideal
+		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
+		let mut positive = false;
+		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
+		let diff = match ideal.checked_sub(all) {
+			Some(d) => d,
+			None => { positive = true; all - ideal }
+		};
+
+		// 0.00004 = 4/100_000 = 40_000/10^9
+		let v = 40_000;
+		// 0.00004^2 = 16/10^10 ~= 2/10^9
+		let v_squared = 2;
+
+		let mut first_term = v * from_max_to_per_bill(diff as u128);
+		first_term = first_term / billion;
+
+		let mut second_term = v_squared * from_max_to_per_bill(diff as u128) * from_max_to_per_bill(diff as u128) / 2;
+		second_term = second_term / billion;
+		second_term = second_term / billion;
+
+		let mut fee_multiplier = billion + second_term;
+		if positive {
+			fee_multiplier += first_term;
+		} else {
+			fee_multiplier -= first_term;
+		}
+
+		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
+		let transaction_fee: u32 = p * weight;
+		transaction_fee.into()
+	}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -47,7 +92,7 @@ impl system::Trait for Runtime {
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type WeightToFee = ();
+	type WeightToFee = WeightToFeeHandler;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
