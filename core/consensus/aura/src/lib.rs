@@ -889,7 +889,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}
 
 	#[test]

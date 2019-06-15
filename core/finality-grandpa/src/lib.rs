@@ -51,15 +51,11 @@
 //! number (this is num(signal) + N). When finalizing a block, we either apply
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
-#![forbid(warnings)]
 
 use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
-use client::{
-	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError,
-};
+use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{

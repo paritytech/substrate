@@ -88,7 +88,7 @@ fn basic_two_nodes_connectivity() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	let _ = tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
+	let _ = tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn basic_two_nodes_requests_in_parallel() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	let _ = tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
 }
 
 #[test]
