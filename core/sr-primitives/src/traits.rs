@@ -868,8 +868,8 @@ macro_rules! impl_opaque_keys {
 			$($rest:tt)*
 		}
 	) => {
-		#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name($( pub $t ,)*);
 		impl $crate::traits::OpaqueKeys for $name {
 			fn count() -> usize {
