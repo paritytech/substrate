@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
