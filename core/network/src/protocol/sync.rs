@@ -587,7 +587,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, protocol: &mut Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
+	pub fn blocks_processed(&mut self, protocol: &mut dyn Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		for hash in processed_blocks {
 			self.queue_blocks.remove(&hash);
 		}
