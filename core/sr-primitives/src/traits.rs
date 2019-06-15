@@ -819,7 +819,7 @@ pub trait ValidateUnsigned {
 
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
-pub trait OpaqueKeys {
+pub trait OpaqueKeys: Clone {
 	/// Return the number of encoded keys.
 	fn count() -> usize { 0 }
 	/// Get the raw bytes of key with index `i`.

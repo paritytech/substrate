@@ -16,6 +16,7 @@
 
 //! Test utilities
 
+use std::{collections::HashSet, cell::RefCell};
 use primitives::{BuildStorage, Perbill};
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
@@ -39,13 +40,30 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 	}
 }
 
+thread_local! {
+	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
+}
+
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
-	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, _validators: &[(AccountId, Ks)]) {
+	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, validators: &[(AccountId, Ks)]) {
+		SESSION.with(|x|
+			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
+		);
 	}
 
-	fn on_disabled(_validator_index: usize) {
+	fn on_disabled(validator_index: usize) {
+		SESSION.with(|d| {
+			let mut d = d.borrow_mut();
+			let value = d.0[validator_index];
+			println!("on_disabled {} -> {}", validator_index, value);
+			d.1.insert(value);
+		})
 	}
+}
+
+pub fn is_disabled(validator: AccountId) -> bool {
+	SESSION.with(|d| d.borrow().1.contains(&validator))
 }
 
 impl_outer_origin!{
@@ -167,9 +185,10 @@ impl ExtBuilder {
 		} else {
 			1
 		};
+		let validators = if self.validator_pool { vec![10, 20, 30, 40] } else { vec![10, 20] };
 		let _ = session::GenesisConfig::<Test>{
 			// NOTE: if config.nominate == false then 100 is also selected in the initial round.
-			validators: if self.validator_pool { vec![10, 20, 30, 40] } else { vec![10, 20] },
+			validators,
 			keys: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = balances::GenesisConfig::<Test>{
@@ -225,7 +244,14 @@ impl ExtBuilder {
 		let _ = timestamp::GenesisConfig::<Test>{
 			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
-		t.into()
+		let mut ext = t.into();
+		runtime_io::with_externalities(&mut ext, || {
+			let validators = Session::validators();
+			SESSION.with(|x|
+				*x.borrow_mut() = (validators.clone(), HashSet::new())
+			);
+		});
+		ext
 	}
 }
 
