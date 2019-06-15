@@ -91,15 +91,19 @@ pub struct WeightToFeeHandler;
 
 impl Convert<Weight, Balance> for WeightToFeeHandler {
 	fn convert(weight: Weight) -> Balance {
-		// 40/1000000 = 4/100000 = 0.00004
+		// 40/1000000 = 4/100000 = 4/10^5 = 0.00004
 		let variability_fee = Permill::from_parts(40);
-		// 0.00004^2 = 0.0000000016 = 16/1000000000
-		let variability_fee_squared = Perbill::from_parts(16);
+		// 0.00004^2 = 16/10^10 ~= 2/10^9
+		let variability_fee_squared = Perbill::from_parts(2);
 		let potential_weight = <system::Module<Runtime>>::all_extrinsics_weight() + weight;
-		let diff = IDEAL_TRANSACTIONS_WEIGHT - potential_weight;
+		let high_fee: bool =  IDEAL_TRANSACTIONS_WEIGHT <= potential_weight;
+		// workaround because unsigned cannot be negative
+		let diff = if high_fee { potential_weight - IDEAL_TRANSACTIONS_WEIGHT }
+					else { IDEAL_TRANSACTIONS_WEIGHT - potential_weight};
 		let first_term = variability_fee * diff;
 		let second_term = variability_fee_squared * diff * diff / 2;
-		let fee_multiplier = 1 + first_term + second_term;
+		let fee_multiplier = if high_fee { 1 + first_term + second_term }
+								else { 1 + second_term - first_term };
 		let transaction_fee = weight * fee_multiplier;
 		transaction_fee.into()
 	}
