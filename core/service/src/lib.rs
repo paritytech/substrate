@@ -41,7 +41,6 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
-use network::SyncProvider;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
@@ -384,10 +383,10 @@ impl<Components: components::Components> Service<Components> {
 			impl_version: config.impl_version.into(),
 			properties: config.chain_spec.properties(),
 		};
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(),
-			network.clone(),
-			has_bootnodes,
+			system_rpc_tx,
 			system_info,
 			config.rpc_http,
 			config.rpc_ws,
@@ -396,6 +395,11 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.clone(),
 			transaction_pool.clone(),
 		)?;
+		task_executor.spawn(build_system_rpc_handler::<Components>(
+			network.clone(),
+			system_rpc_rx,
+			has_bootnodes
+		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -609,6 +613,39 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
+}
+
+/// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
+fn build_system_rpc_handler<Components: components::Components>(
+	network: Arc<NetworkService<Components::Factory>>,
+	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	should_have_peers: bool,
+) -> impl Future<Item = (), Error = ()> {
+	rx.for_each(move |request| {
+		match request {
+			rpc::apis::system::Request::Health(sender) => {
+				let _ = sender.send(rpc::apis::system::Health {
+					peers: network.peers_debug_info().len(),
+					is_syncing: network.is_major_syncing(),
+					should_have_peers,
+				});
+			},
+			rpc::apis::system::Request::Peers(sender) => {
+				let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
+					peer_id: peer_id.to_base58(),
+					roles: format!("{:?}", p.roles),
+					protocol_version: p.protocol_version,
+					best_hash: p.best_hash,
+					best_number: p.best_number,
+				}).collect());
+			}
+			rpc::apis::system::Request::NetworkState(sender) => {
+				let _ = sender.send(network.network_state());
+			}
+		};
+
+		Ok(())
+	})
 }
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
