@@ -1272,7 +1272,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of controller to 0
-		Balances::slash(&10, u64::max_value());
+		let _ = Balances::slash(&10, u64::max_value());
 
 		// Check the balance of the stash account has not been touched
 		assert_eq!(Balances::free_balance(&11), 256000);
@@ -1287,7 +1287,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of stash to 0
-		Balances::slash(&11, u64::max_value());
+		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
@@ -1328,7 +1328,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of controller to 0
-		Balances::slash(&10, u64::max_value());
+		let _ = Balances::slash(&10, u64::max_value());
 		// Check total balance of account 10
 		assert_eq!(Balances::total_balance(&10), 0);
 
@@ -1344,7 +1344,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of stash to 0
-		Balances::slash(&11, u64::max_value());
+		let _ = Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
