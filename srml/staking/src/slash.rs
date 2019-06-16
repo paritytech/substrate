@@ -14,24 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use srml_slashing::{OnSlashing, Misconduct};
 use crate::{BalanceOf, Module, Trait};
-use srml_support::traits::Currency;
 use rstd::marker::PhantomData;
+use srml_slashing::{OnSlashing, Misconduct};
+use primitives::traits::Convert;
+
+type ExtendedBalance = u128;
 
 /// OnSlashing implementation for `Staking`
-pub struct StakingSlasher<T, M> {
-	t: PhantomData<T>,
-	m: PhantomData<M>,
-}
+pub struct StakingSlasher<T>(PhantomData<T>);
 
-impl<T: Trait, M: Misconduct> OnSlashing<T::AccountId, M> for StakingSlasher<T, M>
-where
-	M::Severity: Into<BalanceOf<T>>
+impl<T: Trait> OnSlashing<T> for StakingSlasher<T>
 {
-	fn on_slash(who: &T::AccountId, misconduct: M) {
-		let balance = T::Currency::free_balance(&who);
-		let slash = balance / misconduct.severity().into();
+	fn on_slash(who: &T::AccountId, misconduct: &impl Misconduct) {
+		// hack to convert both to `u128` and calculate the amount to slash
+		// then convert it back `BalanceOf<T>`
+		let to_balance = |b: ExtendedBalance|
+			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
+		let to_u128 = |b: BalanceOf<T>|
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+
+		let balance = to_u128(<Module<T>>::slashable_balance(&who));
+		let severity: ExtendedBalance = misconduct.severity().into();
+		let slash = to_balance(balance / severity);
 		<Module<T>>::slash_validator(who, slash);
 	}
 }
@@ -43,8 +48,6 @@ mod tests {
 	use srml_slashing::Slashing;
 	use rstd::cmp;
 	use runtime_io::with_externalities;
-
-	type Balance = balances::Module<Test>;
 
 	#[derive(Copy, Clone, Eq, PartialEq)]
 	struct MisconductT {
@@ -73,17 +76,45 @@ mod tests {
 		}
 	}
 
-	struct SlashWrapper;
 
-	impl Slashing<u64, MisconductT> for SlashWrapper {
-		type Slash = StakingSlasher<Test, MisconductT>;
+	#[derive(Copy, Clone, Eq, PartialEq)]
+	struct OtherMisconduct {
+		severity: u32,
+	}
 
-		fn slash(who: &u64, mut misconduct: MisconductT) {
+	impl Default for OtherMisconduct {
+		fn default() -> Self {
+			Self { severity: 1000 }
+		}
+	}
+
+	impl Misconduct for OtherMisconduct {
+		type Severity = u32;
+
+		fn on_misconduct(&mut self) {
+			self.severity = cmp::max(1, self.severity / 2);
+		}
+
+		fn on_signal(&mut self) {
+			self.severity = cmp::min(100_000, self.severity * 2);
+		}
+
+		fn severity(&self) -> Self::Severity {
+			self.severity
+		}
+	}
+
+	struct SlashWrapper<T>(PhantomData<T>);
+
+	impl<T: Trait> Slashing<T> for SlashWrapper<T> {
+		type Slash = StakingSlasher<T>;
+
+		fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
 			Self::Slash::on_slash(&who, misconduct);
 			misconduct.on_misconduct();
 		}
 
-		fn on_signal(mut misconduct: MisconductT) {
+		fn on_signal(misconduct: &mut impl Misconduct) {
 			misconduct.on_signal();
 		}
 	}
@@ -92,11 +123,10 @@ mod tests {
 	fn it_works() {
 		with_externalities(&mut ExtBuilder::default().build(),
 		|| {
-			let who = 0;
-			let _ = Balance::deposit_creating(&who, 100_000);
-			assert_eq!(Balance::free_balance(&who), 100_000);
-			let mut misconduct = MisconductT::default();
-			SlashWrapper::slash(&who, misconduct);
+			let mut m1 = MisconductT::default();
+			let mut m2 = OtherMisconduct::default();
+			SlashWrapper::<Test>::slash(&0, &mut m1);
+			SlashWrapper::<Test>::slash(&0, &mut m2);
 		});
 	}
 }

@@ -22,15 +22,16 @@
 //! In order to customize severity level and misconduct fees.
 //!
 
-mod types;
+// mod types;
 
 use parity_codec::Codec;
 use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 
 /// Estimates severity level based on misconduct
-pub trait Misconduct {
-	/// Severity
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
+pub trait Misconduct: {
+	/// Severity, must be able to encode in `u128` otherwise it will into() will be lossy
+	// TODO(niklasad1): better way than the hack?!
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
 	/// Increase severity level on misconduct.
 	fn on_misconduct(&mut self);
@@ -41,19 +42,19 @@ pub trait Misconduct {
 }
 
 /// Slashing interface
-pub trait OnSlashing<AccountId, M: Misconduct> {
+pub trait OnSlashing<T: system::Trait> {
 	/// Slash validator `who` based on severity_level `severity`
-	fn on_slash(who: &AccountId, misconduct: M);
+	fn on_slash(who: &T::AccountId, misconduct: &impl Misconduct);
 }
 
 /// Slashing wrapper interface on top of `OnSlashing`
-pub trait Slashing<AccountId, M: Misconduct> {
-	/// ..
-	type Slash: OnSlashing<AccountId, M>;
+pub trait Slashing<T: system::Trait> {
+	/// ...
+	type Slash: OnSlashing<T>;
 
 	/// Slash the given account `who`
-	fn slash(who: &AccountId, misconduct: M);
+	fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct);
 
 	/// Decrease severity level after a certain point up to the implementer to determine when.
-	fn on_signal(misconduct: M);
+	fn on_signal(misconduct: &mut impl Misconduct);
 }
