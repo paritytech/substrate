@@ -57,8 +57,9 @@ mod extra_requests;
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
-/// If more than this many blocks exist in the import queue then we won't do an ancesty search since
-/// it will most likely be a waste of time.
+/// We use a heuristic that with a high likelihood, by the time `MAJOR_SYNC_BLOCKS` have been
+/// imported we'll be on the same chain as (or at least closer to) the peer so we want to delay the
+/// ancestor search to not waste time doing that when we're so far behind.
 const MAJOR_SYNC_BLOCKS: usize = 5;
 /// Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
@@ -139,7 +140,8 @@ pub(crate) enum PeerSyncState<B: BlockT> {
 	Available,
 	/// Actively downloading new blocks, starting from the given Number.
 	DownloadingNew(NumberFor<B>),
-	/// Downloading a stale (already imported) block with given Hash.
+	/// Downloading a stale block with given Hash. Stale means that it's a block with a number that
+	/// is lower than our best number. It might be from a fork and not necessarily already imported.
 	DownloadingStale(B::Hash),
 	/// Downloading justification for given block hash.
 	DownloadingJustification(B::Hash),
@@ -303,10 +305,9 @@ impl<B: BlockT> ChainSync<B> {
 				protocol.disconnect_peer(who);
 			},
 			(Ok(BlockStatus::Unknown), _) if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS => {
-				// Here we have more than `MAJOR_SYNC_BLOCKS` in the import queue which means that
-				// we are actively downloading, the common ancestor block is moving too fast to do
-				// an ancestor search and so we assume the best queued block is the common point.
-				// TODO: WHY?
+				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
+				// enough to do in the import queue that it's not worth kicking off
+				// an ancestor search, which is what we do in the next match case below.
 				debug!(
 					target:"sync",
 					"New peer with unknown best hash {} ({}), assuming common block.",
@@ -369,7 +370,13 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// TODO: Explain what this is and why it exists
+	/// This function handles the ancestor search strategy used. The goal is to find a common point
+	/// that both our chains agree on that is as close to the tip as possible.
+	/// The way this works is we first have an exponential backoff strategy, where we try to step
+	/// forward until we find a block hash mismatch. The size of the step doubles each step we take.
+	///
+	/// When we've found a block hash mismatch we then fall back to a binary search between the two
+	/// last known points to find the common block closest to the tip.
 	fn handle_ancestor_search_state(
 		state: AncestorSearchState<B>,
 		curr_block_num: NumberFor<B>,
@@ -766,7 +773,7 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// If true is returned, then the caller MUST try to import passed header (call `on_block_data`).
 	/// The network request isn't sent in this case.
-	/// FH: Why is both hash and header passed? Hash is in the header?
+	/// Both hash and header is passed as an optimization to avoid rehashing the header.
 	#[must_use]
 	pub(crate) fn on_block_announce(
 		&mut self,
@@ -1043,7 +1050,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Request header and justification for the given block number.
+	/// Request the ancestry for a block. Sends a request for header and justification for the given
+	/// block number. Used during ancestry search.
 	fn request_ancestry(protocol: &mut dyn Context<B>, who: PeerId, block: NumberFor<B>) {
 		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, who);
 		let request = message::generic::BlockRequest {
