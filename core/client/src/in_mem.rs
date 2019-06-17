@@ -20,11 +20,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, Digest, DigestItem
-};
+use runtime_primitives::generic::{BlockId, DigestItem};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
@@ -33,7 +30,7 @@ use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
 use crate::error;
-use crate::backend::{self, NewBlockState};
+use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
 use crate::blockchain::{self, BlockStatus, HeaderBackend};
@@ -515,7 +512,11 @@ where
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()> {
+	fn update_storage(
+		&mut self,
+		_update: StorageCollection,
+		_child_update: ChildStorageCollection,
+	) -> error::Result<()> {
 		Ok(())
 	}
 
@@ -627,10 +628,9 @@ where
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 
-			let changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
-			if let Some(changes_trie_root) = changes_trie_root {
+			let maybe_changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
+			if let Some(changes_trie_root) = maybe_changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
-					let changes_trie_root: H::Out = changes_trie_root.into();
 					self.changes_trie_storage.0.insert(
 						*header.number(),
 						changes_trie_root,

@@ -270,7 +270,8 @@ mod tests {
 			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
+			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
+				double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
 			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
@@ -440,7 +441,9 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
 					hasher: StorageHasher::Twox128,
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
+					key: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -452,7 +455,9 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map{
 					hasher: StorageHasher::Blake2_256,
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
+					key: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))

@@ -154,8 +154,6 @@ impl<Block: BlockT> ImportBlock<Block> {
 
 	/// Get a handle to full header (with post-digests applied).
 	pub fn post_header(&self) -> Cow<Block::Header> {
-		use runtime_primitives::traits::Digest;
-
 		if self.post_digests.is_empty() {
 			Cow::Borrowed(&self.header)
 		} else {

@@ -34,7 +34,7 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-use network::{multiaddr, Multiaddr, SyncProvider, ManageNetwork};
+use network::{multiaddr, Multiaddr, ManageNetwork};
 use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
@@ -139,6 +139,7 @@ fn node_config<F: ServiceFactory> (
 		database_path: root.join("db").to_str().unwrap().into(),
 		database_cache_size: None,
 		state_cache_size: 16777216,
+		state_cache_child_ratio: None,
 		pruning: Default::default(),
 		keys: keys,
 		chain_spec: (*spec).clone(),
