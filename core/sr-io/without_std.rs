@@ -211,14 +211,14 @@ pub mod ext {
 		fn ext_child_trie(
 			storage_key_data: *const u8,
 			storage_key_len: u32,
-			a: *mut *mut u8,
-			b: *mut u32,
-			c: *mut *mut u8,
-			d: *mut u32,
-			e: *mut *mut u8,
-			f: *mut u32,
-			g: *mut *mut u8,
-			h: *mut u32
+			keyspace: *mut *mut u8,
+			keyspace_len: *mut u32,
+			root: *mut *mut u8,
+			root_len: *mut u32,
+			parent: *mut *mut u8,
+			parent_len: *mut u32,
+			extension: *mut *mut u8,
+			extension_len: *mut u32
 		) -> u32;
 		/// Set child trie return false if there is an attempt to change non empty root.
 		/// # Returns
@@ -648,28 +648,28 @@ impl StorageApi for () {
 
 	/// Get child trie at storage key location.
 	fn child_trie(storage_key: &[u8]) -> Option<ChildTrie> {
-		let mut a = ptr::null_mut();
-		let mut b = 0u32;
-		let mut c = ptr::null_mut();
-		let mut d = 0u32;
+		let mut k = ptr::null_mut();
+		let mut kl = 0u32;
+		let mut r = ptr::null_mut();
+		let mut rl = 0u32;
+		let mut p = ptr::null_mut();
+		let mut pl = 0u32;
 		let mut e = ptr::null_mut();
-		let mut f = 0u32;
-		let mut g = ptr::null_mut();
-		let mut h = 0u32;
+		let mut el = 0u32;
 		unsafe {
 			if ext_child_trie.get()(
 				storage_key.as_ptr(),
 				storage_key.len() as u32,
-				&mut a as *mut _,
-				&mut b,
-				&mut c as *mut _,
-				&mut d,
+				&mut k as *mut _,
+				&mut kl,
+				&mut r as *mut _,
+				&mut rl,
+				&mut p as *mut _,
+				&mut pl,
 				&mut e as *mut _,
-				&mut f,
-				&mut g as *mut _,
-				&mut h,
+				&mut el,
 			) == 1 {
-				Some(ChildTrie::unsafe_from_ptr_child_trie((a, b, c, d, e, f, g, h)))
+				Some(ChildTrie::unsafe_from_ptr_child_trie(k, kl, r, rl, p, pl, e, el))
 			} else {
 				None
 			}

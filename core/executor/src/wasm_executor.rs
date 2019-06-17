@@ -178,14 +178,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_child_trie(
 			storage_key_data: *const u8,
 			storage_key_len: u32,
-			a: *mut *mut u8,
-			b: *mut u32,
-			c: *mut *mut u8,
-			d: *mut u32,
+			k: *mut *mut u8,
+			kl: *mut u32,
+			r: *mut *mut u8,
+			rl: *mut u32,
+			p: *mut *mut u8,
+			pl: *mut u32,
 			e: *mut *mut u8,
-			f: *mut u32,
-			g: *mut *mut u8,
-			h: *mut u32
+			el: *mut u32
 	) -> u32 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_child_trie"))?;
@@ -208,11 +208,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					}
 					Ok(())
 				};
-				let p = ct.to_ptr_vec();
-				alloc_vec(Some(p.0), a, b)?;
-				alloc_vec(p.1, c, d)?;
-				alloc_vec(Some(p.2), e, f)?;
-				alloc_vec(Some(p.3), g, h)?;
+				let fields = ct.to_ptr_vec();
+				alloc_vec(Some(fields.0), k, kl)?;
+				alloc_vec(fields.1, r, rl)?;
+				alloc_vec(Some(fields.2), p, pl)?;
+				alloc_vec(Some(fields.3), e, el)?;
 				1
 			} else {
 				0

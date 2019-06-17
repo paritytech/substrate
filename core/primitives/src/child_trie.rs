@@ -295,17 +295,16 @@ impl ChildTrie {
 	/// Function to rebuild child trie accessed from.
 	/// This is unsafe to use because it allows to build invalid
 	/// child trie object: duplicate keyspace or invalid root.
-	pub fn unsafe_from_ptr_child_trie(pct: PtrChildTrieMut) -> Self {
-		let (
-			keyspace,
-			kl,
-			root,
-			rl,
-			parent,
-			pl,
-			extension,
-			el,
-		) = pct;
+	pub fn unsafe_from_ptr_child_trie(
+    keyspace: *mut u8,
+    kl: u32,
+    root: *mut u8,
+    rl: u32,
+    parent: *mut u8,
+    pl: u32,
+    extension: *mut u8,
+    el: u32,
+  ) -> Self {
 		unsafe {
 			let keyspace = from_raw_parts(keyspace, kl).expect("non optional; qed");
 			let root = from_raw_parts(root, rl);
@@ -340,18 +339,6 @@ type PtrChildTrie = (
 	*const u8,
 	u32,
 	*const u8,
-	u32,
-);
-
-/// Mut Pointers repersentation of ChildTrie
-type PtrChildTrieMut = (
-	*mut u8,
-	u32,
-	*mut u8,
-	u32,
-	*mut u8,
-	u32,
-	*mut u8,
 	u32,
 );
 
