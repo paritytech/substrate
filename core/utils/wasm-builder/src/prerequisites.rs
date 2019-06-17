@@ -32,7 +32,7 @@ pub fn check() -> Option<&'static str> {
 	}
 
 	if !check_wasm_toolchain_installed() {
-		return Some("Rurst WASM toolchain not installed, please install it!")
+		return Some("Rust WASM toolchain not installed, please install it!")
 	}
 
 	None
@@ -43,14 +43,14 @@ fn check_nightly_installed() -> bool {
 		Command::new("cargo")
 			.arg("--version")
 			.output()
-			.expect("Cargo version never fails; qed")
+			.expect("`cargo --version` never fails; qed")
 			.stdout
 	).unwrap_or_default();
 	let version2 = String::from_utf8(
 		Command::new("cargo")
 			.args(&["+nightly", "--version"])
 			.output()
-			.expect("Cargo version never fails; qed")
+			.expect("`cargo --version` never fails; qed")
 			.stdout
 	).unwrap_or_default();
 

@@ -128,7 +128,7 @@ fn build_project(project: &Path) {
 	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", "-C link-arg=--export-table")
-		// We don't want to calling us recursively
+		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
 	if !build_helper::debug() {
