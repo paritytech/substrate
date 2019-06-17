@@ -94,8 +94,8 @@ cargo-audit:
 check-warnings:
   stage:                           test
   <<:                              *docker-env
-  # except:
-  #   - /^[0-9]+$/
+  except:
+    - /^[0-9]+$/
   script:
     - ./scripts/build.sh --locked
     - RUSTFLAGS="-D warnings" time cargo check --all --release --verbose
