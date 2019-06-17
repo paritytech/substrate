@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use wasm_builder_runner::{build_current_project, WasmBuilderSource};
+
 fn main() {
 	/// TODO: this will not work with a released `node-template`.
-	wasm_builder_runner::build_current_project(
+	build_current_project(
 		"wasm_binary.rs",
-		"../../core/utils/wasm-builder",
+		WasmBuilderSource::Path("../../core/utils/wasm-builder"),
 	);
 }
