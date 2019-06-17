@@ -419,11 +419,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
+		child_trie: ChildTrieReadRef,
 		key: &StorageKey
 	) -> error::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
-			.child_storage_hash(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.child_storage_hash(child_trie, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 		)
 	}
 

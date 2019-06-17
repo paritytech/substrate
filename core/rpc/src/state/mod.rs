@@ -409,13 +409,17 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> Result<Option<Block::Hash>> {
-		let block = self.unwrap_or_best(block)?;
+		let block = BlockId::Hash(self.unwrap_or_best(block)?);
 		trace!(
 			target: "rpc", "Querying child storage hash at {:?} for key {}",
 			block,
 			HexDisplay::from(&key.0),
 		);
-		Ok(self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key)?)
+		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+			Ok(self.client.child_storage_hash(&block, subtrie.node_ref(), &key)?)
+		} else {
+			Ok(None)
+		}
 	}
 
 	fn child_storage_size(

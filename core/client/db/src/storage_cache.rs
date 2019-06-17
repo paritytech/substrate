@@ -42,6 +42,7 @@ pub struct Cache<B: Block, H: Hasher> {
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
 	lru_hashes: LRUMap<StorageKey, OptionHOut<H::Out>>,
 	/// Storage cache for child trie. `None` indicates that key is known to be missing.
+  /// Key is a pair of child trie `KeySpace` and `Key` for value in the child trie.
 	lru_child_storage: LRUMap<ChildStorageKey, Option<StorageValue>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
@@ -499,8 +500,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
     child_trie: ChildTrieReadRef,
     key: &[u8],
   ) -> Result<Option<Vec<u8>>, Self::Error> {
-    // TODO EMCH rewrite child cache to use keyspace everywhere
-		let key = (child_trie.keyspace().to_vec(), key.to_vec());
+		let key = (child_trie.keyspace.to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
 			trace!("Found in local cache: {:?}", key);
