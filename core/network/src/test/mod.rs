@@ -37,17 +37,17 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError};
+use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
 use crate::message::Message;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
+use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
+use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{NetworkLink, NetworkMsg, ProtocolMsg, TransactionPool};
 use crate::specialization::NetworkSpecialization;
@@ -55,6 +55,8 @@ use test_client::{self, AccountKeyring};
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
+
+type AuthorityId = primitives::sr25519::Public;
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
@@ -70,9 +72,12 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
-		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
-			.map(|auth| auth.iter().cloned().collect());
+	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		let maybe_keys = header.digest()
+			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
+				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
+			)
+			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
 		Ok((ImportBlock {
 			origin,
@@ -83,7 +88,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
-		}, new_authorities))
+		}, maybe_keys))
 	}
 }
 
@@ -282,6 +287,10 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
+	/// This field is used only in test code, but maintaining different
+	/// instantiation paths or field names is too much hassle, hence
+	/// we allow it to be unused.
+	#[cfg_attr(not(test), allow(unused))]
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 	import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
@@ -292,10 +301,10 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 type MessageFilter = dyn Fn(&NetworkMsg<Block>) -> bool;
 
 pub enum FromNetworkMsg<B: BlockT> {
-	/// A peer connected, with debug info.
-	PeerConnected(PeerId, String),
-	/// A peer disconnected, with debug info.
-	PeerDisconnected(PeerId, String),
+	/// A peer connected.
+	PeerConnected(PeerId),
+	/// A peer disconnected.
+	PeerDisconnected(PeerId),
 	/// A custom message from another peer.
 	CustomMessage(PeerId, Message<B>),
 	/// Synchronization request.
@@ -471,6 +480,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(ProtocolMsg::BlockImported(info.chain.best_hash, header));
 	}
 
+	#[cfg(test)]
 	fn on_block_imported(
 		&self,
 		hash: <Block as BlockT>::Hash,
@@ -492,18 +502,19 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Get protocol status.
+	#[cfg(test)]
 	fn protocol_status(&self) -> ProtocolStatus<Block> {
 		self.protocol_status.read().clone()
 	}
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerConnected(other.peer_id.clone()));
 	}
 
 	/// Called on disconnect from other indicated peer.
 	fn on_disconnect(&self, other: &Self) {
-		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone(), String::new()));
+		self.net_proto_channel.send_from_net(FromNetworkMsg::PeerDisconnected(other.peer_id.clone()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
@@ -608,6 +619,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Announce a block to peers.
+	#[cfg(test)]
 	fn announce_block(&self, block: Hash) {
 		self.net_proto_channel.send_from_client(ProtocolMsg::AnnounceBlock(block));
 	}
@@ -821,12 +833,12 @@ pub trait TestNetFactory: Sized {
 			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
 					let outcome = match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
-							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerConnected(peer_id)) => {
+							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
-							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id, debug_msg);
+						Some(FromNetworkMsg::PeerDisconnected(peer_id)) => {
+							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id);
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>

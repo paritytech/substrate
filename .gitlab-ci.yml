@@ -103,6 +103,15 @@ check-warnings:
   allow_failure:                   true
 
 
+cargo-check-benches:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - ./scripts/build.sh --locked
+    - time cargo check --benches
+    - sccache -s
+
+
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
@@ -112,7 +121,7 @@ cargo-check-subkey:
     - cd ./subkey
     - time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
-  
+
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -138,7 +147,7 @@ test-linux-stable-int:
       - $DEPLOY_TAG
   script:
     - ./scripts/build.sh --locked
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace 
+    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
   allow_failure:                   true
@@ -164,7 +173,6 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives

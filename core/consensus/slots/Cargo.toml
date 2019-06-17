@@ -18,4 +18,4 @@ parking_lot = "0.8.0"
 log = "0.4"
 
 [dev-dependencies]
-test_client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }

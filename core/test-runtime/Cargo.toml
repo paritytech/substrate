@@ -25,11 +25,10 @@ memory-db = { version = "0.12", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.6"
-consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
-substrate-test-client = { path = "../test-client" }
+substrate-test-runtime-client = { path = "./client" }
 
 [features]
 default = [
@@ -57,7 +56,6 @@ std = [
 	"memory-db/std",
 	"offchain-primitives/std",
 	"executive/std",
-	"consensus_authorities/std",
 ]
 # If enabled, the WASM blob is added to the `GenesisConfig`.
 include-wasm-blob = []

@@ -6,12 +6,18 @@ description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
+parity-codec = { version = "3.5", default-features = false }
 substrate-client = { path = "../../../client", default-features = false }
+substrate-primitives = { path = "../../../primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
+	"rstd/std",
+	"parity-codec/std",
 	"runtime_primitives/std",
 	"substrate-client/std",
+	"substrate-primitives/std",
 ]

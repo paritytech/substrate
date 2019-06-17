@@ -8,7 +8,7 @@ edition = "2018"
 num-traits = { version = "0.2", default-features = false }
 integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+codec = { package = "parity-codec", version = "3.5.1", default-features = false, features = ["derive"] }
 substrate-primitives = { path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
@@ -26,6 +26,6 @@ std = [
 	"log",
 	"rstd/std",
 	"runtime_io/std",
-	"parity-codec/std",
+	"codec/std",
 	"substrate-primitives/std",
 ]

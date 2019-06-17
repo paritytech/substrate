@@ -175,7 +175,7 @@ pub fn import_blocks<F, E, R>(
 
 		block_count = b;
 		if b % 1000 == 0 {
-			info!("#{}", b);
+			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
@@ -184,6 +184,13 @@ pub fn import_blocks<F, E, R>(
 		wait_recv.recv()
 			.expect("Importing thread has panicked. Then the main process will die before this can be reached. qed.");
 		blocks_imported += 1;
+		if blocks_imported % 1000 == 0 {
+			info!(
+				"#{} blocks were imported (#{} left)",
+				blocks_imported,
+				count - blocks_imported
+			);
+		}
 	}
 
 	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);

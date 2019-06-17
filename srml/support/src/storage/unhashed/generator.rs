@@ -27,11 +27,15 @@ pub trait UnhashedStorage {
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
 	/// it's not there.
-	fn require<T: codec::Decode>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+	fn require<T: codec::Decode>(&self, key: &[u8]) -> T {
+		self.get(key).expect("Required values must be in storage")
+	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
 	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
+	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T {
+		self.get(key).unwrap_or_default()
+	}
 
 	/// Put a value in under a key.
 	fn put<T: codec::Encode>(&mut self, key: &[u8], val: &T);
@@ -50,10 +54,14 @@ pub trait UnhashedStorage {
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Decode>(&mut self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Decode>(&mut self, key: &[u8]) -> T {
+		self.take(key).expect("Required values must be in storage")
+	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Decode + Default>(&mut self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+	fn take_or_default<T: codec::Decode + Default>(&mut self, key: &[u8]) -> T {
+		self.take(key).unwrap_or_default()
+	}
 
 	/// Get a Vec of bytes from storage.
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;

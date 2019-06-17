@@ -14,12 +14,10 @@ runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-srml-consensus = { path = "../../../srml/consensus" }
 substrate-telemetry = { path = "../../telemetry" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.26"
@@ -35,6 +33,6 @@ keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
-test_client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.18"
 env_logger = "0.6.1"

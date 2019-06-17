@@ -14,12 +14,10 @@ runtime_io = { package = "sr-io", path = "../../sr-io" }
 slots = { package = "substrate-consensus-slots", path = "../slots" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.17"
 tokio-timer = "0.2.11"
@@ -31,6 +29,6 @@ keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
-test_client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.7"
 env_logger = "0.6"

@@ -35,7 +35,7 @@ use std::ops::Range;
 use std::collections::{HashMap, VecDeque};
 use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
@@ -587,7 +587,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, protocol: &mut Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
+	pub fn blocks_processed(&mut self, protocol: &mut dyn Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		for hash in processed_blocks {
 			self.queue_blocks.remove(&hash);
 		}
