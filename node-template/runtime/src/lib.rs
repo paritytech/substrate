@@ -30,7 +30,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use support::{StorageValue, construct_runtime};
+pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
 pub type AuraSignature = ed25519::Signature;
@@ -151,6 +151,14 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+	pub const TransferFee: u128 = 0;
+	pub const CreationFee: u128 = 0;
+	pub const TransactionBaseFee: u128 = 1;
+	pub const TransactionByteFee: u128 = 0;
+}
+
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = u128;
@@ -164,6 +172,11 @@ impl balances::Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 
 impl sudo::Trait for Runtime {
