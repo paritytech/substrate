@@ -223,7 +223,7 @@ mod tests {
 	use node_runtime::{Call, BalancesCall, UncheckedExtrinsic};
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
-		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
+		crypto::Pair as CryptoPair, ed25519::{Pair, Signature}, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
@@ -300,7 +300,7 @@ mod tests {
 				transaction_pool: service.transaction_pool(),
 			});
 			let mut digest = Digest::<H256>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
+			digest.push(<DigestItem as CompatibleDigestItem<Signature>>::aura_pre_digest(slot_num * 10 / 2));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
@@ -314,7 +314,7 @@ mod tests {
 			// add it to a digest item.
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
-			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
+			let item = <DigestItem as CompatibleDigestItem<Signature>>::aura_seal(
 				signature,
 			);
 			slot_num += 1;

@@ -67,9 +67,6 @@ use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_
 
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
-pub use digest::CompatibleDigestItem;
-
-mod digest;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -94,21 +91,6 @@ impl SlotDuration {
 	pub fn get(&self) -> u64 {
 		self.0.get()
 	}
-}
-
-/// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
-	if authorities.is_empty() { return None }
-
-	let idx = slot_num % (authorities.len() as u64);
-	assert!(idx <= usize::max_value() as u64,
-		"It is impossible to have a vector with length beyond the address space; qed");
-
-	let current_author = authorities.get(idx as usize)
-		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
-
-	Some(current_author)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -235,7 +217,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			);
 			return Box::new(future::ok(()));
 		}
-		let maybe_author = slot_author::<P>(slot_num, &authorities);
+		let maybe_author = slot_author::<P::Public>(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
 			Some(author) => if author == &public_key {
@@ -268,7 +250,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 						slot_info.inherent_data,
 						generic::Digest {
 							logs: vec![
-								<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_num),
+								<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot_num),
 							],
 						},
 						remaining_duration,
@@ -296,7 +278,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header);
+			let pre_digest: Result<u64, &str> = find_pre_digest::<H>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -311,7 +293,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -354,24 +336,6 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
-{
-	let mut pre_digest: Option<u64> = None;
-	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
-		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))?,
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
-		}
-	}
-	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
-}
-
-
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
@@ -385,7 +349,7 @@ fn check_header<C, B: Block, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P::Signature: Decode,
 	C: client::backend::AuxStore,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
@@ -399,7 +363,7 @@ fn check_header<C, B: Block, P: Pair>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let slot_num = find_pre_digest::<B, _>(&header)?;
+	let slot_num = find_pre_digest::<B::Header>(&header)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -407,7 +371,7 @@ fn check_header<C, B: Block, P: Pair>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author::<P>(slot_num, &authorities) {
+		let expected_author = match slot_author::<P::Public>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author,
 		};
@@ -500,7 +464,7 @@ impl<C, P> AuraVerifier<C, P>
 impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode,
@@ -674,7 +638,7 @@ pub fn import_queue<B, C, P>(
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
@@ -683,7 +647,7 @@ pub fn import_queue<B, C, P>(
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = Arc::new(
-		AuraVerifier {
+		AuraVerifier::<C, P> {
 			client: client.clone(),
 			inherent_data_providers,
 			phantom: PhantomData,

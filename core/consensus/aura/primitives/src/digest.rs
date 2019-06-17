@@ -19,21 +19,20 @@
 //! This implements the digests for AuRa, to allow the private
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
-use primitives::Pair;
-use aura_primitives::AURA_ENGINE_ID;
-use runtime_primitives::generic::{DigestItem, OpaqueDigestItemId};
+use runtime_primitives::{
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Header
+};
+use substrate_primitives::ed25519::Signature as Signature;
 use parity_codec::{Encode, Codec};
-use std::fmt::Debug;
-
-type Signature<P> = <P as Pair>::Signature;
+use crate::AURA_ENGINE_ID;
 
 /// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<P: Pair>: Sized {
+pub trait CompatibleDigestItem<S> {
 	/// Construct a digest item which contains a signature on the hash.
-	fn aura_seal(signature: Signature<P>) -> Self;
+	fn aura_seal(signature: S) -> Self;
 
 	/// If this item is an Aura seal, return the signature.
-	fn as_aura_seal(&self) -> Option<Signature<P>>;
+	fn as_aura_seal(&self) -> Option<S>;
 
 	/// Construct a digest item which contains the slot number
 	fn aura_pre_digest(slot_num: u64) -> Self;
@@ -42,16 +41,13 @@ pub trait CompatibleDigestItem<P: Pair>: Sized {
 	fn as_aura_pre_digest(&self) -> Option<u64>;
 }
 
-impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
-	P: Pair,
-	Signature<P>: Codec,
-	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
+impl<Hash, S: Codec> CompatibleDigestItem<S> for DigestItem<Hash>
 {
-	fn aura_seal(signature: Signature<P>) -> Self {
+	fn aura_seal(signature: S) -> Self {
 		DigestItem::Seal(AURA_ENGINE_ID, signature.encode())
 	}
 
-	fn as_aura_seal(&self) -> Option<Signature<P>> {
+	fn as_aura_seal(&self) -> Option<S> {
 		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
 	}
 
@@ -62,4 +58,24 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 	fn as_aura_pre_digest(&self) -> Option<u64> {
 		self.try_to(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
 	}
+}
+
+/// Extract the digest item type for a block.
+pub type DigestItemForHeader<H> = DigestItem<<H as Header>::Hash>;
+
+/// Find pre digest in Aura header.
+pub fn find_pre_digest<H>(header: &H) -> Result<u64, &str>
+where
+	H: Header,
+	DigestItemForHeader<H>: CompatibleDigestItem<Signature>,
+{
+	let mut pre_digest: Option<u64> = None;
+	for log in header.digest().logs() {
+		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err("Multiple AuRa pre-runtime headers, rejecting!")?,
+			(None, _) => {},
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| "No AuRa pre-runtime digest found")
 }

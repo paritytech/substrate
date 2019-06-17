@@ -23,6 +23,9 @@ use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 
+mod digest;
+pub use digest::{CompatibleDigestItem, find_pre_digest};
+
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
@@ -46,4 +49,21 @@ decl_runtime_apis! {
 		// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
 	}
+}
+
+
+/// Get slot author for given block along with authorities.
+pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> Option<&AuthorityId>
+{
+	if authorities.is_empty() { return None }
+
+	let idx = slot_num % (authorities.len() as u64);
+	assert!(idx <= usize::max_value() as u64,
+		"It is impossible to have a vector with length beyond the address space; qed");
+
+	let current_author = authorities.get(idx as usize)
+		.expect("authorities not empty; index constrained to list length;\
+				this is a valid index; qed");
+
+	Some(current_author)
 }

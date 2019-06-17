@@ -51,18 +51,24 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
-use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
+use primitives::{
+	traits::{
+		SaturatedConversion, Saturating, Zero, One, Member, Verify,
+		ValidateUnsigned, Header
+	},
+	generic::DigestItem, transaction_validity::TransactionValidity
+};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
-#[cfg(feature = "std")]
-use parity_codec::Decode;
+use substrate_consensus_aura_primitives::{
+	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author
+};
 
 mod mock;
 mod tests;
@@ -148,12 +154,128 @@ impl HandleReport for () {
 	fn handle_report(_report: AuraReport) { }
 }
 
+pub trait AuthorshipEquivocationProof<H, S> {
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H;
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H;
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> &S;
+
+	/// Get signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> &S;
+}
+
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
+pub struct AuraEquivocationProof<H, S> {
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S> AuthorshipEquivocationProof<H, S> for AuraEquivocationProof<H, S> {
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	/// Get signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
+}
+
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + Default;
+
+	/// The signature of a header in an AuRa equivocation.
+	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
+
+	/// Proof of an equivocation misbehaviour.
+	type AuraEquivocationProof: AuthorshipEquivocationProof<Self::Header, Self::Signature> + Parameter;
+}
+
+fn verify_header<'a, T, P>(
+	header: &mut <T as system::Trait>::Header,
+	signature: <T as Trait>::Signature,
+	authorities: &'a [T::AuthorityId],
+) -> Option<&'a T::AuthorityId>
+where 
+	T: Trait,
+{
+	if let Ok(slot_num) = find_pre_digest(header) {
+		let author = match slot_author(slot_num, authorities) {
+			None => return None,
+			Some(author) => author,
+		};
+		let pre_hash = header.hash();
+		if signature.verify(pre_hash.as_ref(), author) {
+			return Some(author)
+		}
+	}
+	None
+}
+
+fn handle_equivocation_proof<T: Trait>(proof: &T::AuraEquivocationProof) -> TransactionValidity
+{
+	let authorities = <Module<T>>::authorities();
+
+	let fst_author = verify_header::<T, <T::Signature as Verify>::Signer>(
+		&mut proof.first_header().clone(),
+		proof.first_signature().clone(),
+		authorities.as_slice()
+	);
+
+	let snd_author = verify_header::<T, <T::Signature as Verify>::Signer>(
+		&mut proof.second_header().clone(),
+		proof.second_signature().clone(),
+		authorities.as_slice()
+	);
+
+	let proof_is_valid = fst_author.map_or(false, |f| snd_author.map_or(false, |s| f == s));
+
+	if  proof_is_valid {
+		TransactionValidity::Valid {
+			priority: 0,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615,
+			propagate: true,
+		}
+	} else {
+		TransactionValidity::Invalid(0)
+	}
+}
+
+impl<T> ValidateUnsigned for Module<T> 
+where
+	T: Trait,
+{
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(proof) => handle_equivocation_proof::<T>(proof),
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
 }
 
 decl_storage! {
@@ -167,7 +289,12 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
+		/// Report equivocation.
+		fn report_equivocation(_origin, _equivocation_proof: T::AuraEquivocationProof) {
+			// This is the place where we will slash.
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {

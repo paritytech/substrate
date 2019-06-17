@@ -42,7 +42,7 @@ use council::{motions as council_motions};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::OpaqueMetadata;
+use substrate_primitives::{OpaqueMetadata, ed25519};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 
 #[cfg(any(feature = "std", test))]
@@ -101,6 +101,8 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
+	type Signature = ed25519::Signature;
+	type AuraEquivocationProof = aura::AuraEquivocationProof<Self::Header, Self::Signature>;
 }
 
 impl indices::Trait for Runtime {
