@@ -96,7 +96,6 @@ pub(crate) struct PeerSync<B: BlockT> {
 	/// The common number is the block number that is a common point of ancestry for both our chains
 	/// (as far as we know)
 	pub common_number: NumberFor<B>,
-	// FH: Why aren't these two lines replaced with a `pub info: PeerInfo,` ?
 	/// The hash of the best block that we've seen for this peer
 	pub best_hash: B::Hash,
 	/// The number of the best block that we've seen for this peer
@@ -157,7 +156,6 @@ pub struct ChainSync<B: BlockT> {
 	/// A `BlockCollection` of blocks that are being downloaded from peers
 	blocks: BlockCollection<B>,
 	/// The best block number in our queue of blocks to import
-	// FH: Why are we not re-using PeerInfo here again?
 	best_queued_number: NumberFor<B>,
 	/// The best block hash in our queue of blocks to import
 	best_queued_hash: B::Hash,
