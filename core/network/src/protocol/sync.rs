@@ -886,7 +886,7 @@ impl<B: BlockT> ChainSync<B> {
 		};
 		let is_required_data_available =
 			!requires_additional_data &&
-			 range.end - range.start == One::one() &&
+			range.end - range.start == One::one() &&
 			range.start == *header.number();
 		if !is_required_data_available {
 			protocol.send_block_request(who, request);
