@@ -486,8 +486,9 @@ mod tests {
 
 	#[test]
 	fn should_send_a_basic_request_and_get_response() {
+		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		let state = t.with_offchain_externalities();
+		t.set_offchain_externalities(offchain);
 
 		with_externalities(&mut t, || {
 			let request: Request = Request::get("http://localhost:1234");
@@ -526,9 +527,8 @@ mod tests {
 
 	#[test]
 	fn should_send_a_post_request() {
-		let offchain = testing::TestOffchainExt::default();
+		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		let state = offchain.0.clone();
 		t.set_offchain_externalities(offchain);
 
 		with_externalities(&mut t, || {
