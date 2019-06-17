@@ -69,16 +69,28 @@ impl Verify for substrate_primitives::sr25519::Signature {
 	}
 }
 
+/// EnsureOrigin Error type
+pub trait EnsureOriginError {
+	/// Indicates invalid origin
+	fn invalid_origin() -> Self;
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
+	/// Error type
+	type Error: EnsureOriginError;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str> {
-		Self::try_origin(o).map_err(|_| "Invalid origin")
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, Self::Error> {
+		Self::try_origin(o).map_err(|_| Self::Error::invalid_origin())
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+}
+
+impl EnsureOriginError for () {
+	fn invalid_origin() -> () { }
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -87,8 +99,10 @@ pub trait Lookup {
 	type Source;
 	/// Type to lookup into.
 	type Target;
+	/// Error type
+	type Error;
 	/// Attempt a lookup.
-	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, Self::Error>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -99,8 +113,10 @@ pub trait StaticLookup {
 	type Source: Codec + Clone + PartialEq + MaybeDebug;
 	/// Type to lookup into.
 	type Target;
+	/// Error type
+	type Error;
 	/// Attempt a lookup.
-	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, Self::Error>;
 	/// Convert from Target back to Source.
 	fn unlookup(t: Self::Target) -> Self::Source;
 }
@@ -111,13 +127,15 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	type Error = ();
+	fn lookup(x: T) -> result::Result<T, ()> { Ok(x) }
 	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
+	type Error = ();
+	fn lookup(&self, x: T) -> result::Result<T, ()> { Ok(x) }
 }
 
 /// Get the "current" block number.
@@ -701,9 +719,11 @@ pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 pub trait Checkable<Context>: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
+	/// Indicates why `check` failed
+	type Error;
 
 	/// Check self, given an instance of Context.
-	fn check(self, c: &Context) -> Result<Self::Checked, &'static str>;
+	fn check(self, c: &Context) -> Result<Self::Checked, Self::Error>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -721,6 +741,8 @@ pub trait BlindCheckable: Sized {
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
+	type Error = &'static str;
+
 	fn check(self, _c: &Context) -> Result<Self::Checked, &'static str> {
 		BlindCheckable::check(self)
 	}

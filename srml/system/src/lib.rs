@@ -76,15 +76,19 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
-	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
-}};
+use primitives::{
+	generic, Error as PrimitiveError,
+	traits::{
+		self, CheckEqual, SimpleArithmetic,
+		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
+		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+	}
+};
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
-	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
+	storage, decl_module, decl_event, decl_storage, decl_error, StorageDoubleMap, StorageValue,
 	StorageMap, Parameter, for_each_tuple, traits::Contains
 };
 use safe_mix::TripletMix;
@@ -184,6 +188,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
+
+	/// The aggregated error type of the runtime.
+	type Error: Parameter + Member + From<Error>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -194,6 +201,8 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error;
+
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {
 			Self::deposit_event_indexed(&[], event);
@@ -261,6 +270,27 @@ decl_event!(
 		ExtrinsicFailed,
 	}
 );
+
+decl_error! {
+	/// Error for the System module
+	pub enum Error {
+		BadSignature,
+		BlockFull,
+		RequireSignedOrigin,
+		RequireRootOrigin,
+		RequireNoOrigin,
+	}
+}
+
+impl From<PrimitiveError> for Error {
+	fn from(err: PrimitiveError) -> Error {
+		match err {
+			PrimitiveError::Unknown(err) => Error::Unknown(err),
+			PrimitiveError::BadSignature => Error::BadSignature,
+			PrimitiveError::BlockFull => Error::BlockFull,
+		}
+	}
+}
 
 /// Origin for the System module.
 #[derive(PartialEq, Eq, Clone)]
@@ -378,6 +408,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureRoot<AccountId> {
 	type Success = ();
+	type Error = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(()),
@@ -392,6 +423,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
+	type Error = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(who) => Ok(who),
@@ -407,6 +439,7 @@ impl<
 	AccountId: PartialEq + Clone,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
+	type Error = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
@@ -421,6 +454,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureNone<AccountId> {
 	type Success = ();
+	type Error = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::None => Ok(()),
@@ -432,6 +466,7 @@ impl<
 pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
+	type Error = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
 	}
@@ -439,32 +474,32 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
-pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>
+pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, Error>
 	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
 		Ok(RawOrigin::Signed(t)) => Ok(t),
-		_ => Err("bad origin: expected to be a signed origin"),
+		_ => Err(Error::RequireSignedOrigin),
 	}
 }
 
 /// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
-pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), Error>
 	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
 		Ok(RawOrigin::Root) => Ok(()),
-		_ => Err("bad origin: expected to be a root origin"),
+		_ => Err(Error::RequireRootOrigin),
 	}
 }
 
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
-pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), Error>
 	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
 		Ok(RawOrigin::None) => Ok(()),
-		_ => Err("bad origin: expected to be no origin"),
+		_ => Err(Error::RequireNoOrigin),
 	}
 }
 
@@ -741,7 +776,8 @@ impl<T> Default for ChainContext<T> {
 impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = <T::Lookup as StaticLookup>::Source;
 	type Target = <T::Lookup as StaticLookup>::Target;
-	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
+	type Error = <T::Lookup as StaticLookup>::Error;
+	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, Self::Error> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }

@@ -24,6 +24,7 @@ use runtime_io::blake2_256;
 use crate::codec::{Decode, Encode, Input, Compact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
 	Lookup, Checkable, Extrinsic, SaturatedConversion};
+use crate::Error;
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;
@@ -75,18 +76,19 @@ where
 	AccountId: Member + MaybeDisplay,
 	BlockNumber: SimpleArithmetic,
 	Hash: Encode,
-	Context: Lookup<Source=Address, Target=AccountId>
+	Context: Lookup<Source=Address, Target=AccountId, Error=Error>
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
+	type Error = Error;
 
-	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
+	fn check(self, context: &Context) -> Result<Self::Checked, Error> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
 				let current_u64 = context.current_height().saturated_into::<u64>();
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
-					.ok_or("transaction birth block ancient")?;
+					.ok_or(Error::Unknown("transaction birth block ancient"))?;
 				let signed = context.lookup(signed)?;
 				let raw_payload = (index, self.function, era, h);
 				if !raw_payload.using_encoded(|payload| {
@@ -96,7 +98,7 @@ where
 						signature.verify(payload, &signed)
 					}
 				}) {
-					return Err(crate::BAD_SIGNATURE)
+					return Err(Error::BadSignature)
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, (raw_payload.0).0)),

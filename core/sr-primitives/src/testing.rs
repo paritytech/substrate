@@ -200,6 +200,7 @@ impl<Call> Debug for TestXt<Call> {
 
 impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
+	type Error = &'static str;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {

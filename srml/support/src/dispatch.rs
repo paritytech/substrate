@@ -30,7 +30,7 @@ pub enum Never {}
 
 /// Result of a module function call; either nothing (functions are only called for "side effects")
 /// or an error message.
-pub type Result = result::Result<(), &'static str>;
+pub type Result<Error> = result::Result<(), Error>;
 
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
@@ -40,7 +40,8 @@ pub trait Dispatchable {
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
 	type Trait;
-	fn dispatch(self, origin: Self::Origin) -> Result;
+	type Error;
+	fn dispatch(self, origin: Self::Origin) -> Result<Self::Error>;
 }
 
 /// Serializable version of Dispatchable.
@@ -217,6 +218,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -237,6 +239,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -251,6 +254,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* () = default;
@@ -264,6 +268,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -276,6 +281,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* (
@@ -291,6 +297,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -303,6 +310,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{}
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -316,6 +324,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -328,6 +337,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{}
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -345,6 +355,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -358,6 +369,7 @@ macro_rules! decl_module {
 			{ fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -370,6 +382,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -387,6 +400,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -399,7 +413,35 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
+			{ $( $error_type )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		type Error = $error_type:ty;
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $error_type }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -416,6 +458,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $error_type:ty }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -434,6 +477,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $error_type }
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
@@ -458,6 +502,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -475,6 +520,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$(#[doc = $doc_attr])*
 			#[weight = $crate::dispatch::TransactionWeight::default()]
@@ -483,6 +529,36 @@ macro_rules! decl_module {
 			) $( -> $result )* { $( $impl )* }
 			$($rest)*
 		);
+	};
+	// Add default Error if none supplied
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ }
+		[ $($t:tt)* ]
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ Error }
+			[ $($t)* ]
+			$($rest)*
+		);
+		$crate::decl_error! {
+			pub enum Error {
+			}
+		}
 	};
 	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize
@@ -493,6 +569,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -516,6 +593,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -539,6 +617,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -555,6 +634,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 			[ $($t)* ]
 
 			$(#[doc = $doc_attr])*
@@ -575,6 +655,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $( $error_type:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -587,6 +668,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
+			{ $( $error_type )* }
 		);
 	};
 
@@ -745,13 +827,14 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		root;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		$(#[doc = $doc_attr])*
 		#[allow(unreachable_code)]
-		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
+		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result<$error_type> {
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -761,6 +844,7 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		root;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
@@ -777,6 +861,7 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		$ignore:ident;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
@@ -786,7 +871,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr])*
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
-		) -> $crate::dispatch::Result {
+		) -> $crate::dispatch::Result<$error_type> {
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -796,6 +881,7 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		$ignore:ident;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
@@ -939,6 +1025,7 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
+		{ $error_type:ty }
 	) => {
 		$crate::__check_reserved_fn_name! {
 			$($fn_name)*
@@ -985,6 +1072,7 @@ macro_rules! decl_module {
 					@impl_function
 					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 					$origin_type;
+					$error_type;
 					$from;
 					$(#[doc = $doc_attr])*
 					$fn_vis fn $fn_name (
@@ -1087,7 +1175,8 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result {
+			type Error = $error_type;
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result<Self::Error> {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1110,7 +1199,7 @@ macro_rules! decl_module {
 
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result<D::Error> {
 				d.dispatch(origin)
 			}
 		}
@@ -1136,6 +1225,25 @@ macro_rules! impl_outer_dispatch {
 			)*
 		}
 	) => {
+		$crate::impl_outer_dispatch! {
+			$(#[$attr])*
+			pub enum $call_type for $runtime where origin: $origin {
+				type Error = &'static str;
+				$(
+					$module::$camelcase,
+				)*
+			}
+		}
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum $call_type:ident for $runtime:ident where origin: $origin:ty {
+			type Error = $error_type:ty;
+			$(
+				$module:ident::$camelcase:ident,
+			)*
+		}
+	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
@@ -1154,7 +1262,8 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
-			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result {
+			type Error = $error_type;
+			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result<Self::Error> {
 				match self {
 					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
 				}

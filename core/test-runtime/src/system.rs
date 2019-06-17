@@ -23,7 +23,7 @@ use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
+use runtime_primitives::{ApplyError, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -237,7 +237,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
-		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
+		Extrinsic::IncludeData(_) => ApplyResult::Success,
 	}
 }
 
@@ -264,13 +264,13 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
 	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
 	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
-	Ok(ApplyOutcome::Success)
+	ApplyResult::Success
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
 	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
 	<NewAuthorities>::put(new_authorities);
-	Ok(ApplyOutcome::Success)
+	ApplyResult::Success
 }
 
 #[cfg(feature = "std")]

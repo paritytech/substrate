@@ -85,7 +85,7 @@ use primitives::{generic::Digest, traits::{
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
-use primitives::{ApplyOutcome, ApplyError};
+use primitives::{ApplyResult, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 use primitives::weights::Weighable;
 
@@ -100,9 +100,9 @@ mod internal {
 		FullBlock,
 	}
 
-	pub enum ApplyOutcome {
+	pub enum ApplyOutcome<Error> {
 		Success,
-		Fail(&'static str),
+		Fail(Error),
 	}
 }
 

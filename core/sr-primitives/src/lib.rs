@@ -48,18 +48,23 @@ pub mod transaction_validity;
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
-/// A message indicating an invalid signature in extrinsic.
-pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
-
-/// Full block error message.
-///
-/// This allows modules to indicate that given transaction is potentially valid
-/// in the future, but can't be executed in the current state.
-/// Note this error should be returned early in the execution to prevent DoS,
-/// cause the fees are not being paid if this error is returned.
-///
-/// Example: block gas limit is reached (the transaction can be retried in the next block though).
-pub const BLOCK_FULL: &str = "block size limit is reached";
+/// Error type
+pub enum Error {
+	/// Unknown error
+	/// This exists only to make implementation easier. Should be avoid as much as possible.
+	Unknown(&'static str),
+	/// Indicating an invalid signature in extrinsic.
+	BadSignature,
+	/// Full block error.
+	///
+	/// This allows modules to indicate that given transaction is potentially valid
+	/// in the future, but can't be executed in the current state.
+	/// Note this error should be returned early in the execution to prevent DoS,
+	/// cause the fees are not being paid if this error is returned.
+	///
+	/// Example: block gas limit is reached (the transaction can be retried in the next block though).
+	BlockFull
+}
 
 /// Justification type.
 pub type Justification = Vec<u8>;
@@ -489,23 +494,6 @@ impl From<ed25519::Signature> for AnySignature {
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
-/// Outcome of a valid extrinsic application. Capable of being sliced.
-pub enum ApplyOutcome {
-	/// Successful application (extrinsic reported no issue).
-	Success = 0,
-	/// Failed application (extrinsic was probably a no-op other than fees).
-	Fail = 1,
-}
-
-impl codec::Encode for ApplyOutcome {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[*self as u8])
-	}
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// Bad signature.
@@ -526,8 +514,23 @@ impl codec::Encode for ApplyError {
 	}
 }
 
+// TODO: custom implement Encode & Decode to make it a two byte value
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Result from attempt to apply an extrinsic.
-pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+pub enum ApplyResult {
+	/// Successful application (extrinsic reported no issue).
+	Success,
+	/// Failed application (extrinsic was probably a no-op other than fees).
+	ModuleError {
+		/// Module index, matching the metadata module index
+		module: i8, // use i8 instead of u8 because u8 is not supported by parity-codec
+		/// Module specific error value
+		error: i8,
+	},
+	/// Invalid extrinsic application.
+	ApplyError(ApplyError),
+}
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
