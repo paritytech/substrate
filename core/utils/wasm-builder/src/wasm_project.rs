@@ -34,17 +34,25 @@ pub fn create_and_compile(cargo_manifest: &Path) -> PathBuf {
 	project.join(format!("{}.compact.wasm", WASM_BINARY))
 }
 
-/// Find the `Cargo.lock` relative to the `OUT_DIR`.
-fn find_cargo_lock() -> PathBuf {
-	let mut out_dir = build_helper::out_dir();
-
-	while out_dir.pop() {
-		if out_dir.join("Cargo.lock").exists() {
-			return out_dir.join("Cargo.lock")
+/// Find the `Cargo.lock` relative to the given manifest path or the env variable `OUT_DIR`.
+///
+/// If the `Cargo.lock` can not be found, we emit a warning and return `None`.
+fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
+	fn search_path(mut path: PathBuf) -> Option<PathBuf> {
+		while path.pop() {
+			if path.join("Cargo.lock").exists() {
+				return Some(path.join("Cargo.lock"))
+			}
 		}
+		None
 	}
 
-	panic!("Did not found `Cargo.lock` for out dir: {}", build_helper::out_dir().display())
+	search_path(cargo_manifest.to_path_buf())
+		.or_else(|| search_path(build_helper::out_dir()))
+		.or_else(|| {
+			build_helper::warning!("Could not find `Cargo.lock` for `{}`.", cargo_manifest.display());
+			None
+		})
 }
 
 /// Extract the crate name from the given `Cargo.toml`.
@@ -68,7 +76,6 @@ fn get_crate_name(cargo_manifest: &Path) -> String {
 fn create_project(cargo_manifest: &Path) -> PathBuf {
 	let crate_name = get_crate_name(cargo_manifest);
 	let crate_path = cargo_manifest.parent().expect("Parent path exists; qed");
-	let crate_lock_file = find_cargo_lock();
 	let project_folder = build_helper::out_dir().join(format!("{}_wasm_project", crate_name));
 
 	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
@@ -114,9 +121,11 @@ fn create_project(cargo_manifest: &Path) -> PathBuf {
 		)
 	).expect("Project `lib.rs` writing can not fail; qed");
 
-	// Use the `Cargo.lock` of the main project.
-	fs::copy(crate_lock_file, project_folder.join("Cargo.lock"))
-		.expect("Copying the `Cargo.lock` can not fail; qed");
+	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
+		// Use the `Cargo.lock` of the main project.
+		fs::copy(crate_lock_file, project_folder.join("Cargo.lock"))
+			.expect("Copying the `Cargo.lock` can not fail; qed");
+	}
 
 	project_folder
 }
