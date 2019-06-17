@@ -1059,7 +1059,7 @@ impl<B: BlockT> ChainSync<B> {
 }
 
 /// Returns the BlockStatus for given block hash, looking first in the import queue and then in the
-/// chain of the provided chain.
+/// provided chain.
 fn block_status<B: BlockT>(
 	chain: &dyn crate::chain::Client<B>,
 	queue_blocks: &HashSet<B::Hash>,
