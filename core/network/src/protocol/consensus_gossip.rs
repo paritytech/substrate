@@ -24,7 +24,7 @@ use std::time;
 use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
@@ -208,7 +208,12 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	}
 
 	/// Validate consensus message.
-	fn validate(&self, context: &mut dyn ValidatorContext<B>, sender: &PeerId, data: &[u8]) -> ValidationResult<B::Hash>;
+	fn validate(
+		&self,
+		context: &mut dyn ValidatorContext<B>,
+		sender: &PeerId,
+		data: &[u8]
+	) -> ValidationResult<B::Hash>;
 
 	/// Produce a closure for validating messages on a given topic.
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {

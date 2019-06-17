@@ -83,7 +83,25 @@ The size of the arguments and the return value depends on the exact function in 
 `AccountDb` is an abstraction that supports collecting changes to accounts with the ability to efficiently reverting them. Contract
 execution contexts operate on the AccountDb. All changes are flushed into underlying storage only after origin transaction succeeds.
 
-Today `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. Each overlay is represented by a `Map`. On a commit from an overlay to an overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage. On revert, the overlay is just discarded.
+## Relation to the underlying storage
+
+At present, `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. The direct
+storage `AccountDb` leverages child tries. Each overlay is represented by a `Map`. On a commit from an overlay to an
+overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage
+and on revert, the overlay is just discarded.
+
+> ℹ️ The underlying storage has a overlay layer implemented as a `Map`. If the runtime reads a storage location and the
+> respective key doesn't exist in the overlay, then the underlying storage performs a DB access, but the value won't be
+> placed into the overlay. The overlay is only filled with writes.
+>
+> This means that the overlay can be abused in the following ways:
+>
+> - The overlay can be inflated by issuing a lot of writes to unique locations,
+> - Deliberate cache misses can be induced by reading non-modified storage locations,
+
+It also worth noting that the performance degrades with more state stored in the trie. Due to this
+there is not negligible chance that gas schedule will be updated for all operations that involve
+storage access.
 
 ## get_storage, get_code_hash, get_rent_allowance, get_balance, contract_exists
 
@@ -158,20 +176,36 @@ Assuming marshaled size of a balance value is of the constant size we can neglec
 
 This function receives input data for the contract execution. The execution consists of the following steps:
 
-1. Loading code from the DB.
-2. `transfer`-ing funds between the caller and the destination account.
-3. Executing the code of the destination account.
-4. Committing overlayed changed to the underlying `AccountDb`.
+1. Checking rent payment.
+2. Loading code from the DB.
+3. `transfer`-ing funds between the caller and the destination account.
+4. Executing the code of the destination account.
+5. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
-Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
+Checking for rent involves 2 unconditional DB reads: `ContractInfoOf` and `block_number`
+and on top of that at most once per block:
+
+- DB read to `free_balance` and
+- `rent_deposit_offset` and
+- `rent_byte_price` and
+- `Currency::minimum_balance` and
+- `tombstone_deposit`.
+- Calls to `ensure_can_withdraw`, `withdraw`, `make_free_balance_be` can perform arbitrary logic and should be considered separately,
+- `child_storage_root`
+- `kill_child_storage`
+- mutation of `ContractInfoOf`
+
+Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it, or it has been created in the same call chain).
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 3 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
+**complexity**:
+- Only for the first invocation of the contract: up to 5 DB reads and one DB write as well as logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
+- On top of that for every invocation: Up to 5 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
 
@@ -185,7 +219,7 @@ This function takes the code of the constructor and input data. Creation of a co
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most probably it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
@@ -224,9 +258,11 @@ This function receives a `key` as an argument. It consists of the following step
 
 Key is of a constant size. Therefore, the sandbox memory load can be considered to be of constant complexity.
 
-However, a read from the contract's storage can hit the DB, and the size of this read is dynamical.
+Unless the value is cached, a DB read will be performed. The size of the value is not known until the read is
+performed. Moreover, the DB read has to be synchronous and no progress can be made until the value is fetched.
 
-**complexity**: The memory and computing complexity is proportional to the size of the fetched value.
+**complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
+DB read.
 
 ## ext_call
 
@@ -242,7 +278,7 @@ It consists of the following steps:
 1. Loading `callee` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
 2. Loading `value` buffer from the sandbox memory and then decoding it.
 3. Loading `input_data` buffer from the sandbox memory.
-4. Invoking `call` executive function.
+4. Invoking the executive function `call`.
 
 Loading of `callee` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
@@ -326,6 +362,8 @@ This function copies slice of data from the input buffer to the sandbox memory. 
 
 ## ext_scratch_size
 
+This function returns the size of the scratch buffer.
+
 **complexity**: This function is of constant complexity.
 
 ## ext_scratch_copy
@@ -356,4 +394,5 @@ It consists of the following steps:
 1. Invoking `get_rent_allowance` AccountDB function.
 2. Serializing the rent allowance of the current contract into the scratch buffer.
 
-**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity.
+**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity. This
+function performs a DB read.

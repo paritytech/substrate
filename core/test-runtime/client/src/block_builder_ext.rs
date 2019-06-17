@@ -16,10 +16,10 @@
 
 //! Block Builder extensions for tests.
 
-use client;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
-use client::block_builder::api::BlockBuilder;
+use generic_test_client::client;
+use generic_test_client::client::block_builder::api::BlockBuilder;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {

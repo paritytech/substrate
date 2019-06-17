@@ -21,52 +21,55 @@ use consensus::{
 	ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
+use hash_db::Hasher;
 use runtime_primitives::Justification;
+use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
-use runtime;
 use parity_codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
-pub trait TestClient: Sized {
+pub trait ClientExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
-	fn import(&self, origin: BlockOrigin, block: runtime::Block)
+	fn import(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
 	fn import_justified(
 		&self,
 		origin: BlockOrigin,
-		block: runtime::Block,
+		block: Block,
 		justification: Justification
 	) -> Result<(), ConsensusError>;
 
 	/// Finalize a block.
 	fn finalize_block(
 		&self,
-		id: BlockId<runtime::Block>,
+		id: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
-	fn genesis_hash(&self) -> runtime::Hash;
+	fn genesis_hash(&self) -> <Block as BlockT>::Hash;
 }
 
-impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
+impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
-		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
-		Self: BlockImport<runtime::Block, Error=ConsensusError>,
+		B: client::backend::Backend<Block, Blake2Hasher>,
+		E: client::CallExecutor<Block, Blake2Hasher>,
+		Self: BlockImport<Block, Error=ConsensusError>,
+		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
-	fn import(&self, origin: BlockOrigin, block: runtime::Block)
+	fn import(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>
 	{
+		let (header, extrinsics) = block.deconstruct();
 		let import = ImportBlock {
 			origin,
-			header: block.header,
+			header,
 			justification: None,
 			post_digests: vec![],
-			body: Some(block.extrinsics),
+			body: Some(extrinsics),
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -78,15 +81,16 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	fn import_justified(
 		&self,
 		origin: BlockOrigin,
-		block: runtime::Block,
+		block: Block,
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
+		let (header, extrinsics) = block.deconstruct();
 		let import = ImportBlock {
 			origin,
-			header: block.header,
+			header,
 			justification: Some(justification),
 			post_digests: vec![],
-			body: Some(block.extrinsics),
+			body: Some(extrinsics),
 			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -97,13 +101,13 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 
 	fn finalize_block(
 		&self,
-		id: BlockId<runtime::Block>,
+		id: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> client::error::Result<()> {
 		self.finalize_block(id, justification, true)
 	}
 
-	fn genesis_hash(&self) -> runtime::Hash {
-		self.block_hash(0).unwrap().unwrap()
+	fn genesis_hash(&self) -> <Block as BlockT>::Hash {
+		self.block_hash(0.into()).unwrap().unwrap()
 	}
 }

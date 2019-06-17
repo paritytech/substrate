@@ -122,7 +122,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key.
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Twox128>>(f: F, storage: &mut S) -> R {
+				fn mutate<R, F, S>(f: F, storage: &mut S) -> R
+				where
+					F: FnOnce(&mut Self::Query) -> R,
+					S: #scrate::HashedStorage<#scrate::Twox128>,
+				{
 					let mut val = <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
@@ -218,7 +222,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &mut S) -> R {
+				fn mutate<R, F, S>(key: &#kty, f: F, storage: &mut S) -> R
+				where
+					F: FnOnce(&mut Self::Query) -> R,
+					S: #scrate::HashedStorage<#scrate::#hasher>,
+				{
 					let mut val = #as_map::get(key, storage);
 
 					let ret = f(&mut val);
@@ -355,7 +363,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(linkage: Linkage<#kty>, storage: &mut S);
 
 					/// Read the contained data and it's linkage.
-					fn read_with_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
+					fn read_with_linkage<S>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>
+					where
+						S: #scrate::HashedStorage<#scrate::#hasher>;
 
 					/// Generate linkage for newly inserted element.
 					///
@@ -525,7 +535,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &mut S) -> R {
+				fn mutate<R, F, S>(key: &#kty, f: F, storage: &mut S) -> R
+				where
+					F: FnOnce(&mut Self::Query) -> R,
+					S: #scrate::HashedStorage<#scrate::#hasher>,
+				{
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -548,7 +562,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &'a S) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
+				fn enumerate<'a, S>(storage: &'a S) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a>
+				where
+					S: #scrate::HashedStorage<#scrate::#hasher>,
 					#kty: 'a,
 					#typ: 'a,
 				{
@@ -564,7 +580,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		}
 	}
 
-	pub fn double_map(self, hasher: TokenStream2, k1ty: &syn::Type, k2ty: &syn::Type, k2_hasher: TokenStream2) -> TokenStream2 {
+	pub fn double_map(
+		self,
+		hasher: TokenStream2,
+		k1ty: &syn::Type,
+		k2ty: &syn::Type,
+		k2_hasher: TokenStream2,
+	) -> TokenStream2 {
 		let Self {
 			scrate,
 			visibility,
@@ -636,8 +658,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				fn key_for(k1: &#k1ty, k2: &#k2ty) -> Vec<u8> {
+					use #scrate::storage::hashed::generator::StorageHasher;
+
 					let mut key = #as_double_map::prefix_for(k1);
-					key.extend(&#scrate::Hashable::#k2_hasher(k2));
+					#scrate::codec::Encode::using_encoded(k2, |e| key.extend(&#scrate::#k2_hasher::hash(e)));
 					key
 				}
 
@@ -651,7 +675,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage.take(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &mut S) -> R {
+				fn mutate<R, F, S>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &mut S) -> R
+				where
+					F: FnOnce(&mut Self::Query) -> R,
+					S: #scrate::UnhashedStorage,
+				{
 					let mut val = #as_double_map::get(key1, key2, storage);
 
 					let ret = f(&mut val);

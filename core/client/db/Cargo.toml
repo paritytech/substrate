@@ -11,7 +11,7 @@ kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c
 # FIXME replace with release as soon as our rocksdb changes are released upstream https://github.com/paritytech/parity-common/issues/88
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d", optional = true }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-lru-cache = "0.1.1"
+linked-hash-map = "0.5"
 hash-db = { version = "0.12" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
@@ -25,7 +25,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../conse
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
-test-client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 env_logger = { version = "0.6" }
 
 [features]

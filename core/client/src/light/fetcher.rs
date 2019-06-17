@@ -491,7 +491,7 @@ pub mod tests {
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
 	use test_client::{
-		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;
@@ -501,7 +501,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{StorageKey, well_known_keys};
+	use primitives::storage::{well_known_keys, StorageKey};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -564,10 +564,10 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::AUTHORITY_COUNT.to_vec()))
+		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
 			.unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -580,7 +580,7 @@ pub mod tests {
 		).unwrap();
 		let local_executor = test_client::LocalExecutor::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
-		(local_checker, remote_block_header, remote_read_proof, authorities_len)
+		(local_checker, remote_block_header, remote_read_proof, heap_pages)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, Vec<Vec<u8>>) {
@@ -619,13 +619,13 @@ pub mod tests {
 
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
-		let (local_checker, remote_block_header, remote_read_proof, authorities_len) = prepare_for_read_proof_check();
+		let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
+			key: well_known_keys::HEAP_PAGES.to_vec(),
 			retry_count: None,
-		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
+		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
 	}
 
 	#[test]

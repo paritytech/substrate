@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use test_client::{
-	AccountKeyring, runtime::{TestAPI, DecodeFails, Transfer, Header},
-	NativeExecutor, LocalExecutor, TestClientBuilder
+	prelude::*,
+	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
 use runtime_primitives::{
 	generic::BlockId,
