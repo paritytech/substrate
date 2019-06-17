@@ -565,15 +565,9 @@ impl<T: Trait> Module<T> {
 		to: &T::AccountId,
 		amount: T::Balance,
 	) -> Result {
-		let new_balance = Self::free_balance(asset_id, from)
-			.checked_sub(&amount)
-			.ok_or_else(|| "balance too low to send amount")?;
-		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer, new_balance)?;
+		Self::make_transfer(asset_id, from, to, amount)?;
 
 		if from != to {
-			<FreeBalance<T>>::mutate(asset_id, from, |balance| *balance -= amount);
-			<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance += amount);
-
 			Self::deposit_event(RawEvent::Transferred(*asset_id, from.clone(), to.clone(), amount));
 		}
 
