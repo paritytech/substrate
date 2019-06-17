@@ -21,9 +21,10 @@ use serde::Serialize;
 #[cfg(feature = "std")]
 use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
-use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
-	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug,
-	MaybeSerializeDebugButNotDeserialize};
+use crate::traits::{
+	self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Hash as HashT, MaybeSerializeDebug,
+	MaybeSerializeDebugButNotDeserialize
+};
 use crate::generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
@@ -31,7 +32,7 @@ use crate::generic::Digest;
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number: Copy + Into<u128>, Hash: HashT, DigestItem> {
+pub struct Header<Number: Copy + Into<u128>, Hash: HashT> {
 	/// The parent hash.
 	pub parent_hash: <Hash as HashT>::Output,
 	/// The block number.
@@ -42,7 +43,7 @@ pub struct Header<Number: Copy + Into<u128>, Hash: HashT, DigestItem> {
 	/// The merkle root of the extrinsics.
 	pub extrinsics_root: <Hash as HashT>::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
-	pub digest: Digest<DigestItem>,
+	pub digest: Digest<<Hash as HashT>::Output>,
 }
 
 #[cfg(feature = "std")]
@@ -54,11 +55,10 @@ pub fn serialize_number<S, T: Copy + Into<u128>>(val: &T, s: S) -> Result<S::Ok,
 	::serde::Serialize::serialize(&(upper + lower), s)
 }
 
-impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
+impl<Number, Hash> Decode for Header<Number, Hash> where
 	Number: HasCompact + Copy + Into<u128>,
 	Hash: HashT,
 	Hash::Output: Decode,
-	DigestItem: DigestItemT + Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
@@ -71,11 +71,10 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	}
 }
 
-impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
+impl<Number, Hash> Encode for Header<Number, Hash> where
 	Number: HasCompact + Copy + Into<u128>,
 	Hash: HashT,
 	Hash::Output: Encode,
-	DigestItem: DigestItemT + Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
@@ -86,16 +85,14 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 	}
 }
 
-impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
+impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
 	Hash: HashT,
-	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
 	type Hashing = Hash;
-	type Digest = Digest<DigestItem>;
 
 	fn number(&self) -> &Self::Number { &self.number }
 	fn set_number(&mut self, num: Self::Number) { self.number = num }
@@ -109,23 +106,23 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
-	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn digest(&self) -> &Digest<Self::Hash> { &self.digest }
 
 	#[cfg(feature = "std")]
-	fn digest_mut(&mut self) -> &mut Self::Digest {
+	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> {
 		debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
+	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> { &mut self.digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest,
+		digest: Digest<Self::Hash>,
 	) -> Self {
 		Header {
 			number,
@@ -137,10 +134,9 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	}
 }
 
-impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
+impl<Number, Hash> Header<Number, Hash> where
 	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128>,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having

@@ -7,13 +7,16 @@ edition = "2018"
 
 [dependencies]
 substrate-client = { path = "../../../client", default-features = false }
+rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+substrate-primitives = { path = "../../../primitives", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 parity-codec = { version = "3.5.1", default-features = false }
 
 [features]
 default = ["std"]
 std = [
+	"rstd/std",
 	"runtime_primitives/std",
 	"substrate-client/std",
 	"parity-codec/std",

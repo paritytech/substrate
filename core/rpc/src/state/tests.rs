@@ -254,9 +254,14 @@ fn should_return_runtime_version() {
 	let client = Arc::new(test_client::new());
 	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
+	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
+		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",3],\
+		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
+		[\"0xf78b278be53f454c\",1]]}";
 	assert_eq!(
 		serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
-		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",2],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",3],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1],["0xcbca25e39f142387",1],["0xf78b278be53f454c",1],["0x7801759919ee83e5",1]]}"#
+		result,
 	);
 }
 
@@ -281,4 +286,3 @@ fn should_notify_on_runtime_version_initially() {
 		// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
-
