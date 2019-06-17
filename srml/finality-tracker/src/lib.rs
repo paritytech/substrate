@@ -18,9 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support;
-
 use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
@@ -29,13 +26,15 @@ use srml_support::StorageValue;
 use primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
+use srml_support::{decl_module, decl_storage, for_each_tuple};
+use srml_support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
 use parity_codec::Encode;
 
-const DEFAULT_WINDOW_SIZE: u32 = 101;
-const DEFAULT_DELAY: u32 = 1000;
+pub const DEFAULT_WINDOW_SIZE: u32 = 101;
+pub const DEFAULT_DELAY: u32 = 1000;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
@@ -89,6 +88,10 @@ impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
 pub trait Trait: SystemTrait {
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnFinalizationStalled: OnFinalizationStalled<Self::BlockNumber>;
+	/// The number of recent samples to keep from this chain. Default is n-100
+	type WindowSize: Get<Self::BlockNumber>;
+	/// The delay after which point things become suspicious.
+	type ReportLatency: Get<Self::BlockNumber>;
 }
 
 decl_storage! {
@@ -99,10 +102,6 @@ decl_storage! {
 		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// The median.
 		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
-		/// The number of recent samples to keep from this chain. Default is n-100
-		pub WindowSize get(window_size) config(window_size): T::BlockNumber = DEFAULT_WINDOW_SIZE.into();
-		/// The delay after which point things become suspicious.
-		pub ReportLatency get(report_latency) config(report_latency): T::BlockNumber = DEFAULT_DELAY.into();
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
@@ -144,7 +143,7 @@ impl<T: Trait> Module<T> {
 
 		let mut recent = Self::recent_hints();
 		let mut ordered = Self::ordered_hints();
-		let window_size = cmp::max(T::BlockNumber::one(), Self::window_size());
+		let window_size = cmp::max(T::BlockNumber::one(), T::WindowSize::get());
 
 		let hint = hint.unwrap_or_else(|| recent.last()
 			.expect("always at least one recent sample; qed").clone()
@@ -196,7 +195,7 @@ impl<T: Trait> Module<T> {
 
 		if T::BlockNumber::from(our_window_size) == window_size {
 			let now = srml_system::Module::<T>::block_number();
-			let latency = Self::report_latency();
+			let latency = T::ReportLatency::get();
 
 			// the delay is the latency plus half the window size.
 			let delay = latency + (window_size / two);
@@ -264,10 +263,9 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::Header;
-	use srml_support::impl_outer_origin;
+	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
-	use lazy_static::lazy_static;
-	use parking_lot::Mutex;
+	use std::cell::RefCell;
 
 	#[derive(Clone, PartialEq, Debug)]
 	pub struct StallEvent {
@@ -275,69 +273,63 @@ mod tests {
 		further_wait: u64,
 	}
 
-	macro_rules! make_test_context {
-		() => {
-			#[derive(Clone, Eq, PartialEq)]
-			pub struct Test;
+	#[derive(Clone, Eq, PartialEq)]
+	pub struct Test;
 
-			impl_outer_origin! {
-				pub enum Origin for Test {}
-			}
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
 
-			impl system::Trait for Test {
-				type Origin = Origin;
-				type Index = u64;
-				type BlockNumber = u64;
-				type Hash = H256;
-				type Hashing = BlakeTwo256;
-				type AccountId = u64;
-				type Lookup = IdentityLookup<u64>;
-				type Header = Header;
-				type Event = ();
-			}
+	thread_local! {
+		static NOTIFICATIONS: RefCell<Vec<StallEvent>> = Default::default();
+	}
 
-			type System = system::Module<Test>;
-
-			lazy_static! {
-				static ref NOTIFICATIONS: Mutex<Vec<StallEvent>> = Mutex::new(Vec::new());
-			}
-
-			pub struct StallTracker;
-			impl OnFinalizationStalled<u64> for StallTracker {
-				fn on_stalled(further_wait: u64, _median: u64) {
-					let now = System::block_number();
-					NOTIFICATIONS.lock().push(StallEvent { at: now, further_wait });
-				}
-			}
-
-			impl Trait for Test {
-				type OnFinalizationStalled = StallTracker;
-			}
-
-			type FinalityTracker = Module<Test>;
+	pub struct StallTracker;
+	impl OnFinalizationStalled<u64> for StallTracker {
+		fn on_stalled(further_wait: u64, _median: u64) {
+			let now = System::block_number();
+			NOTIFICATIONS.with(|v| v.borrow_mut().push(StallEvent { at: now, further_wait }));
 		}
 	}
 
+	impl system::Trait for Test {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
+		type Header = Header;
+		type Event = ();
+	}
+	parameter_types! {
+		pub const WindowSize: u64 = 11;
+		pub const ReportLatency: u64 = 100;
+	}
+	impl Trait for Test {
+		type OnFinalizationStalled = StallTracker;
+		type WindowSize = WindowSize;
+		type ReportLatency = ReportLatency;
+	}
+
+	type System = system::Module<Test>;
+	type FinalityTracker = Module<Test>;
+
 	#[test]
 	fn median_works() {
-		make_test_context!();
 		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
-			assert!(NOTIFICATIONS.lock().is_empty());
+			assert!(NOTIFICATIONS.with(|v| v.borrow().is_empty()));
 		});
 	}
 
 	#[test]
 	fn notifies_when_stalled() {
-		make_test_context!();
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
-			window_size: 11,
-			report_latency: 100
-		}.build_storage().unwrap().0);
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
@@ -349,7 +341,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				NOTIFICATIONS.lock().to_vec(),
+				NOTIFICATIONS.with(|v| v.borrow().to_vec()),
 				vec![StallEvent { at: 105, further_wait: 10 }]
 			)
 		});
@@ -357,12 +349,7 @@ mod tests {
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		make_test_context!();
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
-			window_size: 11,
-			report_latency: 100
-		}.build_storage().unwrap().0);
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
@@ -377,7 +364,7 @@ mod tests {
 				parent_hash = hdr.hash();
 			}
 
-			assert!(NOTIFICATIONS.lock().is_empty());
+			assert!(NOTIFICATIONS.with(|v| v.borrow().is_empty()));
 		});
 	}
 }
