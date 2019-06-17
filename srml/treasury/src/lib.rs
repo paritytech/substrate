@@ -71,7 +71,7 @@
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance};
+use srml_support::traits::{Currency, Get, Imbalance, OnDilution, OnUnbalanced, ReservableCurrency};
 use runtime_primitives::{Permill,
 	traits::{Zero, EnsureOrigin, StaticLookup, Saturating, CheckedSub, CheckedMul}
 };
@@ -100,6 +100,19 @@ pub trait Trait: system::Trait {
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
 	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+	/// An accepted proposal gets these back. A rejected proposal does not.
+	type ProposalBond: Get<Permill>;
+
+	/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+	type ProposalBondMinimum: Get<BalanceOf<Self>>;
+
+	/// Period between successive spends.
+	type SpendPeriod: Get<Self::BlockNumber>;
+
+	/// Percentage of spare funds (if any) that are burnt per spend period.
+	type Burn: Get<Permill>;
 }
 
 type ProposalIndex = u32;
@@ -141,19 +154,6 @@ decl_module! {
 			<Pot<T>>::put(new_pot);
 		}
 
-		/// (Re-)configure this module.
-		fn configure(
-			#[compact] proposal_bond: Permill,
-			#[compact] proposal_bond_minimum: BalanceOf<T>,
-			#[compact] spend_period: T::BlockNumber,
-			#[compact] burn: Permill
-		) {
-			<ProposalBond<T>>::put(proposal_bond);
-			<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
-			<SpendPeriod<T>>::put(spend_period);
-			<Burn<T>>::put(burn);
-		}
-
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
@@ -188,7 +188,7 @@ decl_module! {
 
 		fn on_finalize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
-			if (n % Self::spend_period()).is_zero() {
+			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds();
 			}
 		}
@@ -207,23 +207,6 @@ pub struct Proposal<AccountId, Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
-		// Config...
-
-		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
-		/// An accepted proposal gets these back. A rejected proposal does not.
-		ProposalBond get(proposal_bond) config(): Permill;
-
-		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		ProposalBondMinimum get(proposal_bond_minimum) config(): BalanceOf<T>;
-
-		/// Period between successive spends.
-		SpendPeriod get(spend_period) config(): T::BlockNumber = runtime_primitives::traits::One::one();
-
-		/// Percentage of spare funds (if any) that are burnt per spend period.
-		Burn get(burn) config(): Permill;
-
-		// State...
-
 		/// Total funds available to this module for spending.
 		Pot get(pot): BalanceOf<T>;
 
@@ -262,7 +245,7 @@ impl<T: Trait> Module<T> {
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
-		Self::proposal_bond_minimum().max(Self::proposal_bond() * value)
+		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
 	}
 
 	// Spend some money!
@@ -302,7 +285,7 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = (Self::burn() * budget_remaining).min(budget_remaining);
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
@@ -334,7 +317,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
+	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
@@ -357,6 +340,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
@@ -365,6 +355,17 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
+	}
+	parameter_types! {
+		pub const ProposalBond: Permill = Permill::from_percent(5);
+		pub const ProposalBondMinimum: u64 = 1;
+		pub const SpendPeriod: u64 = 2;
+		pub const Burn: Permill = Permill::from_percent(50);
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;
@@ -373,6 +374,10 @@ mod tests {
 		type Event = ();
 		type MintedForSpending = ();
 		type ProposalRejection = ();
+		type ProposalBond = ProposalBond;
+		type ProposalBondMinimum = ProposalBondMinimum;
+		type SpendPeriod = SpendPeriod;
+		type Burn = Burn;
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
@@ -381,18 +386,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			existential_deposit: 0,
 			vesting: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1,
-			spend_period: 2,
-			burn: Permill::from_percent(50),
 		}.build_storage().unwrap().0);
 		t.into()
 	}
@@ -400,10 +394,6 @@ mod tests {
 	#[test]
 	fn genesis_config_works() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Treasury::proposal_bond(), Permill::from_percent(5));
-			assert_eq!(Treasury::proposal_bond_minimum(), 1);
-			assert_eq!(Treasury::spend_period(), 2);
-			assert_eq!(Treasury::burn(), Permill::from_percent(50));
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
 		});
