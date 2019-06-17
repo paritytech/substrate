@@ -665,13 +665,15 @@ fn nominating_and_rewards_should_work() {
 		// nothing else will happen, era ends and rewards are paid again,
 		// it is expected that nominators will also be paid. See below
 
+		// Approximation resulting from Perbill conversion
+		let approximation = 1;
 		// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&2), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1);
+		assert_eq!(Balances::total_balance(&2), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation);
 		// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1);
+		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation);
 
 		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
+		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - approximation);
 		// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11+ 2);
 
@@ -1655,11 +1657,13 @@ fn bond_with_no_staked_value() {
 
 		start_era(3);
 
+		// Approximation resulting from Perbill conversion
+		let approximation = 1;
 		let reward = Staking::current_session_reward() * 3;
 		// 2 will not get a reward of only 1
 		// 4 will get the rest
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3 - approximation);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3 - approximation);
 	});
 }
 

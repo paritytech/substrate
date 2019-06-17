@@ -254,6 +254,21 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	/// Approximate the fracion `p/q` into a per billion fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
+
+		Perbill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -318,8 +333,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
