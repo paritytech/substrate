@@ -248,7 +248,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// behind the best queued block.
 	fn state(&self, best_seen: &Option<NumberFor<B>>) -> SyncState {
 		match best_seen {
-			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > MAJOR_SYNC_BLOCKS.into() => SyncState::Downloading,
+			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5.into() => SyncState::Downloading,
 			_ => SyncState::Idle,
 		}
 	}
