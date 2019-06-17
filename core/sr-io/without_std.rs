@@ -679,7 +679,7 @@ impl StorageApi for () {
 	/// Set child trie. Can fail and return false (eg change of root).
 	fn set_child_trie(ct: ChildTrie) -> bool {
 		unsafe {
-			let p = ct.unsafe_ptr_child_trie();
+			let p = ct.ptr_child_trie();
 			ext_set_child_trie.get()(p.0, p.1, p.2, p.3, p.4, p.5, p.6, p.7)
 				== 1
 		}

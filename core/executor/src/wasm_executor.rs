@@ -208,7 +208,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					}
 					Ok(())
 				};
-				let p = ct.unsafe_to_ptr_vec();
+				let p = ct.to_ptr_vec();
 				alloc_vec(Some(p.0), a, b)?;
 				alloc_vec(p.1, c, d)?;
 				alloc_vec(Some(p.2), e, f)?;

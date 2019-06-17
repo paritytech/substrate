@@ -111,6 +111,10 @@ export_api! {
 		/// Update or create an existing child trie.
 		/// Return false if it could not be updated (eg direct change
 		/// of root is not allowed).
+		/// This is accessible to runtime module, but is not safe for
+		/// direct access, (eg contract).
+		/// Problematic use case is direct construction of child trie with existing root or keyspace.
+		/// `ChildTrie` input need to be fetch or instantiate from a valid `Keyspace` generator.
 		fn set_child_trie(ct: ChildTrie) -> bool;
 
 		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return

@@ -268,9 +268,9 @@ impl ChildTrie {
 		enc
 	}
 
-	/// Function to send child trie without relying on
-	/// contiguous memory.
-	pub fn unsafe_ptr_child_trie(&self) -> PtrChildTrie {
+	/// Function accessing all child trie fields and returning
+	/// tuple of pointer and size from them.
+	pub fn ptr_child_trie(&self) -> PtrChildTrie {
 		(
 			self.keyspace.as_ptr(),
 			self.keyspace.len() as u32,
@@ -282,8 +282,8 @@ impl ChildTrie {
 			self.extension.len() as u32,
 		)
 	}
-	/// Function to access child trie field unsafely (for memcopy).
-	pub fn unsafe_to_ptr_vec(&self) -> (&[u8], Option<&[u8]>, &[u8], &[u8]) {
+	/// Function to access all child trie fields.
+	pub fn to_ptr_vec(&self) -> (&[u8], Option<&[u8]>, &[u8], &[u8]) {
 		(
 			self.keyspace.as_ref(),
 			self.root.as_ref().map(|r| r.as_ref()),
@@ -293,6 +293,8 @@ impl ChildTrie {
 	}
 
 	/// Function to rebuild child trie accessed from.
+	/// This is unsafe to use because it allows to build invalid
+	/// child trie object: duplicate keyspace or invalid root.
 	pub fn unsafe_from_ptr_child_trie(pct: PtrChildTrieMut) -> Self {
 		let (
 			keyspace,
@@ -313,6 +315,8 @@ impl ChildTrie {
 		}
 	}
 	/// Function to rebuild child trie accessed from mem copied field.
+	/// This is unsafe to use because it allows to build invalid
+	/// child trie object: duplicate keyspace or invalid root.
 	pub fn unsafe_from_ptr_vecs(a: Vec<u8>, b: Option<Vec<u8>>, c: Vec<u8>, d: Vec<u8>) -> Self {
 		ChildTrie { keyspace: a, root: b , parent: c, extension: d }
 	}
