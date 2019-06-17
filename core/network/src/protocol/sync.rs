@@ -902,8 +902,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
 	}
 
-	/// Convenience function to check if the given hash exists in our block queue or the provided
-	/// chain in `protocol` where the status isn't Unknown.
+	/// Returns true if the block with given hash exists in the import queue with known status or is
+	/// already imported.
 	fn is_known(&self, protocol: &mut dyn Context<B>, hash: &B::Hash) -> bool {
 		block_status(&*protocol.client(), &self.queue_blocks, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
