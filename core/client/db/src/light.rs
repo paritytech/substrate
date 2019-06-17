@@ -31,11 +31,8 @@ use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT,
-	Zero, One, NumberFor, Digest, DigestItem,
-};
+use runtime_primitives::generic::{DigestItem, BlockId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
@@ -574,11 +571,10 @@ pub(crate) mod tests {
 	use client::cht;
 	use runtime_primitives::generic::DigestItem;
 	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::AuthorityIdFor;
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
-	type AuthorityId = AuthorityIdFor<Block>;
+	type AuthorityId = primitives::ed25519::Public;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {
@@ -871,7 +867,7 @@ pub(crate) mod tests {
 	fn authorities_are_cached() {
 		let db = LightStorage::new_test();
 
-		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityIdFor<Block>>>)]) {
+		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityId>>)]) {
 			for (at, expected) in checks.iter().take_while(|(at, _)| *at <= max) {
 				let actual = get_authorities(db.cache(), BlockId::Number(*at));
 				assert_eq!(*expected, actual);

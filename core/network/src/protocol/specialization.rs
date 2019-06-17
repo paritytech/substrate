@@ -16,9 +16,9 @@
 
 //! Specializations of the substrate network protocol to allow more complex forms of communication.
 
-use crate::PeerId;
-use runtime_primitives::traits::Block as BlockT;
 use crate::protocol::Context;
+use libp2p::PeerId;
+use runtime_primitives::traits::Block as BlockT;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {

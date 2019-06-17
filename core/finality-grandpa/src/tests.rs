@@ -39,7 +39,8 @@ use std::result;
 use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
+use substrate_primitives::{NativeOrEncoded, ExecutionContext};
+use fg_primitives::AuthorityId;
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -443,7 +444,7 @@ const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }

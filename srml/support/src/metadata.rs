@@ -82,16 +82,6 @@ macro_rules! __runtime_modules_to_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_call {
-	// skip system
-	(
-		system,
-		$skip_module: ident $( <$instance:ident> )?,
-		$skip_runtime: ident,
-		with Call
-		$(with $kws:ident)*
-	) => {
-		None
-	};
 	(
 		$mod: ident,
 		$module: ident $( <$instance:ident> )?,
