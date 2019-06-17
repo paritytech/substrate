@@ -484,20 +484,20 @@ impl<Block: BlockT> Inner<Block> {
 			},
 		};
 
-		let set_id = local_view.set_id;
+        let set_id = local_view.set_id;
 
-		debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-			self.config.name(), (round,set_id));
+        debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
+            self.config.name(), (round,set_id));
 
 		local_view.round = round;
 
-		let pruned = self.live_topics.push(round, set_id);
+        let pruned = self.live_topics.push(round, set_id);
 
-		for p in pruned {
-			// Prune the tallies
-			self.incoming_msg_tally.remove(&p);
-			self.outgoing_msg_tally.remove(&p);
-		}
+        for p in pruned {
+            // Prune the tallies
+            self.incoming_msg_tally.remove(&p);
+            self.outgoing_msg_tally.remove(&p);
+        }
 
 		// Reset the votes-tally for a new round.
 		self.incoming_msg_tally.insert((round, set_id), Default::default());
