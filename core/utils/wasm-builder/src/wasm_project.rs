@@ -34,25 +34,24 @@ pub fn create_and_compile(cargo_manifest: &Path) -> PathBuf {
 	project.join(format!("{}.compact.wasm", WASM_BINARY))
 }
 
-/// Find the `Cargo.lock` relative to the given manifest path or the env variable `OUT_DIR`.
+/// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
 ///
 /// If the `Cargo.lock` can not be found, we emit a warning and return `None`.
 fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
-	fn search_path(mut path: PathBuf) -> Option<PathBuf> {
-		while path.pop() {
-			if path.join("Cargo.lock").exists() {
-				return Some(path.join("Cargo.lock"))
-			}
+	let mut path = build_helper::out_dir();
+
+	while path.pop() {
+		if path.join("Cargo.lock").exists() {
+			return Some(path.join("Cargo.lock"))
 		}
-		None
 	}
 
-	search_path(cargo_manifest.to_path_buf())
-		.or_else(|| search_path(build_helper::out_dir()))
-		.or_else(|| {
-			build_helper::warning!("Could not find `Cargo.lock` for `{}`.", cargo_manifest.display());
-			None
-		})
+	build_helper::warning!(
+		"Could not find `Cargo.lock` for `{}`, while searching from `{}`.",
+		cargo_manifest.display(),
+		build_helper::out_dir().display()
+	);
+	None
 }
 
 /// Extract the crate name from the given `Cargo.toml`.
