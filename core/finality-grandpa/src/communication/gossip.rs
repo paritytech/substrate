@@ -189,7 +189,7 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 	}
 
-    // Adds a round of topic, returns a list of pruned rounds
+	// Adds a round of topic, returns a list of pruned rounds
 	fn push(&mut self, round: Round, set_id: SetId) -> Vec<(Round, SetId)> {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 		self.rounds.push_back((round, set_id));
