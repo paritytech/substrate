@@ -635,7 +635,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
-				const INVERSE_NANO: u32 = 1000_000_000;
+				const NANOS_PER_SEC: u32 = 1_000_000_000;
 				let mut timestamps = self.timestamps.lock();
 				// Remainder of this block is a critical section.
 				let num_timestamps = timestamps.1.len();
@@ -645,8 +645,8 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 								.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
 								.and_then(|x| x.checked_mul(u128::from(slot_num).saturating_sub(u128::from(sl))))
 								.expect("we cannot have timespans long enough for this to overflow; qed");
-							let nanos = (offset % u128::from(INVERSE_NANO)) as u32;
-							let secs = (offset / u128::from(INVERSE_NANO)) as u64;
+							let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
+							let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
 							t + Duration::new(secs, nanos)
 						}).collect();
 					// FIXME use a selection algorithm instead of a full sorting algorithm.
