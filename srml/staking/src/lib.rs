@@ -1210,8 +1210,7 @@ impl<T: Trait> Module<T> {
 					.map(|x| x.min(slash_exposure))
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
-				<Validators<T>>::remove(&stash);
-				let _ = Self::apply_force_new_era();
+				let _ = <session::Module<T>>::disable(&controller);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
