@@ -33,7 +33,7 @@ pub enum Error {
 	/// Transaction pool error,
 	Pool(txpool::error::Error),
 	/// Verification error
-	#[display(fmt="Extrinsic verification error: {}", "_0.description()")]
+	#[display(fmt="Extrinsic verification error: {}", _0)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format")]
