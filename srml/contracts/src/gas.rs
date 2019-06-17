@@ -17,7 +17,8 @@
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{CheckedMul, CheckedSub, Zero, SaturatedConversion};
-use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
+use srml_support::StorageValue;
+use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -202,15 +203,15 @@ pub fn buy_gas<T: Trait>(
 	gas_limit: T::Gas,
 ) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
-	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
-	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
+	// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
+	let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
 	if gas_limit > gas_available {
 		// gas limit reached, revert the transaction and retry again in the future
 		return Err(BLOCK_FULL);
 	}
 
 	// Buy the specified amount of gas.
-	let gas_price = <Module<T>>::gas_price();
+	let gas_price = T::GasPrice::get();
 	let cost = gas_limit.clone().into()
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;

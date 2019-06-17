@@ -21,9 +21,9 @@
 use primitives::BuildStorage;
 use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
-use rstd::cell::RefCell;
 use runtime_io;
 use srml_support::{impl_outer_origin, traits::Get};
+use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
