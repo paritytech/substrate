@@ -53,19 +53,27 @@ fn basic_setup_works() {
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
 		if cfg!(feature = "equalise") {
-			// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-			assert_eq!(Staking::stakers(11), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] });
-			// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
-			assert_eq!(Staking::stakers(21), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] });
+			assert_eq!(
+				Staking::stakers(11),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+			);
+			assert_eq!(
+				Staking::stakers(21),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+			);
 			// initial slot_stake
-			assert_eq!(Staking::slot_stake(),  1250); // Naive
+			assert_eq!(Staking::slot_stake(),  1250);
 		} else {
-			// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-			assert_eq!(Staking::stakers(11), Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] });
-			// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
-			assert_eq!(Staking::stakers(21), Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] });
+			assert_eq!(
+				Staking::stakers(11),
+				Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] }
+			);
+			assert_eq!(
+				Staking::stakers(21),
+				Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] }
+			);
 			// initial slot_stake
-			assert_eq!(Staking::slot_stake(),  1125); // Naive
+			assert_eq!(Staking::slot_stake(),  1125);
 		}
 
 
@@ -210,7 +218,10 @@ fn offline_grace_should_delay_slashing() {
 
 		// Check unstake_threshold is 3 (default)
 		let default_unstake_threshold = 3;
-		assert_eq!(Staking::validators(&11), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
+		assert_eq!(
+			Staking::validators(&11),
+			ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 }
+		);
 
 		// Check slash count is zero
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -510,7 +521,10 @@ fn staking_should_work() {
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Note: the stashed value of 4 is still lock
-		assert_eq!(Staking::ledger(&4), Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] }));
+		assert_eq!(
+			Staking::ledger(&4),
+			Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] })
+		);
 		// e.g. it cannot spend more than 500 that it has free from the total 2000
 		assert_noop!(Balances::reserve(&3, 501), "account liquidity restrictions prevent withdrawal");
 		assert_ok!(Balances::reserve(&3, 409));
@@ -657,27 +671,51 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Staking::stakers(11).own, 1000);
 			assert_eq!(Staking::stakers(11).total, 1000 + 999);
 			// 2 and 4 supported 10, each with stake 600, according to phragmen.
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![599, 400]);
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(), vec![3, 1]);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![599, 400]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
 			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(21).own, 1000);
 			assert_eq!(Staking::stakers(21).total, 1000 + 999);
 			// 2 and 4 supported 20, each with stake 250, according to phragmen.
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 599]);
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(), vec![3, 1]);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![400, 599]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
 		} else {
 			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(11).own, 1000);
 			assert_eq!(Staking::stakers(11).total, 1000 + 800);
 			// 2 and 4 supported 10, each with stake 600, according to phragmen.
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 400]);
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(), vec![3, 1]);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![400, 400]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
 			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(21).own, 1000);
 			assert_eq!(Staking::stakers(21).total, 1000 + 1198);
 			// 2 and 4 supported 20, each with stake 250, according to phragmen.
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![599, 599]);
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(), vec![3, 1]);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![599, 599]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
 		}
 
 		// They are not chosen anymore
@@ -780,9 +818,15 @@ fn double_staking_should_fail() {
 		|| {
 			let arbitrary_value = 5;
 			// 2 = controller, 1 stashed => ok
-			assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
+			assert_ok!(
+				Staking::bond(Origin::signed(1), 2, arbitrary_value,
+				RewardDestination::default())
+			);
 			// 4 = not used so far, 1 stashed => not allowed.
-			assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::default()), "stash already bonded");
+			assert_noop!(
+				Staking::bond(Origin::signed(1), 4, arbitrary_value,
+				RewardDestination::default()), "stash already bonded"
+			);
 			// 1 = stashed => attempting to nominate should fail.
 			assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
 			// 2 = controller  => nominating should work.
