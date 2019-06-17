@@ -430,7 +430,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: PeerId,
 		message: ConsensusMessage,
 	) {
-        println!("received message");
 		let message_hash = HashFor::<B>::hash(&message.data[..]);
 
 		if self.known_messages.contains_key(&message_hash) {
@@ -441,7 +440,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		let engine_id = message.engine_id;
 		//validate the message
-        println!("Validating message");
 		let validation = self.validators.get(&engine_id)
 			.cloned()
 			.map(|v| {

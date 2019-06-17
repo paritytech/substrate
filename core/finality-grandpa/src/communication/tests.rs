@@ -358,7 +358,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
-			// start round, dispatch commit, and wait for broadcast.
+			// start round.
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
 			{
@@ -373,11 +373,118 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 					_ => panic!("wrong expected outcome from initial commit validation"),
 				}
 			}
-			// start another round, tallies should have been reset.
+			// start another round.
 			tester.net_handle.global_communication(SetId(2), voter_set, false);
 
 			{
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
+				match action {
+					gossip::Action::Keep(_, _) => {},
+					_ => panic!("wrong expected outcome from initial commit validation"),
+				}
+			}
+			Ok((tester, id))
+		}).map(|_| ());
+
+	current_thread::block_on_all(test).unwrap();
+}
+
+#[test]
+fn non_existent_votes_excluded_from_tallies() {
+	let private = [AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let public = make_ids(&private[..]);
+	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+
+	let unknown_public = make_ids(&[AuthorityKeyring::Charlie]);
+
+	let encoded_vote_one = {
+		let round = 0;
+		let set_id = 1;
+
+		let signed = {
+			let target_hash: Hash = [1; 32].into();
+			let target_number = 500;
+
+			let message = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+			let payload = super::localized_payload(
+				round, set_id, &grandpa::Message::Precommit(message.clone())
+			);
+
+			let key = private.get(0).unwrap();
+			let (id, _) = public.get(0).unwrap();
+			let signature = key.sign(&payload[..]);
+
+			grandpa::SignedMessage {
+				signature,
+				message: grandpa::Message::Precommit(message.clone()),
+				id: id.clone(),
+			}
+		};
+		gossip::GossipMessage::<Block>::VoteOrPrecommit(gossip::VoteOrPrecommitMessage {
+			round: Round(round),
+			set_id: SetId(set_id),
+			message: signed,
+		}).encode()
+	};
+
+	// Vote from unknown authority.
+	let encoded_vote_two = {
+		let round = 1;
+		let set_id = 2;
+
+		let signed = {
+			let target_hash: Hash = [1; 32].into();
+			let target_number = 500;
+
+			let message = grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+			let payload = super::localized_payload(
+				round, set_id, &grandpa::Message::Precommit(message.clone())
+			);
+
+			let key = AuthorityKeyring::Charlie;
+			let (id, _) = unknown_public.get(0).unwrap();
+			let signature = key.sign(&payload[..]);
+
+			grandpa::SignedMessage {
+				signature,
+				message: grandpa::Message::Precommit(message.clone()),
+				id: id.clone(),
+			}
+		};
+		gossip::GossipMessage::<Block>::VoteOrPrecommit(gossip::VoteOrPrecommitMessage {
+			round: Round(round),
+			set_id: SetId(set_id),
+			message: signed,
+		}).encode()
+	};
+
+	let id = network::PeerId::random();
+
+	let test = make_test_network()
+		.and_then(move |tester| {
+			// register a peer.
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
+			Ok((tester, id))
+		})
+		.and_then(move |(tester, id)| {
+			// start round,.
+			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
+
+			{
+				// Unknown voter.
+				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
+				match action {
+					gossip::Action::Discard(_) => {},
+					_ => panic!("wrong expected outcome from initial commit validation"),
+				}
+				// Unknown voter.
+				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
+				match action {
+					gossip::Action::Discard(_) => {},
+					_ => panic!("wrong expected outcome from initial commit validation"),
+				}
+				// Known voter.
+				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_one[..]);
 				match action {
 					gossip::Action::Keep(_, _) => {},
 					_ => panic!("wrong expected outcome from initial commit validation"),
