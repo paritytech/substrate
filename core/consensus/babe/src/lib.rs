@@ -24,7 +24,6 @@
 //! happen at any point.  This crate is also missing features, such as banning
 //! of malicious validators, that are essential for a production network.
 #![forbid(unsafe_code, missing_docs)]
-#![deny(warnings)]
 extern crate core;
 mod digest;
 use digest::CompatibleDigestItem;
@@ -434,7 +433,6 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
-#[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
 	client: &C,
 	slot_now: u64,
@@ -950,7 +948,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
 	}
 
 	#[test]

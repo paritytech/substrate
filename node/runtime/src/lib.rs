@@ -21,7 +21,6 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -60,7 +59,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	spec_version: 95,
-	impl_version: 94,
+	impl_version: 95,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -132,8 +131,6 @@ parameter_types! {
 }
 
 type SessionHandlers = (Grandpa, Aura);
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 impl_opaque_keys! {
 	pub struct SessionKeys(grandpa::AuthorityId, AuraId);
 }

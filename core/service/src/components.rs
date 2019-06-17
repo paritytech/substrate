@@ -34,6 +34,7 @@ use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
+use futures::sync::mpsc;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -139,8 +140,7 @@ pub trait StartRPC<C: Components> {
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
-		should_have_peers: bool,
+		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
@@ -159,8 +159,7 @@ impl<C: Components> StartRPC<Self> for C where
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
-		should_have_peers: bool,
+		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
@@ -178,7 +177,7 @@ impl<C: Components> StartRPC<Self> for C where
 				client.clone(), transaction_pool.clone(), subscriptions
 			);
 			let system = rpc::apis::system::System::new(
-				rpc_system_info.clone(), network.clone(), should_have_peers
+				rpc_system_info.clone(), system_send_back.clone()
 			);
 			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 				state,

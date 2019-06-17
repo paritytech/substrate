@@ -819,7 +819,7 @@ pub trait ValidateUnsigned {
 
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
-pub trait OpaqueKeys {
+pub trait OpaqueKeys: Clone {
 	/// Return the number of encoded keys.
 	fn count() -> usize { 0 }
 	/// Get the raw bytes of key with index `i`.
@@ -868,8 +868,8 @@ macro_rules! impl_opaque_keys {
 			$($rest:tt)*
 		}
 	) => {
-		#[derive(Default, Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name($( pub $t ,)*);
 		impl $crate::traits::OpaqueKeys for $name {
 			fn count() -> usize {

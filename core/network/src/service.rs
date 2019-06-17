@@ -46,7 +46,7 @@ use crate::protocol::specialization::NetworkSpecialization;
 
 mod tests;
 
-/// Interval at which we send status updates on the SyncProvider status stream.
+/// Interval at which we send status updates on the status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
@@ -55,23 +55,6 @@ pub use libp2p::PeerId;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-
-/// Sync status
-pub trait SyncProvider<B: BlockT>: Send + Sync {
-	/// Get a stream of sync statuses.
-	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
-	/// Get network state.
-	fn network_state(&self) -> NetworkState;
-
-	/// Get currently connected peers.
-	///
-	/// > **Warning**: This method can return outdated information and should only ever be used
-	/// > when obtaining outdated information is acceptable.
-	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)>;
-
-	/// Are we in the process of downloading the chain?
-	fn is_major_syncing(&self) -> bool;
-}
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT:
@@ -382,35 +365,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	}
 
 	/// Are we in the process of downloading the chain?
-	/// Used by both SyncProvider and SyncOracle.
-	fn is_major_syncing(&self) -> bool {
+	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
-	}
-}
-
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for NetworkService<B, S> {
-	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing()
-	}
-
-	fn is_offline(&self) -> bool {
-		self.is_offline.load(Ordering::Relaxed)
-	}
-}
-
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for NetworkService<B, S> {
-	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing()
 	}
 
 	/// Get sync status
-	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
+	pub fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
 		let (sink, stream) = mpsc::unbounded();
 		self.status_sinks.lock().push(sink);
 		stream
 	}
 
-	fn network_state(&self) -> NetworkState {
+	/// Get network state.
+	pub fn network_state(&self) -> NetworkState {
 		let mut swarm = self.network.lock();
 		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
 
@@ -465,9 +432,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Netwo
 		}
 	}
 
-	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
+	/// Get currently connected peers.
+	///
+	/// > **Warning**: This method can return outdated information and should only ever be used
+	/// > when obtaining outdated information is acceptable.
+	pub fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
 		let peers = (*self.peers.read()).clone();
 		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
+	}
+}
+
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for NetworkService<B, S> {
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing()
+	}
+
+	fn is_offline(&self) -> bool {
+		self.is_offline.load(Ordering::Relaxed)
 	}
 }
 
