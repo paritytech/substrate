@@ -24,7 +24,8 @@ use rstd::prelude::*;
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
+	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Gas, Hash, Index,
+	Moment, Signature,
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -37,13 +38,14 @@ use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };
 use version::RuntimeVersion;
-use council::{motions as council_motions};
+use council::{motions as council_motions, VoteIndex};
 #[cfg(feature = "std")]
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use finality_tracker::{DEFAULT_DELAY, DEFAULT_WINDOW_SIZE};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -72,19 +74,14 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
-pub struct CurrencyToVoteHandler;
+pub const MILLICENTS: Balance = 1_000_000_000;
+pub const CENTS: Balance = 1_000 * MILLICENTS;    // assume this is worth about a cent.
+pub const DOLLARS: Balance = 100 * CENTS;
 
-impl CurrencyToVoteHandler {
-	fn factor() -> u128 { (Balances::total_issuance() / u64::max_value() as u128).max(1) }
-}
-
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 { (x / Self::factor()) as u64 }
-}
-
-impl Convert<u128, u128> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u128 { x * Self::factor() }
-}
+pub const SECS_PER_BLOCK: Moment = 6;
+pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
+pub const HOURS: Moment = MINUTES * 60;
+pub const DAYS: Moment = HOURS * 24;
 
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -110,6 +107,14 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: Balance = 1 * DOLLARS;
+	pub const TransferFee: Balance = 1 * CENTS;
+	pub const CreationFee: Balance = 1 * CENTS;
+	pub const TransactionBaseFee: Balance = 1 * CENTS;
+	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
+}
+
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type OnFreeBalanceZero = ((Staking, Contracts), Session);
@@ -118,10 +123,15 @@ impl balances::Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 
 impl timestamp::Trait for Runtime {
-	type Moment = u64;
+	type Moment = Moment;
 	type OnTimestampSet = Aura;
 }
 
@@ -154,6 +164,20 @@ parameter_types! {
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
 }
 
+pub struct CurrencyToVoteHandler;
+
+impl CurrencyToVoteHandler {
+	fn factor() -> u128 { (Balances::total_issuance() / u64::max_value() as u128).max(1) }
+}
+
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 { (x / Self::factor()) as u64 }
+}
+
+impl Convert<u128, u128> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u128 { x * Self::factor() }
+}
+
 impl staking::Trait for Runtime {
 	type Currency = Balances;
 	type CurrencyToVote = CurrencyToVoteHandler;
@@ -165,17 +189,15 @@ impl staking::Trait for Runtime {
 	type BondingDuration = BondingDuration;
 }
 
-const MINUTES: BlockNumber = 6;
-const BUCKS: Balance = 1_000_000_000_000;
-
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const EmergencyVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
-	pub const MinimumDeposit: Balance = 100 * BUCKS;
+	pub const MinimumDeposit: Balance = 100 * DOLLARS;
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
+
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
@@ -193,6 +215,18 @@ impl democracy::Trait for Runtime {
 	type CooloffPeriod = CooloffPeriod;
 }
 
+parameter_types! {
+	pub const CandidacyBond: Balance = 10 * DOLLARS;
+	pub const VotingBond: Balance = 1 * DOLLARS;
+	pub const VotingFee: Balance = 2 * DOLLARS;
+	pub const PresentSlashPerVoter: Balance = 1 * CENTS;
+	pub const CarryCount: u32 = 6;
+	// one additional vote should go by before an inactive voter can be reaped.
+	pub const InactiveGracePeriod: VoteIndex = 1;
+	pub const CouncilVotingPeriod: BlockNumber = 2 * DAYS;
+	pub const DecayRatio: u32 = 0;
+}
+
 impl council::Trait for Runtime {
 	type Event = Event;
 	type BadPresentation = ();
@@ -200,12 +234,27 @@ impl council::Trait for Runtime {
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
 	type OnMembersChanged = CouncilMotions;
+	type CandidacyBond = CandidacyBond;
+	type VotingBond = VotingBond;
+	type VotingFee = VotingFee;
+	type PresentSlashPerVoter = PresentSlashPerVoter;
+	type CarryCount = CarryCount;
+	type InactiveGracePeriod = InactiveGracePeriod;
+	type CouncilVotingPeriod = CouncilVotingPeriod;
+	type DecayRatio = DecayRatio;
 }
 
 impl council::motions::Trait for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+}
+
+parameter_types! {
+	pub const ProposalBond: Permill = Permill::from_percent(5);
+	pub const ProposalBondMinimum: Balance = 1 * DOLLARS;
+	pub const SpendPeriod: BlockNumber = 1 * DAYS;
+	pub const Burn: Permill = Permill::from_percent(50);
 }
 
 impl treasury::Trait for Runtime {
@@ -215,17 +264,56 @@ impl treasury::Trait for Runtime {
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ProposalBondMinimum;
+	type SpendPeriod = SpendPeriod;
+	type Burn = Burn;
+}
+
+parameter_types! {
+	pub const SignedClaimHandicap: BlockNumber = 2;
+	pub const TombstoneDeposit: Balance = 16;
+	pub const StorageSizeOffset: u32 = 8;
+	pub const RentByteFee: Balance = 4;
+	pub const RentDepositOffset: Balance = 1000;
+	pub const SurchargeReward: Balance = 150;
+	pub const ContractTransferFee: Balance = 1 * CENTS;
+	pub const ContractCreationFee: Balance = 1 * CENTS;
+	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
+	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
+	pub const ContractFee: Balance = 1 * CENTS;
+	pub const CallBaseFee: Gas = 1000;
+	pub const CreateBaseFee: Gas = 1000;
+	pub const GasPrice: Balance = 1 * MILLICENTS;
+	pub const MaxDepth: u32 = 1024;
+	pub const BlockGasLimit: Gas = 10_000_000;
 }
 
 impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Call = Call;
 	type Event = Event;
-	type Gas = u64;
+	type Gas = Gas;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
+	type SignedClaimHandicap = SignedClaimHandicap;
+	type TombstoneDeposit = TombstoneDeposit;
+	type StorageSizeOffset = StorageSizeOffset;
+	type RentByteFee = RentByteFee;
+	type RentDepositOffset = RentDepositOffset;
+	type SurchargeReward = SurchargeReward;
+	type TransferFee = ContractTransferFee;
+	type CreationFee = ContractCreationFee;
+	type TransactionBaseFee = ContractTransactionBaseFee;
+	type TransactionByteFee = ContractTransactionByteFee;
+	type ContractFee = ContractFee;
+	type CallBaseFee = CallBaseFee;
+	type CreateBaseFee = CreateBaseFee;
+	type GasPrice = GasPrice;
+	type MaxDepth = MaxDepth;
+	type BlockGasLimit = BlockGasLimit;
 }
 
 impl sudo::Trait for Runtime {
@@ -237,8 +325,15 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE as _;
+	pub const ReportLatency: BlockNumber = DEFAULT_DELAY as _;
+}
+
 impl finality_tracker::Trait for Runtime {
 	type OnFinalizationStalled = Grandpa;
+	type WindowSize = WindowSize;
+	type ReportLatency = ReportLatency;
 }
 
 construct_runtime!(
@@ -260,7 +355,7 @@ construct_runtime!(
 		CouncilSeats: council_seats::{Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Event},
-		Treasury: treasury,
+		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
 	}
