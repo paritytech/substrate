@@ -953,6 +953,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
@@ -961,6 +968,11 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
@@ -1001,12 +1013,7 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>::default().build_storage().unwrap().0);
