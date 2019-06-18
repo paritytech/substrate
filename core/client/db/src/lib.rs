@@ -722,6 +722,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
 	}
 
+	/// Creates a client backend with test settings.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
 
