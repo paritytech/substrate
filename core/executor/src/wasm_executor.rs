@@ -1223,7 +1223,13 @@ impl WasmExecutor {
 	) -> Result<R> {
 		let module = wasmi::Module::from_buffer(code)?;
 		let module = self.prepare_module(ext, heap_pages, &module)?;
-		self.call_in_wasm_module_with_custom_signature(ext, &module, method, create_parameters, filter_result)
+		self.call_in_wasm_module_with_custom_signature(
+			ext,
+			&module,
+			method,
+			create_parameters,
+			filter_result,
+		)
 	}
 
 	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
@@ -1288,7 +1294,7 @@ impl WasmExecutor {
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
-			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| Error::Runtime)?;
+			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
 			Ok(offset)
 		})?;
