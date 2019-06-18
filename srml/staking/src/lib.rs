@@ -1044,21 +1044,19 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let (reward_map, total_points) = rewards.into_iter().fold(
-				(BTreeMap::new(), 0u32),
-				|(mut map, mut points), (validator, reward)| {
-					*map.entry(validator).or_insert(0) += reward;
-					points += reward;
-					(map, points)
-				}
-			);
+			let mut total_points = 0u32;
+			let mut points_for_validator = BTreeMap::new();
+			for (validator, reward) in rewards {
+				*points_for_validator.entry(validator).or_insert(0) += reward;
+				total_points += reward;
+			}
 
-			// TODO TODO: this should be generic
+			// TODO TODO: does this should be generic ?
 			let total_payout = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				<BalanceOf<T>>::from(
-					// TODO TODO: This is fine as an era duration of u32::max seconds must not happen
+					// Era of duration more than u32::MAX is rewarded as u32::max_value.
 					TryInto::<u32>::try_into(era_duration).unwrap_or(u32::max_value())
 				),
 			);
@@ -1066,7 +1064,7 @@ impl<T: Trait> Module<T> {
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
 
 			for v in validators.iter() {
-				if let Some(&points) = reward_map.get(v) {
+				if let Some(&points) = points_for_validator.get(v) {
 					// TODO TODO: do not overflow by converting points/total_points into a Per*
 					let reward = total_payout * points.into() / total_points.into();
 					total_imbalance.subsume(Self::reward_validator(v, reward));
