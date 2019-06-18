@@ -286,7 +286,8 @@ use srml_support::{
 use session::{OnSessionEnding, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
+	SaturatedConversion
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -1047,8 +1048,13 @@ impl<T: Trait> Module<T> {
 			let mut total_points = 0u32;
 			let mut points_for_validator = BTreeMap::new();
 			for (validator, reward) in rewards {
-				*points_for_validator.entry(validator).or_insert(0) += reward;
-				total_points += reward;
+				// If the total number of points exceed u32::MAX then they are dismissed
+				if let Some(p) = total_points.checked_add(reward) {
+					total_points = p;
+
+					// Cannot overflow as inferior to total_points
+					*points_for_validator.entry(validator).or_insert(0) += reward;
+				}
 			}
 
 			// TODO TODO: does this should be generic ?
@@ -1065,8 +1071,23 @@ impl<T: Trait> Module<T> {
 
 			for v in validators.iter() {
 				if let Some(&points) = points_for_validator.get(v) {
-					// TODO TODO: do not overflow by converting points/total_points into a Per*
-					let reward = total_payout * points.into() / total_points.into();
+					// TODO TODO: put this code into a rational type in primitives
+					let reward_divisor_part = total_payout / total_points.into() * points.into();
+					let reward_remainder_part = {
+						let rem = total_payout % total_points.into();
+
+						// Fits into u32 because total_points is u32 and remainder < total_points
+						let rem_u32 = rem.saturated_into::<u32>();
+
+						// Multiplication fits into u64 as both term are u32
+						let rem_part = rem_u32 as u64 * points as u64
+							/ total_points as u64;
+
+						// Result fits into u32 as points < total_points
+						(rem_part as u32).into()
+					};
+
+					let reward = reward_divisor_part + reward_remainder_part;
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
