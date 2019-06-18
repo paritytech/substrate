@@ -15,12 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Private mplementation details of BABE digests.
+
 use primitives::sr25519::{Public, Signature};
 use babe_primitives::BABE_ENGINE_ID;
-use runtime_primitives::generic::DigestItem;
+use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
-use parity_codec::{Decode, Encode, Input};
-use log::info;
+use parity_codec::{Decode, Encode, Codec, Input};
 use schnorrkel::{
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
 	PUBLIC_KEY_LENGTH,
@@ -89,26 +89,15 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<Signature>;
 }
 
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
+impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
+	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
-		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => {
-				let decoded = Decode::decode(&mut &seal[..]);
-				if decoded.is_none() {
-					info!(target: "babe", "Failed to decode {:?}", seal)
-				}
-				decoded
-			}
-			_ => {
-				info!(target: "babe", "Invalid consensus: {:?}!", self);
-				None
-			}
-		}
+		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
 	fn babe_seal(signature: Signature) -> Self {
@@ -116,34 +105,6 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
 	}
 
 	fn as_babe_seal(&self) -> Option<Signature> {
-		match self {
-			DigestItem::Seal(BABE_ENGINE_ID, signature) => Decode::decode(&mut &signature[..]),
-			_ => None,
-		}
-	}
-}
-
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
-{
-	fn babe_pre_digest(digest: BabePreDigest) -> Self {
-		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
-	}
-
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
-		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
-		}
-	}
-
-	fn babe_seal(signature: Signature) -> Self {
-		DigestItem::Seal(BABE_ENGINE_ID, signature)
-	}
-
-	fn as_babe_seal(&self) -> Option<Signature> {
-		match self {
-			DigestItem::Seal(BABE_ENGINE_ID, signature) => Some(signature.clone()),
-			_ => None,
-		}
+		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 }

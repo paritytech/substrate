@@ -50,8 +50,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-
-use ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]

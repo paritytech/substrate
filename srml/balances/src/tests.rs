@@ -36,7 +36,10 @@ fn basic_locking_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		assert_eq!(Balances::free_balance(&1), 10);
 		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 5), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 5),
+			"account liquidity restrictions prevent withdrawal"
+		);
 	});
 }
 
@@ -89,11 +92,20 @@ fn combination_locking_should_work() {
 fn lock_value_extension_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 3),
+			"account liquidity restrictions prevent withdrawal"
+		);
 	});
 }
 
@@ -101,19 +113,28 @@ fn lock_value_extension_should_work() {
 fn lock_reasons_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).transaction_fees(0, 1).build(), || {
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 1),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
-		assert_noop!(<Balances as ReservableCurrency<_>>::reserve(&1, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as ReservableCurrency<_>>::reserve(&1, 1),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_noop!(<Balances as MakePayment<_>>::make_payment(&1, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as MakePayment<_>>::make_payment(&1, 1),
+			"account liquidity restrictions prevent withdrawal"
+		);
 	});
 }
 
@@ -121,7 +142,10 @@ fn lock_reasons_should_work() {
 fn lock_block_number_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 1),
+			"account liquidity restrictions prevent withdrawal"
+		);
 
 		System::set_block_number(2);
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -132,12 +156,21 @@ fn lock_block_number_should_work() {
 fn lock_block_number_extension_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		System::set_block_number(2);
 		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 3),
+			"account liquidity restrictions prevent withdrawal"
+		);
 	});
 }
 
@@ -145,11 +178,20 @@ fn lock_block_number_extension_should_work() {
 fn lock_reasons_extension_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
-		assert_noop!(<Balances as Currency<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			"account liquidity restrictions prevent withdrawal"
+		);
 	});
 }
 

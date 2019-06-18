@@ -15,7 +15,6 @@ client = { package = "substrate-client", path = "../../client" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 srml-system = { path = "../../../srml/system" }
-srml-consensus = { path = "../../../srml/consensus" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }

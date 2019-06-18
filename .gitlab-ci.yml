@@ -7,7 +7,6 @@
 
 
 stages:
-  - pre-test
   - test
   - build
   - publish
@@ -58,7 +57,7 @@ variables:
 #### stage:                        test
 
 check-runtime:
-  stage:                           pre-test
+  stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -72,7 +71,7 @@ check-runtime:
 
 
 check-line-width:
-  stage:                           pre-test
+  stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -83,13 +82,22 @@ check-line-width:
 
 
 cargo-audit:
-  stage:                           pre-test
+  stage:                           test
   <<:                              *docker-env
   except:
     - /^[0-9]+$/
   script:
     - cargo audit
   allow_failure:                   true
+
+
+cargo-check-benches:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - ./scripts/build.sh --locked
+    - time cargo check --benches
+    - sccache -s
 
 
 cargo-check-subkey:
@@ -101,7 +109,7 @@ cargo-check-subkey:
     - cd ./subkey
     - time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
-  
+
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -127,7 +135,7 @@ test-linux-stable-int:
       - $DEPLOY_TAG
   script:
     - ./scripts/build.sh --locked
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace 
+    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
   allow_failure:                   true
@@ -304,6 +312,48 @@ publish-s3-doc:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
+
+
+publish-gh-doc:
+  stage:                           publish
+  image:                           parity/tools:latest
+  allow_failure:                   true
+  dependencies:
+    - build-rust-doc-release
+  cache:                           {}
+  <<:                              *build-only
+  <<:                              *kubernetes-build
+  variables:
+    GIT_STRATEGY:                  none
+    GITHUB_API:                    "https://api.github.com"
+  script:
+    - test -r ./crate-docs/index.html || (
+        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
+        exit 1
+      )
+    - test "${GITHUB_USER}" -a "${GITHUB_EMAIL}" -a "${GITHUB_TOKEN}" || (
+        echo "environment variables for github insufficient";
+        exit 1
+      )
+    - |
+      cat > ${HOME}/.gitconfig <<EOC
+      [user]
+      name = "${GITHUB_USER}"
+      email = "${GITHUB_EMAIL}"
+
+      [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
+      insteadOf = "https://github.com/"
+      EOC
+    - unset GITHUB_TOKEN
+    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
+    - cd ./rustdocs; git add .
+    - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
+    - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
+  after_script:
+    - rm -vrf ${HOME}/.gitconfig
+
+
 
 .deploy-template:                  &deploy
   stage:                           kubernetes

@@ -27,27 +27,30 @@
 //! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
 //! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
-//!		<li>Documentation comments (i.e. <code>/// comment</code>) - should accompany module functions and be
-//!         restricted to the module interface, not the internals of the module implementation. Only state inputs,
-//!         outputs, and a brief description that mentions whether calling it requires root, but without repeating
-//!         the source code details. Capitalise the first word of each documentation comment and end it with a full
-//!         stop. See <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank">Generic example of annotating source code with documentation comments</a></li>
-//! 	<li>Self-documenting code - Try to refactor code to be self-documenting.</li>
-//!		<li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!		<li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
+//!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
+//!         accompany module functions and be restricted to the module interface,
+//!         not the internals of the module implementation. Only state inputs,
+//!         outputs, and a brief description that mentions whether calling it
+//!         requires root, but without repeating the source code details.
+//!         Capitalise the first word of each documentation comment and end it with
+//!         a full stop. See
+//!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
+//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
 //!         <code>u64</code>)</li>
-//!		<li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
-//!		<li>Extended tutorials - should be moved to external files and refer to.</li>
-//!		<!-- Original author of paragraph: @AmarRSingh -->
-//!		<li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
-//!		<li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
+//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
+//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!     <!-- Original author of paragraph: @AmarRSingh -->
+//!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
+//!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
 //! </ul>
 //!
 //! ### Documentation Template:<br>
 //!
-//! Copy and paste this template from srml/example/src/lib.rs into file srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs of
-//! your own custom module and complete it.
+//! Copy and paste this template from srml/example/src/lib.rs into file
+//! `srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
 //! <details><p><pre>
 //! // Add heading with custom module name
 //!
@@ -196,7 +199,8 @@
 //!
 //! \## Usage
 //!
-//! // Insert 2-3 examples of usage and code snippets that show how to use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
+//! // Insert 2-3 examples of usage and code snippets that show how to
+//! // use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
 //!
 //! \### Prerequisites
 //!
@@ -324,8 +328,10 @@ decl_event!(
 // - Public calls that are signed by an external account.
 // - Root calls that are allowed to be made only by the governance system.
 // - Unsigned calls that can be of two kinds:
-//   * "Inherent extrinsics" that are opinions generally held by the block authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the network, and are validated by the runtime.
+//   * "Inherent extrinsics" that are opinions generally held by the block
+//     authors that build child blocks.
+//   * Unsigned Transactions that are of intrinsic recognisable utility to the
+//     network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
@@ -505,7 +511,7 @@ mod tests {
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
 		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -523,12 +529,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

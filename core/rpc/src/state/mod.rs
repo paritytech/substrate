@@ -88,7 +88,8 @@ pub trait StateApi<Hash> {
 	fn child_storage(
 		&self,
 		child_storage_key: StorageKey,
-		key: StorageKey, hash: Option<Hash>
+		key: StorageKey,
+		hash: Option<Hash>
 	) -> Result<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
@@ -96,7 +97,8 @@ pub trait StateApi<Hash> {
 	fn child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
-		key: StorageKey, hash: Option<Hash>
+		key: StorageKey,
+		hash: Option<Hash>
 	) -> Result<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.

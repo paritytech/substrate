@@ -10,18 +10,18 @@ serde = { version = "1.0", optional = true }
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
+substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
 
 [dev-dependencies]
 lazy_static = "1.0"
 parking_lot = "0.8.0"
-substrate-primitives = { path = "../../core/primitives" }
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
-consensus = { package = "srml-consensus", path = "../consensus" }
 
 [features]
 default = ["std"]
@@ -31,8 +31,10 @@ std = [
 	"rstd/std",
 	"srml-support/std",
 	"primitives/std",
+	"substrate-primitives/std",
 	"system/std",
 	"timestamp/std",
 	"staking/std",
 	"inherents/std",
+	"substrate-consensus-aura-primitives/std",
 ]

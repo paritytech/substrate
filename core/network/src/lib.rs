@@ -43,7 +43,7 @@ pub mod test;
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork,
-	NetworkMsg, SyncProvider, ExHashT, ReportHandle,
+	NetworkMsg, ExHashT, ReportHandle,
 };
 pub use config::{NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret};
 pub use protocol::{ProtocolStatus, PeerInfo, Context, consensus_gossip, message, specialization};

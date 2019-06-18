@@ -22,7 +22,7 @@ use std::time;
 use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
-use network::{SyncState, SyncProvider};
+use network::SyncState;
 use client::{backend::Backend, BlockchainEvents};
 use log::{info, warn};
 

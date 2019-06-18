@@ -224,9 +224,9 @@ mod tests {
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
-		sr25519::Public as AddressPublic,
+		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::{Block, Digest as DigestT}, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
@@ -299,9 +299,9 @@ mod tests {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			});
-			let mut digest = Digest::<DigestItem>::default();
+			let mut digest = Digest::<H256>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
-			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
+			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,

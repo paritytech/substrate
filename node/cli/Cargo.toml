@@ -27,6 +27,7 @@ network = { package = "substrate-network", path = "../../core/network" }
 consensus = { package = "substrate-consensus-aura", path = "../../core/consensus/aura" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
 sr-primitives = { path = "../../core/sr-primitives" }
+aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
 node-executor = { path = "../executor" }
 substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
