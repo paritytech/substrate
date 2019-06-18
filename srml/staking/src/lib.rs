@@ -1049,6 +1049,7 @@ impl<T: Trait> Module<T> {
 			let mut points_for_validator = BTreeMap::new();
 			for (validator, reward) in rewards {
 				// If the total number of points exceed u32::MAX then they are dismissed
+				// TODO TODO: if this is a problem we can use u64
 				if let Some(p) = total_points.checked_add(reward) {
 					total_points = p;
 
