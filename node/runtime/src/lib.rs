@@ -44,6 +44,7 @@ use council::seats as council_seats;
 use version::NativeVersion;
 use substrate_primitives::{OpaqueMetadata, ed25519};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use consensus_aura::AuraEquivocationProof;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -102,7 +103,7 @@ impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
 	type Signature = ed25519::Signature;
-	type AuraEquivocationProof = aura::AuraEquivocationProof<Self::Header, Self::Signature>;
+	type AuraEquivocationProof = AuraEquivocationProof<Self::Header, Self::Signature>;
 }
 
 impl indices::Trait for Runtime {
@@ -364,6 +365,12 @@ impl_runtime_apis! {
 		}
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
+		}
+
+		fn construct_equivocation_report_call(
+			proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
+		) -> Vec<u8> {
+			vec![]
 		}
 	}
 }

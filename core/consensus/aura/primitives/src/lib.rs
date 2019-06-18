@@ -21,7 +21,9 @@
 use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
-use runtime_primitives::ConsensusEngineId;
+use substrate_primitives::ed25519::Signature;
+use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT};
+use safety_primitives::AuthorshipEquivocationProof;
 
 mod digest;
 pub use digest::{CompatibleDigestItem, find_pre_digest};
@@ -48,9 +50,13 @@ decl_runtime_apis! {
 
 		// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
+
+		/// Construct a call to report the equivocation.
+		fn construct_equivocation_report_call(
+			proof: AuraEquivocationProof<<Block as BlockT>::Header, Signature>,
+		) -> Vec<u8>;
 	}
 }
-
 
 /// Get slot author for given block along with authorities.
 pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> Option<&AuthorityId>
@@ -66,4 +72,34 @@ pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> O
 				this is a valid index; qed");
 
 	Some(current_author)
+}
+
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
+pub struct AuraEquivocationProof<H, S> {
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S> AuthorshipEquivocationProof<H, S> for AuraEquivocationProof<H, S> {
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	/// Get signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
 }

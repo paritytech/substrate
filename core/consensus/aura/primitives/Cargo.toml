@@ -11,6 +11,7 @@ substrate-client = { path = "../../../client", default-features = false }
 substrate-primitives = { path = "../../../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../../accountable-safety/primitives" }
 
 [features]
 default = ["std"]

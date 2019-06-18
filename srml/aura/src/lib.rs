@@ -67,8 +67,9 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{
-	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author
+	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author, AuraEquivocationProof
 };
+use safety_primitives::AuthorshipEquivocationProof;
 
 mod mock;
 mod tests;
@@ -152,50 +153,6 @@ pub trait HandleReport {
 
 impl HandleReport for () {
 	fn handle_report(_report: AuraReport) { }
-}
-
-pub trait AuthorshipEquivocationProof<H, S> {
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H;
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H;
-
-	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &S;
-
-	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &S;
-}
-
-#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
-pub struct AuraEquivocationProof<H, S> {
-	first_header: H,
-	second_header: H,
-	first_signature: S,
-	second_signature: S,
-}
-
-impl<H, S> AuthorshipEquivocationProof<H, S> for AuraEquivocationProof<H, S> {
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
-	}
-
-	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &S {
-		&self.first_signature
-	}
-
-	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &S {
-		&self.second_signature
-	}
 }
 
 pub trait Trait: timestamp::Trait {

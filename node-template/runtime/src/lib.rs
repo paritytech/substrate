@@ -19,6 +19,7 @@ use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api, impl_runtime_apis
 };
+use consensus_aura::AuraEquivocationProof;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
@@ -132,7 +133,7 @@ impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type AuthorityId = AuraId;
 	type Signature = ed25519::Signature;
-	type AuraEquivocationProof = aura::AuraEquivocationProof<Self::Header, Self::Signature>;
+	type AuraEquivocationProof = AuraEquivocationProof<Self::Header, Self::Signature>;
 }
 
 impl indices::Trait for Runtime {
@@ -269,6 +270,12 @@ impl_runtime_apis! {
 		}
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
+		}
+
+		fn construct_equivocation_report_call(
+			proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+		) -> Vec<u8> {
+			vec![]
 		}
 	}
 

@@ -3469,6 +3469,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -4077,6 +4078,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-safety-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4182,6 +4184,13 @@ dependencies = [
  "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-transaction-pool 2.0.0",
+]
+
+[[package]]
+name = "substrate-consensus-safety-primitives"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
 ]
 
 [[package]]

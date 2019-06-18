@@ -42,14 +42,16 @@ use runtime_primitives::{
 		GetNodeBlockType, GetRuntimeBlockType, Verify
 	},
 };
+use consensus_aura::AuraEquivocationProof;
 use runtime_version::RuntimeVersion;
-pub use primitives::hash::H256;
-use primitives::{sr25519, OpaqueMetadata};
+use primitives::{sr25519, ed25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+
 pub use consensus_babe::AuthorityId;
+pub use primitives::hash::H256;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type AuraId = AuthorityId;
@@ -460,6 +462,11 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn construct_equivocation_report_call(
+					proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+				) -> Vec<u8> {
+					vec![]
+				}
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
@@ -604,6 +611,11 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn construct_equivocation_report_call(
+					proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+				) -> Vec<u8> {
+					vec![]
+				}
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
