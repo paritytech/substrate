@@ -190,7 +190,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Event: Parameter + Member + From<Event>;
 
 	/// The aggregated error type of the runtime.
-	type Error: Parameter + Member + From<Error>;
+	type Error: Member + From<Error>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;

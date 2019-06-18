@@ -84,7 +84,7 @@ where
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId> + Codec,
 	AccountId: Member + MaybeDisplay,
-	Context: Lookup<Source=Address, Target=AccountId, Error=Error>,
+	Context: Lookup<Source=Address, Target=AccountId, Error=&'static str>
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 	type Error = Error;
@@ -93,7 +93,7 @@ where
 		Ok(match self.signature {
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
-				let signed = context.lookup(signed)?;
+				let signed = context.lookup(signed).map_err(Into::into)?;
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err(Error::BadSignature)
 				}

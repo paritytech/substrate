@@ -18,7 +18,7 @@
 
 use rstd::{prelude::*, result};
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, EnsureOriginError};
+use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
@@ -259,11 +259,11 @@ pub fn ensure_council_members<OuterOrigin, AccountId>(o: OuterOrigin, n: MemberC
 
 pub struct EnsureMember<AccountId>(::rstd::marker::PhantomData<AccountId>);
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + EnsureOriginError,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId
 > EnsureOrigin<O> for EnsureMember<AccountId> {
 	type Success = AccountId;
-	type Error = O;
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Member(id) => Ok(id),
@@ -274,12 +274,12 @@ impl<
 
 pub struct EnsureMembers<N: U32, AccountId>(::rstd::marker::PhantomData<(N, AccountId)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + EnsureOriginError,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	N: U32,
 	AccountId,
 > EnsureOrigin<O> for EnsureMembers<N, AccountId> {
 	type Success = (MemberCount, MemberCount);
-	type Error = O;
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
@@ -292,13 +292,13 @@ pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId>(
 	::rstd::marker::PhantomData<(N, D, AccountId)>
 );
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + EnsureOriginError,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	N: U32,
 	D: U32,
 	AccountId,
 > EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId> {
 	type Success = ();
-	type Error = O;
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n * D::VALUE > N::VALUE * m => Ok(()),
@@ -311,13 +311,13 @@ pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId>(
 	::rstd::marker::PhantomData<(N, D, AccountId)>
 );
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + EnsureOriginError,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	N: U32,
 	D: U32,
 	AccountId,
 > EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId> {
 	type Success = ();
-	type Error = O;
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),

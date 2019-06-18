@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::convert::TryInto;
 use primitives::{
-	generic::Digest, ApplyResult, ApplyError, DispatchError,
+	generic::Digest, ApplyResult, ApplyError, DispatchError, Error as PrimitiveError,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 		OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
@@ -116,10 +116,11 @@ impl<
 	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	CheckableError: Into<PrimitiveError>,
 	Error: Into<DispatchError> + TryInto<system::Error>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context, Error=Error> + Codec,
+	Block::Extrinsic: Checkable<Context, Error=CheckableError> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable<Error=Error>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -137,10 +138,11 @@ impl<
 	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	CheckableError: Into<PrimitiveError>,
 	Error: Into<DispatchError> + TryInto<system::Error>,
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context, Error=Error> + Codec,
+	Block::Extrinsic: Checkable<Context, Error=CheckableError> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable<Error=Error>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -343,14 +345,14 @@ where
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			Err(err) => {
-				match err.try_into() {
+				match err.into() {
 					// An unknown account index implies that the transaction may yet become valid.
 					// TODO: avoid hardcoded error string here
-					Ok(system::Error::Unknown("invalid account index")) =>
+					PrimitiveError::Unknown("invalid account index") =>
 						return TransactionValidity::Unknown(INVALID_INDEX),
 					// Technically a bad signature could also imply an out-of-date account index, but
 					// that's more of an edge case.
-					Ok(system::Error::BadSignature) =>
+					PrimitiveError::BadSignature =>
 						return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 					_ => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 				}

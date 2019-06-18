@@ -77,6 +77,12 @@ impl From<Error> for &str {
 	}
 }
 
+impl Into<Error> for &'static str {
+	fn into(self) -> Error {
+		Error::Unknown(self)
+	}
+}
+
 /// Justification type.
 pub type Justification = Vec<u8>;
 

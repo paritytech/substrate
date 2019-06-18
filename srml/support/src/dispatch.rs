@@ -1270,7 +1270,7 @@ macro_rules! impl_outer_dispatch {
 			type Error = $error_type;
 			fn dispatch(self, origin: $origin) -> $crate::dispatch::DispatchResult<Self::Error> {
 				match self {
-					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
+					$( $call_type::$camelcase(call) => call.dispatch(origin).map_err(Into::into), )*
 				}
 			}
 		}

@@ -96,6 +96,7 @@ impl system::Trait for Runtime {
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
+	type Error = Error;
 }
 
 impl aura::Trait for Runtime {

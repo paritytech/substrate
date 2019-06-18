@@ -76,6 +76,12 @@ macro_rules! impl_outer_error {
 			}
 		}
 
+		impl From<&'static str> for $name {
+			fn from(err: &'static str) -> Self {
+				$name::system($system::Error::Unknown(err))
+			}
+		}
+
 		impl $crate::rstd::convert::TryInto<$system::Error> for $name {
 			type Error = Self;
 			fn try_into(self) -> $crate::dispatch::result::Result<$system::Error, Self::Error> {
@@ -95,11 +101,11 @@ macro_rules! impl_outer_error {
 							$crate::runtime_primitives::DispatchError {
 								module: 0,
 								error: 0,
-								message: msg,
+								message: Some(msg),
 							},
 						_ => $crate::runtime_primitives::DispatchError {
 								module: 0,
-								error: err.into(),
+								error: Into::<u8>::into(err) as i8,
 								message: None,
 							},
 					},
@@ -109,11 +115,11 @@ macro_rules! impl_outer_error {
 								$crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
 									error: 0,
-									message: msg,
+									message: Some(msg),
 								},
 							_ => $crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
-									error: err.into(),
+									error: Into::<u8>::into(err) as i8,
 									message: None,
 								},
 						},
