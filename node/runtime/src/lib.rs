@@ -247,7 +247,7 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{default, Config<T>},
+		System: system,
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Indices: indices,
@@ -261,7 +261,7 @@ construct_runtime!(
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Event},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
+		Contract: contract,
 		Sudo: sudo,
 	}
 );
