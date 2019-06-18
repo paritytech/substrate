@@ -668,9 +668,15 @@ fn nominating_and_rewards_should_work() {
 		// Approximation resulting from Perbill conversion
 		let approximation = 1;
 		// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&2), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation);
+		assert_eq!(
+			Balances::total_balance(&2),
+			initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation
+		);
 		// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation);
+		assert_eq!(
+			Balances::total_balance(&4),
+			initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation
+		);
 
 		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
 		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - approximation);
