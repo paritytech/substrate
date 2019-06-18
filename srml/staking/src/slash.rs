@@ -45,64 +45,9 @@ impl<T: Trait> OnSlashing<T> for StakingSlasher<T>
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use srml_slashing::Slashing;
+	use srml_slashing::{Slashing, misconduct::{Unresponsive, BlockProduction}};
 	use rstd::cmp;
 	use runtime_io::with_externalities;
-
-	#[derive(Copy, Clone, Eq, PartialEq)]
-	struct MisconductT {
-		severity: u64,
-	}
-
-	impl Default for MisconductT {
-		fn default() -> Self {
-			Self { severity: 1000 }
-		}
-	}
-
-	impl Misconduct for MisconductT {
-		type Severity = u64;
-
-		fn on_misconduct(&mut self) {
-			self.severity = cmp::max(1, self.severity / 2);
-		}
-
-		fn on_signal(&mut self) {
-			self.severity = cmp::min(100_000, self.severity * 2);
-		}
-
-		fn severity(&self) -> Self::Severity {
-			self.severity
-		}
-	}
-
-
-	#[derive(Copy, Clone, Eq, PartialEq)]
-	struct OtherMisconduct {
-		severity: u32,
-	}
-
-	impl Default for OtherMisconduct {
-		fn default() -> Self {
-			Self { severity: 1000 }
-		}
-	}
-
-	impl Misconduct for OtherMisconduct {
-		type Severity = u32;
-
-		fn on_misconduct(&mut self) {
-			self.severity = cmp::max(1, self.severity / 2);
-		}
-
-		fn on_signal(&mut self) {
-			self.severity = cmp::min(100_000, self.severity * 2);
-		}
-
-		fn severity(&self) -> Self::Severity {
-			self.severity
-		}
-	}
 
 	struct SlashWrapper<T>(PhantomData<T>);
 
@@ -123,10 +68,10 @@ mod tests {
 	fn it_works() {
 		with_externalities(&mut ExtBuilder::default().build(),
 		|| {
-			let mut m1 = MisconductT::default();
-			let mut m2 = OtherMisconduct::default();
-			SlashWrapper::<Test>::slash(&0, &mut m1);
-			SlashWrapper::<Test>::slash(&0, &mut m2);
+			let mut ur = Unresponsive::default();
+			let mut bp = BlockProduction::default();
+			SlashWrapper::<Test>::slash(&0, &mut ur);
+			SlashWrapper::<Test>::slash(&0, &mut bp);
 		});
 	}
 }

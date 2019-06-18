@@ -117,6 +117,9 @@
 use parity_codec::Codec;
 use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 
+/// Pre-defined misconduct types
+pub mod misconduct;
+
 /// Estimates severity level based on misconduct
 pub trait Misconduct: {
 	/// Severity, must be able to encode in `u128` otherwise into() will be lossy
