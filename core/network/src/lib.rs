@@ -25,8 +25,8 @@
 //!
 //! In a decentralized network, each node possesses a network private key and a network public key.
 //! In Substrate, the keys are based on the ed25519 curve. As of the writing of this documentation,
-//! the secp256k1 curve can also be used, but is deprecated. Our local node's keypair must be passed
-//! as part of the network configuration.
+//! the secp256k1 curve can also be used, but is deprecated. Our local node's keypair must be
+//! passed as part of the network configuration.
 //!
 //! From a node's public key, we can derive its *identity*. In Substrate and libp2p, a node's
 //! identity is represented with the [`PeerId`] struct. All network communications between nodes on
@@ -39,9 +39,9 @@
 //! # Substrate's network protocol
 //!
 //! Substrate's networking protocol is based upon libp2p. It is at the moment not possible and not
-//! planned to permit using something else than the libp2p network stack and the rust-libp2p library.
-//! However the libp2p framework is very flexible and the rust-libp2p library could be extended to
-//! support a wider range of protocols than what is offered by libp2p.
+//! planned to permit using something else than the libp2p network stack and the rust-libp2p
+//! library. However the libp2p framework is very flexible and the rust-libp2p library could be
+//! extended to support a wider range of protocols than what is offered by libp2p.
 //!
 //! ## Discovery mechanisms
 //!
@@ -61,8 +61,8 @@
 //!
 //! ## Connection establishment
 //!
-//! When node Alice knows node Bob's identity and address, it can establish a connection with Bob. All
-//! connections must always use encryption and multiplexing. While some node addresses (eg.
+//! When node Alice knows node Bob's identity and address, it can establish a connection with Bob.
+//! All connections must always use encryption and multiplexing. While some node addresses (eg.
 //! addresses using `/quic`) already imply which encryption and/or multiplexing to use, for others
 //! the **multistream-select** protocol is used in order to negotiate an encryption layer and/or a
 //! multiplexing layer.
@@ -84,8 +84,8 @@
 //!
 //! - [Secio](https://github.com/libp2p/specs/tree/master/secio). A TLS-1.2-like protocol but
 //! without certificates. Support for secio will likely be deprecated in the far future.
-//! - [Noise](https://noiseprotocol.org/). Support for noise is very experimental. The details are very blurry and may change at
-//! any moment.
+//! - [Noise](https://noiseprotocol.org/). Support for noise is very experimental. The details are
+//! very blurry and may change at any moment.
 //!
 //! The following multiplexing protocols are supported:
 //!
@@ -119,7 +119,7 @@
 //! we should perform Substrate-based communications with. For these nodes, we open a connection
 //! if necessary and open a unique substream for Substrate-based communications. If the PSM decides
 //! that we should disconnect a node, then that substream is closed.
-//! 
+//!
 //! For more information about the PSM, see the *substrate-peerset* crate.
 //!
 //! Note that at the moment there is no mechanism in place to solve the issues that arise where the
@@ -127,7 +127,7 @@
 //! issues, only the dialer of a connection is allowed to open the unique substream. When the
 //! substream is closed, the entire connection is closed as well. This is a bug, and should be
 //! fixed by improving the protocol.
-//! 
+//!
 //! Within the unique Substrate substream, messages encoded using *parity-codec* are exchanged.
 //! The detail of theses messages is not totally in place, but they can be found in the
 //! `message.rs` file.
