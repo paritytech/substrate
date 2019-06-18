@@ -34,6 +34,7 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
+use consensus_safety::TestPool;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
@@ -511,6 +512,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -612,6 +614,7 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -781,6 +784,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1198,6 +1202,7 @@ fn voter_persists_its_votes() {
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
 				telemetry_on_connect: None,
+				transaction_pool: Arc::new(TestPool),
 			};
 			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 

@@ -41,6 +41,7 @@ use transaction_pool::{
 		ExHash,
 		IntoPoolError,
 		Pool,
+		PoolApi,
 		watcher::Status,
 	},
 };

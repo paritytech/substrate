@@ -38,6 +38,7 @@ use network::{multiaddr, Multiaddr, ManageNetwork};
 use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
+use transaction_pool::txpool::PoolApi;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);

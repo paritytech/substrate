@@ -26,7 +26,9 @@ use crate::{error, Service, maybe_start_server};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
+use transaction_pool::txpool::{
+	self, Options as TransactionPoolOptions, Pool as TransactionPool, PoolApi as _PoolApi,
+};
 use runtime_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
@@ -357,6 +359,7 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_full_import_queue(
 		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
 		_select_chain: Self::SelectChain,
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
@@ -428,6 +431,7 @@ pub trait Components: Sized + 'static {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
+		transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error>;
 
@@ -521,11 +525,12 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
+		transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
-		Factory::build_full_import_queue(config, client, select_chain)
+		Factory::build_full_import_queue(config, client, transaction_pool, select_chain)
 	}
 
 	fn build_select_chain(
@@ -615,6 +620,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 		_select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)

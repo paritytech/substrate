@@ -145,6 +145,7 @@ construct_service_factory! {
 							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
+							transaction_pool: service.transaction_pool(),
 						};
 						executor.spawn(grandpa::run_grandpa_voter(grandpa_config)?);
 					},
@@ -156,27 +157,35 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
-				let slot_duration = SlotDuration::get_or_compute(&*client)?;
-				let (block_import, link_half) =
-					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
-						client.clone(), client.clone(), select_chain
-					)?;
-				let block_import = Arc::new(block_import);
-				let justification_import = block_import.clone();
+			{ 	|
+					config: &mut FactoryFullConfiguration<Self>,
+					client: Arc<FullClient<Self>>,
+					transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+					select_chain: Self::SelectChain,
+				|
+				{
+					let slot_duration = SlotDuration::get_or_compute(&*client)?;
+					let (block_import, link_half) =
+						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
+							client.clone(), client.clone(), select_chain
+						)?;
+					let block_import = Arc::new(block_import);
+					let justification_import = block_import.clone();
 
-				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
+					config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, ed25519::Pair>(
-					slot_duration,
-					block_import,
-					Some(justification_import),
-					None,
-					None,
-					client,
-					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
-			}},
+					import_queue::<_, _, ed25519::Pair, TransactionPool<Self::FullTransactionPoolApi>>(
+						slot_duration,
+						block_import,
+						Some(justification_import),
+						None,
+						None,
+						client,
+						transaction_pool,
+						config.custom.inherent_data_providers.clone(),
+					).map_err(Into::into)
+				}
+			},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 				#[allow(deprecated)]
@@ -191,13 +200,14 @@ construct_service_factory! {
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, ed25519::Pair>(
+				import_queue::<_, _, ed25519::Pair, TransactionPool<Self::FullTransactionPoolApi>>(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import,
 					None,
 					Some(finality_proof_import),
 					Some(finality_proof_request_builder),
 					client,
+					None,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},

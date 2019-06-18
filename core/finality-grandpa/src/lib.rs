@@ -55,16 +55,21 @@
 use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
-use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
+use client::{
+	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
+	runtime_api::ConstructRuntimeApi,
+};
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
+use transaction_pool::txpool::{self, PoolApi};
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use consensus_common::SelectChain;
+use consensus_safety::SubmitReport;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
@@ -443,7 +448,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
+pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -456,16 +461,18 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
+	/// The transaction pool.
+	pub transaction_pool: Arc<T>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -473,6 +480,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	T: Sync + Send + 'static,
+	// T: SubmitReport<B, Block> + Send + Sync + 'static,
+	// T: PoolApi + Send + Sync + 'static,
+	// <T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
+	// <RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
+	// RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 {
 	let GrandpaParams {
 		config,
@@ -481,6 +494,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		inherent_data_providers,
 		on_exit,
 		telemetry_on_connect,
+		transaction_pool,
 	} = grandpa_params;
 
 	use futures::future::{self, Loop as FutureLoop};
@@ -536,6 +550,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
 		voter_set_state: set_state.clone(),
+		transaction_pool: transaction_pool.clone(),
 	});
 
 	initial_environment.update_voter_set_state(|voter_set_state| {
@@ -611,6 +626,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		});
 
 		let client = client.clone();
+		let transaction_pool = transaction_pool.clone();
 		let config = config.clone();
 		let network = network.clone();
 		let select_chain = select_chain.clone();
@@ -664,6 +680,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						authority_set,
 						consensus_changes,
 						voter_set_state: set_state,
+						transaction_pool,
 					});
 
 					Ok(FutureLoop::Continue((env, voter_commands_rx)))
@@ -727,12 +744,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -740,6 +757,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	T: Sync + Send + 'static,
+	// T: PoolApi + Send + Sync + 'static,
+	// <T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
+	// <RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
+	// RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
+	// T: SubmitReport<B, Block> + 'static + Send + Sync,
 {
 	run_grandpa_voter(grandpa_params)
 }
