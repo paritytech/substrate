@@ -110,12 +110,6 @@ test-node-template:
     - web
     - v1.0
 
-.build-only-doc:                      &build-only-doc
-  only:
-    - master
-    - tags
-    - web
-
 
 #### stage:                        build
 
@@ -158,7 +152,7 @@ build-rust-doc-release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only-doc
+  <<:                              *build-only
   tags:
     - linux-docker
   before_script:
@@ -239,29 +233,6 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest${BRANCH}/
         --recursive --human-readable --summarize
 
-publish-s3-doc:
-  stage:                           publish
-  image:                           parity/awscli:latest
-  allow_failure:                   true
-  dependencies:
-    - build-rust-doc-release
-  cache:                           {}
-  <<:                              *build-only-doc
-  <<:                              *kubernetes-build
-  variables:
-    GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io"
-    PREFIX:                        "substrate-rustdoc"
-  script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - aws s3 sync --delete --size-only --only-show-errors
-        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
-  after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
-        --human-readable --summarize
 
 
 publish-gh-doc:
