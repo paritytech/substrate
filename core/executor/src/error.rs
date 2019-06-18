@@ -68,7 +68,7 @@ pub enum Error {
 	AllocatorOutOfSpace,
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]
-	RequestedAllocationToLarge,
+	RequestedAllocationTooLarge,
 }
 
 impl std::error::Error for Error {

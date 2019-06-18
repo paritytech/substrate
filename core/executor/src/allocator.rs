@@ -89,7 +89,7 @@ impl FreeingBumpHeapAllocator {
 	/// The maximum size which can be allocated at once is 16 MiB.
 	pub fn allocate(&mut self, size: u32) -> Result<u32> {
 		if size > MAX_POSSIBLE_ALLOCATION {
-			return Err(Error::RequestedAllocationToLarge);
+			return Err(Error::RequestedAllocationTooLarge);
 		}
 
 		let size = size.max(8);
@@ -397,7 +397,7 @@ mod tests {
 		assert_eq!(ptr.is_err(), true);
 		if let Err(err) = ptr {
 			match err {
-				Error::RequestedAllocationToLarge => {},
+				Error::RequestedAllocationTooLarge => {},
 				e => panic!("Expected out of space error, got: {:?}", e),
 			}
 		}
