@@ -224,6 +224,8 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 impl<T: Trait> StaticLookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
+	type Error = &'static str;
+
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		Self::lookup_address(a).ok_or("invalid account index")
 	}

@@ -292,6 +292,20 @@ impl From<PrimitiveError> for Error {
 	}
 }
 
+// Exists for for backward compatibility purpose.
+impl From<Error> for &str {
+	fn from(err: Error) -> &'static str {
+		match err {
+			Error::Unknown(val) => val,
+			Error::BadSignature => "bad signature in extrinsic",
+			Error::BlockFull => "block size limit is reached",
+			Error::RequireSignedOrigin => "bad origin: expected to be a signed origin",
+			Error::RequireRootOrigin => "bad origin: expected to be a root origin",
+			Error::RequireNoOrigin => "bad origin: expected to be no origin",
+		}
+	}
+}
+
 /// Origin for the System module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -738,10 +752,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
-		Self::deposit_event(match r {
-			Ok(_) => Event::ExtrinsicSuccess,
-			Err(_) => Event::ExtrinsicFailed,
+	pub fn note_applied_extrinsic(success: bool, encoded_len: u32) {
+		Self::deposit_event(match success {
+			true => Event::ExtrinsicSuccess,
+			false => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
@@ -867,8 +881,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(""), 0);
+			System::note_applied_extrinsic(true, 0);
+			System::note_applied_extrinsic(false, 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();

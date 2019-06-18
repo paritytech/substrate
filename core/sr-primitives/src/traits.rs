@@ -113,8 +113,8 @@ pub trait StaticLookup {
 	type Source: Codec + Clone + PartialEq + MaybeDebug;
 	/// Type to lookup into.
 	type Target;
-	/// Error type
-	type Error;
+	/// Error type.
+	type Error: Into<&'static str>; // Into<&'static str> for backward compatibility purpose.
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, Self::Error>;
 	/// Convert from Target back to Source.
@@ -127,15 +127,15 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	type Error = ();
-	fn lookup(x: T) -> result::Result<T, ()> { Ok(x) }
+	type Error = &'static str;
+	fn lookup(x: T) -> result::Result<T, Self::Error> { Ok(x) }
 	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	type Error = ();
-	fn lookup(&self, x: T) -> result::Result<T, ()> { Ok(x) }
+	type Error = &'static str;
+	fn lookup(&self, x: T) -> result::Result<T, Self::Error> { Ok(x) }
 }
 
 /// Get the "current" block number.

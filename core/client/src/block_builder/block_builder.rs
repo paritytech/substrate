@@ -104,7 +104,7 @@ where
 				ExecutionContext::BlockConstruction,
 				xt.clone()
 			)? {
-				ApplyResult::Success | ApplyResult::ModuleError { .. } => {
+				ApplyResult::Success | ApplyResult::DispatchError(_) => {
 					extrinsics.push(xt);
 					Ok(())
 				}

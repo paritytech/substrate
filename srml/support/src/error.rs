@@ -2,20 +2,144 @@
 macro_rules! impl_outer_error {
 	(
 		$(#[$attr:meta])*
-		pub enum $name:ident {
-			$( $modules:tt , )*
+		pub enum $name:ident for $runtime:ident {
+			$( $module:ident $( <$generic:ident $(, $instance:path )? > )? ),* $(,)?
 		}
 	) => {
+		$crate::impl_outer_error! {
+			$(#[$attr])*
+			pub enum $name for $runtime where system = system {
+				$( $module $( <$generic $(, $instance )? > )?, )*
+			}
+		}
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum $name:ident for $runtime:ident where system = $system:ident {
+			$( $module:ident $( <$generic:ident $(, $instance:path )?> )? ),* $(,)?
+		}
+	) => {
+		$crate::impl_outer_error!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { $( $module $( <$generic $(, $instance )? > )*, )* };
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		$system:ident;
+		Modules {
+			$module:ident $( <T $(,  $instance:path )? > )?,
+			$( $rest_module:tt )*
+		};
+		$( $parsed:tt )*
+	) => {
+		$crate::impl_outer_error!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { $( $rest_module )* };
+			$( $parsed )* $module $( <$runtime $(, $instance )? > )?,
+		);
+	};
+
+	// The main macro expansion that actually renders the Error enum.
+
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		$system:ident;
+		Modules { };
+		$( $module:ident $( <$generic_param:ident $(, $generic_instance:path )? > )* ,)*
+	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::Serialize, $crate::Deserialize))]
+		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
+			system($system::Error),
 			$(
-				$modules( $modules::Error ),
+				$module($module::Error),
 			)*
 		}
+
+		impl From<$system::Error> for $name {
+			fn from(err: $system::Error) -> Self {
+				$name::system(err)
+			}
+		}
+
+		impl TryInto<$system::Error> for $name {
+			type Error = Self;
+			fn try_into(self) -> $crate::dispatch::result::Result<$modules::Error, Self::Error> {
+				if let $name::system(err) = self {
+					Ok(err)
+				} else {
+					Err(self)
+				}
+			}
+		}
+
+		impl Into<$crate::runtime_primitives::DispatchError> for $name {
+			fn into(self) -> $crate::runtime_primitives::DispatchError {
+				match self {
+					system(err) => match err {
+						$system::Error::Unknown(msg) =>
+							$crate::runtime_primitives::DispatchError {
+								module: 0,
+								error: 0,
+								message: msg,
+							}
+						_ => $crate::runtime_primitives::DispatchError {
+								module: 0,
+								error: err.into(),
+								message: None,
+							}
+					},
+					$(
+						$modules(err) => match err {
+							$modules::Error::Unknown(msg) =>
+								$crate::runtime_primitives::DispatchError {
+									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
+									error: 0,
+									message: msg,
+								}
+							_ => $crate::runtime_primitives::DispatchError {
+									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
+									error: err.into(),
+									message: None,
+								}
+						}
+					)*
+				}
+			}
+		}
+
+		$(
+			impl From<$modules::Error> for $name {
+				fn from(err: $system::Error) -> Self {
+					$name::$modules(err)
+				}
+			}
+
+			impl TryInto<$modules::Error> for $name {
+				type Error = Self;
+				fn try_into(self) -> $crate::dispatch::result::Result<$modules::Error, Self::Error> {
+					if let $name::$modules(err) = self {
+						Ok(err)
+					} else {
+						Err(self)
+					}
+				}
+			}
+		)*
 	}
 }
 

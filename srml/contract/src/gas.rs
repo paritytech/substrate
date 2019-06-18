@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
-use runtime_primitives::BLOCK_FULL;
+use runtime_primitives::Error as PrimitiveError;
 use runtime_primitives::traits::{CheckedMul, CheckedSub, Zero, SaturatedConversion};
 use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
 
@@ -207,7 +207,7 @@ pub fn buy_gas<T: Trait>(
 	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
 	if gas_limit > gas_available {
 		// gas limit reached, revert the transaction and retry again in the future
-		return Err(BLOCK_FULL);
+		return Err(PrimitiveError::BlockFull.into());
 	}
 
 	// Buy the specified amount of gas.

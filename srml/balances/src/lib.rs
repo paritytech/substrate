@@ -371,7 +371,7 @@ decl_module! {
 			#[compact] value: T::Balance
 		) {
 			let transactor = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let dest = T::Lookup::lookup(dest).map_err(Into::into)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
 		}
 
@@ -393,7 +393,7 @@ decl_module! {
 			#[compact] new_free: T::Balance,
 			#[compact] new_reserved: T::Balance
 		) {
-			let who = T::Lookup::lookup(who)?;
+			let who = T::Lookup::lookup(who).map_err(Into::into)?;
 
 			let current_free = <FreeBalance<T, I>>::get(&who);
 			if new_free > current_free {

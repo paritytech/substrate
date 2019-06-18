@@ -66,6 +66,17 @@ pub enum Error {
 	BlockFull
 }
 
+// Exists for for backward compatibility purpose.
+impl From<Error> for &str {
+	fn from(err: Error) -> &'static str {
+		match err {
+			Error::Unknown(val) => val,
+			Error::BadSignature => "bad signature in extrinsic",
+			Error::BlockFull => "block size limit is reached",
+		}
+	}
+}
+
 /// Justification type.
 pub type Justification = Vec<u8>;
 
@@ -514,6 +525,19 @@ impl codec::Encode for ApplyError {
 	}
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+/// Reason why a dispatch call failed
+pub struct DispatchError {
+	/// Module index, matching the metadata module index
+	pub module: i8, // use i8 instead of u8 because u8 is not supported by parity-codec
+	/// Module specific error value
+	pub error: i8,
+	/// Optional error message
+	#[codec(skip)]
+	pub message: Option<&'static str>,
+}
+
 // TODO: custom implement Encode & Decode to make it a two byte value
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
@@ -522,12 +546,7 @@ pub enum ApplyResult {
 	/// Successful application (extrinsic reported no issue).
 	Success,
 	/// Failed application (extrinsic was probably a no-op other than fees).
-	ModuleError {
-		/// Module index, matching the metadata module index
-		module: i8, // use i8 instead of u8 because u8 is not supported by parity-codec
-		/// Module specific error value
-		error: i8,
-	},
+	DispatchError(DispatchError),
 	/// Invalid extrinsic application.
 	ApplyError(ApplyError),
 }

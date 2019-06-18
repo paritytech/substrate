@@ -29,8 +29,11 @@ pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
 pub enum Never {}
 
 /// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type Result<Error> = result::Result<(), Error>;
+/// or an error.
+pub type DispatchResult<Error> = result::Result<(), Error>;
+
+/// Result with string error message. This exists for backward compatibility purpose.
+pub type Result = DispatchResult<&'static str>;
 
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
@@ -41,7 +44,7 @@ pub trait Dispatchable {
 	type Origin;
 	type Trait;
 	type Error;
-	fn dispatch(self, origin: Self::Origin) -> Result<Self::Error>;
+	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
 }
 
 /// Serializable version of Dispatchable.
@@ -533,7 +536,10 @@ macro_rules! decl_module {
 	// Add default Error if none supplied
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -545,7 +551,9 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
@@ -555,10 +563,7 @@ macro_rules! decl_module {
 			[ $($t)* ]
 			$($rest)*
 		);
-		$crate::decl_error! {
-			pub enum Error {
-			}
-		}
+		pub type Error = &'static str;
 	};
 	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize
@@ -834,7 +839,7 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		#[allow(unreachable_code)]
-		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result<$error_type> {
+		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::DispatchResult<$error_type> {
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -871,7 +876,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr])*
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
-		) -> $crate::dispatch::Result<$error_type> {
+		) -> $crate::dispatch::DispatchResult<$error_type> {
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -1176,7 +1181,7 @@ macro_rules! decl_module {
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
 			type Error = $error_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result<Self::Error> {
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResult<Self::Error> {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1199,7 +1204,7 @@ macro_rules! decl_module {
 
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result<D::Error> {
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::DispatchResult<D::Error> {
 				d.dispatch(origin)
 			}
 		}
@@ -1263,7 +1268,7 @@ macro_rules! impl_outer_dispatch {
 			type Origin = $origin;
 			type Trait = $call_type;
 			type Error = $error_type;
-			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result<Self::Error> {
+			fn dispatch(self, origin: $origin) -> $crate::dispatch::DispatchResult<Self::Error> {
 				match self {
 					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
 				}
