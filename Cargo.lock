@@ -3556,7 +3556,6 @@ dependencies = [
 ]
 
 [[package]]
- "parity-codec 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 name = "srml-contract"
 version = "2.0.0"
 dependencies = [
