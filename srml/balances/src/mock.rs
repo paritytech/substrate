@@ -34,16 +34,18 @@ impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
 
-pub struct WeightToFeeHandler;
+pub struct DummyFeeHandler;
 
-impl Convert<Weight, u64> for WeightToFeeHandler {
+impl Convert<Weight, u64> for DummyFeeHandler {
 	fn convert(weight: Weight) -> u64 {
 		let billion = 1_000_000_000_u128;
 		let from_max_to_per_bill = |x: u128| { x * billion /  MAX_TRANSACTIONS_WEIGHT as u128 };
 		// temporary: weight < ideal
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
 		let mut positive = false;
-		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
+		// for testing reasons, we set `all_extrinsics_weight()` equal to 0
+		// - still tests the range of values allowed; all_extrinsics_weight() is tested in `srml/executive
+		let all = 0u128 + weight as u128;
 		let diff = match ideal.checked_sub(all) {
 			Some(d) => d,
 			None => { positive = true; all - ideal }
@@ -92,7 +94,7 @@ impl system::Trait for Runtime {
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type WeightToFee = WeightToFeeHandler;
+	type WeightToFee = DummyFeeHandler;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();

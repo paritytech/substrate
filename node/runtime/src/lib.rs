@@ -95,6 +95,7 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		let from_max_to_per_bill = |x: u128| { x * billion /  MAX_TRANSACTIONS_WEIGHT as u128 };
 		// temporary: weight < ideal
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
+		// determines if the first_term is positive
 		let mut positive = false;
 		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
 		let diff = match ideal.checked_sub(all) {
@@ -114,14 +115,12 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		second_term = second_term / billion;
 		second_term = second_term / billion;
 
+		//					   = 1		+ second_term
 		let mut fee_multiplier = billion + second_term;
-		if positive {
-			fee_multiplier += first_term;
-		} else {
-			fee_multiplier -= first_term;
-		}
+		fee_multiplier = if positive { fee_multiplier + first_term } else { fee_multiplier - first_term};
 
 		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
+		// transaction_fee = fee_multiplier * weight
 		let transaction_fee: u32 = p * weight;
 		transaction_fee.into()
 	}
