@@ -162,6 +162,21 @@ impl Permill {
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
+
+	/// Approximate the fracion `p/q` into a per million fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
+
+		Permill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Permill
@@ -671,6 +686,20 @@ mod tests {
 			assert_eq!($per::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
+
+			// from_rational_approximation
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
+				$per::one(),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value()/3, u128::max_value()),
+				$per::from_parts($per::one().0/3),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(1, u128::max_value()),
+				$per::zero(),
+			);
 
 			// bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
