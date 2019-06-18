@@ -76,9 +76,9 @@ macro_rules! impl_outer_error {
 			}
 		}
 
-		impl TryInto<$system::Error> for $name {
+		impl $crate::rstd::convert::TryInto<$system::Error> for $name {
 			type Error = Self;
-			fn try_into(self) -> $crate::dispatch::result::Result<$modules::Error, Self::Error> {
+			fn try_into(self) -> $crate::dispatch::result::Result<$system::Error, Self::Error> {
 				if let $name::system(err) = self {
 					Ok(err)
 				} else {
@@ -90,49 +90,49 @@ macro_rules! impl_outer_error {
 		impl Into<$crate::runtime_primitives::DispatchError> for $name {
 			fn into(self) -> $crate::runtime_primitives::DispatchError {
 				match self {
-					system(err) => match err {
+					$name::system(err) => match err {
 						$system::Error::Unknown(msg) =>
 							$crate::runtime_primitives::DispatchError {
 								module: 0,
 								error: 0,
 								message: msg,
-							}
+							},
 						_ => $crate::runtime_primitives::DispatchError {
 								module: 0,
 								error: err.into(),
 								message: None,
-							}
+							},
 					},
 					$(
-						$modules(err) => match err {
-							$modules::Error::Unknown(msg) =>
+						$name::$module(err) => match err {
+							$module::Error::Unknown(msg) =>
 								$crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
 									error: 0,
 									message: msg,
-								}
+								},
 							_ => $crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
 									error: err.into(),
 									message: None,
-								}
-						}
+								},
+						},
 					)*
 				}
 			}
 		}
 
 		$(
-			impl From<$modules::Error> for $name {
+			impl From<$module::Error> for $name {
 				fn from(err: $system::Error) -> Self {
-					$name::$modules(err)
+					$name::$module(err)
 				}
 			}
 
-			impl TryInto<$modules::Error> for $name {
+			impl $crate::rstd::convert::TryInto<$module::Error> for $name {
 				type Error = Self;
-				fn try_into(self) -> $crate::dispatch::result::Result<$modules::Error, Self::Error> {
-					if let $name::$modules(err) = self {
+				fn try_into(self) -> $crate::dispatch::result::Result<$module::Error, Self::Error> {
+					if let $name::$module(err) = self {
 						Ok(err)
 					} else {
 						Err(self)

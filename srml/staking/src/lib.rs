@@ -637,7 +637,7 @@ decl_module! {
 				return Err("stash already bonded")
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
+			let controller = T::Lookup::lookup(controller).map_err(Into::into)?;
 
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
@@ -795,7 +795,8 @@ decl_module! {
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(T::Lookup::lookup)
-				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
+				.collect::<result::Result<Vec<T::AccountId>, _>>()
+				.map_err(Into::into)?;
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, targets);
@@ -852,7 +853,7 @@ decl_module! {
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
-			let controller = T::Lookup::lookup(controller)?;
+			let controller = T::Lookup::lookup(controller).map_err(Into::into)?;
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
 			}

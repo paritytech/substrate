@@ -123,8 +123,9 @@ decl_module! {
 
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
-				Err(e) => {
-					sr_io::print(e);
+				Err(_e) => {
+					// TODO: not sure how to deal with this
+					// sr_io::print(e);
 					false
 				}
 			};
@@ -145,7 +146,7 @@ decl_module! {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
-			let new = T::Lookup::lookup(new)?;
+			let new = T::Lookup::lookup(new).map_err(Into::into)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);

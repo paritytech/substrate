@@ -397,7 +397,7 @@ decl_module! {
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let dest = T::Lookup::lookup(dest).map_err(Into::into)?;
 
 			// Pay for the gas upfront.
 			//

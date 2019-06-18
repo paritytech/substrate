@@ -87,10 +87,10 @@ pub trait Trait: system::Trait {
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// Origin from which approvals must come.
-	type ApproveOrigin: EnsureOrigin<Self::Origin>;
+	type ApproveOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
 
 	/// Origin from which rejections must come.
-	type RejectOrigin: EnsureOrigin<Self::Origin>;
+	type RejectOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -122,7 +122,7 @@ decl_module! {
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
 			let proposer = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let beneficiary = T::Lookup::lookup(beneficiary).map_err(Into::into)?;
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
