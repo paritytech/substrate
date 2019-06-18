@@ -35,12 +35,12 @@ use std::ops::Range;
 use std::collections::{HashMap, VecDeque};
 use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
-use extra_requests::ExtraRequestsAggregator;
+use extra_requests::ExtraRequests;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
 	CheckedSub, SaturatedConversion
@@ -91,7 +91,7 @@ pub trait Context<B: BlockT> {
 	fn send_block_request(&mut self, who: PeerId, request: message::BlockRequest<B>);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// All the data we have about a Peer that we are trying to sync with
 pub(crate) struct PeerSync<B: BlockT> {
 	/// The common number is the block number that is a common point of ancestry for both our chains
@@ -109,8 +109,8 @@ pub(crate) struct PeerSync<B: BlockT> {
 	pub recently_announced: VecDeque<B::Hash>,
 }
 
-#[derive(Debug)]
 /// The sync status of a peer we are trying to sync with
+#[derive(Debug)]
 pub(crate) struct PeerInfo<B: BlockT> {
 	/// Their best block hash.
 	pub best_hash: B::Hash,
@@ -151,8 +151,6 @@ pub(crate) enum PeerSyncState<B: BlockT> {
 
 /// The main data structure to contain all the state for a chains active syncing strategy.
 pub struct ChainSync<B: BlockT> {
-	/// The genesis hash that we are trying to sync for
-	_genesis_hash: B::Hash,
 	/// The active peers that we are using to sync and their PeerSync status
 	peers: HashMap<PeerId, PeerSync<B>>,
 	/// A `BlockCollection` of blocks that are being downloaded from peers
@@ -166,15 +164,14 @@ pub struct ChainSync<B: BlockT> {
 	/// What block attributes we require for this node, usually derived from what role we are, but
 	/// could be customized
 	required_block_attributes: message::BlockAttributes,
-	/// The `extra_requests` field is an `ExtraRequestsAggregator` that manages network requests for
-	/// justifications and finality proofs. The underlying `ExtraRequests` data structure deals with
-	/// collecting multiple network requests handling ordering and branching rules for forks.
-	extra_requests: ExtraRequestsAggregator<B>,
+	extra_finality_proofs: ExtraRequests<B>,
+	extra_justifications: ExtraRequests<B>,
 	/// A set of hashes of blocks that are being downloaded or have been downloaded and are queued
 	/// for import.
 	queue_blocks: HashSet<B::Hash>,
 	/// The best block number that we are currently importing
 	best_importing_number: NumberFor<B>,
+	request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 }
 
 /// Reported sync state.
@@ -215,26 +212,26 @@ impl<B: BlockT> Status<B> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance. Pass the initial known state of the chain.
-	pub(crate) fn new(
-		role: Roles,
-		info: &ClientInfo<B>,
-	) -> Self {
-		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
+	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
+		let mut required_block_attributes =
+			message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
+
 		if role.is_full() {
 			required_block_attributes |= message::BlockAttributes::BODY;
 		}
 
 		ChainSync {
-			_genesis_hash: info.chain.genesis_hash,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.chain.best_hash,
 			best_queued_number: info.chain.best_number,
-			extra_requests: ExtraRequestsAggregator::new(),
+			extra_finality_proofs: ExtraRequests::new(),
+			extra_justifications: ExtraRequests::new(),
 			role,
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
+			request_builder: None,
 		}
 	}
 
@@ -548,9 +545,9 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		protocol: &mut dyn Context<B>,
 		who: PeerId,
-		_request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
-	) -> Option<(PeerId, B::Hash, NumberFor<B>, Justification)> {
+	) -> Option<(PeerId, B::Hash, NumberFor<B>, Justification)>
+	{
 		let peer = if let Some(peer) = self.peers.get_mut(&who) {
 			peer
 		} else {
@@ -571,12 +568,8 @@ impl<B: BlockT> ChainSync<B> {
 						protocol.disconnect_peer(who);
 						return None;
 					}
-
-					return self.extra_requests.justifications().on_response(
-						who,
-						response.justification,
-					);
-				},
+					return self.extra_justifications.on_response(who, response.justification)
+				}
 				None => {
 					// we might have asked the peer for a justification on a block that we thought it had
 					// (regardless of whether it had a justification for it or not).
@@ -585,7 +578,7 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 					);
 					return None;
-				},
+				}
 			}
 		}
 
@@ -623,10 +616,7 @@ impl<B: BlockT> ChainSync<B> {
 				return None;
 			}
 
-			return self.extra_requests.finality_proofs().on_response(
-				who,
-				response.proof,
-			);
+			return self.extra_finality_proofs.on_response(who, response.proof)
 		}
 
 		self.maintain_sync(protocol);
@@ -636,7 +626,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, protocol: &mut Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
+	pub fn blocks_processed(&mut self, protocol: &mut dyn Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		for hash in processed_blocks {
 			self.queue_blocks.remove(&hash);
 		}
@@ -652,13 +642,47 @@ impl<B: BlockT> ChainSync<B> {
 		for peer in peers {
 			self.download_new(protocol, peer);
 		}
-		self.extra_requests.dispatch(&mut self.peers, protocol);
+		self.tick(protocol)
 	}
 
 	/// Called periodically to perform any time-based actions. Must be called at a regular
 	/// interval.
 	pub fn tick(&mut self, protocol: &mut dyn Context<B>) {
-		self.extra_requests.dispatch(&mut self.peers, protocol);
+		self.send_justification_requests(protocol);
+		self.send_finality_proof_request(protocol)
+	}
+
+	fn send_justification_requests(&mut self, protocol: &mut dyn Context<B>) {
+		let mut matcher = self.extra_justifications.matcher();
+		while let Some((peer, request)) = matcher.next(&self.peers) {
+			self.peers.get_mut(&peer)
+				.expect("`Matcher::next` guarantees the `PeerId` comes from the given peers; qed")
+				.state = PeerSyncState::DownloadingJustification(request.0);
+			protocol.send_block_request(peer, message::generic::BlockRequest {
+				id: 0,
+				fields: message::BlockAttributes::JUSTIFICATION,
+				from: message::FromBlock::Hash(request.0),
+				to: None,
+				direction: message::Direction::Ascending,
+				max: Some(1)
+			})
+		}
+	}
+
+	fn send_finality_proof_request(&mut self, protocol: &mut dyn Context<B>) {
+		let mut matcher = self.extra_finality_proofs.matcher();
+		while let Some((peer, request)) = matcher.next(&self.peers) {
+			self.peers.get_mut(&peer)
+				.expect("`Matcher::next` guarantees the `PeerId` comes from the given peers; qed")
+				.state = PeerSyncState::DownloadingFinalityProof(request.0);
+			protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
+				id: 0,
+				block: request.0,
+				request: self.request_builder.as_ref()
+					.map(|builder| builder.build_request_data(&request.0))
+					.unwrap_or_default()
+			})
+		}
 	}
 
 	/// Request a justification for the given block.
@@ -666,24 +690,22 @@ impl<B: BlockT> ChainSync<B> {
 	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut dyn Context<B>) {
-		self.extra_requests.justifications().queue_request(
-			(*hash, number),
-			|base, block| protocol.client().is_descendent_of(base, block),
-		);
-
-		self.extra_requests.justifications().dispatch(&mut self.peers, protocol);
+		self.extra_justifications.schedule((*hash, number), |base, block| {
+			protocol.client().is_descendent_of(base, block)
+		});
+		self.send_justification_requests(protocol)
 	}
 
 	/// Clears all pending justification requests.
 	pub fn clear_justification_requests(&mut self) {
-		self.extra_requests.justifications().clear();
+		self.extra_justifications.reset()
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without
 	/// errors.
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let finalization_result = if success { Ok((hash, number)) } else { Err(()) };
-		if !self.extra_requests.justifications().on_import_result((hash, number), finalization_result) {
+		if !self.extra_justifications.try_finalize_root((hash, number), finalization_result, true) {
 			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
 				hash,
 				number,
@@ -695,12 +717,10 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// Queues a new finality proof request and tries to dispatch all pending requests.
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut dyn Context<B>) {
-		self.extra_requests.finality_proofs().queue_request(
-			(*hash, number),
-			|base, block| protocol.client().is_descendent_of(base, block),
-		);
-
-		self.extra_requests.finality_proofs().dispatch(&mut self.peers, protocol);
+		self.extra_finality_proofs.schedule((*hash, number), |base, block| {
+			protocol.client().is_descendent_of(base, block)
+		});
+		self.send_finality_proof_request(protocol)
 	}
 
 	pub fn finality_proof_import_result(
@@ -708,11 +728,11 @@ impl<B: BlockT> ChainSync<B> {
 		request_block: (B::Hash, NumberFor<B>),
 		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
 	) {
-		self.extra_requests.finality_proofs().on_import_result(request_block, finalization_result);
+		self.extra_finality_proofs.try_finalize_root(request_block, finalization_result, true);
 	}
 
-	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
-		self.extra_requests.finality_proofs().essence().0 = Some(request_builder);
+	pub fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
+		self.request_builder = Some(builder)
 	}
 
 	/// Log that a block has been successfully imported
@@ -722,13 +742,21 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Notify about finalization of the given block.
 	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut dyn Context<B>) {
-		if let Err(err) = self.extra_requests.on_block_finalized(
-			hash,
-			number,
-			&|base, block| protocol.client().is_descendent_of(base, block),
-		) {
-			warn!(target: "sync", "Error cleaning up pending extra data requests: {:?}", err);
-		};
+		let r = self.extra_finality_proofs.on_block_finalized(hash, number, |base, block| {
+			protocol.client().is_descendent_of(base, block)
+		});
+
+		if let Err(err) = r {
+			warn!(target: "sync", "Error cleaning up pending extra finality proof data requests: {:?}", err);
+		}
+
+		let r = self.extra_justifications.on_block_finalized(hash, number, |base, block| {
+			protocol.client().is_descendent_of(base, block)
+		});
+
+		if let Err(err) = r {
+			warn!(target: "sync", "Error cleaning up pending extra justification data requests: {:?}", err);
+		}
 	}
 
 	/// Called when a block has been queued for import. Updates our internal state for best queued
@@ -917,7 +945,8 @@ impl<B: BlockT> ChainSync<B> {
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut dyn Context<B>, who: PeerId) {
 		self.blocks.clear_peer_download(&who);
 		self.peers.remove(&who);
-		self.extra_requests.peer_disconnected(who);
+		self.extra_justifications.peer_disconnected(&who);
+		self.extra_finality_proofs.peer_disconnected(&who);
 		self.maintain_sync(protocol);
 	}
 

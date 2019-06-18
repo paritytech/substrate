@@ -18,13 +18,18 @@
 #![deny(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use parity_codec::{Encode, Decode};
+use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
+use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
 
-use parity_codec::{Encode, Decode};
+/// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
+/// the main Babe module. If that ever changes, then this must, too.
+pub type AuthorityId = Public;
 
 /// The `ConsensusEngineId` of BABE.
-pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
+pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
@@ -69,5 +74,8 @@ decl_runtime_apis! {
 		///
 		/// Dynamic configuration may be supported in the future.
 		fn startup_data() -> BabeConfiguration;
+
+		/// Get the current authorites for Babe.
+		fn authorities() -> Vec<AuthorityId>;
 	}
 }

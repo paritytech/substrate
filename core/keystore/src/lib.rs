@@ -71,7 +71,7 @@ impl Store {
 
 	/// Generate a new key, placing it into the store.
 	pub fn generate(&self, password: &str) -> Result<Pair> {
-		let (pair, phrase) = Pair::generate_with_phrase(Some(password));
+		let (pair, phrase, _) = Pair::generate_with_phrase(Some(password));
 		let mut file = File::create(self.key_file_path(&pair.public()))?;
 		::serde_json::to_writer(&file, &phrase)?;
 		file.flush()?;
@@ -95,7 +95,7 @@ impl Store {
 		let file = File::open(path)?;
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
-		let pair = Pair::from_phrase(&phrase, Some(password))
+		let (pair, _) = Pair::from_phrase(&phrase, Some(password))
 			.ok().ok_or(Error::InvalidPhrase)?;
 		if &pair.public() != public {
 			return Err(Error::InvalidPassword);

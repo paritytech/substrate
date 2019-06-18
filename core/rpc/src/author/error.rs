@@ -33,7 +33,7 @@ pub enum Error {
 	/// Transaction pool error,
 	Pool(txpool::error::Error),
 	/// Verification error
-	#[display(fmt="Extrinsic verification error: {}", "_0.description()")]
+	#[display(fmt="Extrinsic verification error: {}", _0)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format")]
@@ -85,7 +85,7 @@ impl From<Error> for rpc::Error {
 			},
 			Error::Verification(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(VERIFICATION_ERROR),
-				message: e.description().into(),
+				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
 			Error::Pool(PoolError::InvalidTransaction(code)) => rpc::Error {
