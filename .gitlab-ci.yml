@@ -343,10 +343,11 @@ publish-gh-doc:
 
       [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
       insteadOf = "https://github.com/"
+      EOC
     - unset GITHUB_TOKEN
     - git clone https://github.com/substrate-developer-hub/rustdocs.git
-    - rsync -avx --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
-    - cd ./rustdocs; git status; git add .
+    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
+    - cd ./rustdocs; git add .
     - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
     - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
   after_script:
