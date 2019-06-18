@@ -170,7 +170,7 @@ impl Permill {
 		let p = p.min(q.clone());
 		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
 
-		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		// Conversion can't overflow as p < q so ( p / (q/million)) < million
 		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
 		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
 		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
