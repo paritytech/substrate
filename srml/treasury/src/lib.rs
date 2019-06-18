@@ -70,17 +70,22 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance};
-use runtime_primitives::{Permill,
-	traits::{Zero, EnsureOrigin, StaticLookup, Saturating, CheckedSub, CheckedMul}
+use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
+use srml_support::traits::{
+	Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance, WithdrawReason,
+	ExistenceRequirement
 };
+use runtime_primitives::{Permill, ModuleId, traits::{
+	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
+}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+
+const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
 pub trait Trait: system::Trait {
 	/// The staking balance.
@@ -133,12 +138,6 @@ decl_module! {
 			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
 			Self::deposit_event(RawEvent::Proposed(c));
-		}
-
-		/// Set the balance of funds available to spend.
-		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
-			// Put the new value into storage.
-			<Pot<T>>::put(new_pot);
 		}
 
 		/// (Re-)configure this module.
@@ -224,9 +223,6 @@ decl_storage! {
 
 		// State...
 
-		/// Total funds available to this module for spending.
-		Pot get(pot): BalanceOf<T>;
-
 		/// Number of proposals that have been made.
 		ProposalCount get(proposal_count): ProposalIndex;
 
@@ -259,6 +255,14 @@ decl_event!(
 
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
+
+	/// The account ID of the treasury pot.
+	///
+	/// This actually does compmutation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	fn account_id() -> T::AccountId {
+		MODULE_ID.into_account()
+	}
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
@@ -298,18 +302,40 @@ impl<T: Trait> Module<T> {
 			});
 		});
 
-		T::MintedForSpending::on_unbalanced(imbalance);
-
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
 			let burn = (Self::burn() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
+			imbalance.subsume(T::Currency::burn(burn));
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
-		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+		if let Err(problem) = T::Currency::settle(
+			&Self::account_id(),
+			imbalance,
+			WithdrawReason::Transfer,
+			ExistenceRequirement::KeepAlive
+		) {
+			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
+			// Nothing else to do here.
+			drop(problem);
+		}
 
-		<Pot<T>>::put(budget_remaining);
+		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+	}
+
+	fn pot() -> BalanceOf<T> {
+		T::Currency::free_balance(&Self::account_id())
+	}
+}
+
+impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
+		if let Err(amount) = T::Currency::resolve_into_existing(&Self::account_id(), amount) {
+			// Author account doesn't exist. That shouldn't be possible, but whatever. We'll just
+			// drop the imbalance safely.
+			drop(amount);
+		}
 	}
 }
 
@@ -322,7 +348,7 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 			if let Some(funding) = total_issuance.checked_sub(&portion) {
 				let funding = funding / portion;
 				if let Some(funding) = funding.checked_mul(&minted) {
-					<Pot<T>>::mutate(|x| *x = x.saturating_add(funding));
+					Self::on_unbalanced(T::Currency::issue(funding));
 				}
 			}
 		}

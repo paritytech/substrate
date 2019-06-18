@@ -21,7 +21,9 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use support::{construct_runtime, parameter_types};
+use support::{
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
+};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
@@ -72,6 +74,29 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+
+pub struct Author;
+
+impl OnUnbalanced<NegativeImbalance> for Author {
+	fn on_unbalanced(amount: NegativeImbalance) {
+		// TODO: figure out who the author is and correct the account id.
+		let author = AccountId::default();
+		if let Err(amount) = Balances::resolve_into_existing(&author, amount) {
+			// Author account doesn't exist. That shouldn't be possible, but whatever. We'll just
+			// drop the imbalance safely.
+			drop(amount);
+		}
+	}
+}
+
+pub type DealWithFees = SplitTwoWays<
+	Balance,
+	NegativeImbalance,
+	_4, Treasury,   // 4 parts (80%) goes to the treasury.
+	_1, Author,     // 1 part (20%) goes to the block author.
+>;
+
 pub struct CurrencyToVoteHandler;
 
 impl CurrencyToVoteHandler {
@@ -115,7 +140,7 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;
-	type TransactionPayment = ();
+	type TransactionPayment = DealWithFees;
 	type DustRemoval = ();
 	type TransferPayment = ();
 }
