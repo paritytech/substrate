@@ -39,9 +39,9 @@
 //! # Substrate's network protocol
 //!
 //! Substrate's networking protocol is based upon libp2p. It is at the moment not possible and not
-//! planned to permit using something else than the libp2p protocol and the rust-libp2p library.
-//! However the libp2p protocol is very loose and the rust-libp2p library could be extended to
-//! support a wider range of protocols than just libp2p.
+//! planned to permit using something else than the libp2p network stack and the rust-libp2p library.
+//! However the libp2p framework is very flexible and the rust-libp2p library could be extended to
+//! support a wider range of protocols than what is offered by libp2p.
 //!
 //! ## Discovery mechanisms
 //!
@@ -61,7 +61,7 @@
 //!
 //! ## Connection establishment
 //!
-//! When node Alice knows node Bob's identity and address, it can establish with Bob. All
+//! When node Alice knows node Bob's identity and address, it can establish a connection with Bob. All
 //! connections must always use encryption and multiplexing. While some node addresses (eg.
 //! addresses using `/quic`) already imply which encryption and/or multiplexing to use, for others
 //! the **multistream-select** protocol is used in order to negotiate an encryption layer and/or a
@@ -76,7 +76,7 @@
 //! encryption and a multiplexing layer are negotiated on top.
 //! - WebSockets for addresses of the form `/ip4/1.2.3.4/tcp/5/ws`. A TCP/IP connection is open and
 //! the WebSockets protocol is negotiated on top. Communications then happen inside WebSockets data
-//! frame. Encryption and multiplexing are additionally negotiated again inside this channel.
+//! frames. Encryption and multiplexing are additionally negotiated again inside this channel.
 //! - DNS for addresses of the form `/dns4/example.com/tcp/5` or `/dns4/example.com/tcp/5/ws`. A
 //! node's address can contain a domain name.
 //!
@@ -84,7 +84,7 @@
 //!
 //! - [Secio](https://github.com/libp2p/specs/tree/master/secio). A TLS-1.2-like protocol but
 //! without certificates. Support for secio will likely be deprecated in the far future.
-//! - Noise. Support for noise is very experimental. The details are very blurry and may change at
+//! - [Noise](https://noiseprotocol.org/). Support for noise is very experimental. The details are very blurry and may change at
 //! any moment.
 //!
 //! The following multiplexing protocols are supported:
@@ -153,11 +153,11 @@
 //! # Usage
 //!
 //! Using the `substrate-network` crate is done through the [`NetworkWorker`] struct. Create this
-//! struct by passing a [`config::Params`], then poll it as if it was a `Future`. You can extract a
+//! struct by passing a [`config::Params`], then poll it as if it was a `Future`. You can extract an
 //! `Arc<NetworkService>` from the `NetworkWorker`, which can be shared amongst multiple places
 //! in order to give orders to the networking.
 //!
-//! More precise usage details are still being refined out and will likely change in the future.
+//! More precise usage details are still being worked on and will likely change in the future.
 //!
 
 mod behaviour;
