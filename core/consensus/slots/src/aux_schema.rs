@@ -19,7 +19,9 @@
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use runtime_primitives::traits::Header;
+use runtime_primitives::traits::{Header, Verify};
+use safety_primitives::AuthorshipEquivocationProof;
+use std::ops::Deref;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -44,45 +46,23 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
-impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, P>(
+pub fn check_equivocation<C, H, E, V>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
 	header: &H,
-	signer: &P,
-) -> ClientResult<Option<EquivocationProof<H>>>
+	signature: V,
+	signer: &V::Signer,
+) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
-		P: Clone + Encode + Decode + PartialEq,
+		V: Verify + Encode + Decode + Clone,
+		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
+		E: AuthorshipEquivocationProof<H, V>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -94,25 +74,28 @@ pub fn check_equivocation<C, H, P>(
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?
-		.unwrap_or_else(Vec::new);
+	let mut headers_with_sig = load_decode::<_, Vec<(H, V, V::Signer)>>(
+		backend.deref(), 
+		&curr_slot_key[..],
+	)?.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();
-	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
+	let first_saved_slot = load_decode::<_, u64>(backend.deref(), &slot_header_start[..])?
 		.unwrap_or(slot);
 
-	for (prev_header, prev_signer) in headers_with_sig.iter() {
+	for (prev_header, prev_signature, prev_signer) in headers_with_sig.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
 		if prev_signer == signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
-				}));
+				return Ok(Some(AuthorshipEquivocationProof::new(
+					prev_header.clone(),
+					header.clone(),
+					prev_signature.clone(),
+					signature.clone(),
+				)));
 			} else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
@@ -136,7 +119,7 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	headers_with_sig.push((header.clone(), signer.clone()));
+	headers_with_sig.push((header.clone(), signature.clone(), signer.clone()));
 
 	backend.insert_aux(
 		&[
@@ -155,6 +138,7 @@ mod test {
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
+	use safety_primitives::AuthorshipEquivocationProof;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 
@@ -173,11 +157,29 @@ mod test {
 		header
 	}
 
+	struct TestEquivocation {
+		h1: HeaderTest,
+		h2: HeaderTest,
+		s1: sr25519::Signature,
+		s2: sr25519::Signature,
+	}
+
+	impl AuthorshipEquivocationProof<HeaderTest, sr25519::Signature> for TestEquivocation {
+		fn new(h1: HeaderTest, h2: HeaderTest, s1: sr25519::Signature, s2: sr25519::Signature) -> Self {
+			TestEquivocation { h1, h2, s1, s2 }
+		}
+		fn first_header(&self) -> &HeaderTest { &self.h1 }
+		fn second_header(&self) -> &HeaderTest { &self.h2 }
+		fn first_signature(&self) -> &sr25519::Signature { &self.s1 }
+		fn second_signature(&self) -> &sr25519::Signature { &self.s2 }
+	}
+
 	#[test]
 	fn check_equivocation_works() {
 		let client = test_client::new();
 		let (pair, _seed) = sr25519::Pair::generate();
 		let public = pair.public();
+		let sig = sr25519::Signature::default();
 
 		let header1 = create_header(1); // @ slot 2
 		let header2 = create_header(2); // @ slot 2
@@ -188,76 +190,83 @@ mod test {
 
 		// It's ok to sign same headers.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				2,
 				2,
 				&header1,
+				sig.clone(),
 				&public,
 			).unwrap().is_none(),
 		);
 
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				3,
 				2,
 				&header1,
+				sig.clone(),
 				&public,
 			).unwrap().is_none(),
 		);
 
 		// But not two different headers at the same slot.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				4,
 				2,
 				&header2,
+				sig.clone(),
 				&public,
 			).unwrap().is_some(),
 		);
 
 		// Different slot is ok.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				5,
 				4,
 				&header3,
+				sig.clone(),
 				&public,
 			).unwrap().is_none(),
 		);
 
 		// Here we trigger pruning and save header 4.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 2,
 				MAX_SLOT_CAPACITY + 4,
 				&header4,
+				sig.clone(),
 				&public,
 			).unwrap().is_none(),
 		);
 
 		// This fails because header 5 is an equivocation of header 4.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 3,
 				MAX_SLOT_CAPACITY + 4,
 				&header5,
+				sig.clone(),
 				&public,
 			).unwrap().is_some(),
 		);
 
 		// This is ok because we pruned the corresponding header. Shows that we are pruning.
 		assert!(
-			check_equivocation(
+			check_equivocation::<_, _, TestEquivocation, _>(
 				&client,
 				PRUNING_BOUND + 4,
 				4,
 				&header6,
+				sig.clone(),
 				&public,
 			).unwrap().is_none(),
 		);

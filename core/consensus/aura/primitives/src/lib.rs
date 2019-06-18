@@ -21,8 +21,8 @@
 use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
-use substrate_primitives::ed25519::Signature;
-use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT};
+// use substrate_primitives::ed25519::Signature;
+use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT, traits::Verify};
 use safety_primitives::AuthorshipEquivocationProof;
 
 mod digest;
@@ -40,7 +40,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
-	pub trait AuraApi<AuthorityId: Codec> {
+	pub trait AuraApi<AuthorityId: Codec, Signature: Verify + Codec> {
 		/// Return the slot duration in seconds for Aura.
 		/// Currently, only the value provided by this type at genesis
 		/// will be used.
@@ -83,6 +83,20 @@ pub struct AuraEquivocationProof<H, S> {
 }
 
 impl<H, S> AuthorshipEquivocationProof<H, S> for AuraEquivocationProof<H, S> {
+	fn new(
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		AuraEquivocationProof {
+			first_header,
+			second_header,
+			first_signature,
+			second_signature
+		}
+	}
+
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &H {
 		&self.first_header

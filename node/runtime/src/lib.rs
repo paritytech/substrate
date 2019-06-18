@@ -359,7 +359,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+	impl consensus_aura::AuraApi<Block, AuraId, ed25519::Signature> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

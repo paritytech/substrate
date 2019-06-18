@@ -48,7 +48,9 @@ use client::{
 };
 
 use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{Block, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use runtime_primitives::traits::{
+	Block, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member, Verify
+};
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -66,6 +68,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 use transaction_pool::txpool::{self, PoolApi};
 use consensus_safety::SubmitReport;
+use safety_primitives::AuthorshipEquivocationProof;
 
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -79,12 +82,13 @@ pub struct SlotDuration(slots::SlotDuration<u64>);
 impl SlotDuration {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<A, B, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<A, B, C, S>(client: &C) -> CResult<Self>
 	where
 		A: Codec,
 		B: Block,
 		C: AuxStore + ProvideRuntimeApi,
-		C::Api: AuraApi<B, A>,
+		S: Verify<Signer=A> + Encode + Decode,
+		C::Api: AuraApi<B, A, S>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 	}
@@ -123,13 +127,13 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
+	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Member + Encode + Decode,
-	P::Signature: Hash + Member + Encode + Decode,
+	P::Signature: Hash + Member + Encode + Decode + Verify<Signer=P::Public>,
 	H: Header<Hash=B::Hash>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -169,7 +173,7 @@ struct AuraWorker<C, E, I, P, SO> {
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
+	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -177,7 +181,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P::Signature: Member + Encode + Decode + Hash + Debug + Verify<Signer=P::Public>,
 	SO: SyncOracle + Send + Clone,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -353,8 +357,9 @@ fn check_header<C, B: Block, P: Pair, T>(
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
-	P::Signature: Decode,
-	C: client::backend::AuxStore,
+	P::Signature: Encode + Decode + Clone + Verify<Signer=P::Public>,
+	C: client::backend::AuxStore + ProvideRuntimeApi + HeaderBackend<B>,
+	C::Api: AuraApi<B, P::Public, P::Signature>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	T: SubmitReport<C, B>,
 {
@@ -383,24 +388,27 @@ fn check_header<C, B: Block, P: Pair, T>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if let Some(equivocation_proof) = check_equivocation(
+			if let Some(equivocation_proof) = check_equivocation::<
+				_, _, AuraEquivocationProof<B::Header, P::Signature>, P::Signature,
+			>(
 				client,
 				slot_now,
 				slot_num,
 				&header,
+				sig,
 				expected_author,
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header().hash(),
+					equivocation_proof.second_header().hash(),
 				);
+				let block_id = BlockId::number(client.info().best_number);
 				transaction_pool.as_ref().map(|txpool|
 					txpool.submit_report_call(
 						client,
-						&[0; 1],
-					// 	client.runtime_api().construct_equiv_report_call(&block_id, equiv_proof).unwrap().as_slice(),
+						client.runtime_api().construct_equivocation_report_call(&block_id, equivocation_proof).unwrap().as_slice(),
 					)
 				);
 			}
@@ -475,11 +483,11 @@ impl<C, P, T> AuraVerifier<C, P, T>
 #[forbid(deprecated)]
 impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B> + HeaderBackend<B>,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
-	P::Signature: Encode + Decode,
+	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
 	T: SubmitReport<C, B> + Send + Sync,
 {
 	fn verify(
@@ -571,11 +579,12 @@ impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	}
 }
 
-fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
+fn initialize_authorities_cache<A, B, C, S>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuraApi<B, A>,
+	S: Verify<Signer=A> + Encode + Decode,
+	C::Api: AuraApi<B, A, S>,
 {
 	// no cache => no initialization
 	let cache = match client.cache() {
@@ -605,11 +614,12 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 }
 
 #[allow(deprecated)]
-fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
+fn authorities<A, B, C, S>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: AuraApi<B, A>,
+	S: Verify<Signer=A> + Encode + Decode,
+	C::Api: AuraApi<B, A, S>,
 {
 	client
 		.cache()
@@ -652,11 +662,11 @@ pub fn import_queue<B, C, P, T>(
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
-	P::Signature: Encode + Decode,
+	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
 	T: SubmitReport<C, B> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;

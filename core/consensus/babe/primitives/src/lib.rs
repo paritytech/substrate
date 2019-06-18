@@ -23,6 +23,7 @@ use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
+use safety_primitives::AuthorshipEquivocationProof;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -77,5 +78,50 @@ decl_runtime_apis! {
 
 		/// Get the current authorites for Babe.
 		fn authorities() -> Vec<AuthorityId>;
+	}
+}
+
+/// Represents an Babe equivocation proof.
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct BabeEquivocationProof<H, S> {
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S> AuthorshipEquivocationProof<H, S> for BabeEquivocationProof<H, S>
+{
+	/// Create a new Babe equivocation proof.
+	fn new(
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		BabeEquivocationProof {
+			first_header,
+			second_header,
+			first_signature,
+			second_signature,
+		}
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	fn second_signature(&self) -> &S {
+		&self.second_signature
 	}
 }

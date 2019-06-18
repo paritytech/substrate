@@ -76,7 +76,7 @@ use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
-
+use safety_primitives::AuthorshipEquivocationProof;
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
 
 pub use babe_primitives::AuthorityId;
@@ -484,19 +484,22 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(equivocation_proof) = check_equivocation(
+			if let Some(equivocation_proof) = check_equivocation::<
+				_, _, BabeEquivocationProof<B::Header, _>, _,
+			>(
 				client,
 				slot_now,
 				slot_num,
 				&header,
+				sig,
 				author,
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header().hash(),
+					equivocation_proof.second_header().hash(),
 				);
 			}
 

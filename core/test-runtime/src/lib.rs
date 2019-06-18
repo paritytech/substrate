@@ -459,11 +459,11 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId, sr25519::Signature> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+					proof: AuraEquivocationProof<<Block as BlockT>::Header,sr25519::Signature>
 				) -> Vec<u8> {
 					vec![]
 				}
@@ -608,11 +608,11 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId, sr25519::Signature> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+					proof: AuraEquivocationProof<<Block as BlockT>::Header, sr25519::Signature>
 				) -> Vec<u8> {
 					vec![]
 				}

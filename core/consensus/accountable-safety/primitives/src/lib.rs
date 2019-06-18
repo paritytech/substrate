@@ -19,6 +19,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub trait AuthorshipEquivocationProof<H, S> {
+	/// Create an equivocation proof for AuRa or Babe.
+	fn new(
+		first_header: H,
+		second_header: H,
+		first_signature: S, 
+		second_signature: S,
+	) -> Self;
+
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &H;
 

@@ -19,6 +19,7 @@ client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 consensus_safety = { package = "substrate-consensus-safety", path = "../accountable-safety" }
+safety_primitives = { package = "substrate-consensus-safety-primitives", path = "../accountable-safety/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 futures = "0.1.17"

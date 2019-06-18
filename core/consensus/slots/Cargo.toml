@@ -12,6 +12,7 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
+safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../accountable-safety/primitives" }
 futures = "0.1.17"
 tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
