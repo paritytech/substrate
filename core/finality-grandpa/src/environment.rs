@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::ops::Deref;
 
 use log::{debug, warn, info};
 use parity_codec::{Decode, Encode};
@@ -26,15 +27,17 @@ use tokio::timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	blockchain::HeaderBackend, runtime_api::ConstructRuntimeApi,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
+use fg_primitives::{GrandpaEquivocationProof, GrandpaApi};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash, ProvideRuntimeApi
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -45,6 +48,7 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
+use consensus_safety::SubmitReport;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
@@ -677,8 +681,6 @@ where
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		use client::blockchain::HeaderBackend;
-
 		#[allow(deprecated)]
 		let blockchain = self.inner.backend().blockchain();
 		let status = blockchain.info();

@@ -30,21 +30,30 @@ use client::{
 	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+use consensus_common::{
+	BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult
+};
+use consensus_common::import_queue::{
+	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
 use consensus_safety::TestPool;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use runtime_primitives::traits::{
+	ApiRef, ProvideRuntimeApi, Header as HeaderT, Block as BlockT
+};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
-use fg_primitives::AuthorityId;
+use fg_primitives::{
+	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
+};
 
 use authorities::AuthoritySet;
-use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
+use finality_proof::{
+	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker
+};
 use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
@@ -400,8 +409,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<(&DigestFor<Block>)>,
 		_: Vec<u8>,
-	)
-		-> Result<NativeOrEncoded<Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>>> {
+	) -> Result<NativeOrEncoded<Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
 			_ => panic!("not requested by block hash!!"),
@@ -410,6 +418,27 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
 		Ok(self.inner.forced_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
+	}
+
+	fn GrandpaApi_construct_prevote_equivocation_report_call_runtime_api_impl(
+		&self,
+		at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<Block, <Block as BlockT>::Hash>>>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Vec<u8>>> {
+		Ok(NativeOrEncoded::Native(vec![]))
+	}
+
+	/// Construct a call to report the precommit equivocation.
+	fn GrandpaApi_construct_precommit_equivocation_report_call_runtime_api_impl(
+		&self,
+		at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<Block, <Block as BlockT>::Hash>>>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Vec<u8>>> {
+		Ok(NativeOrEncoded::Native(vec![]))
 	}
 }
 

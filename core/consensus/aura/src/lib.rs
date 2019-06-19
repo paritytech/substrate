@@ -408,7 +408,9 @@ fn check_header<C, B: Block, P: Pair, T>(
 				transaction_pool.as_ref().map(|txpool|
 					txpool.submit_report_call(
 						client,
-						client.runtime_api().construct_equivocation_report_call(&block_id, equivocation_proof).unwrap().as_slice(),
+						client.runtime_api()
+							.construct_equivocation_report_call(&block_id, equivocation_proof)
+							.unwrap().as_slice(),
 					)
 				);
 			}

@@ -26,7 +26,9 @@ use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
 };
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{
+	self, ScheduledChange, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
+};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -357,6 +359,17 @@ impl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}
+
+		fn construct_prevote_equivocation_report_call(
+			_proof: GrandpaEquivocationProof<PrevoteEquivocation<Block, <Block as BlockT>::Hash>>
+		) -> Vec<u8> {
+			vec![]
+		}
+		fn construct_precommit_equivocation_report_call(
+			_proof: GrandpaEquivocationProof<PrecommitEquivocation<Block, <Block as BlockT>::Hash>>
+		) -> Vec<u8> {
+			vec![]
+		}
 	}
 
 	impl consensus_aura::AuraApi<Block, AuraId, ed25519::Signature> for Runtime {
@@ -368,7 +381,7 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
+			_proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
 		) -> Vec<u8> {
 			vec![]
 		}
