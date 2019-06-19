@@ -24,7 +24,7 @@ type ExtendedBalance = u128;
 /// OnSlashing implementation for `Staking`
 pub struct StakingSlasher<T>(PhantomData<T>);
 
-impl<T: Trait> OnSlashing<T> for StakingSlasher<T>
+impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T>
 {
 	fn on_slash(who: &T::AccountId, misconduct: &impl Misconduct) {
 		// hack to convert both to `u128` and calculate the amount to slash
@@ -51,7 +51,7 @@ mod tests {
 
 	struct SlashWrapper<T>(PhantomData<T>);
 
-	impl<T: Trait> Slashing<T> for SlashWrapper<T> {
+	impl<T: Trait> Slashing<T::AccountId> for SlashWrapper<T> {
 		type Slash = StakingSlasher<T>;
 
 		fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
