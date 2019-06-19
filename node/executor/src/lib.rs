@@ -23,7 +23,17 @@
 
 pub use substrate_executor::NativeExecutor;
 use substrate_executor::native_executor_instance;
-native_executor_instance!(pub Executor, node_runtime::api::dispatch, node_runtime::native_version, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"));
+
+// Declare an instance of the native executor named `Executor`. Include the wasm binary as the
+// equivalent wasm code.
+native_executor_instance!(
+	pub Executor,
+	node_runtime::api::dispatch,
+	node_runtime::native_version,
+	include_bytes!(
+		"../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
+	)
+);
 
 #[cfg(test)]
 mod tests {
@@ -48,8 +58,23 @@ mod tests {
 	use wabt;
 	use primitives::map;
 
-	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
-	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+	/// The wasm runtime code.
+	///
+	/// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
+	/// making the binary slimmer. There is a convention to use compact version of the runtime
+	/// as canonical. This is why `native_executor_instance` also uses the compact version of the
+	/// runtime.
+	const COMPACT_CODE: &[u8] =
+		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+
+	/// The wasm runtime binary which hasn't undergone the compacting process.
+	///
+	/// The idea here is to pass it as the current runtime code to the executor so the executor will
+	/// have to execute provided wasm code instead of the native equivalent. This trick is used to
+	/// test code paths that differ between native and wasm versions.
+	const BLOATY_CODE: &[u8] =
+		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
+
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
@@ -751,10 +776,17 @@ mod tests {
 	)
 	;; Destination AccountId to transfer the funds.
 	;; Represented by H256 (32 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+	(data (i32.const 4)
+		"\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00\00\00"
+	)
 	;; Amount of value to transfer.
 	;; Represented by u128 (16 bytes long) in little endian.
-	(data (i32.const 36) "\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+	(data (i32.const 36)
+		"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00"
+	)
 )
 "#;
 
@@ -794,7 +826,12 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
 					function: Call::Contracts(
-						contracts::Call::call::<Runtime>(indices::address::Address::Id(addr.clone()), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contracts::Call::call::<Runtime>(
+							indices::address::Address::Id(addr.clone()),
+							10,
+							10_000,
+							vec![0x00, 0x01, 0x02, 0x03]
+						)
 					),
 				},
 			]
@@ -861,8 +898,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
@@ -889,8 +925,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
