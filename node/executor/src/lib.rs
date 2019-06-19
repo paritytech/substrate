@@ -183,8 +183,8 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -210,7 +210,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&alice()), 46);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
@@ -218,8 +218,8 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -245,7 +245,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&alice()), 46);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
@@ -266,7 +266,7 @@ mod tests {
 			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
-					(alice(), 111),
+					(alice(), 254),
 					(bob(), 100),
 					(charlie(), 100_000_000),
 					(dave(), 111),
@@ -530,7 +530,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
+			assert_eq!(Balances::total_balance(&alice()), 254 - 69 - 1 - 10 - 1);
 			// 100 + 69 + 10 - 1     = 178
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 			assert_eq!(System::events(), vec![
@@ -832,8 +832,8 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -848,7 +848,7 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&alice()), 46);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}

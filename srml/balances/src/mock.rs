@@ -45,7 +45,7 @@ impl Convert<Weight, u64> for DummyFeeHandler {
 		let mut positive = false;
 		// for testing reasons, we set `all_extrinsics_weight()` equal to 0
 		// - still tests the range of values allowed; all_extrinsics_weight() is tested in `srml/executive
-		let all = 0u128 + weight as u128;
+		let all = weight as u128;
 		let diff = match ideal.checked_sub(all) {
 			Some(d) => d,
 			None => { positive = true; all - ideal }
@@ -64,11 +64,7 @@ impl Convert<Weight, u64> for DummyFeeHandler {
 		second_term = second_term / billion;
 
 		let mut fee_multiplier = billion + second_term;
-		if positive {
-			fee_multiplier += first_term;
-		} else {
-			fee_multiplier -= first_term;
-		}
+		fee_multiplier = if positive { fee_multiplier + first_term } else { fee_multiplier - first_term};
 
 		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
 		let transaction_fee: u32 = p * weight;
