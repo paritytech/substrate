@@ -1290,8 +1290,6 @@ impl WasmExecutor {
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
 
-		let low = memory.lowest_used();
-		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
@@ -1315,13 +1313,6 @@ impl WasmExecutor {
 			},
 		};
 
-		// cleanup module instance for next use
-		let new_low = memory.lowest_used();
-		if new_low < low {
-			memory.zero(new_low as usize, (low - new_low) as usize)?;
-			memory.reset_lowest_used(low);
-		}
-		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
 		result
 	}
 
