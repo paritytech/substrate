@@ -737,17 +737,19 @@ pub trait Checkable<Context>: Sized {
 pub trait BlindCheckable: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
+	/// Returned if `check` failed.
+	type Error;
 
 	/// Check self.
-	fn check(self) -> Result<Self::Checked, &'static str>;
+	fn check(self) -> Result<Self::Checked, Self::Error>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	type Error = &'static str;
+	type Error = <Self as BlindCheckable>::Error;
 
-	fn check(self, _c: &Context) -> Result<Self::Checked, &'static str> {
+	fn check(self, _c: &Context) -> Result<Self::Checked, Self::Error> {
 		BlindCheckable::check(self)
 	}
 }

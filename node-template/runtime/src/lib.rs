@@ -126,6 +126,8 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	/// The ubiquitous origin type.
 	type Origin = Origin;
+	/// The ubiquitous error type.
+	type Error = Error;
 }
 
 impl aura::Trait for Runtime {

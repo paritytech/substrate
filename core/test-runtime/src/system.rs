@@ -106,7 +106,10 @@ fn execute_block_with_state_root_handler(
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		match execute_transaction_backend(e) {
+			ApplyResult::Success => (),
+			_ => panic!("Invalid transaction"),
+		};
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
@@ -233,11 +236,13 @@ fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
-	check_signature(utx)?;
-	match utx {
-		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
-		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
-		Extrinsic::IncludeData(_) => ApplyResult::Success,
+	match check_signature(utx) {
+		Ok(_) => match utx {
+			Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
+			Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+			Extrinsic::IncludeData(_) => ApplyResult::Success,
+		},
+		Err(err) => ApplyResult::ApplyError(err)
 	}
 }
 
@@ -246,7 +251,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
-		return Err(ApplyError::Stale)
+		return ApplyResult::ApplyError(ApplyError::Stale)
 	}
 
 	// increment nonce in storage
@@ -258,7 +263,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
-		return Err(ApplyError::CantPay)
+		return ApplyResult::ApplyError(ApplyError::CantPay)
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);

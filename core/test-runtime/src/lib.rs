@@ -37,6 +37,7 @@ use runtime_primitives::{
 	ApplyResult,
 	create_runtime_str,
 	transaction_validity::TransactionValidity,
+	Error,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify
@@ -117,18 +118,19 @@ impl serde::Serialize for Extrinsic {
 
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
+	type Error = Error;
 
-	fn check(self) -> Result<Self, &'static str> {
+	fn check(self) -> Result<Self, Error> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
 				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(runtime_primitives::BAD_SIGNATURE)
+					Err(Error::BadSignature)
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::IncludeData(_) => Err(Error::BadSignature),
 		}
 	}
 }
