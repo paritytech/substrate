@@ -268,17 +268,18 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key)?;
-					match last_values.get(key) {
-						Some(prev_data) => (curr_data != *prev_data, curr_data),
-						None => (true, curr_data),
-					}
+					let prev_data = last_values.get(key).and_then(|x| x.as_ref());
+					(curr_data.as_ref() != prev_data, curr_data)
 				};
 				if has_changed {
 					block_changes.changes.push((key.clone(), data.clone()));
 				}
 				last_values.insert(key.clone(), data);
 			}
-			if !block_changes.changes.is_empty() {
+
+			// always insert entry for the first block, because we're claiming to provide values of
+			// all keys in this entry (if key has None value, it will be missing from the changes field)
+			if changes.is_empty() || !block_changes.changes.is_empty() {
 				changes.push(block_changes);
 			}
 		}
