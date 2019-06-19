@@ -18,11 +18,10 @@
 
 use std::collections::HashMap;
 use runtime_io::{blake2_256, twox_128};
-use super::AccountId;
+use super::{AuthorityId, AccountId};
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;
-use primitives::sr25519::Public as AuthorityId;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -58,16 +57,12 @@ impl GenesisConfig {
 				#[cfg(feature = "include-wasm-blob")]
 				(well_known_keys::CODE.into(), wasm_runtime),
 				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
-				(well_known_keys::AUTHORITY_COUNT.into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
-			.chain(self.authorities.iter()
-				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), vec![].and(account)))
-			)
 			.collect();
 		if let Some(ref changes_trie_config) = self.changes_trie_config {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
+		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		map
 	}
 }

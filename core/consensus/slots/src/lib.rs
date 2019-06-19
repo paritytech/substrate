@@ -41,8 +41,6 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ApiRef, Block, ProvideRuntimeApi};
 use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::mpsc;
-use std::thread;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
@@ -64,58 +62,6 @@ pub trait SlotCompatible {
 	fn extract_timestamp_and_slot(
 		inherent: &InherentData,
 	) -> Result<(u64, u64), consensus_common::Error>;
-}
-
-/// Start a new slot worker in a separate thread.
-#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
-pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
-	slot_duration: SlotDuration<T>,
-	select_chain: C,
-	worker: W,
-	sync_oracle: SO,
-	on_exit: OnExit,
-	inherent_data_providers: InherentDataProviders,
-) -> Result<(), consensus_common::Error>
-where
-	B: Block + 'static,
-	C: SelectChain<B> + Clone + 'static,
-	W: SlotWorker<B> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Clone + 'static,
-	SC: SlotCompatible + 'static,
-	OnExit: Future<Item = (), Error = ()> + Send + 'static,
-	T: SlotData + Send + Clone + 'static,
-{
-	use tokio::runtime::current_thread::Runtime;
-
-	let (result_sender, result_recv) = mpsc::channel();
-
-	thread::spawn(move || {
-		let mut runtime = match Runtime::new() {
-			Ok(r) => r,
-			Err(e) => {
-				warn!(target: "slots", "Unable to start authorship: {:?}", e);
-				return;
-			}
-		};
-
-		let slot_worker_future = start_slot_worker::<_, _, _, T, _, SC>(
-			slot_duration.clone(),
-			select_chain,
-			worker,
-			sync_oracle,
-			inherent_data_providers,
-		);
-
-		result_sender
-			.send(Ok(()))
-			.expect("Receive is not dropped before receiving a result; qed");
-
-		let _ = runtime.block_on(slot_worker_future.select(on_exit).map(|_| ()));
-	});
-
-	result_recv
-		.recv()
-		.expect("Slots start thread result sender dropped")
 }
 
 /// Start a new slot worker.

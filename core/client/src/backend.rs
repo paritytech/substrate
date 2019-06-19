@@ -28,6 +28,12 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use parking_lot::Mutex;
 
+/// In memory array of storage values.
+pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// In memory arrays of storage values for multiple child tries.
+pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
+
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewBlockState {
@@ -82,8 +88,12 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
-	/// Set top level storage changes.
-	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
+	/// Set storage changes.
+	fn update_storage(
+		&mut self,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
+	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 	/// Insert auxiliary keys. Values are `None` if should be deleted.

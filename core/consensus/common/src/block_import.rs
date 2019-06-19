@@ -154,8 +154,6 @@ impl<Block: BlockT> ImportBlock<Block> {
 
 	/// Get a handle to full header (with post-digests applied).
 	pub fn post_header(&self) -> Cow<Block::Header> {
-		use runtime_primitives::traits::Digest;
-
 		if self.post_digests.is_empty() {
 			Cow::Borrowed(&self.header)
 		} else {
@@ -197,7 +195,7 @@ pub trait JustificationImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
@@ -213,7 +211,7 @@ pub trait FinalityProofImport<B: BlockT> {
 	type Error: std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(

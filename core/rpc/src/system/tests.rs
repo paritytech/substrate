@@ -16,11 +16,12 @@
 
 use super::*;
 
-use network::{self, ProtocolStatus, PeerId, PeerInfo as NetworkPeerInfo};
+use network::{self, PeerId};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
-use futures::sync::mpsc;
+use futures::{prelude::*, sync::mpsc};
+use std::thread;
 
 struct Status {
 	pub peers: usize,
@@ -40,55 +41,61 @@ impl Default for Status {
 	}
 }
 
-impl network::SyncProvider<Block> for Status {
-	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<Block>> {
-		let (_sink, stream) = mpsc::unbounded();
-		stream
-	}
-
-	fn network_state(&self) -> network::NetworkState {
-		network::NetworkState {
-			peer_id: String::new(),
-			listened_addresses: Default::default(),
-			external_addresses: Default::default(),
-			connected_peers: Default::default(),
-			not_connected_peers: Default::default(),
-			average_download_per_sec: 0,
-			average_upload_per_sec: 0,
-			peerset: serde_json::Value::Null,
-		}
-	}
-
-	fn peers_debug_info(&self) -> Vec<(PeerId, NetworkPeerInfo<Block>)> {
-		let mut peers = vec![];
-		for _peer in 0..self.peers {
-			peers.push(
-				(self.peer_id.clone(), NetworkPeerInfo {
-					roles: Roles::FULL,
-					protocol_version: 1,
-					best_hash: Default::default(),
-					best_number: 1
-				})
-			);
-		}
-		peers
-	}
-
-	fn is_major_syncing(&self) -> bool {
-		self.is_syncing
-	}
-}
-
-
 fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
+	let (tx, rx) = mpsc::unbounded();
+	thread::spawn(move || {
+		tokio::run(rx.for_each(move |request| {
+			match request {
+				Request::Health(sender) => {
+					let _ = sender.send(Health {
+						peers: status.peers,
+						is_syncing: status.is_syncing,
+						should_have_peers,
+					});
+				},
+				Request::Peers(sender) => {
+					let mut peers = vec![];
+					for _peer in 0..status.peers {
+						peers.push(PeerInfo {
+							peer_id: status.peer_id.to_base58(),
+							roles: format!("{:?}", Roles::FULL),
+							protocol_version: 1,
+							best_hash: Default::default(),
+							best_number: 1,
+						});
+					}
+					let _ = sender.send(peers);
+				}
+				Request::NetworkState(sender) => {
+					let _ = sender.send(network::NetworkState {
+						peer_id: String::new(),
+						listened_addresses: Default::default(),
+						external_addresses: Default::default(),
+						connected_peers: Default::default(),
+						not_connected_peers: Default::default(),
+						average_download_per_sec: 0,
+						average_upload_per_sec: 0,
+						peerset: serde_json::Value::Null,
+					});
+				}
+			};
+
+			Ok(())
+		}))
+	});
 	System::new(SystemInfo {
 		impl_name: "testclient".into(),
 		impl_version: "0.2.0".into(),
 		chain_name: "testchain".into(),
 		properties: Default::default(),
-	}, Arc::new(status), should_have_peers)
+	}, tx)
+}
+
+fn wait_receiver<T>(rx: Receiver<T>) -> T {
+	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+	runtime.block_on(rx).unwrap()
 }
 
 #[test]
@@ -126,7 +133,7 @@ fn system_properties_works() {
 #[test]
 fn system_health() {
 	assert_matches!(
-		api(None).system_health().unwrap(),
+		wait_receiver(api(None).system_health()),
 		Health {
 			peers: 0,
 			is_syncing: false,
@@ -135,12 +142,12 @@ fn system_health() {
 	);
 
 	assert_matches!(
-		api(Status {
+		wait_receiver(api(Status {
 			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: true,
 			is_dev: true,
-		}).system_health().unwrap(),
+		}).system_health()),
 		Health {
 			peers: 5,
 			is_syncing: true,
@@ -149,12 +156,12 @@ fn system_health() {
 	);
 
 	assert_eq!(
-		api(Status {
+		wait_receiver(api(Status {
 			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: false,
 			is_dev: false,
-		}).system_health().unwrap(),
+		}).system_health()),
 		Health {
 			peers: 5,
 			is_syncing: false,
@@ -163,12 +170,12 @@ fn system_health() {
 	);
 
 	assert_eq!(
-		api(Status {
+		wait_receiver(api(Status {
 			peer_id: PeerId::random(),
 			peers: 0,
 			is_syncing: false,
 			is_dev: true,
-		}).system_health().unwrap(),
+		}).system_health()),
 		Health {
 			peers: 0,
 			is_syncing: false,
@@ -181,12 +188,12 @@ fn system_health() {
 fn system_peers() {
 	let peer_id = PeerId::random();
 	assert_eq!(
-		api(Status {
+		wait_receiver(api(Status {
 			peer_id: peer_id.clone(),
 			peers: 1,
 			is_syncing: false,
 			is_dev: true,
-		}).system_peers().unwrap(),
+		}).system_peers()),
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
@@ -200,7 +207,7 @@ fn system_peers() {
 #[test]
 fn system_network_state() {
 	assert_eq!(
-		api(None).system_network_state().unwrap(),
+		wait_receiver(api(None).system_network_state()),
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),

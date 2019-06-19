@@ -91,7 +91,13 @@ impl_stubs!(
 		[sr25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
 	test_enumerated_trie_root => |_| {
-		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).as_ref().to_vec()
+		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(
+			&[
+				&b"zero"[..],
+				&b"one"[..],
+				&b"two"[..],
+			]
+		).as_ref().to_vec()
 	},
 	test_sandbox => |code: &[u8]| {
 		let ok = execute_sandboxed(code, &[]).is_ok();
@@ -108,13 +114,15 @@ impl_stubs!(
 		[ok as u8].to_vec()
 	},
 	test_sandbox_return_val => |code: &[u8]| {
-		let result = execute_sandboxed(
+		let ok = match execute_sandboxed(
 			code,
 			&[
 				sandbox::TypedValue::I32(0x1336),
 			]
-		);
-		let ok = if let Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) = result { true } else { false };
+		) {
+			Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) => true,
+			_ => false,
+		};
 		[ok as u8].to_vec()
 	},
 	test_sandbox_instantiate => |code: &[u8]| {
