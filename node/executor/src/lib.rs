@@ -23,7 +23,17 @@
 
 pub use substrate_executor::NativeExecutor;
 use substrate_executor::native_executor_instance;
-native_executor_instance!(pub Executor, node_runtime::api::dispatch, node_runtime::native_version, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"));
+
+// Declare an instance of the native executor named `Executor`. Include the wasm binary as the
+// equivalent wasm code.
+native_executor_instance!(
+	pub Executor,
+	node_runtime::api::dispatch,
+	node_runtime::native_version,
+	include_bytes!(
+		"../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
+	)
+);
 
 #[cfg(test)]
 mod tests {
@@ -37,19 +47,34 @@ mod tests {
 	use primitives::{twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Digest, DigestItem};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
-	use contract::ContractAddressFor;
+	use {balances, indices, system, staking, timestamp, treasury, contracts};
+	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, SessionKeys};
 	use wabt;
 	use primitives::map;
 
-	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
-	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+	/// The wasm runtime code.
+	///
+	/// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
+	/// making the binary slimmer. There is a convention to use compact version of the runtime
+	/// as canonical. This is why `native_executor_instance` also uses the compact version of the
+	/// runtime.
+	const COMPACT_CODE: &[u8] =
+		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+
+	/// The wasm runtime binary which hasn't undergone the compacting process.
+	///
+	/// The idea here is to pass it as the current runtime code to the executor so the executor will
+	/// have to execute provided wasm code instead of the native equivalent. This trick is used to
+	/// test code paths that differ between native and wasm versions.
+	const BLOATY_CODE: &[u8] =
+		include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
+
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
@@ -121,15 +146,33 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+				vec![0u8; 32]
+			},
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => {
+				vec![70u8; 16]
+			},
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			}
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -154,15 +197,33 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			},
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+				vec![0u8; 32]
+			},
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => {
+				vec![70u8; 16]
+			},
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => {
+				vec![0u8; 16]
+			}
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -187,8 +248,12 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -224,8 +289,12 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -258,10 +327,14 @@ mod tests {
 		});
 	}
 
+	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
+		SessionKeys(ring.to_owned().into(), ring.to_owned().into())
+	}
+
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let three = AccountId::from_raw([3u8; 32]);
 		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
-			consensus: Some(Default::default()),
+			aura: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
@@ -289,16 +362,14 @@ mod tests {
 				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
-				session_length: 2,
 				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
-					(alice(), AuthorityKeyring::Alice.into()),
-					(bob(), AuthorityKeyring::Bob.into()),
-					(charlie(), AuthorityKeyring::Charlie.into())
+					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
+					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
+					(charlie(), to_session_keys(&AuthorityKeyring::Charlie)),
 				]
 			}),
 			staking: Some(StakingConfig {
-				sessions_per_era: 2,
 				current_era: 0,
 				stakers: vec![
 					(dave(), alice(), 111, staking::StakerStatus::Validator),
@@ -307,7 +378,6 @@ mod tests {
 				],
 				validator_count: 3,
 				minimum_validator_count: 0,
-				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
 				current_session_reward: 0,
@@ -318,9 +388,10 @@ mod tests {
 			council_seats: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
-			contract: Some(Default::default()),
+			contracts: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
+				_genesis_phantom_data: Default::default(),
 				authorities: vec![],
 			}),
 		}.build_storage().unwrap().0);
@@ -447,8 +518,8 @@ mod tests {
 
 		// session change => consensus authorities change => authorities change digest item appears
 		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
-		assert_eq!(digest.logs().len(), 1);
-		assert!(digest.logs()[0].as_authorities_change().is_some());
+		assert_eq!(digest.logs().len(), 0);
+//		assert!(digest.logs()[0].as_consensus().is_some());
 
 		(block1, block2)
 	}
@@ -465,7 +536,7 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
-					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
+					function: Call::System(system::Call::remark(vec![0; 120000])),
 				}
 			]
 		)
@@ -598,11 +669,6 @@ mod tests {
 					event: Event::treasury(treasury::RawEvent::Rollover(0)),
 					topics: vec![],
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1)),
-					topics: vec![],
-				},
 			]);
 		});
 	}
@@ -710,10 +776,17 @@ mod tests {
 	)
 	;; Destination AccountId to transfer the funds.
 	;; Represented by H256 (32 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+	(data (i32.const 4)
+		"\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00\00\00"
+	)
 	;; Amount of value to transfer.
 	;; Represented by u128 (16 bytes long) in little endian.
-	(data (i32.const 36) "\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+	(data (i32.const 36)
+		"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00"
+	)
 )
 "#;
 
@@ -723,7 +796,7 @@ mod tests {
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
 
-		let addr = <Runtime as contract::Trait>::DetermineContractAddress::contract_address_for(
+		let addr = <Runtime as contracts::Trait>::DetermineContractAddress::contract_address_for(
 			&transfer_ch,
 			&[],
 			&charlie(),
@@ -740,20 +813,25 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
-					function: Call::Contract(
-						contract::Call::put_code::<Runtime>(10_000, transfer_code)
+					function: Call::Contracts(
+						contracts::Call::put_code::<Runtime>(10_000, transfer_code)
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
-					function: Call::Contract(
-						contract::Call::create::<Runtime>(10, 10_000, transfer_ch, Vec::new())
+					function: Call::Contracts(
+						contracts::Call::create::<Runtime>(10, 10_000, transfer_ch, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
-					function: Call::Contract(
-						contract::Call::call::<Runtime>(indices::address::Address::Id(addr.clone()), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+					function: Call::Contracts(
+						contracts::Call::call::<Runtime>(
+							indices::address::Address::Id(addr.clone()),
+							10,
+							10_000,
+							vec![0x00, 0x01, 0x02, 0x03]
+						)
 					),
 				},
 			]
@@ -766,7 +844,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
 			assert_eq!(
-				&contract::ContractInfoOf::<Runtime>::get(addr)
+				&contracts::ContractInfoOf::<Runtime>::get(addr)
 					.and_then(|c| c.get_alive())
 					.unwrap()
 					.code_hash,
@@ -782,7 +860,7 @@ mod tests {
 		assert!(
 			WasmExecutor::new().call(
 				&mut t,
-				8,
+				4,
 				COMPACT_CODE,
 				"Core_execute_block",
 				&big_block().0
@@ -820,10 +898,13 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -833,19 +914,24 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -855,9 +941,11 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+		let r = WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
@@ -890,9 +978,25 @@ mod tests {
 		let block1 = changes_trie_block();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
+		WasmExecutor::new()
+			.call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+	}
+
+	#[test]
+	fn should_import_block_with_test_client() {
+		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+
+		let client = TestClientBuilder::default()
+			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
+			.0;
+
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
+		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	#[cfg(feature = "benchmarks")]

@@ -1,5 +1,5 @@
 [package]
-name = "srml-contract"
+name = "srml-contracts"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -23,7 +23,6 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 wabt = "~0.7.4"
 assert_matches = "1.1"
 hex-literal = "0.2.0"
-consensus = { package = "srml-consensus", path = "../consensus" }
 balances = { package = "srml-balances", path = "../balances" }
 hex = "0.3"
 

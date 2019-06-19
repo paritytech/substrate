@@ -25,7 +25,7 @@ pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
 	traits::{
-		AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
 		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,
@@ -46,7 +46,6 @@ use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell, rc::Rc};
-use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use primitives::Hasher as HasherT;
 

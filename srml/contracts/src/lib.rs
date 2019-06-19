@@ -216,7 +216,8 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash,
+	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash
+		+ Codec,
 	Hasher: Hash<Output=H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {

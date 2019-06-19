@@ -19,11 +19,12 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
-use crate::generic::DigestItem as GenDigestItem;
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
+use crate::generic;
+use crate::weights::{Weighable, Weight};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
-use substrate_primitives::sr25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::ed25519::{Public as AuthorityId};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -36,39 +37,19 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
-/// Converter between u64 and the AuthorityId wrapper type.
-pub struct ConvertUintAuthorityId;
-impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
-	fn convert(a: u64) -> Option<UintAuthorityId> {
-		Some(UintAuthorityId(a))
-	}
+impl OpaqueKeys for UintAuthorityId {
+	fn count() -> usize { 1 }
+	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
+	// keep `UintAuthorityId` as a u64 under the hood.
+	fn get_raw(&self, _: usize) -> &[u8] { unsafe { &std::mem::transmute::<_, &[u8; 8]>(&self.0)[..] } }
+	fn get<T: Decode>(&self, _: usize) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 }
+
 /// Digest item
-pub type DigestItem = GenDigestItem<H256, AuthorityId, AuthoritySignature>;
+pub type DigestItem = generic::DigestItem<H256>;
 
 /// Header Digest
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
-pub struct Digest {
-	/// Generated logs
-	pub logs: Vec<DigestItem>,
-}
-
-impl traits::Digest for Digest {
-	type Hash = H256;
-	type Item = DigestItem;
-
-	fn logs(&self) -> &[Self::Item] {
-		&self.logs
-	}
-
-	fn push(&mut self, item: Self::Item) {
-		self.logs.push(item);
-	}
-
-	fn pop(&mut self) -> Option<Self::Item> {
-		self.logs.pop()
-	}
-}
+pub type Digest = generic::Digest<H256>;
 
 /// Block Header
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
@@ -91,7 +72,6 @@ impl traits::Header for Header {
 	type Number = u64;
 	type Hashing = BlakeTwo256;
 	type Hash = H256;
-	type Digest = Digest;
 
 	fn number(&self) -> &Self::Number { &self.number }
 	fn set_number(&mut self, num: Self::Number) { self.number = num }
@@ -105,15 +85,15 @@ impl traits::Header for Header {
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
-	fn digest(&self) -> &Self::Digest { &self.digest }
-	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
+	fn digest(&self) -> &Digest { &self.digest }
+	fn digest_mut(&mut self) -> &mut Digest { &mut self.digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest,
+		digest: Digest,
 	) -> Self {
 		Header {
 			number,
@@ -237,5 +217,11 @@ impl<Call> Applyable for TestXt<Call> where
 	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.2, self.0)
+	}
+}
+impl<Call> Weighable for TestXt<Call> {
+	fn weight(&self, len: usize) -> Weight {
+		// for testing: weight == size.
+		len as Weight
 	}
 }

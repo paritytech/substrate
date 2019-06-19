@@ -26,14 +26,13 @@
 // our error-chain could potentially blow up otherwise
 #![recursion_limit="128"]
 
-#[macro_use] extern crate crossbeam_channel;
+extern crate crossbeam_channel;
 #[macro_use] extern crate log;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block, DigestFor};
+use runtime_primitives::traits::{Block, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -54,14 +53,6 @@ pub use block_import::{
 };
 pub use select_chain::SelectChain;
 
-/// Trait for getting the authorities at a given block.
-pub trait Authorities<B: Block> {
-	type Error: std::error::Error + Send + 'static;
-
-	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
-}
-
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
 	/// The proposer type this creates.
@@ -71,7 +62,7 @@ pub trait Environment<B: Block> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
+	fn init(&self, parent_header: &B::Header)
 		-> Result<Self::Proposer, Self::Error>;
 }
 
@@ -124,20 +115,6 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	fn is_offline(&self) -> bool {
 		T::is_offline(&*self)
 	}
-}
-
-/// Extra verification for blocks.
-pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified, or fails with error if
-	/// not.
-	type Verified: IntoFuture<Item=(),Error=String>;
-
-	/// Do additional verification for this block.
-	fn verify(
-		&self,
-		header: &B::Header,
-		body: Option<&[B::Extrinsic]>,
-	) -> Self::Verified;
 }
 
 /// A list of all well known keys in the cache.

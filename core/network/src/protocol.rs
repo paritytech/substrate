@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
@@ -618,15 +618,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called when a new peer is connected
-	pub fn on_peer_connected(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, debug_info: String) {
-		trace!(target: "sync", "Connecting {}: {}", who, debug_info);
+	pub fn on_peer_connected(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId) {
+		trace!(target: "sync", "Connecting {}", who);
 		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
 		self.send_status(network_out, who);
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, mut network_out: &mut dyn NetworkOut<B>, peer: PeerId, debug_info: String) {
-		trace!(target: "sync", "Disconnecting {}: {}", peer, debug_info);
+	pub fn on_peer_disconnected(&mut self, mut network_out: &mut dyn NetworkOut<B>, peer: PeerId) {
+		trace!(target: "sync", "Disconnecting {}", peer);
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
@@ -765,8 +765,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let outcome = self.sync.on_block_justification_data(
 				&mut ProtocolContext::new(&mut self.context_data, network_out),
 				peer,
-				request,
-				response,
+				response
 			);
 
 			if let Some((origin, hash, nb, just)) = outcome {

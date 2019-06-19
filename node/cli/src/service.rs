@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use client::{self, LongestChain};
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::{Pair as PairT, ed25519};
@@ -167,14 +167,13 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, _, ed25519::Pair>(
+				import_queue::<_, _, ed25519::Pair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
 					None,
 					None,
 					client,
-					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
@@ -192,14 +191,13 @@ construct_service_factory! {
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, _, ed25519::Pair>(
+				import_queue::<_, _, ed25519::Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import,
 					None,
 					Some(finality_proof_import),
 					Some(finality_proof_request_builder),
 					client,
-					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
@@ -226,9 +224,9 @@ mod tests {
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
-		sr25519::Public as AddressPublic,
+		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::{Block, Digest as DigestT}, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
@@ -301,9 +299,9 @@ mod tests {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			});
-			let mut digest = Digest::<DigestItem>::default();
+			let mut digest = Digest::<H256>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
-			let proposer = proposer_factory.init(&parent_header, &[]).unwrap();
+			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,

@@ -125,8 +125,8 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
+	use crate::custom_proto::CustomMessage;
 	use parity_codec::{Encode, Decode};
-	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{

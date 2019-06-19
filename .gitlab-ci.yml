@@ -13,12 +13,11 @@ stages:
   - kubernetes
   - flaming-fir
 
-image:                             parity/rust-builder:latest
-
 variables:
   GIT_STRATEGY:                    fetch
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
+  CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
@@ -38,11 +37,21 @@ variables:
   environment:
     name: parity-build
 
-.compiler_info:                    &compiler_info
+.docker-env:                       &docker-env
+  image:                           parity/rust-builder:latest
   before_script:
     - rustup show
     - cargo --version
     - sccache -s
+  only:
+    - tags
+    - master
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+    - schedules
+    - web
+    - /^[0-9]+$/                   # PRs
+  tags:
+    - linux-docker
 
 
 #### stage:                        test
@@ -58,6 +67,7 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./scripts/gitlab/check_runtime.sh
+  allow_failure:                   true
 
 
 check-line-width:
@@ -68,26 +78,46 @@ check-line-width:
     - /^[0-9]+$/
   script:
     - ./scripts/gitlab/check_line_width.sh
-  allow_failure:                   false
+  allow_failure:                   true
 
 
-test-linux-stable:                 &test
+cargo-audit:
   stage:                           test
-  <<:                              *compiler_info
+  <<:                              *docker-env
+  except:
+    - /^[0-9]+$/
+  script:
+    - cargo audit
+  allow_failure:                   true
+
+
+cargo-check-benches:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - ./scripts/build.sh --locked
+    - time cargo check --benches
+    - sccache -s
+
+
+cargo-check-subkey:
+  stage:                           test
+  <<:                              *docker-env
+  except:
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  script:
+    - cd ./subkey
+    - time cargo check --release   # makes sense to save artifacts for building it
+    - sccache -s
+
+
+test-linux-stable:                 &test-linux
+  stage:                           test
+  <<:                              *docker-env
   variables:
-    RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
-    TARGET: native
-  tags:
-    - linux-docker
-  only:
-    - tags
-    - master
-    - schedules
-    - web
-    - /^[0-9]+$/
   except:
     variables:
       - $DEPLOY_TAG
@@ -96,52 +126,41 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
-test-linux-stable-int:             &test
-  stage:                           test
-  variables:
-    RUST_TOOLCHAIN: stable
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    TARGET: native
-  tags:
-    - linux-docker
-  only:
-    - tags
-    - master
-    - schedules
-    - web
-    - /^[0-9]+$/
+test-linux-stable-int:
+  <<:                              *test-linux
   except:
+    refs:
+      - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
-  before_script:
-    - sccache -s
-    - ./scripts/build.sh --locked
   script:
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - ./scripts/build.sh --locked
+    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
   allow_failure:                   true
 
 
 check-web-wasm:
   stage:                           test
-  <<:                              *compiler_info
+  <<:                              *docker-env
   allow_failure:                   true
-  only:
-    - master
-    - /^[0-9]+$/
+  except:
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
+    - time cargo web build -p substrate-client
+    - time cargo web build -p substrate-consensus-aura
+    - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
     - time cargo web build -p substrate-keyring
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
-    - time cargo web build -p substrate-network-libp2p
+    - time cargo web build -p substrate-network
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
@@ -151,8 +170,6 @@ check-web-wasm:
     - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
     - sccache -s
-  tags:
-    - linux-docker
 
 .build-only:                       &build-only
   only:
@@ -165,13 +182,11 @@ check-web-wasm:
 build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
+  <<:                              *docker-env
   <<:                              *build-only
-  <<:                              *compiler_info
   except:
     variables:
       - $DEPLOY_TAG
-  tags:
-    - linux-docker
   script:
     - ./scripts/build.sh --locked
     - time cargo build --release --verbose
@@ -193,7 +208,7 @@ build-linux-release:
 
 build-rust-doc-release:
   stage:                           build
-  <<:                              *compiler_info
+  <<:                              *docker-env
   allow_failure:                   true
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
@@ -202,8 +217,6 @@ build-rust-doc-release:
     paths:
     - ./crate-docs
   <<:                              *build-only
-  tags:
-    - linux-docker
   script:
     - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
@@ -299,6 +312,48 @@ publish-s3-doc:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
+
+
+publish-gh-doc:
+  stage:                           publish
+  image:                           parity/tools:latest
+  allow_failure:                   true
+  dependencies:
+    - build-rust-doc-release
+  cache:                           {}
+  <<:                              *build-only
+  <<:                              *kubernetes-build
+  variables:
+    GIT_STRATEGY:                  none
+    GITHUB_API:                    "https://api.github.com"
+  script:
+    - test -r ./crate-docs/index.html || (
+        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
+        exit 1
+      )
+    - test "${GITHUB_USER}" -a "${GITHUB_EMAIL}" -a "${GITHUB_TOKEN}" || (
+        echo "environment variables for github insufficient";
+        exit 1
+      )
+    - |
+      cat > ${HOME}/.gitconfig <<EOC
+      [user]
+      name = "${GITHUB_USER}"
+      email = "${GITHUB_EMAIL}"
+
+      [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
+      insteadOf = "https://github.com/"
+      EOC
+    - unset GITHUB_TOKEN
+    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
+    - cd ./rustdocs; git add .
+    - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
+    - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
+  after_script:
+    - rm -vrf ${HOME}/.gitconfig
+
+
 
 .deploy-template:                  &deploy
   stage:                           kubernetes

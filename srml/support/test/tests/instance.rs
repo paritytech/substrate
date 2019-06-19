@@ -33,14 +33,13 @@ pub trait Currency {}
 // Test for:
 // * No default instance
 // * Custom InstantiableTrait
-// * Origin, Inherent, Log, Event
+// * Origin, Inherent, Event
 mod module1 {
 	use super::*;
 
 	pub trait Trait<I>: system::Trait {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
-		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
 	srml_support::decl_module! {
@@ -49,15 +48,7 @@ mod module1 {
 
 			fn one() {
 				Self::deposit_event(RawEvent::AnotherVariant(3));
-				Self::deposit_log(RawLog::AmountChange(3));
 			}
-		}
-	}
-
-	impl<T: Trait<I>, I: InstantiableThing> Module<T, I> {
-		/// Deposit one of this module's logs.
-		fn deposit_log(log: Log<T, I>) {
-			<system::Module<T>>::deposit_log(<T as Trait<I>>::Log::from(log).into());
 		}
 	}
 
@@ -81,22 +72,6 @@ mod module1 {
 	pub enum Origin<T: Trait<I>, I> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
-	}
-
-	pub type Log<T, I> = RawLog<
-		T,
-		I,
-		<T as system::Trait>::Hash,
-	>;
-
-	/// A logs in this module.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
-	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<T, I, Hash> {
-		_Phantom(std::marker::PhantomData<(T, I)>),
-		AmountChange(u32),
-		ChangesTrieRoot(Hash),
-		AuthoritiesChange(Vec<()>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
@@ -126,7 +101,6 @@ mod module2 {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
-		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
@@ -157,19 +131,6 @@ mod module2 {
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
-	}
-
-	pub type Log<T, I=DefaultInstance> = RawLog<
-		T,
-		I,
-	>;
-
-	/// A logs in this module.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
-	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<T, I=DefaultInstance> {
-		_Phantom(std::marker::PhantomData<(T, I)>),
-		AmountChange(u32),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
@@ -207,36 +168,30 @@ mod module3 {
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module2::Trait<module2::Instance1> for Runtime {
 	type Amount = u32;
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module2::Trait<module2::Instance2> for Runtime {
 	type Amount = u32;
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module2::Trait<module2::Instance3> for Runtime {
 	type Amount = u64;
 	type Event = Event;
 	type Origin = Origin;
-	type Log = Log;
 }
 impl module3::Trait for Runtime {
 	type Currency = Module2_2;
@@ -252,42 +207,38 @@ impl system::Trait for Runtime {
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
-	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
 	type Event = Event;
-	type Log = Log;
 }
 
 srml_support::construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
+	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
+		System: system::{Module, Call, Event},
 		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>,
-			Log(ChangesTrieRoot, AuthoritiesChange), Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>,
-			Log(ChangesTrieRoot, AuthoritiesChange), Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
+		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_2: module2::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_3: module2::<Instance3>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module3: module3::{Module, Call},
 	}
 );
 
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature>;
 

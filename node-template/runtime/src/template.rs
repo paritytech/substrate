@@ -75,7 +75,7 @@ mod tests {
 	use runtime_primitives::{
 		BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		testing::Header,
 	};
 
 	impl_outer_origin! {
@@ -93,12 +93,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl Trait for Test {
 		type Event = ();

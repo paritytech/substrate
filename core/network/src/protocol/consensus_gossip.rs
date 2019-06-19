@@ -24,7 +24,7 @@ use std::time;
 use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};

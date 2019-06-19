@@ -20,7 +20,9 @@ use libp2p::{
 	mplex, identity, secio, yamux, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
+use libp2p::{tcp, dns, websocket, noise};
+#[cfg(not(target_os = "unknown"))]
+use libp2p::core::{upgrade, either::EitherError, either::EitherOutput};
 use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -34,16 +36,32 @@ pub fn build_transport(
 	keypair: identity::Keypair,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
+	// Build configuration objects for encryption mechanisms.
+	#[cfg(not(target_os = "unknown"))]
+	let noise_config = {
+		let noise_keypair = noise::Keypair::new().into_authentic(&keypair)
+			// For more information about this panic, see in "On the Importance of Checking
+			// Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
+			// and Richard J. Lipton.
+			.expect("can only fail in case of a hardware bug; since this signing is performed only \
+				once and at initialization, we're taking the bet that the inconvenience of a very \
+				rare panic here is basically zero");
+		noise::NoiseConfig::ix(noise_keypair)
+	};
+	let secio_config = secio::SecioConfig::new(keypair);
+
+	// Build configuration objects for multiplexing mechanisms.
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
+	let yamux_config = yamux::Config::default();
 
+	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
 		OptionalTransport::some(t)
 	} else {
 		OptionalTransport::none()
 	};
-
 	#[cfg(not(target_os = "unknown"))]
 	let transport = {
 		let desktop_trans = tcp::TcpConfig::new();
@@ -51,22 +69,48 @@ pub fn build_transport(
 			.or_transport(desktop_trans);
 		transport.or_transport(dns::DnsConfig::new(desktop_trans))
 	};
-
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
-	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
-	let transport = transport
-		.with_upgrade(secio::SecioConfig::new(keypair))
-		.and_then(move |out, endpoint| {
-			let peer_id = out.remote_key.into_peer_id();
+	// Encryption
+
+	// For non-WASM, we support both secio and noise.
+	#[cfg(not(target_os = "unknown"))]
+	let transport = transport.and_then(move |stream, endpoint| {
+		let upgrade = core::upgrade::SelectUpgrade::new(noise_config, secio_config);
+		core::upgrade::apply(stream, upgrade, endpoint)
+			.and_then(|out| match out {
+				// We negotiated noise
+				EitherOutput::First((remote_id, out)) => {
+					let remote_key = match remote_id {
+						noise::RemoteIdentity::IdentityKey(key) => key,
+						_ => return Err(upgrade::UpgradeError::Apply(EitherError::A(noise::NoiseError::InvalidKey)))
+					};
+					Ok((EitherOutput::First(out), remote_key.into_peer_id()))
+				}
+				// We negotiated secio
+				EitherOutput::Second(out) =>
+					Ok((EitherOutput::Second(out.stream), out.remote_key.into_peer_id()))
+			})
+	});
+
+	// For WASM, we only support secio for now.
+	#[cfg(target_os = "unknown")]
+	let transport = transport.and_then(move |stream, endpoint| {
+		core::upgrade::apply(stream, secio_config, endpoint)
+			.and_then(|out| Ok((out.stream, out.remote_key.into_peer_id())))
+	});
+
+	// Multiplexing
+	let transport = transport.and_then(move |(stream, peer_id), endpoint| {
 			let peer_id2 = peer_id.clone();
-			let upgrade = core::upgrade::SelectUpgrade::new(yamux::Config::default(), mplex_config)
+			let upgrade = core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 				.map_inbound(move |muxer| (peer_id, muxer))
 				.map_outbound(move |muxer| (peer_id2, muxer));
 
-			core::upgrade::apply(out.stream, upgrade, endpoint)
+			core::upgrade::apply(stream, upgrade, endpoint)
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
+
 		.with_timeout(Duration::from_secs(20))
 		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 		.boxed();

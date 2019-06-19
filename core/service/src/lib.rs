@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::BlockchainEvents;
+use client::{BlockchainEvents, backend::Backend};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -41,6 +41,7 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
+use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::Error;
@@ -305,11 +306,17 @@ impl<Components: components::Components> Service<Components> {
 		{
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
+			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
 					}
+					let status = transaction_pool_.status();
+					telemetry!(SUBSTRATE_INFO; "txpool.import";
+						"ready" => status.ready,
+						"future" => status.future
+					);
 					Ok(())
 				})
 				.select(exit.clone())
@@ -318,6 +325,56 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.spawn(events);
 		}
 
+		// Periodically notify the telemetry.
+		let transaction_pool_ = transaction_pool.clone();
+		let client_ = client.clone();
+		let network_ = network.clone();
+		let mut sys = System::new();
+		let self_pid = get_current_pid();
+		task_executor.spawn(network.status().for_each(move |sync_status| {
+			let info = client_.info();
+			let best_number = info.chain.best_number.saturated_into::<u64>();
+			let best_hash = info.chain.best_hash;
+			let num_peers = sync_status.num_peers;
+			let txpool_status = transaction_pool_.status();
+			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
+			let bandwidth_download = network_.average_download_per_sec();
+			let bandwidth_upload = network_.average_upload_per_sec();
+
+			#[allow(deprecated)]
+			let backend = (*client_).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
+			// get cpu usage and memory usage of this process
+			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
+				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
+				(proc.cpu_usage(), proc.memory())
+			} else { (0.0, 0) };
+
+			let network_state = network_.network_state();
+
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"network_state" => network_state,
+				"peers" => num_peers,
+				"height" => best_number,
+				"best" => ?best_hash,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
+			);
+
+			Ok(())
+		}).select(exit.clone()).then(|_| Ok(())));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -326,10 +383,10 @@ impl<Components: components::Components> Service<Components> {
 			impl_version: config.impl_version.into(),
 			properties: config.chain_spec.properties(),
 		};
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(),
-			network.clone(),
-			has_bootnodes,
+			system_rpc_tx,
 			system_info,
 			config.rpc_http,
 			config.rpc_ws,
@@ -338,6 +395,11 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.clone(),
 			transaction_pool.clone(),
 		)?;
+		task_executor.spawn(build_system_rpc_handler::<Components>(
+			network.clone(),
+			system_rpc_rx,
+			has_bootnodes
+		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -354,7 +416,12 @@ impl<Components: components::Components> Service<Components> {
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
 				wasm_external_transport: None,
-				on_connect: Box::new(move || {
+			});
+			let future = telemetry.clone()
+				.for_each(move |event| {
+					// Safe-guard in case we add more events in the future.
+					let tel::TelemetryEvent::Connected = event;
+
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
@@ -369,9 +436,9 @@ impl<Components: components::Components> Service<Components> {
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-				}),
-			});
-			task_executor.spawn(telemetry.clone()
+					Ok(())
+				});
+			task_executor.spawn(future
 				.select(exit.clone())
 				.then(|_| Ok(())));
 			telemetry
@@ -553,6 +620,39 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
+/// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
+fn build_system_rpc_handler<Components: components::Components>(
+	network: Arc<NetworkService<Components::Factory>>,
+	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	should_have_peers: bool,
+) -> impl Future<Item = (), Error = ()> {
+	rx.for_each(move |request| {
+		match request {
+			rpc::apis::system::Request::Health(sender) => {
+				let _ = sender.send(rpc::apis::system::Health {
+					peers: network.peers_debug_info().len(),
+					is_syncing: network.is_major_syncing(),
+					should_have_peers,
+				});
+			},
+			rpc::apis::system::Request::Peers(sender) => {
+				let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
+					peer_id: peer_id.to_base58(),
+					roles: format!("{:?}", p.roles),
+					protocol_version: p.protocol_version,
+					best_hash: p.best_hash,
+					best_number: p.best_number,
+				}).collect());
+			}
+			rpc::apis::system::Request::NetworkState(sender) => {
+				let _ = sender.send(network.network_state());
+			}
+		};
+
+		Ok(())
+	})
+}
+
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -571,12 +671,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # use client::{self, LongestChain};
 /// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock};
+/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
 /// # use runtime_primitives::Justification;
-/// # use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT};
+/// # use runtime_primitives::traits::Block as BlockT;
 /// # use grandpa;
 /// # construct_simple_protocol! {
 /// # 	pub struct NodeProtocol where Block = Block { }
@@ -589,7 +689,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }
@@ -757,7 +857,7 @@ mod tests {
 	use super::*;
 	use consensus_common::SelectChain;
 	use runtime_primitives::traits::BlindCheckable;
-	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}, TestClientBuilder};
+	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {

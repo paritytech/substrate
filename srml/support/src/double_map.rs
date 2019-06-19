@@ -64,7 +64,7 @@ pub trait StorageDoubleMapWithHasher {
 
 	/// Get an entry from this map.
 	///
-	/// If there is entry stored under the given keys, returns `None`.
+	/// If there is no entry stored under the given keys, returns `None`.
 	fn get<Q, R>(k1: &Q, k2: &R) -> Option<Self::Value>
 	where
 		Self::Key1: Borrow<Q>,

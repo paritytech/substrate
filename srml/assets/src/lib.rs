@@ -33,7 +33,8 @@
 //!
 //! ### Terminology
 //!
-//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
+//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the
+//!   account that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
 //! * **Asset destruction:** The process of an account removing its entire holding of an asset.
 //! * **Fungible asset:** An asset whose units are interchangeable.
@@ -45,7 +46,8 @@
 //!
 //! * Issue a unique asset to its creator's account.
 //! * Move assets between accounts.
-//! * Remove an account's balance of an asset when requested by that account's owner and update the asset's total supply.
+//! * Remove an account's balance of an asset when requested by that account's owner and update
+//!   the asset's total supply.
 //!
 //! ## Interface
 //!
@@ -112,6 +114,14 @@
 //! }
 //! ```
 //!
+//! ## Assumptions
+//!
+//! Below are assumptions that must be held when using this module.  If any of
+//! them are violated, the behavior of this module is undefined.
+//!
+//! * The total count of assets should be less than
+//!   `Trait::AssetId::max_value()`.
+//!
 //! ## Related Modules
 //!
 //! * [`System`](../srml_system/index.html)
@@ -123,6 +133,7 @@
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
+use primitives::traits::One;
 
 /// The module configuration trait.
 pub trait Trait: system::Trait {
@@ -131,9 +142,10 @@ pub trait Trait: system::Trait {
 
 	/// The units in which we record balances.
 	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
-}
 
-type AssetId = u32;
+	/// The arithmetic type of asset identifier.
+	type AssetId: Parameter + SimpleArithmetic + Default + Copy;
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -145,7 +157,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 
 			let id = Self::next_asset_id();
-			<NextAssetId<T>>::mutate(|id| *id += 1);
+			<NextAssetId<T>>::mutate(|id| *id += One::one());
 
 			<Balances<T>>::insert((id, origin.clone()), total);
 			<TotalSupply<T>>::insert(id, total);
@@ -155,7 +167,7 @@ decl_module! {
 
 		/// Move some assets from one holder to another.
 		fn transfer(origin,
-			#[compact] id: AssetId,
+			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
 			#[compact] amount: T::Balance
 		) {
@@ -172,7 +184,7 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		fn destroy(origin, #[compact] id: AssetId) {
+		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, origin.clone()));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
@@ -184,7 +196,10 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::AccountId, <T as Trait>::Balance {
+	pub enum Event<T>
+		where <T as system::Trait>::AccountId,
+		      <T as Trait>::Balance,
+		      <T as Trait>::AssetId {
 		/// Some assets were issued.
 		Issued(AssetId, AccountId, Balance),
 		/// Some assets were transferred.
@@ -197,11 +212,11 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Assets {
 		/// The number of units of assets held by any given account.
-		Balances: map (AssetId, T::AccountId) => T::Balance;
+		Balances: map (T::AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
-		NextAssetId get(next_asset_id): AssetId;
+		NextAssetId get(next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
-		TotalSupply: map AssetId => T::Balance;
+		TotalSupply: map T::AssetId => T::Balance;
 	}
 }
 
@@ -210,12 +225,12 @@ impl<T: Trait> Module<T> {
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.
-	pub fn balance(id: AssetId, who: T::AccountId) -> T::Balance {
+	pub fn balance(id: T::AssetId, who: T::AccountId) -> T::Balance {
 		<Balances<T>>::get((id, who))
 	}
 
 	/// Get the total supply of an asset `id`.
-	pub fn total_supply(id: AssetId) -> T::Balance {
+	pub fn total_supply(id: T::AssetId) -> T::Balance {
 		<TotalSupply<T>>::get(id)
 	}
 }
@@ -232,7 +247,7 @@ mod tests {
 	use primitives::{
 		BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -250,16 +265,15 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Balance = u64;
+		type AssetId = u32;
 	}
 	type Assets = Module<Test>;
 

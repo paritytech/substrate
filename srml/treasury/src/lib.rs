@@ -110,6 +110,12 @@ decl_module! {
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change, one extra DB entry.
+		/// # </weight>
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -149,6 +155,12 @@ decl_module! {
 		}
 
 		/// Reject a proposed spend. The original deposit will be slashed.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB clear.
+		/// # </weight>
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
@@ -160,6 +172,12 @@ decl_module! {
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -320,7 +338,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::testing::Header;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -334,12 +352,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
