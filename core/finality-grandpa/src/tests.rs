@@ -37,7 +37,6 @@ use consensus_common::import_queue::{
 	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus_safety::TestPool;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
@@ -50,7 +49,7 @@ use fg_primitives::{
 	AuthorityId, GrandpaEquivocationProof, Equivocation, Precommit, Prevote,
 	AuthoritySignature
 };
-
+use consensus_safety::TestPool;
 use authorities::AuthoritySet;
 use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker

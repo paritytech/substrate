@@ -4619,6 +4619,7 @@ dependencies = [
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-executor 2.0.0",
+ "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",

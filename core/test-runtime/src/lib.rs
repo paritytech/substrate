@@ -39,10 +39,15 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify
+		GetNodeBlockType, GetRuntimeBlockType, Verify, NumberFor, DigestFor,
 	},
 };
 use consensus_aura::AuraEquivocationProof;
+use consensus_grandpa::{
+	Equivocation, Prevote, Precommit, AuthorityId as GrandpaAuthorityId,
+	AuthoritySignature, GrandpaEquivocationProof, AuthorityWeight, ScheduledChange
+};
+
 use runtime_version::RuntimeVersion;
 use primitives::{sr25519, ed25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
@@ -478,6 +483,38 @@ cfg_if! {
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
+			}
+
+			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_pending_change(digest: &DigestFor<Block>)
+					-> Option<ScheduledChange<NumberFor<Block>>> {
+					unimplemented!()
+				}
+				
+				fn grandpa_forced_change(digest: &DigestFor<Block>)
+					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)> {
+					unimplemented!()
+				}
+
+				fn grandpa_authorities() -> Vec<(GrandpaAuthorityId, AuthorityWeight)> {
+					unimplemented!()
+				}
+		
+				fn construct_prevote_equivocation_report_call(
+					proof: GrandpaEquivocationProof<
+						Equivocation<GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+					>
+				) -> Vec<u8> {
+					unimplemented!()
+				}
+		
+				fn construct_precommit_equivocation_report_call(
+					proof: GrandpaEquivocationProof<
+						Equivocation<GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+					>
+				) -> Vec<u8> {
+					unimplemented!()
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
