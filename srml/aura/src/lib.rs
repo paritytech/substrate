@@ -206,7 +206,10 @@ fn handle_equivocation_proof<T: Trait>(proof: &T::AuraEquivocationProof) -> Tran
 		authorities.as_slice()
 	);
 
-	let proof_is_valid = fst_author.map_or(false, |f| snd_author.map_or(false, |s| f == s));
+	let proof_is_valid = fst_author.map_or(
+		false,
+		|f| snd_author.map_or(false, |s| f == s),
+	);
 
 	if  proof_is_valid {
 		TransactionValidity::Valid {

@@ -2246,6 +2246,7 @@ dependencies = [
  "sr-std 2.0.0",
  "sr-version 2.0.0",
  "srml-aura 2.0.0",
+ "srml-babe 2.0.0",
  "srml-balances 2.0.0",
  "srml-contract 2.0.0",
  "srml-council 2.0.0",

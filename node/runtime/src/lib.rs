@@ -23,6 +23,7 @@
 use rstd::prelude::*;
 use support::{construct_runtime, parameter_types};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
+use parity_codec::Encode;
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
 };
@@ -58,6 +59,9 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill, impl_opaque_keys};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
+pub use aura::Call as AuraCall;
+pub use babe::Call as BabeCall;
+pub use grandpa::Call as GrandpaCall;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -256,7 +260,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config<T>},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Indices: indices,
 		Balances: balances,
@@ -383,14 +387,17 @@ impl_runtime_apis! {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
+
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
 		}
 
 		fn construct_equivocation_report_call(
-			_proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
+			proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
 		) -> Vec<u8> {
-			vec![]
+			let report_call = Call::Aura(AuraCall::report_equivocation(proof));
+			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+			extrinsic.encode()
 		}
 	}
 }
