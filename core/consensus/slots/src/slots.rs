@@ -31,15 +31,11 @@ use tokio_timer::Delay;
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
-
-	let now = SystemTime::now();
-	match now.duration_since(SystemTime::UNIX_EPOCH) {
-		Ok(s) => s,
-		Err(e) => panic!(
-			"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-			now, e
-		),
-	}
+	SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|s| panic!(
+		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
+		now,
+		e,
+	))
 }
 
 /// Get the slot for now.
