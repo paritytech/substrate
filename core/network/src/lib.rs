@@ -91,7 +91,7 @@
 //!
 //! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
 //! be deprecated in the future.
-//! - [Yamux](https://github.com/hashicorp/yamux).
+//! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
 //!
