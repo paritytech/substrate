@@ -654,12 +654,11 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					let &median = new_list
 						.get(num_timestamps / 2)
 						.expect("we have at least one timestamp, so this is a valid index; qed");
-					drop(new_list);
-					std::mem::replace(&mut timestamps.1, Default::default());
+					timestamps.1.clear()
 					// Compute the (relative!) start time of the blockchain ―
 					// that is, the issue time of the genesis block that would
 					// give the values we observed.
-					drop(timestamps.0.replace(Instant::now() - median))
+					timestamps.0.replace(Instant::now() - median);
 				} else {
 					timestamps.1.push((Instant::now(), slot_now))
 				}
@@ -826,7 +825,7 @@ pub fn import_queue<B, C, E>(
 
 	let verifier = Arc::new(
 		BabeVerifier {
-			client: client.clone(),
+			client: client,
 			inherent_data_providers,
 			timestamps: Default::default(),
 			config,
