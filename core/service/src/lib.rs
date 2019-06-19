@@ -416,7 +416,12 @@ impl<Components: components::Components> Service<Components> {
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
 				wasm_external_transport: None,
-				on_connect: Box::new(move || {
+			});
+			let future = telemetry.clone()
+				.for_each(move |event| {
+					// Safe-guard in case we add more events in the future.
+					let tel::TelemetryEvent::Connected = event;
+
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
@@ -431,9 +436,9 @@ impl<Components: components::Components> Service<Components> {
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-				}),
-			});
-			task_executor.spawn(telemetry.clone()
+					Ok(())
+				});
+			task_executor.spawn(future
 				.select(exit.clone())
 				.then(|_| Ok(())));
 			telemetry

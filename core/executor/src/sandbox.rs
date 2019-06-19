@@ -18,16 +18,13 @@
 
 //! This module implements sandboxing support in the runtime.
 
-use std::collections::HashMap;
-use std::rc::Rc;
+use crate::error::{Result, Error};
+use std::{collections::HashMap, rc::Rc};
 use parity_codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
-use crate::wasm_utils::UserError;
-use wasmi;
-use wasmi::memory_units::Pages;
 use wasmi::{
 	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind
+	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
 
 /// Index of a function inside the supervisor.
@@ -75,18 +72,18 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		signature: &::wasmi::Signature,
-	) -> Result<FuncRef, ::wasmi::Error> {
+	) -> std::result::Result<FuncRef, wasmi::Error> {
 		let key = (
 			module_name.as_bytes().to_owned(),
 			field_name.as_bytes().to_owned(),
 		);
 		let idx = *self.func_map.get(&key).ok_or_else(|| {
-			::wasmi::Error::Instantiation(format!(
+			wasmi::Error::Instantiation(format!(
 				"Export {}:{} not found",
 				module_name, field_name
 			))
 		})?;
-		Ok(::wasmi::FuncInstance::alloc_host(signature.clone(), idx.0))
+		Ok(wasmi::FuncInstance::alloc_host(signature.clone(), idx.0))
 	}
 
 	fn resolve_memory(
@@ -94,7 +91,7 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		_memory_type: &::wasmi::MemoryDescriptor,
-	) -> Result<MemoryRef, ::wasmi::Error> {
+	) -> std::result::Result<MemoryRef, wasmi::Error> {
 		let key = (
 			module_name.as_bytes().to_vec(),
 			field_name.as_bytes().to_vec(),
@@ -102,7 +99,7 @@ impl ImportResolver for Imports {
 		let mem = self.memories_map
 			.get(&key)
 			.ok_or_else(|| {
-				::wasmi::Error::Instantiation(format!(
+				wasmi::Error::Instantiation(format!(
 					"Export {}:{} not found",
 					module_name, field_name
 				))
@@ -116,8 +113,8 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		_global_type: &::wasmi::GlobalDescriptor,
-	) -> Result<::wasmi::GlobalRef, ::wasmi::Error> {
-		Err(::wasmi::Error::Instantiation(format!(
+	) -> std::result::Result<wasmi::GlobalRef, wasmi::Error> {
+		Err(wasmi::Error::Instantiation(format!(
 			"Export {}:{} not found",
 			module_name, field_name
 		)))
@@ -128,8 +125,8 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		_table_type: &::wasmi::TableDescriptor,
-	) -> Result<::wasmi::TableRef, ::wasmi::Error> {
-		Err(::wasmi::Error::Instantiation(format!(
+	) -> std::result::Result<wasmi::TableRef, wasmi::Error> {
+		Err(wasmi::Error::Instantiation(format!(
 			"Export {}:{} not found",
 			module_name, field_name
 		)))
@@ -153,7 +150,7 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if allocation not possible or errors during heap management.
 	///
 	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: u32) -> Result<u32, UserError>;
+	fn allocate(&mut self, len: u32) -> Result<u32>;
 
 	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
 	///
@@ -162,21 +159,21 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if deallocation not possible or because of errors in heap management.
 	///
 	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: u32) -> Result<(), UserError>;
+	fn deallocate(&mut self, ptr: u32) -> Result<()>;
 
 	/// Write `data` into the supervisor memory at offset specified by `ptr`.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<(), UserError>;
+	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<()>;
 
 	/// Read `len` bytes from the supervisor memory.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, UserError>;
+	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>>;
 }
 
 /// Implementation of [`Externals`] that allows execution of guest module with
@@ -190,12 +187,12 @@ pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
 }
 
 fn trap(msg: &'static str) -> Trap {
-	TrapKind::Host(Box::new(UserError(msg))).into()
+	TrapKind::Host(Box::new(Error::Other(msg))).into()
 }
 
-fn deserialize_result(serialized_result: &[u8]) -> Result<Option<RuntimeValue>, Trap> {
+fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::{HostError, ReturnValue};
-	let result_val = Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
+	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
 		.ok_or_else(|| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
 	match result_val {
@@ -212,7 +209,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		&mut self,
 		index: usize,
 		args: RuntimeArgs,
-	) -> Result<Option<RuntimeValue>, Trap> {
+	) -> std::result::Result<Option<RuntimeValue>, Trap> {
 		// Make `index` typesafe again.
 		let index = GuestFuncIndex(index);
 
@@ -331,7 +328,7 @@ impl SandboxInstance {
 		args: &[RuntimeValue],
 		supervisor_externals: &mut FE,
 		state: u32,
-	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
+	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
 		with_guest_externals(
 			supervisor_externals,
 			self,
@@ -362,7 +359,7 @@ pub enum InstantiationError {
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
-) -> Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
+) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
 		.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
 
@@ -420,7 +417,7 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
-) -> Result<u32, InstantiationError> {
+) -> std::result::Result<u32, InstantiationError> {
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
@@ -476,7 +473,7 @@ impl Store {
 	///
 	/// Returns `Err` if the memory couldn't be created.
 	/// Typically happens if `initial` is more than `maximum`.
-	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32, UserError> {
+	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(Pages(specified_limit as usize)),
@@ -486,8 +483,7 @@ impl Store {
 			MemoryInstance::alloc(
 				Pages(initial as usize),
 				maximum,
-			)
-			.map_err(|_| UserError("Sandboxed memory allocation error"))?;
+			)?;
 
 		let mem_idx = self.memories.len();
 		self.memories.push(Some(mem));
@@ -500,12 +496,12 @@ impl Store {
 	///
 	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
 	/// instance is already torndown.
-	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>, UserError> {
+	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>> {
 		self.instances
 			.get(instance_idx as usize)
 			.cloned()
-			.ok_or_else(|| UserError("Trying to access a non-existent instance"))?
-			.ok_or_else(|| UserError("Trying to access a torndown instance"))
+			.ok_or_else(|| "Trying to access a non-existent instance")?
+			.ok_or_else(|| "Trying to access a torndown instance".into())
 	}
 
 	/// Returns reference to a memory instance by `memory_idx`.
@@ -514,12 +510,12 @@ impl Store {
 	///
 	/// Returns `Err` If `memory_idx` isn't a valid index of an memory or
 	/// if memory has been torn down.
-	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, UserError> {
+	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
-			.ok_or_else(|| UserError("Trying to access a non-existent sandboxed memory"))?
-			.ok_or_else(|| UserError("Trying to access a torndown sandboxed memory"))
+			.ok_or_else(|| "Trying to access a non-existent sandboxed memory")?
+			.ok_or_else(|| "Trying to access a torndown sandboxed memory".into())
 	}
 
 	/// Tear down the memory at the specified index.
@@ -528,10 +524,10 @@ impl Store {
 	///
 	/// Returns `Err` if `memory_idx` isn't a valid index of an memory or
 	/// if it has been torn down.
-	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), UserError> {
+	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<()> {
 		match self.memories.get_mut(memory_idx as usize) {
-			None => Err(UserError("Trying to teardown a non-existent sandboxed memory")),
-			Some(None) => Err(UserError("Double teardown of a sandboxed memory")),
+			None => Err("Trying to teardown a non-existent sandboxed memory".into()),
+			Some(None) => Err("Double teardown of a sandboxed memory".into()),
 			Some(memory) => {
 				*memory = None;
 				Ok(())
@@ -545,10 +541,10 @@ impl Store {
 	///
 	/// Returns `Err` if `instance_idx` isn't a valid index of an instance or
 	/// if it has been torn down.
-	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), UserError> {
+	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<()> {
 		match self.instances.get_mut(instance_idx as usize) {
-			None => Err(UserError("Trying to teardown a non-existent instance")),
-			Some(None) => Err(UserError("Double teardown of an instance")),
+			None => Err("Trying to teardown a non-existent instance".into()),
+			Some(None) => Err("Double teardown of an instance".into()),
 			Some(instance) => {
 				*instance = None;
 				Ok(())
@@ -565,9 +561,8 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use primitives::{Blake2Hasher};
-	use crate::allocator;
-	use crate::sandbox::trap;
 	use crate::wasm_executor::WasmExecutor;
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use wabt;
@@ -647,7 +642,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				format!("{}", err),
-				format!("{}", wasmi::Error::Trap(trap(allocator::OUT_OF_SPACE)))
+				format!("{}", wasmi::Error::Trap(Error::AllocatorOutOfSpace.into()))
 			);
 		}
 	}
