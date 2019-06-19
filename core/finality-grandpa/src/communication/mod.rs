@@ -42,7 +42,7 @@ use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 
 use crate::{
-	Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
+	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
 	Message, SignedMessage,
 };
 use crate::environment::HasVoted;
@@ -457,6 +457,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		mut notification: network_gossip::TopicNotification,
 		service: &mut N,
 		gossip_validator: &Arc<GossipValidator<B>>,
+		voters: &VoterSet<AuthorityId>,
 	| {
 		let precommits_signed_by: Vec<String> =
 			msg.message.auth_data.iter().map(move |(_, a)| {
@@ -471,7 +472,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 
 		if let Err(cost) = check_compact_commit::<B>(
 			&msg.message,
-			&*voters,
+			voters,
 			msg.round,
 			msg.set_id,
 		) {
@@ -520,12 +521,26 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		mut notification: network_gossip::TopicNotification,
 		service: &mut N,
 		gossip_validator: &Arc<GossipValidator<B>>,
+		voters: &VoterSet<AuthorityId>,
 	| {
 		// FIXME: handle catch up replies and requests?
 		// signal to validator about import outcome,
 		// cleanup pending request after import!
 		let gossip_validator = gossip_validator.clone();
 		let service = service.clone();
+
+		if let Err(cost) = check_catch_up::<B>(
+			&msg.message,
+			voters,
+			msg.set_id,
+		) {
+			if let Some(who) = notification.sender {
+				service.report(who, cost);
+			}
+
+			return None;
+		}
+
 		let cb = move |outcome| {
 			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
 				// report peer
@@ -554,9 +569,9 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(move |(notification, msg)| {
 			match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &mut service, &gossip_validator),
+					process_commit(msg, notification, &mut service, &gossip_validator, &*voters),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &mut service, &gossip_validator),
+					process_catch_up(msg, notification, &mut service, &gossip_validator, &*voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
@@ -697,7 +712,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	}
 }
 
-// checks a compact commit. returns `None` if it was bad and
+// checks a compact commit. returns the cost associated with processing it if
+// the commit was bad.
 fn check_compact_commit<Block: BlockT>(
 	msg: &CompactCommit<Block>,
 	voters: &VoterSet<AuthorityId>,
@@ -752,6 +768,114 @@ fn check_compact_commit<Block: BlockT>(
 			return Err(cost);
 		}
 	}
+
+	Ok(())
+}
+
+// checks a catch up. returns the cost associated with processing it if
+// the catch up was bad.
+fn check_catch_up<Block: BlockT>(
+	msg: &CatchUp<Block>,
+	voters: &VoterSet<AuthorityId>,
+	set_id: SetId,
+) -> Result<(), i32> {
+	// 4f + 1 = equivocations from f voters.
+	let f = voters.total_weight() - voters.threshold();
+	let full_threshold = voters.total_weight() + f;
+
+	// check total weight is not out of range for a set of votes.
+	fn check_weight<'a>(
+		voters: &'a VoterSet<AuthorityId>,
+		votes: impl Iterator<Item=&'a AuthorityId>,
+		full_threshold: u64,
+	) -> Result<(), i32> {
+		let mut total_weight = 0;
+
+		for id in votes {
+			if let Some(weight) = voters.info(&id).map(|info| info.weight()) {
+				total_weight += weight;
+				if total_weight > full_threshold {
+					return Err(cost::MALFORMED_CATCH_UP);
+				}
+			} else {
+				debug!(target: "afg", "Skipping catch up message containing unknown voter {}", id);
+				return Err(cost::MALFORMED_CATCH_UP);
+			}
+		}
+
+		if total_weight < voters.threshold() {
+			return Err(cost::MALFORMED_CATCH_UP);
+		}
+
+		Ok(())
+	};
+
+	check_weight(
+		voters,
+		msg.prevotes.iter().map(|vote| &vote.id),
+		full_threshold,
+	)?;
+
+	check_weight(
+		voters,
+		msg.precommits.iter().map(|vote| &vote.id),
+		full_threshold,
+	)?;
+
+	fn check_signatures<'a, B, I>(
+		messages: I,
+		round: u64,
+		set_id: u64,
+		mut signatures_checked: usize,
+	) -> Result<usize, i32> where
+		B: BlockT,
+		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
+	{
+		use crate::communication::gossip::Misbehavior;
+
+		for (msg, id, sig) in messages {
+			signatures_checked += 1;
+
+			if let Err(()) = check_message_sig::<B>(
+				&msg,
+				id,
+				sig,
+				round,
+				set_id,
+			) {
+				debug!(target: "afg", "Bad catch up message signature {}", id);
+				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
+
+				let cost = Misbehavior::BadCatchUpMessage {
+					signatures_checked: signatures_checked as i32,
+				}.cost();
+
+				return Err(cost);
+			}
+		}
+
+		Ok(signatures_checked)
+	}
+
+	// check signatures on all contained prevotes.
+	let signatures_checked = check_signatures::<Block, _>(
+		msg.prevotes.iter().map(|vote| {
+			(grandpa::Message::Prevote(vote.prevote.clone()), &vote.id, &vote.signature)
+		}),
+		msg.round_number,
+		set_id.0,
+		0,
+	)?;
+
+	// check signatures on all contained precommits.
+	let _ = check_signatures::<Block, _>(
+		msg.precommits.iter().map(|vote| {
+			(grandpa::Message::Precommit(vote.precommit.clone()), &vote.id, &vote.signature)
+		}),
+		msg.round_number,
+		set_id.0,
+		signatures_checked,
+	)?;
 
 	Ok(())
 }

@@ -318,6 +318,10 @@ pub(super) enum Misbehavior {
 	InvalidViewChange,
 	// could not decode neighbor message. bytes-length of the packet.
 	UndecodablePacket(i32),
+	// Bad catch up message (invalid signatures).
+	BadCatchUpMessage {
+		signatures_checked: i32,
+	},
 	// Bad commit message
 	BadCommitMessage {
 		signatures_checked: i32,
@@ -340,6 +344,8 @@ impl Misbehavior {
 		match *self {
 			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
 			UndecodablePacket(bytes) =>  bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
+			BadCatchUpMessage { signatures_checked } =>
+				cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked),
 			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
 				let cost = cost::PER_SIGNATURE_CHECKED
 					.saturating_mul(signatures_checked)
