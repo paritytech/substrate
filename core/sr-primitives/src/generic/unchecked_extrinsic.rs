@@ -212,10 +212,16 @@ mod test {
 
 	#[test]
 	fn unprovided_tip_will_not_fail() {
-		let ex = Extrinsic::new_unsigned(42, Tip::Sender(10_u32));
-		let encoded = ex.encode();
-		println!("This is it {:?}", encoded);
-		unimplemented!();
+		// without tip
+		//                       len sig f(u32).....
+		let bytes: Vec<u8> = vec![24, 0, 42, 0, 0, 0];
+		let decoded: Extrinsic = Decode::decode(&mut bytes.as_slice()).unwrap();
+		assert_eq!(decoded, Extrinsic::new_unsigned(42, Tip::default()));
+		// with tip
+		let bytes: Vec<u8> = vec![40, 0, 42, 0, 0, 0, 1, 10, 0, 0, 0];
+		let decoded: Extrinsic = Decode::decode(&mut bytes.as_slice()).unwrap();
+		assert_eq!(decoded, Extrinsic::new_unsigned(42, Tip::Sender(10)));
+
 	}
 
 	#[test]
@@ -223,7 +229,6 @@ mod test {
 	fn serialization_of_unchecked_extrinsics() {
 		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32, u32>;
 		let ex = Extrinsic::new_unsigned(42, Tip::None);
-
-		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x14002a000000\"");
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x18002a00000000\"");
 	}
 }
