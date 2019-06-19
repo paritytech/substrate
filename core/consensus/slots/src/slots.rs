@@ -31,7 +31,8 @@ use tokio_timer::Delay;
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
-	SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|s| panic!(
+	let now = SystemTime::now();
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
 		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
 		now,
 		e,
