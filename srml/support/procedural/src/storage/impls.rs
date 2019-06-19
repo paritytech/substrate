@@ -210,7 +210,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				quote!(#traitinstance, #instance),
 			)
 		} else {
-			(quote!(#instance #bound_instantiable #equal_default_instance), quote!(#instance #bound_instantiable), quote!(#instance))
+			(
+				quote!(#instance #bound_instantiable #equal_default_instance),
+				quote!(#instance #bound_instantiable),
+				quote!(#instance)
+			)
 		};
 
 		// generator for map
@@ -265,8 +269,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 
-			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
-				#scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+			impl<#impl_trait> #scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ>
+				for #name<#trait_and_instance>
 			{}
 		}
 	}

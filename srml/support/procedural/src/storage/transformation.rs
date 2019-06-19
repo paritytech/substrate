@@ -221,6 +221,7 @@ fn decl_store_extra_genesis(
 		let type_infos = get_type_infos(storage_type);
 
 		let opt_build = build
+			.inner
 			.as_ref()
 			.map(|b| {
 				assimilate_require_generic |= ext::expr_contains_ident(&b.expr.content, traitinstance);
@@ -229,7 +230,7 @@ fn decl_store_extra_genesis(
 			.map(|b| quote!( #b ));
 
 		// need build line
-		let builder = if let Some(ref config) = config {
+		let builder = if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
 			} else if let Some(ref getter) = getter.inner {
@@ -317,7 +318,7 @@ fn decl_store_extra_genesis(
 						<
 							#name<#struct_trait #instance> as
 							#scrate::storage::hashed::generator::StorageValue<#typ>
-						>::put(&v, &storage);
+						>::put(&v, storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -336,7 +337,7 @@ fn decl_store_extra_genesis(
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::insert(&k, &v, &storage);
+							>::insert(&k, &v, storage);
 						});
 					}}
 				},
@@ -357,7 +358,7 @@ fn decl_store_extra_genesis(
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::insert(&k1, &k2, &v, &storage);
+							>::insert(&k1, &k2, &v, storage);
 						});
 					}}
 				},
@@ -503,7 +504,7 @@ fn decl_store_extra_genesis(
 				> {
 					let mut storage = Default::default();
 					let mut child_storage = Default::default();
-					self.assimilate_storage::<#fn_traitinstance> (&mut storage, &mut child_storage)?;
+					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
 					Ok((storage, child_storage))
 				}
 
@@ -513,13 +514,11 @@ fn decl_store_extra_genesis(
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> {
-					let storage = std::cell::RefCell::new(r);
+					let storage = r;
 
 					#builders
 
-					let r = storage.into_inner();
-
-					#scall(r, c, &self);
+					#scall(storage, c, &self);
 
 					Ok(())
 				}

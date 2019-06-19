@@ -364,22 +364,6 @@ macro_rules! __create_decl_macro {
 				$runtime:ident;
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
-				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ignore:ident $d( <$ignor:ident> )* )*
-				},
-				$d( $rest:tt )*
-			) => {
-				compile_error!{concat!{
-					"Module `", stringify!{$name}, "` must have `", stringify!{$macro_enum_name}, "<T, I>`",
-					" but has `", stringify!{$macro_enum_name} $d(, "<", stringify!{$event_generic}, ">")*, "`",
-					": Instantiated modules must have ", stringify!{$macro_enum_name},
-					" generic over instance to be able to convert to outer ", stringify!{$macro_enum_name}
-				}}
-			};
-			(@inner
-				$runtime:ident;
-				$d( $system:ident )?;
-				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: {
 					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ignore:ident $d( <$ignor:ident> )* )*
 				},

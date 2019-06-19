@@ -219,10 +219,10 @@ srml_support::construct_runtime!(
 	{
 		System: system::{Module, Call, Event},
 		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Module, Call, Storage, Event<T>, Config, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Module, Call, Storage, Event<T>, Config, Origin<T>, Inherent
 		},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{

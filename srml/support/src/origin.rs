@@ -203,9 +203,9 @@ macro_rules! impl_outer_origin {
 				}
 				impl Into<
 					$crate::rstd::result::Result<
-						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >>,
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
 						$name,
-					>
+					>>
 				for $name {
 					fn into(self) -> $crate::rstd::result::Result<
 						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,

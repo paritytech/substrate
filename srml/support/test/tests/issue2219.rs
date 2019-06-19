@@ -150,7 +150,7 @@ pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature>;
 
@@ -158,21 +158,19 @@ impl system::Trait for Runtime {
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
-	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
 	type Event = Event;
-	type Log = Log;
 }
 
 impl module::Trait for Runtime {}
 
 srml_support::construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
+	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
+		System: system::{Module, Call, Event},
 		Module: module::{Module, Call, Storage, Config},
 	}
 );

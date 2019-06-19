@@ -18,10 +18,7 @@
 //! Extension to syn types, mainly for parsing
 // end::description[]
 
-use syn::{
-	visit::{Visit, self}, parse::{Parse, ParseStream, Result},
-	token::CustomKeyword, Ident,
-};
+use syn::{visit::{Visit, self}, parse::{Parse, ParseStream, Result}, Ident};
 use proc_macro2::{TokenStream, TokenTree};
 use quote::{ToTokens, quote};
 use std::iter::once;
