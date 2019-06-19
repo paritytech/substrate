@@ -296,12 +296,12 @@ where
 
 				// Decode parameters and dispatch
 				let (f, s) = xt.deconstruct();
-				let r = f.dispatch(s.into());
-				<system::Module<System>>::note_applied_extrinsic(r.is_ok(), encoded_len as u32);
+				let r = f.dispatch(s.into()).map_err(Into::<DispatchError>::into);
+				<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 				match r {
 					Ok(_) => ApplyResult::Success,
-					Err(e) => ApplyResult::DispatchError(e.into()),
+					Err(e) => ApplyResult::DispatchError(e),
 				}
 			}
 		}

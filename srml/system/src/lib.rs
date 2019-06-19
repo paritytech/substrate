@@ -77,7 +77,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use primitives::{
-	generic, Error as PrimitiveError,
+	generic, Error as PrimitiveError, DispatchError,
 	traits::{
 		self, CheckEqual, SimpleArithmetic,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
@@ -267,7 +267,7 @@ decl_event!(
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
 		/// An extrinsic failed.
-		ExtrinsicFailed,
+		ExtrinsicFailed(DispatchError),
 	}
 );
 
@@ -752,10 +752,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(success: bool, encoded_len: u32) {
-		Self::deposit_event(match success {
-			true => Event::ExtrinsicSuccess,
-			false => Event::ExtrinsicFailed,
+	pub fn note_applied_extrinsic(r: &Result<(), DispatchError>, encoded_len: u32) {
+		Self::deposit_event(match r {
+			Ok(_) => Event::ExtrinsicSuccess,
+			Err(err) => Event::ExtrinsicFailed(err.clone()),
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
