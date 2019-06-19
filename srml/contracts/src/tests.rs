@@ -527,8 +527,8 @@ const CODE_SET_RENT: &str = r#"
 	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
-	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
-	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; insert a value of 4 bytes into storage
@@ -575,7 +575,7 @@ const CODE_SET_RENT: &str = r#"
 	(func (export "call")
 		(local $input_size i32)
 		(set_local $input_size
-			(call $ext_input_size)
+			(call $ext_scratch_size)
 		)
 		(block $IF_ELSE
 			(block $IF_2
@@ -602,19 +602,19 @@ const CODE_SET_RENT: &str = r#"
 	;; Set call set_rent_allowance with input
 	(func (export "deploy")
 		(local $input_size i32)
+		(set_local $input_size
+			(call $ext_scratch_size)
+		)
+		(call $ext_scratch_copy
+			(i32.const 0)
+			(i32.const 0)
+			(get_local $input_size)
+		)
 		(call $ext_set_storage
 			(i32.const 0)
 			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
-		)
-		(set_local $input_size
-			(call $ext_input_size)
-		)
-		(call $ext_input_copy
-			(i32.const 0)
-			(i32.const 0)
-			(get_local $input_size)
 		)
 		(call $ext_set_rent_allowance
 			(i32.const 0)
@@ -631,7 +631,7 @@ const CODE_SET_RENT: &str = r#"
 "#;
 
 // Use test_hash_and_code test to get the actual hash if the code changed.
-const HASH_SET_RENT: [u8; 32] = hex!("21d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24320697f05");
+const HASH_SET_RENT: [u8; 32] = hex!("b2104e79e8757e2bc32ce3141850cb4af0229693165dc38401c94edf0797f390");
 
 /// Input data for each call in set_rent code
 mod call {
@@ -1116,8 +1116,8 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		vec![acl_key, acl_key],
 	))));
 
-	let literal = "0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f243206\
-		97f053200000000000000080100000000000000000000000000000000000000000000000000000000000000010\
+	let literal = "01050200000000000000b2104e79e8757e2bc32ce3141850cb4af0229693165dc38401c94edf079\
+		7f3903200000000000000080100000000000000000000000000000000000000000000000000000000000000010\
 		0000000000000000000000000000000000000000000000000000000000000";
 
 	assert_eq!(encoded, literal);

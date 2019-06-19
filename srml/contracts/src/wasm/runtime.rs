@@ -39,9 +39,8 @@ enum SpecialTrap {
 }
 
 /// Can only be used for one call.
-pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
+pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	input_data: &'data [u8],
 	// A VM can return a result only once and only by value. So
 	// we wrap output buffer to make it possible to take the buffer out.
 	empty_output_buf: Option<EmptyOutputBuf>,
@@ -51,10 +50,10 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
-impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
-		input_data: &'data [u8],
+		input_data: Vec<u8>,
 		empty_output_buf: EmptyOutputBuf,
 		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
@@ -62,9 +61,9 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	) -> Self {
 		Runtime {
 			ext,
-			input_data,
 			empty_output_buf: Some(empty_output_buf),
-			scratch_buf: Vec::new(),
+			// Put the input data into the scratch buffer immediately.
+			scratch_buf: input_data,
 			schedule,
 			memory,
 			gas_meter,
@@ -443,6 +442,8 @@ define_env!(Env, <E: Ext>,
 
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
+	//
+	// This is the only way to return a data buffer to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		match ctx
 			.gas_meter
@@ -569,38 +570,6 @@ define_env!(Env, <E: Ext>,
 		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
 
 		ctx.ext.note_dispatch_call(call);
-
-		Ok(())
-	},
-
-	// Returns the size of the input buffer.
-	ext_input_size(ctx) -> u32 => {
-		Ok(ctx.input_data.len() as u32)
-	},
-
-	// Copy data from the input buffer starting from `offset` with length `len` into the contract memory.
-	// The region at which the data should be put is specified by `dest_ptr`.
-	ext_input_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
-		let offset = offset as usize;
-		if offset > ctx.input_data.len() {
-			// Offset can't be larger than input buffer length.
-			return Err(sandbox::HostError);
-		}
-
-		// This can't panic since `offset <= ctx.input_data.len()`.
-		let src = &ctx.input_data[offset..];
-		if src.len() != len as usize {
-			return Err(sandbox::HostError);
-		}
-
-		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
 
 		Ok(())
 	},
