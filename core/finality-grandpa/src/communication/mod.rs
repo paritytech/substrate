@@ -63,6 +63,7 @@ pub use fg_primitives::GRANDPA_ENGINE_ID;
 mod cost {
 	pub(super) const PAST_REJECTION: i32 = -50;
 	pub(super) const BAD_SIGNATURE: i32 = -100;
+	pub(super) const MALFORMED_CATCH_UP: i32 = -1000;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
 	pub(super) const UNKNOWN_VOTER: i32 = -150;
@@ -71,6 +72,7 @@ mod cost {
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
+	pub(super) const INVALID_CATCH_UP: i32 = -5000;
 	pub(super) const INVALID_COMMIT: i32 = -5000;
 	pub(super) const OUT_OF_SCOPE_MESSAGE: i32 = -500;
 }
@@ -78,6 +80,7 @@ mod cost {
 // benefit scalars for reporting peers.
 mod benefit {
 	pub(super) const ROUND_MESSAGE: i32 = 100;
+	pub(super) const BASIC_VALIDATED_CATCH_UP: i32 = 200;
 	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
 }
@@ -526,9 +529,8 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		let cb = move |outcome| {
 			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
 				// report peer
-				// FIXME: invalid catch up cost
 				if let Some(who) = notification.sender.take() {
-					service.report(who, cost::INVALID_COMMIT);
+					service.report(who, cost::INVALID_CATCH_UP);
 				}
 			}
 

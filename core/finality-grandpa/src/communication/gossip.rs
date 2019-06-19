@@ -624,20 +624,23 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_catch_up_message(&mut self, who: &PeerId, full: &FullCatchUpMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		// FIXME: adjust costs
 		match self.pending_catch_up_request.take() {
 			Some((peer, request, instant)) => {
 				if peer != *who {
 					self.pending_catch_up_request = Some((peer, request, instant));
-					return Action::Discard(-1);
+					return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE);
 				}
 
 				if request.set_id != full.set_id {
-					return Action::Discard(-1);
+					return Action::Discard(cost::MALFORMED_CATCH_UP);
 				}
 
 				if request.round.0 > full.message.round_number {
-					return Action::Discard(-1);
+					return Action::Discard(cost::MALFORMED_CATCH_UP);
+				}
+
+				if full.message.prevotes.is_empty() || full.message.precommits.is_empty() {
+					return Action::Discard(cost::MALFORMED_CATCH_UP);
 				}
 
 				// move request to pending import state we won't push out any
@@ -645,10 +648,11 @@ impl<Block: BlockT> Inner<Block> {
 				// success or failure)
 				self.pending_catch_up_import = Some((peer, request, instant));
 
+				// always discard catch up messages, they're point-to-point
 				let topic = super::global_topic::<Block>(full.set_id.0);
-				Action::ProcessAndDiscard(topic, 0)
+				Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_CATCH_UP)
 			},
-			None => Action::Discard(-1),
+			None => Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
 		}
 	}
 
