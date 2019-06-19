@@ -26,6 +26,7 @@ mod checked_extrinsic;
 mod header;
 mod block;
 mod digest;
+mod tip;
 #[cfg(test)]
 mod tests;
 
@@ -39,6 +40,7 @@ pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{
 	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId
 };
+pub use self::tip::Tip;
 
 use crate::codec::Encode;
 use rstd::prelude::*;

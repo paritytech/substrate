@@ -27,47 +27,67 @@ use crate::traits::{
 	Lookup, Checkable, Extrinsic, SaturatedConversion
 };
 use super::{CheckedExtrinsic, Era};
+use super::Tip;
 
 const TRANSACTION_VERSION: u8 = 1;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance> {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
 	pub signature: Option<(Address, Signature, Index, Era)>,
 	/// The function that should be called.
 	pub function: Call,
+	/// The tip for this transaction
+	pub tip: Tip<Balance>,
 }
 
-impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+impl<
+	Address,
+	Index,
+	Call,
+	Signature,
+	Balance
+> UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance> {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature, era: Era) -> Self {
+	pub fn new_signed(
+		index: Index,
+		function: Call,
+		signed: Address,
+		signature: Signature,
+		era: Era,
+		tip: Tip<Balance>
+	) -> Self {
 		UncheckedMortalExtrinsic {
 			signature: Some((signed, signature, index, era)),
 			function,
+			tip,
 		}
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
-	pub fn new_unsigned(function: Call) -> Self {
+	pub fn new_unsigned(function: Call, tip: Tip<Balance>) -> Self {
 		UncheckedMortalExtrinsic {
 			signature: None,
 			function,
+			tip,
 		}
 	}
 }
 
-impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode> Extrinsic for UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode, Balance: Encode> Extrinsic
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
+{
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber> Checkable<Context>
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber, Balance> Checkable<Context>
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Member + MaybeDisplay,
 	Index: Encode + Member + MaybeDisplay + SimpleArithmetic,
@@ -80,7 +100,7 @@ where
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -103,23 +123,26 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, raw_payload.0)),
 					function: raw_payload.1,
+					tip: self.tip,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
+				tip: self.tip,
 			},
 		})
 	}
 }
 
-impl<Address, Index, Call, Signature> Decode
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, Index, Call, Signature, Balance> Decode
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Decode,
 	Signature: Decode,
 	Index: Decode,
 	Call: Decode,
+	Balance: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -139,17 +162,19 @@ where
 		Some(UncheckedMortalExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
+			tip: Decode::decode(input).unwrap_or_default(),
 		})
 	}
 }
 
-impl<Address, Index, Call, Signature> Encode
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, Index, Call, Signature, Balance> Encode
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Encode,
 	Signature: Encode,
 	Index: Encode,
 	Call: Encode,
+	Balance: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
@@ -164,13 +189,14 @@ where
 				}
 			}
 			self.function.encode_to(v);
+			self.tip.encode_to(v);
 		})
 	}
 }
 
 #[cfg(feature = "std")]
-impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Serialize
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode, Balance: Encode,> serde::Serialize
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
@@ -178,13 +204,22 @@ impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Ser
 }
 
 #[cfg(feature = "std")]
-impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Address, Index, Call, Signature> where
+impl<Address, Index, Call, Signature, Balance> fmt::Debug
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
+where
 	Address: fmt::Debug,
 	Index: fmt::Debug,
 	Call: fmt::Debug,
+	Balance: fmt::Debug
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedMortalExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
+		write!(
+			f,
+			"UncheckedMortalExtrinsic({:?}, {:?} ,{:?})",
+			self.signature.as_ref().map(|x| (&x.0, &x.2)),
+			self.function,
+			self.tip,
+		)
 	}
 }
 
@@ -221,83 +256,153 @@ mod tests {
 	}
 
 	const DUMMY_ACCOUNTID: u64 = 0;
+	type Balance = u64;
 
-	type Ex = UncheckedMortalExtrinsic<u64, u64, Vec<u8>, TestSig>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>>;
+	type Ex = UncheckedMortalExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
 
 	#[test]
 	fn unsigned_codec_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0]);
+		let ux = Ex::new_unsigned(vec![0u8;0], Tip::Sender(10));
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()),
+			Era::immortal(),
+			Tip::default(),
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn large_signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8; 257], Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8; 257], Era::immortal(), 0u64)
+					.using_encoded(blake2_256)[..].to_owned()
+			),
+			Era::immortal(),
+			Tip::default(),
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn unsigned_check_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0]);
+		let ux = Ex::new_unsigned(vec![0u8;0], Tip::default());
 		assert!(!ux.is_signed().unwrap_or(false));
 		assert!(<Ex as Checkable<TestContext>>::check(ux, &TestContext).is_ok());
 	}
 
 	#[test]
 	fn badly_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, vec![0u8]), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, vec![0u8]),
+			Era::immortal(),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn immortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()),
+			Era::immortal(),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default() })
+		);
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 42), 42u64).encode()),
+			Era::mortal(32, 42),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default()})
+		);
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 11), 11u64).encode()),
+			Era::mortal(32, 11),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default() })
+		);
 	}
 
 	#[test]
 	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()),
+			Era::mortal(32, 10),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()),
+			Era::mortal(32, 43),
+			Tip::default(),
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn encoding_matches_vec() {
-		let ex = Ex::new_unsigned(vec![0u8;0]);
+		let ex = Ex::new_unsigned(vec![0u8;0], Tip::Sender(69));
 		let encoded = ex.encode();
 		let decoded = Ex::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(decoded, ex);
