@@ -54,11 +54,11 @@ where
 	}
 }
 
-#[derive(Debug, Encode, Decode, Clone)]
 /// Testing transaction pool for accountable safety operations.
+#[derive(Debug, Encode, Decode, Clone)]
 pub struct TestPool;
 
-impl<C, Block> SubmitReport<C, Block> for TestPool 
+impl<C, Block> SubmitReport<C, Block> for TestPool
 {
 	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
 

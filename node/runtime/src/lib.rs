@@ -27,7 +27,8 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
 };
 use grandpa::fg_primitives::{
-	self, ScheduledChange, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
+	self, ScheduledChange, GrandpaEquivocationProof, AuthorityId, AuthoritySignature,
+	Equivocation, Prevote, Precommit
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -45,7 +46,9 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::{OpaqueMetadata, ed25519};
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::{
+	AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight
+};
 use consensus_aura::AuraEquivocationProof;
 
 #[cfg(any(feature = "std", test))]
@@ -361,12 +364,16 @@ impl_runtime_apis! {
 		}
 
 		fn construct_prevote_equivocation_report_call(
-			_proof: GrandpaEquivocationProof<PrevoteEquivocation<Block, <Block as BlockT>::Hash>>
+			_proof: GrandpaEquivocationProof<
+				Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+			>
 		) -> Vec<u8> {
 			vec![]
 		}
 		fn construct_precommit_equivocation_report_call(
-			_proof: GrandpaEquivocationProof<PrecommitEquivocation<Block, <Block as BlockT>::Hash>>
+			_proof: GrandpaEquivocationProof<
+				Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+			>
 		) -> Vec<u8> {
 			vec![]
 		}

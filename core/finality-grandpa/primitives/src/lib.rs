@@ -28,7 +28,7 @@ use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
-pub use grandpa::{Precommit, Prevote, Equivocation, Message};
+pub use grandpa_primitives::{Precommit, Prevote, Equivocation, Message};
 
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
@@ -60,11 +60,6 @@ pub struct ScheduledChange<N> {
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
-
-pub type PrevoteEquivocation<Block, Hash> =
-	Equivocation<AuthorityId, Prevote<Hash, NumberFor<Block>>, AuthoritySignature>;
-pub type PrecommitEquivocation<Block, Hash> =
-	Equivocation<AuthorityId, Precommit<Hash, NumberFor<Block>>, AuthoritySignature>;
 
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
@@ -125,12 +120,16 @@ decl_runtime_apis! {
 		
 		/// Construct a call to report the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block, Block::Hash>>
+			proof: GrandpaEquivocationProof<
+				Equivocation<AuthorityId, Prevote<Block::Hash, NumberFor<Block>>, AuthoritySignature>
+			>
 		) -> Vec<u8>;
 		
 		/// Construct a call to report the precommit equivocation.
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block, Block::Hash>>
+			proof: GrandpaEquivocationProof<
+				Equivocation<AuthorityId, Precommit<Block::Hash, NumberFor<Block>>, AuthoritySignature>
+			>
 		) -> Vec<u8>;
 	}
 }

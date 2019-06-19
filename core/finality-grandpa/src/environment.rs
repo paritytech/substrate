@@ -31,9 +31,10 @@ use client::{
 	blockchain::HeaderBackend, runtime_api::ConstructRuntimeApi,
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
+use grandpa_primitives::Equivocation;
 use fg_primitives::{GrandpaEquivocationProof, GrandpaApi};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -41,6 +42,8 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+
+use transaction_pool::txpool::{self, PoolApi};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -453,12 +456,15 @@ for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync + Clone,
 	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
-	RA: 'static + Send + Sync,
+	RA: 'static + Send + Sync + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -720,20 +726,42 @@ where
 
 	fn prevote_equivocation(
 		&self,
-		_round: u64,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		round: u64,
+		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
+		let proof = GrandpaEquivocationProof {
+			set_id: self.set_id,
+			round,
+			equivocation,
+		};
+		let block_id = BlockId::number(self.inner.info().chain.best_number);
+		self.transaction_pool.submit_report_call(
+			self.inner.deref(),
+			self.inner.runtime_api()
+				.construct_prevote_equivocation_report_call(&block_id, proof)
+				.unwrap().as_slice(),
+		);
 	}
 
 	fn precommit_equivocation(
 		&self,
-		_round: u64,
+		round: u64,
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
+		let proof = GrandpaEquivocationProof {
+			set_id: self.set_id,
+			round,
+			equivocation,
+		};
+		let block_id = BlockId::number(self.inner.info().chain.best_number);
+		self.transaction_pool.submit_report_call(
+			self.inner.deref(),
+			self.inner.runtime_api()
+				.construct_precommit_equivocation_report_call(&block_id, proof)
+				.unwrap().as_slice(),
+		);
 	}
 }
 
