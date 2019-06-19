@@ -287,7 +287,7 @@ use session::{OnSessionEnding, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
-	SaturatedConversion
+	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -1072,23 +1072,7 @@ impl<T: Trait> Module<T> {
 
 			for v in validators.iter() {
 				if let Some(&points) = points_for_validator.get(v) {
-					// TODO TODO: put this code into a rational type in primitives
-					let reward_divisor_part = total_payout / total_points.into() * points.into();
-					let reward_remainder_part = {
-						let rem = total_payout % total_points.into();
-
-						// Fits into u32 because total_points is u32 and remainder < total_points
-						let rem_u32 = rem.saturated_into::<u32>();
-
-						// Multiplication fits into u64 as both term are u32
-						let rem_part = rem_u32 as u64 * points as u64
-							/ total_points as u64;
-
-						// Result fits into u32 as points < total_points
-						(rem_part as u32).into()
-					};
-
-					let reward = reward_divisor_part + reward_remainder_part;
+					let reward = multiply_by_fraction(total_payout, points, total_points);
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
@@ -1301,4 +1285,30 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 	}
+}
+
+// This is guarantee not to overflow on whatever values.
+// `num` must be inferior to `den` otherwise it will be reduce to `den`.
+fn multiply_by_fraction<N>(value: N, num: u32, den: u32) -> N
+	where N: SimpleArithmetic + Clone
+{
+	let num = num.min(den);
+
+	let result_divisor_part = value.clone() / den.into() * num.into();
+
+	let result_remainder_part = {
+		let rem = value % den.into();
+
+		// Fits into u32 because den is u32 and remainder < den
+		let rem_u32 = rem.saturated_into::<u32>();
+
+		// Multiplication fits into u64 as both term are u32
+		let rem_part = rem_u32 as u64 * num as u64
+			/ den as u64;
+
+		// Result fits into u32 as num < total_points
+		(rem_part as u32).into()
+	};
+
+	result_divisor_part + result_remainder_part
 }
