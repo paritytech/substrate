@@ -39,7 +39,8 @@ use std::result;
 use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
+use substrate_primitives::{NativeOrEncoded, ExecutionContext};
+use fg_primitives::AuthorityId;
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -119,9 +120,9 @@ impl TestNetFactory for GrandpaTestNet {
 	{
 		match client {
 			PeersClient::Full(ref client) => {
+				#[allow(deprecated)]
 				let select_chain = LongestChain::new(
-					client.backend().clone(),
-					client.import_lock().clone()
+					client.backend().clone()
 				);
 				let (import, link) = block_import(
 					client.clone(),
@@ -149,7 +150,10 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn make_finality_proof_provider(&self, client: PeersClient) -> Option<Arc<network::FinalityProofProvider<Block>>> {
+	fn make_finality_proof_provider(
+		&self,
+		client: PeersClient
+	) -> Option<Arc<dyn network::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(ref client) => {
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -200,7 +204,7 @@ impl MessageRouting {
 }
 
 impl Network<Block> for MessageRouting {
-	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
+	type In = Box<dyn Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Hash) -> Self::In {
@@ -251,6 +255,11 @@ impl Network<Block> for MessageRouting {
 				}
 			)
 		})
+	}
+
+	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
+		// NOTE: only required to restore previous state on startup
+		//       not required for tests currently
 	}
 
 	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
@@ -331,15 +340,6 @@ impl Core<Block> for RuntimeApi {
 		_: Option<&<Block as BlockT>::Header>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-	fn Core_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<substrate_primitives::sr25519::Public>>> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -444,7 +444,7 @@ const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -457,7 +457,7 @@ fn run_to_completion_with<F>(
 	peers: &[AuthorityKeyring],
 	with: F,
 ) -> u64 where
-	F: FnOnce(current_thread::Handle) -> Option<Box<Future<Item=(),Error=()>>>
+	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Item=(), Error=()>>>
 {
 	use parking_lot::RwLock;
 
@@ -534,7 +534,7 @@ fn run_to_completion_with<F>(
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
 	highest_finalized
@@ -555,7 +555,7 @@ fn finalize_3_voters_no_observers() {
 	net.sync();
 
 	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -628,7 +628,7 @@ fn finalize_3_voters_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]
@@ -667,10 +667,11 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		assert_eq!(full_client.info().unwrap().chain.best_number, 1,
+		assert_eq!(full_client.info().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+			#[allow(deprecated)]
 			&**full_client.backend()
 		).unwrap();
 
@@ -760,6 +761,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
 					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+						#[allow(deprecated)]
 						&**full_client.backend()
 					).unwrap();
 
@@ -800,7 +802,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]
@@ -887,7 +889,7 @@ fn sync_justifications_on_change_blocks() {
 	net.sync();
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 25,
+		assert_eq!(net.peer(i).client().info().chain.best_number, 25,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -958,7 +960,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	// all peers imported both change blocks
 	for i in 0..6 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 30,
+		assert_eq!(net.peer(i).client().info().chain.best_number, 30,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -978,7 +980,7 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 	net.sync();
 
 	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 100,
+		assert_eq!(net.peer(i).client().info().chain.best_number, 100,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -1008,7 +1010,7 @@ fn force_change_to_new_set() {
 
 		{
 			// add a forced transition at block 12.
-			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+			let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
 			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
 				next_authorities: voters.clone(),
 				delay: 10,
@@ -1025,11 +1027,12 @@ fn force_change_to_new_set() {
 		net.lock().sync();
 
 		for (i, peer) in net.lock().peers().iter().enumerate() {
-			assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
+			assert_eq!(peer.client().info().chain.best_number, 26,
 					"Peer #{} failed to sync", i);
 
 			let full_client = peer.client().as_full().expect("only full clients are used in test");
 			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+				#[allow(deprecated)]
 				&**full_client.backend()
 			).unwrap();
 
@@ -1058,7 +1061,7 @@ fn allows_reimporting_change_blocks() {
 	let (block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
-	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1107,7 +1110,7 @@ fn test_bad_justification() {
 	let (block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
-	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1163,7 +1166,7 @@ fn voter_persists_its_votes() {
 	net.peer(0).push_blocks(20, false);
 	net.sync();
 
-	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 20,
+	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
 			   "Peer #{} failed to sync", 0);
 
 	let mut runtime = current_thread::Runtime::new().unwrap();
@@ -1242,7 +1245,12 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
-		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
+		let (network, routing_work) = communication::NetworkBridge::new(
+			routing,
+			config.clone(),
+			None,
+			Exit,
+		);
 		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
@@ -1275,9 +1283,10 @@ fn voter_persists_its_votes() {
 				net.lock().peer(0).push_blocks(20, false);
 				net.lock().sync();
 
-				assert_eq!(net.lock().peer(0).client().info().unwrap().chain.best_number, 40,
+				assert_eq!(net.lock().peer(0).client().info().chain.best_number, 40,
 						   "Peer #{} failed to sync", 0);
 
+				#[allow(deprecated)]
 				let block_30_hash =
 					net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
 
@@ -1351,7 +1360,7 @@ fn finalize_3_voters_1_light_observer() {
 	net.sync();
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -1397,7 +1406,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	net.lock().sync_without_disconnects();
 
 	// check that the block#1 is finalized on light client
-	while net.lock().peer(1).client().info().unwrap().chain.finalized_number != 1 {
+	while net.lock().peer(1).client().info().chain.finalized_number != 1 {
 		net.lock().tick_peer(1);
 		net.lock().sync_without_disconnects();
 	}
@@ -1440,7 +1449,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 		// add a forced transition at block 5.
 		if FORCE_CHANGE {
-			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+			let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
 			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
 				next_authorities: voters.clone(),
 				delay: 3,
@@ -1465,9 +1474,9 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	runner_net.lock().add_light_peer(&GrandpaTestNet::default_config());
 	runner_net.lock().sync_without_disconnects();
 
- 	// check block, finalized on light client
+	// check block, finalized on light client
 	assert_eq!(
-		runner_net.lock().peer(3).client().info().unwrap().chain.finalized_number,
+		runner_net.lock().peer(3).client().info().chain.finalized_number,
 		if FORCE_CHANGE { 0 } else { 10 },
 	);
 }

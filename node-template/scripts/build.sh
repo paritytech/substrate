@@ -17,7 +17,7 @@ do
   echo "${bold}Building webassembly binary in $SRC...${normal}"
   cd "$PROJECT_ROOT/$SRC"
 
-  ./build.sh
+  ./build.sh "$@"
 
   cd - >> /dev/null
 done

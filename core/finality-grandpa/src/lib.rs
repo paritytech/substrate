@@ -55,10 +55,7 @@
 use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
-use client::{
-	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError,
-};
+use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
@@ -80,8 +77,6 @@ use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::Vote
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
-
-pub use fg_primitives::ScheduledChange;
 
 mod authorities;
 mod aux_schema;
@@ -110,8 +105,10 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
+use fg_primitives::AuthoritySignature;
 
-use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+// Re-export these two because it's just so damn convenient.
+pub use fg_primitives::{AuthorityId, ScheduledChange};
 
 #[cfg(test)]
 mod tests;
@@ -200,7 +197,7 @@ pub struct Config {
 	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
-	pub justification_period: u64,
+	pub justification_period: u32,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
@@ -360,10 +357,11 @@ where
 {
 	use runtime_primitives::traits::Zero;
 
-	let chain_info = client.info()?;
+	let chain_info = client.info();
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
+		#[allow(deprecated)]
 		&**client.backend(),
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
@@ -457,18 +455,17 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	if !inherent_data_providers.has_provider(&srml_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
-				match client.backend().blockchain().info() {
-					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
-					Ok(info) => {
-						telemetry!(CONSENSUS_INFO; "afg.finalized";
-							"finalized_number" => ?info.finalized_number,
-							"finalized_hash" => ?info.finalized_hash,
-						);
-						Ok(info.finalized_number)
-					},
+				#[allow(deprecated)]
+				{
+					let info = client.backend().blockchain().info();
+					telemetry!(CONSENSUS_INFO; "afg.finalized";
+						"finalized_number" => ?info.finalized_number,
+						"finalized_hash" => ?info.finalized_hash,
+					);
+					Ok(info.finalized_number)
 				}
 			}))
-			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}
@@ -523,9 +520,19 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		persistent_data,
 		voter_commands_rx,
 	} = link;
+
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
 
+// <<<<<<< HEAD
 	let (network, network_startup) = NetworkBridge::new(network, config.clone(), set_state.clone(), on_exit.clone());
+// =======
+// 	let (network, network_startup) = NetworkBridge::new(
+// 		network,
+// 		config.clone(),
+// 		Some(&set_state.read()),
+// 		on_exit.clone(),
+// 	);
+// >>>>>>> master
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
@@ -599,10 +606,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		let mut maybe_voter = match &*env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
-				let chain_info = match client.info() {
-					Ok(i) => i,
-					Err(e) => return future::Either::B(future::err(Error::Client(e))),
-				};
+				let chain_info = client.info();
 
 				let last_finalized = (
 					chain_info.chain.finalized_hash,
@@ -665,15 +669,20 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 					let set_state = VoterSetState::Live {
 						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(CompletedRound {
-							number: 0,
-							state: genesis_state,
-							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
-						}),
+						completed_rounds: CompletedRounds::new(
+							CompletedRound {
+								number: 0,
+								state: genesis_state,
+								base: (new.canon_hash, new.canon_number),
+								votes: Vec::new(),
+							},
+							new.set_id,
+							&*authority_set.inner().read(),
+						),
 						current_round: HasVoted::No,
 					};
 
+					#[allow(deprecated)]
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
@@ -699,6 +708,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					env.update_voter_set_state(|voter_set_state| {
 						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
+
+						#[allow(deprecated)]
 						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 						Ok(Some(set_state))
 					})?;
@@ -708,7 +719,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 			}
 		};
 
-		future::Either::A(poll_voter.select2(voter_commands_rx).then(move |res| match res {
+		poll_voter.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A(((), _))) => {
 				// voters don't conclude naturally; this could reasonably be an error.
 				Ok(FutureLoop::Break(()))
@@ -733,7 +744,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				// some command issued internally.
 				handle_voter_command(command, voter_commands_rx)
 			},
-		}))
+		})
 	});
 
 	let voter_work = voter_work

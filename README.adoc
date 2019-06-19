@@ -307,7 +307,7 @@ cargo run --release \-- \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator
 
-Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
+Additional Substrate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
 [[flaming-fir]]
 === Joining the Flaming Fir Testnet
@@ -388,7 +388,7 @@ substrate-trie
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
 * Substrate Runtime Module Library (SRML)
 [source, shell]
-srml-assets, srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-assets, srml-balances, srml-consensus, srml-contracts, srml-council, srml-democracy, srml-example,
 srml-executive, srml-metadata, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
 srml-treasury
 * Node

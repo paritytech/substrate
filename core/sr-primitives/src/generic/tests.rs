@@ -17,31 +17,34 @@
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
 use crate::codec::{Decode, Encode};
-use substrate_primitives::{H256, H512};
+use substrate_primitives::H256;
 use super::DigestItem;
 
 #[test]
 fn system_digest_item_encoding() {
-	let item = DigestItem::AuthoritiesChange::<H256, u32, H512>(vec![10, 20, 30]);
+	let item = DigestItem::ChangesTrieRoot::<H256>(H256::default());
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
-		// type = DigestItemType::AuthoritiesChange
-		1,
-		// number of items in authorities set
-		12,
-		// authorities
-		10, 0, 0, 0,
-		20, 0, 0, 0,
-		30, 0, 0, 0,
+		// type = DigestItemType::ChangesTrieRoot
+		2,
+		// trie root
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
 	]);
 
-	let decoded: DigestItem<H256, u32, H512> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }
 
 #[test]
 fn non_system_digest_item_encoding() {
-	let item = DigestItem::Other::<H256, u32, H512>(vec![10, 20, 30]);
+	let item = DigestItem::Other::<H256>(vec![10, 20, 30]);
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::Other
@@ -52,6 +55,6 @@ fn non_system_digest_item_encoding() {
 		10, 20, 30,
 	]);
 
-	let decoded: DigestItem<H256, u32, H512> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }

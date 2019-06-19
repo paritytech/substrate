@@ -10,11 +10,11 @@ parity-codec = { version = "3.3", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 
 [dev-dependencies]
 sr-io = { path = "../../core/sr-io" }
 substrate-primitives = { path = "../../core/primitives" }
-sr-primitives = { path = "../../core/sr-primitives" }
 
 [features]
 default = ["std"]

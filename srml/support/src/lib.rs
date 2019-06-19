@@ -57,11 +57,46 @@ pub mod unsigned;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
+pub use self::storage::{
+	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
+};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
+
+/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
+/// how you would declare a `const`:
+///
+/// ```no_compile
+/// parameter_types! {
+///   pub const Argument: u64 = 42;
+/// }
+/// trait Config {
+///   type Parameter: Get<u64>;
+/// }
+/// struct Runtime;
+/// impl Config for Runtime {
+///   type Parameter = Argument;
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		pub struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	() => ();
+	(IMPL $name:ident , $type:ty , $value:expr) => {
+		impl $crate::traits::Get<$type> for $name { fn get() -> $type { $value } }
+	}
+}
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
@@ -235,7 +270,8 @@ mod tests {
 			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
+			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
+				double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
 			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
@@ -405,7 +441,9 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
 					hasher: StorageHasher::Twox128,
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
+					key: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -417,7 +455,9 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map{
 					hasher: StorageHasher::Blake2_256,
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
+					key: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
@@ -432,7 +472,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("u64"),
-					key2_hasher: DecodeDifferent::Encode("blake2_256"),
+					key2_hasher: StorageHasher::Blake2_256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
@@ -447,7 +487,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: DecodeDifferent::Encode("twox_128"),
+					key2_hasher: StorageHasher::Twox128,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
@@ -462,7 +502,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: DecodeDifferent::Encode("twox_256"),
+					key2_hasher: StorageHasher::Twox256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
@@ -477,7 +517,7 @@ mod tests {
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("Vec<u32>"),
-					key2_hasher: DecodeDifferent::Encode("blake2_256"),
+					key2_hasher: StorageHasher::Blake2_256,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))

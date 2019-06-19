@@ -21,25 +21,32 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+pub use rstd;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use rstd::ops;
+use rstd::{prelude::*, ops};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 pub mod testing;
 
+pub mod weights;
 pub mod traits;
+use traits::{SaturatedConversion, UniqueSaturatedInto};
+
 pub mod generic;
 pub mod transaction_validity;
+
+/// Re-export these since they're only "kind of" generic.
+pub use generic::{DigestItem, Digest};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -159,27 +166,30 @@ impl Permill {
 
 impl<N> ops::Mul<N> for Permill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let million = <N as traits::As<u64>>::sa(1_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let million: N = 1_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(million.clone());
 
-			// `rem` is inferior to one million, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one million, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one million, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one million, thus the product is less than 10^12
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000;
+			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / million) * part + rem_multiplied_divided
@@ -248,27 +258,30 @@ impl Perbill {
 
 impl<N> ops::Mul<N> for Perbill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let billion: N = 1_000_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(billion.clone());
 
-			// `rem` is inferior to one billion, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one billion, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one billion, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000_000;
+			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / billion) * part + rem_multiplied_divided
@@ -334,8 +347,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {
@@ -604,140 +617,6 @@ macro_rules! impl_outer_config {
 	}
 }
 
-/// Generates enum that contains all possible log entries for the runtime.
-/// Every individual module of the runtime that is mentioned, must
-/// expose a `Log` and `RawLog` enums.
-///
-/// Generated enum is binary-compatible with and could be interpreted
-/// as `generic::DigestItem`.
-///
-/// Runtime requirements:
-/// 1) binary representation of all supported 'system' log items should stay
-///    the same. Otherwise, the native code will be unable to read log items
-///    generated by previous runtime versions
-/// 2) the support of 'system' log items should never be dropped by runtime.
-///    Otherwise, native code will lost its ability to read items of this type
-///    even if they were generated by the versions which have supported these
-///    items.
-#[macro_export]
-macro_rules! impl_outer_log {
-	(
-		$(#[$attr:meta])*
-		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
-		}
-	) => {
-		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
-		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub struct $name($internal);
-
-		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
-		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum InternalLog {
-			$(
-				$module($module::Log<$trait $(, $instance)? >),
-			)*
-		}
-
-		impl $name {
-			/// Try to convert `$name` into `generic::DigestItemRef`. Returns Some when
-			/// `self` is a 'system' log && it has been marked as 'system' in macro call.
-			/// Otherwise, None is returned.
-			#[allow(unreachable_patterns)]
-			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
-				match self.0 {
-					$($(
-					$internal::$module($module::RawLog::$sitem(ref v)) =>
-						Some($crate::generic::DigestItemRef::$sitem(v)),
-					)*)*
-					_ => None,
-				}
-			}
-		}
-
-		impl $crate::traits::DigestItem for $name {
-			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
-			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
-
-			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-				self.dref().and_then(|dref| dref.as_authorities_change())
-			}
-
-			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-				self.dref().and_then(|dref| dref.as_changes_trie_root())
-			}
-		}
-
-		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-			/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
-			/// a system item which is supported by the runtime, it is returned.
-			/// Otherwise we expect a `Other` log item. Trying to convert from anything other
-			/// will lead to panic in runtime, since the runtime does not supports this 'system'
-			/// log item.
-			#[allow(unreachable_patterns)]
-			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
-				match gen {
-					$($(
-					$crate::generic::DigestItem::$sitem(value) =>
-						$name($internal::$module($module::RawLog::$sitem(value))),
-					)*)*
-					_ => gen.as_other()
-						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-						.map($name)
-						.expect("not allowed to fail in runtime"),
-				}
-			}
-		}
-
-		impl $crate::codec::Decode for $name {
-			/// `generic::DigestItem` binary compatible decode.
-			fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
-				let gen: $crate::generic::DigestItem<$($genarg),*> =
-					$crate::codec::Decode::decode(input)?;
-				Some($name::from(gen))
-			}
-		}
-
-		impl $crate::codec::Encode for $name {
-			/// `generic::DigestItem` binary compatible encode.
-			fn encode(&self) -> Vec<u8> {
-				match self.dref() {
-					Some(dref) => dref.encode(),
-					None => {
-						let gen: $crate::generic::DigestItem<$($genarg),*> =
-							$crate::generic::DigestItem::Other(self.0.encode());
-						gen.encode()
-					},
-				}
-			}
-		}
-
-		$(
-			impl From<$module::Log<$trait $(, $instance)? >> for $name {
-				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
-					$name(x.into())
-				}
-			}
-
-			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
-				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
-					InternalLog::$module(x)
-				}
-			}
-		)*
-	};
-}
-
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
@@ -765,45 +644,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::{H256, H512};
 	use crate::codec::{Encode, Decode};
-	use crate::traits::DigestItem;
-
-	pub trait RuntimeT {
-		type AuthorityId;
-	}
-
-	pub struct Runtime;
-
-	impl RuntimeT for Runtime {
-		type AuthorityId = u64;
-	}
-
-	mod a {
-		use super::RuntimeT;
-		use crate::codec::{Encode, Decode};
-		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
-	}
-
-	mod b {
-		use super::RuntimeT;
-		use crate::codec::{Encode, Decode};
-		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
-	}
-
-	impl_outer_log! {
-		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
-			a(AuthoritiesChange), b()
-		}
-	}
 
 	macro_rules! per_thing_mul_upper_test {
 		($num_type:tt, $per:tt) => {
@@ -821,41 +662,6 @@ mod tests {
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
 		}
-	}
-
-	#[test]
-	fn impl_outer_log_works() {
-		// encode/decode regular item
-		let b1: Log = b::RawLog::B1::<u64>(777).into();
-		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		assert_eq!(b1, decoded_b1);
-
-		// encode/decode system item
-		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
-		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		assert_eq!(auth_change, decoded_auth_change);
-
-		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		match generic_b1 {
-			super::generic::DigestItem::Other(_) => (),
-			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
-		}
-
-		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		match generic_auth_change {
-			super::generic::DigestItem::AuthoritiesChange::<H256, u64, H512>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
-			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
-		}
-
-		// check that as-style methods are working with system items
-		assert!(auth_change.as_authorities_change().is_some());
-
-		// check that as-style methods are not working with regular items
-		assert!(b1.as_authorities_change().is_none());
 	}
 
 	#[test]
@@ -918,13 +724,8 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn per_things_operate_in_output_type() {
-		use super::Perbill;
-
-		assert_eq!(Perbill::one() * 255_u64, 255);
-		// panics
-		assert_ne!(Perbill::one() * 255_u8, 255);
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]

@@ -17,17 +17,18 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
-use crate::codec::{Codec, Encode, HasCompact};
+use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
+use crate::generic::{Digest, DigestItem};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, Saturating
+	CheckedShl, CheckedShr
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -73,7 +74,11 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str> {
+		Self::try_origin(o).map_err(|_| "Invalid origin")
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -157,70 +162,142 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
-/// Simple trait similar to `Into`, except that it can be used to convert numerics between each
-/// other.
-pub trait As<T> {
-	/// Convert forward (ala `Into::into`).
-	fn as_(self) -> T;
-	/// Convert backward (ala `From::from`).
-	fn sa(_: T) -> Self;
-}
-
-macro_rules! impl_numerics {
-	( $( $t:ty ),* ) => {
-		$(
-			impl_numerics!($t: u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize,);
-		)*
-	};
-	( $f:ty : $t:ty, $( $rest:ty, )* ) => {
-		impl As<$t> for $f {
-			fn as_(self) -> $t { self as $t }
-			fn sa(t: $t) -> Self { t as Self }
-		}
-		impl_numerics!($f: $( $rest, )*);
-	};
-	( $f:ty : ) => {}
-}
-
-impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-
 /// A meta trait for arithmetic.
+///
+/// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
+/// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
+/// and smaller ints. All other conversions are fallible.
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
+	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl +
-	CheckedShr +
-	CheckedAdd +
-	CheckedSub +
-	CheckedMul +
-	CheckedDiv +
-	Saturating +
-	PartialOrd<Self> + Ord + Bounded +
-	HasCompact
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
+	Saturating + PartialOrd<Self> + Ord + Bounded +
+	HasCompact + Sized
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
+	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
+	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl +
-	CheckedShr +
-	CheckedAdd +
-	CheckedSub +
-	CheckedMul +
-	CheckedDiv +
-	Saturating +
-	PartialOrd<Self> + Ord + Bounded +
-	HasCompact
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
+	Saturating + PartialOrd<Self> + Ord + Bounded +
+	HasCompact + Sized
 > SimpleArithmetic for T {}
+
+/// Just like `From` except that if the source value is too big to fit into the destination type
+/// then it'll saturate the destination.
+pub trait UniqueSaturatedFrom<T: Sized>: Sized {
+	/// Convert from a value of `T` into an equivalent instance of `Self`.
+	fn unique_saturated_from(t: T) -> Self;
+}
+
+/// Just like `Into` except that if the source value is too big to fit into the destination type
+/// then it'll saturate the destination.
+pub trait UniqueSaturatedInto<T: Sized>: Sized {
+	/// Consume self to return an equivalent value of `T`.
+	fn unique_saturated_into(self) -> T;
+}
+
+impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
+	fn unique_saturated_from(t: T) -> Self {
+		S::try_from(t).unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
+impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
+	fn unique_saturated_into(self) -> T {
+		self.try_into().unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
+/// Simple trait to use checked mul and max value to give a saturated mul operation over
+/// supported types.
+pub trait Saturating {
+	/// Saturated addition - if the product can't fit in the type then just use max-value.
+	fn saturating_add(self, o: Self) -> Self;
+
+	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
+	fn saturating_sub(self, o: Self) -> Self;
+
+	/// Saturated multiply - if the product can't fit in the type then just use max-value.
+	fn saturating_mul(self, o: Self) -> Self;
+}
+
+impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+	fn saturating_add(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_add(self, o)
+	}
+	fn saturating_sub(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_sub(self, o)
+	}
+	fn saturating_mul(self, o: Self) -> Self {
+		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
+	}
+}
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `SaturatedFrom` and `SaturatedInto`.
+pub trait SaturatedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Self`.
+	///
+	/// This just uses `UniqueSaturatedFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn saturated_from<T>(t: T) -> Self where Self: UniqueSaturatedFrom<T> {
+		<Self as UniqueSaturatedFrom<T>>::unique_saturated_from(t)
+	}
+
+	/// Consume self to return an equivalent value of `T`.
+	///
+	/// This just uses `UniqueSaturatedInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn saturated_into<T>(self) -> T where Self: UniqueSaturatedInto<T> {
+		<Self as UniqueSaturatedInto<T>>::unique_saturated_into(self)
+	}
+}
+impl<T: Sized> SaturatedConversion for T {}
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `TryFrom` and `TryInto`.
+pub trait CheckedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Option<Self>`.
+	///
+	/// This just uses `TryFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
+		<Self as TryFrom<T>>::try_from(t).ok()
+	}
+	/// Consume self to return `Some` equivalent value of `Option<T>`.
+	///
+	/// This just uses `TryInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
+		<Self as TryInto<T>>::try_into(self).ok()
+	}
+}
+impl<T: Sized> CheckedConversion for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
@@ -330,7 +407,8 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
+		+ Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
 	type Hasher: Hasher<Out=Self::Output>;
@@ -363,7 +441,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output>;
+	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -396,8 +474,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(parent_hash.into(), parent_number).map(Into::into)
+	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
 	}
 }
 
@@ -426,7 +504,7 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
-impl<I> CheckEqual for I where I: DigestItem {
+impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -533,8 +611,6 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
-	/// Digest type
-	type Digest: Digest<Hash = Self::Hash> + Codec;
 
 	/// Creates new header.
 	fn new(
@@ -542,7 +618,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Digest<Self::Hash>,
 	) -> Self;
 
 	/// Returns a reference to the header number.
@@ -566,11 +642,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
-	fn digest(&self) -> &Self::Digest;
+	fn digest(&self) -> &Digest<Self::Hash>;
 	/// Get a mutable reference to the digest.
-	fn digest_mut(&mut self) -> &mut Self::Digest;
-	/// Sets the digest.
-	fn set_digest(&mut self, digest: Self::Digest);
+	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -616,11 +690,9 @@ pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
-pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
+pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
 /// Extract the digest item type for a block.
-pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
-/// Extract the authority ID type for a block.
-pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
+pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -673,46 +745,6 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
-}
-
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
-	/// Hash of the items.
-	type Hash: Member;
-	/// Digest item type.
-	type Item: DigestItem<Hash = Self::Hash>;
-
-	/// Get reference to all digest items.
-	fn logs(&self) -> &[Self::Item];
-	/// Push new digest item.
-	fn push(&mut self, item: Self::Item);
-	/// Pop a digest item.
-	fn pop(&mut self) -> Option<Self::Item>;
-
-	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
-		self.logs().iter()
-			.filter_map(predicate)
-			.next()
-	}
-}
-
-/// Single digest item. Could be any type that implements `Member` and provides methods
-/// for casting member to 'system' log items, known to substrate.
-///
-/// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
-	/// `ChangesTrieRoot` payload.
-	type Hash: Member;
-	/// `AuthorityChange` payload.
-	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
-
-	/// Returns Some if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
-
-	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -783,4 +815,76 @@ pub trait ValidateUnsigned {
 	///
 	/// Changes made to storage should be discarded by caller.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
+}
+
+/// Opaque datatype that may be destructured into a series of raw byte slices (which represent
+/// individual keys).
+pub trait OpaqueKeys: Clone {
+	/// Return the number of encoded keys.
+	fn count() -> usize { 0 }
+	/// Get the raw bytes of key with index `i`.
+	fn get_raw(&self, i: usize) -> &[u8];
+	/// Get the decoded key with index `i`.
+	fn get<T: Decode>(&self, i: usize) -> Option<T> { T::decode(&mut self.get_raw(i)) }
+	/// Verify a proof of ownership for the keys.
+	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+/// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
+/// e.g.
+/// ```nocompile
+/// count!(println ("{}",) foo, bar, baz);
+/// // Will result in three `println!`s: "0", "1" and "2".
+/// ```
+#[macro_export]
+macro_rules! count {
+	($f:ident ($($x:tt)*) ) => ();
+	($f:ident ($($x:tt)*) $x1:tt) => { $f!($($x)* 0); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt) => { $f!($($x)* 0); $f!($($x)* 1); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt) => { $f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); };
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt) => {
+		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3);
+	};
+	($f:ident ($($x:tt)*) $x1:tt, $x2:tt, $x3:tt, $x4:tt, $x5:tt) => {
+		$f!($($x)* 0); $f!($($x)* 1); $f!($($x)* 2); $f!($($x)* 3); $f!($($x)* 4);
+	};
+}
+
+#[macro_export]
+/// Just implement `OpaqueKeys` for a given tuple-struct.
+/// Would be much nicer for this to be converted to `derive` code.
+macro_rules! impl_opaque_keys {
+	(
+		pub struct $name:ident ( $( $t:ty ),* $(,)* );
+	) => {
+		impl_opaque_keys! {
+			pub struct $name ( $( $t ,)* );
+			impl OpaqueKeys for _ {}
+		}
+	};
+	(
+		pub struct $name:ident ( $( $t:ty ),* $(,)* );
+		impl OpaqueKeys for _ {
+			$($rest:tt)*
+		}
+	) => {
+		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
+		pub struct $name($( pub $t ,)*);
+		impl $crate::traits::OpaqueKeys for $name {
+			fn count() -> usize {
+				let mut c = 0;
+				$( let _: $t; c += 1; )*
+				c
+			}
+			fn get_raw(&self, i: usize) -> &[u8] {
+				$crate::count!(impl_opaque_keys (!! self i) $($t),*);
+				&[]
+			}
+			$($rest)*
+		}
+	};
+	( !! $self:ident $param_i:ident $i:tt) => {
+		if $param_i == $i { return $self.$i.as_ref() }
+	}
 }

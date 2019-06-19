@@ -32,6 +32,9 @@
 
 #![cfg(feature="rhd")]
 // FIXME #1020 doesn't compile
+// NOTE: this is the legacy constant used for transaction size. No longer used except
+// for the rhd code which is not updated. Placed here for compatibility.
+const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -45,7 +48,10 @@ use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
 use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
+use runtime_primitives::traits::{
+	Block as BlockT, Hash as HashT, Header as HeaderT,
+	BlockNumberToHash, SaturatedConversion
+};
 use runtime_primitives::Justification;
 use primitives::{AuthorityId, ed25519, Blake2Hasher, ed25519::LocalizedSignature};
 use srml_system::Trait as SystemT;
@@ -1246,7 +1252,7 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		for (target, misbehavior) in misbehavior {
 			let report = MisbehaviorReport {
 				parent_hash: self.parent_hash.into(),
-				parent_number: self.parent_number.as_(),
+				parent_number: self.parent_number.saturated_into::<u64>(),
 				target,
 				misbehavior: match misbehavior {
 					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,

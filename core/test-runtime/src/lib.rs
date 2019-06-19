@@ -34,11 +34,12 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity,
+	ApplyResult,
 	create_runtime_str,
+	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
+		GetNodeBlockType, GetRuntimeBlockType, Verify
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -48,6 +49,12 @@ use primitives::{sr25519, OpaqueMetadata};
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+pub use consensus_babe::AuthorityId;
+
+// Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub type AuraId = AuthorityId;
+// Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub type BabeId = AuthorityId;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -99,6 +106,7 @@ pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
+	StorageChange(Vec<u8>, Option<Vec<u8>>),
 }
 
 #[cfg(feature = "std")]
@@ -121,14 +129,19 @@ impl BlindCheckable for Extrinsic {
 					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
-			Extrinsic::IncludeData(data) => Ok(Extrinsic::IncludeData(data)),
+			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
 }
 
 impl ExtrinsicT for Extrinsic {
 	fn is_signed(&self) -> Option<bool> {
-		Some(true)
+		if let Extrinsic::IncludeData(_) = *self {
+			Some(false)
+		} else {
+			Some(true)
+		}
 	}
 }
 
@@ -141,10 +154,6 @@ impl Extrinsic {
 	}
 }
 
-/// The signature type used by authorities.
-pub type AuthoritySignature = sr25519::Signature;
-/// The identity type used by authorities.
-pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
 /// The signature type used by accounts/transactions.
 pub type AccountSignature = sr25519::Signature;
 /// An identifier for an account on this system.
@@ -156,13 +165,13 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, AuthorityId, AuthoritySignature>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
+pub type Digest = runtime_primitives::generic::Digest<H256>;
 /// A test block.
 pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, DigestItem>;
+pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -347,10 +356,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -361,6 +366,16 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					if let Extrinsic::IncludeData(data) = utx {
+						return TransactionValidity::Valid {
+							priority: data.len() as u64,
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						};
+					}
+
 					system::validate_transaction(utx)
 				}
 			}
@@ -444,8 +459,9 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
@@ -456,18 +472,13 @@ cfg_if! {
 						threshold: std::u64::MAX,
 					}
 				}
+				fn authorities() -> Vec<BabeId> { system::authorities() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
-				}
-			}
-
-			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					system::authorities()
+					runtime_io::submit_transaction(&ex).unwrap();
 				}
 			}
 		}
@@ -485,10 +496,6 @@ cfg_if! {
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
 				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					panic!("Deprecated, please use `AuthoritiesApi`.")
-				}
 			}
 
 			impl client_api::Metadata<Block> for Runtime {
@@ -499,6 +506,16 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					if let Extrinsic::IncludeData(data) = utx {
+						return TransactionValidity::Valid {
+							priority: data.len() as u64,
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						};
+					}
+
 					system::validate_transaction(utx)
 				}
 			}
@@ -586,8 +603,9 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
@@ -598,18 +616,13 @@ cfg_if! {
 						threshold: core::u64::MAX,
 					}
 				}
+				fn authorities() -> Vec<BabeId> { system::authorities() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_extrinsic(&ex)
-				}
-			}
-
-			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
-				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					system::authorities()
+					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
 		}

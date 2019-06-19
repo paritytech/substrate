@@ -22,9 +22,12 @@ use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
-use parity_codec::Encode;
+use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
+	SimpleArithmetic, CheckedConversion,
+};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
 	create_proof_check_backend_storage, read_child_proof_check};
@@ -233,7 +236,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		&self,
 		request: &RemoteChangesRequest<B::Header>,
 		remote_proof: ChangesProof<B::Header>,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
@@ -281,28 +284,27 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<_, H>(
+		key_changes_proof_check::<_, H, _>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,
 			},
 			remote_proof,
-			request.first_block.0.as_(),
+			request.first_block.0,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0.as_(),
+				number: request.last_block.0,
 			},
-			remote_max_block.as_(),
+			remote_max_block,
 			&request.key)
-		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
 	fn check_changes_tries_proof(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 		remote_roots: &BTreeMap<NumberFor<B>, B::Hash>,
 		remote_roots_proof: Vec<Vec<u8>>,
 	) -> ClientResult<()>
@@ -358,7 +360,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord,
+		H::Out: Ord + 'static,
 		S: BlockchainStorage<Block>,
 		F: Send + Sync,
 {
@@ -414,7 +416,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteChangesRequest<Block::Header>,
 		remote_proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
-		self.check_changes_proof_with_cht_size(request, remote_proof, cht::SIZE)
+		self.check_changes_proof_with_cht_size(request, remote_proof, cht::size())
 	}
 
 	fn check_body_proof(
@@ -438,25 +440,38 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
+struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: BTreeMap<Number, Hash>,
 }
 
-impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
+impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + As<u64>,
+		Number: ::std::fmt::Display + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
-	fn root(&self, _anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+	fn build_anchor(
+		&self,
+		_hash: H::Out,
+	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, Number>, String> {
+		Err("build_anchor is only called when building block".into())
+	}
+
+	fn root(
+		&self,
+		_anchor: &ChangesTrieAnchorBlockId<H::Out, Number>,
+		block: Number,
+	) -> Result<Option<H::Out>, String> {
 		// we can't ask for roots from parallel forks here => ignore anchor
-		let root = if block < self.roots.0.as_() {
-			self.prev_roots.get(&As::sa(block)).cloned()
+		let root = if block < self.roots.0 {
+			self.prev_roots.get(&Number::unique_saturated_from(block)).cloned()
 		} else {
-			block.checked_sub(self.roots.0.as_())
-				.and_then(|index| self.roots.1.get(index as usize))
-				.cloned()
+			let index: Option<usize> = block.checked_sub(&self.roots.0).and_then(|index| index.checked_into());
+			match index {
+				Some(index) => self.roots.1.get(index as usize).cloned(),
+				None => None,
+			}
 		};
 
 		Ok(root.map(|root| {
@@ -476,7 +491,7 @@ pub mod tests {
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
 	use test_client::{
-		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;
@@ -486,7 +501,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{StorageKey, well_known_keys};
+	use primitives::storage::{well_known_keys, StorageKey};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -549,10 +564,10 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::AUTHORITY_COUNT.to_vec()))
+		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
 			.unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -565,7 +580,7 @@ pub mod tests {
 		).unwrap();
 		let local_executor = test_client::LocalExecutor::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
-		(local_checker, remote_block_header, remote_read_proof, authorities_len)
+		(local_checker, remote_block_header, remote_read_proof, heap_pages)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, Vec<Vec<u8>>) {
@@ -573,7 +588,7 @@ pub mod tests {
 		let remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block().unwrap();
+			let builder = remote_client.new_block(Default::default()).unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
 				.map_err(|_| ClientError::Backend("TestError".into())));
@@ -604,19 +619,19 @@ pub mod tests {
 
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
-		let (local_checker, remote_block_header, remote_read_proof, authorities_len) = prepare_for_read_proof_check();
-		assert_eq!((&local_checker as &FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
+		let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
+			key: well_known_keys::HEAP_PAGES.to_vec(),
 			retry_count: None,
-		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
+		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
 	}
 
 	#[test]
 	fn header_proof_is_generated_and_checked() {
 		let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
-		assert_eq!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
 			retry_count: None,
@@ -627,7 +642,7 @@ pub mod tests {
 	fn check_header_proof_fails_if_cht_root_is_invalid() {
 		let (local_checker, _, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
 		remote_block_header.number = 100;
-		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -638,7 +653,7 @@ pub mod tests {
 	fn check_header_proof_fails_if_invalid_header_provided() {
 		let (local_checker, local_cht_root, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
 		remote_block_header.number = 100;
-		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
+		assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
 			retry_count: None,
@@ -652,9 +667,9 @@ pub mod tests {
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			test_client::LocalExecutor::new(None)
 		);
-		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let local_checker = &local_checker as &dyn FetchChecker<Block>;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
@@ -748,9 +763,9 @@ pub mod tests {
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			test_client::LocalExecutor::new(None)
 		);
-		let local_checker = &local_checker as &FetchChecker<Block>;
-		let max = remote_client.info().unwrap().chain.best_number;
-		let max_hash = remote_client.info().unwrap().chain.best_hash;
+		let local_checker = &local_checker as &dyn FetchChecker<Block>;
+		let max = remote_client.info().chain.best_number;
+		let max_hash = remote_client.info().chain.best_hash;
 
 		let (begin, end, key, _) = test_cases[0].clone();
 		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();

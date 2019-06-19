@@ -70,17 +70,17 @@ impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 	}
 
 	/// Put a value in under a key.
-	fn put<T: Encode>(&self, key: &[u8], val: &T) {
+	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
 		hashed::put(&H::hash, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]) {
+	fn kill(&mut self, key: &[u8]) {
 		hashed::kill(&H::hash, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
 		hashed::take(&H::hash, key)
 	}
 
@@ -88,7 +88,7 @@ impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 		hashed::get_raw(&H::hash, key)
 	}
 
-	fn put_raw(&self, key: &[u8], value: &[u8]) {
+	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
 		hashed::put_raw(&H::hash, key, value)
 	}
 }
@@ -104,22 +104,22 @@ impl UnhashedStorage for RuntimeStorage {
 	}
 
 	/// Put a value in under a key.
-	fn put<T: Encode>(&self, key: &[u8], val: &T) {
+	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
 		unhashed::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]) {
+	fn kill(&mut self, key: &[u8]) {
 		unhashed::kill(key)
 	}
 
 	/// Remove the bytes of a key from storage.
-	fn kill_prefix(&self, prefix: &[u8]) {
+	fn kill_prefix(&mut self, prefix: &[u8]) {
 		unhashed::kill_prefix(prefix)
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
 		unhashed::take(key)
 	}
 
@@ -127,7 +127,7 @@ impl UnhashedStorage for RuntimeStorage {
 		unhashed::get_raw(key)
 	}
 
-	fn put_raw(&self, key: &[u8], value: &[u8]) {
+	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
 		unhashed::put_raw(key, value)
 	}
 }
@@ -178,89 +178,21 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 		U::get(&RuntimeStorage)
 	}
 	fn put<Arg: Borrow<T>>(val: Arg) {
-		U::put(val.borrow(), &RuntimeStorage)
+		U::put(val.borrow(), &mut RuntimeStorage)
 	}
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
-		U::mutate(f, &RuntimeStorage)
+		U::mutate(f, &mut RuntimeStorage)
 	}
 	fn kill() {
-		U::kill(&RuntimeStorage)
+		U::kill(&mut RuntimeStorage)
 	}
 	fn take() -> Self::Query {
-		U::take(&RuntimeStorage)
+		U::take(&mut RuntimeStorage)
 	}
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
 		where T: EncodeAppend<Item=I>
 	{
-		U::append(items, &RuntimeStorage)
-	}
-}
-
-/// A strongly-typed list in storage.
-pub trait StorageList<T: Codec> {
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the key used to store the length field.
-	fn len_key() -> Vec<u8>;
-
-	/// Get the storage key used to fetch a value at a given index.
-	fn key_for(index: u32) -> Vec<u8>;
-
-	/// Read out all the items.
-	fn items() -> Vec<T>;
-
-	/// Set the current set of items.
-	fn set_items(items: &[T]);
-
-	/// Set the item at the given index.
-	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg);
-
-	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-	fn get(index: u32) -> Option<T>;
-
-	/// Load the length of the list
-	fn len() -> u32;
-
-	/// Clear the list.
-	fn clear();
-}
-
-impl<T: Codec, U> StorageList<T> for U where U: hashed::generator::StorageList<T> {
-	fn prefix() -> &'static [u8] {
-		<U as hashed::generator::StorageList<T>>::prefix()
-	}
-
-	fn len_key() -> Vec<u8> {
-		<U as hashed::generator::StorageList<T>>::len_key()
-	}
-
-	fn key_for(index: u32) -> Vec<u8> {
-		<U as hashed::generator::StorageList<T>>::key_for(index)
-	}
-
-	fn items() -> Vec<T> {
-		U::items(&RuntimeStorage)
-	}
-
-	fn set_items(items: &[T]) {
-		U::set_items(items, &RuntimeStorage)
-	}
-
-	fn set_item<Arg: Borrow<T>>(index: u32, val: Arg) {
-		U::set_item(index, val.borrow(), &RuntimeStorage)
-	}
-
-	fn get(index: u32) -> Option<T> {
-		U::get(index, &RuntimeStorage)
-	}
-
-	fn len() -> u32 {
-		U::len(&RuntimeStorage)
-	}
-
-	fn clear() {
-		U::clear(&RuntimeStorage)
+		U::append(items, &mut RuntimeStorage)
 	}
 }
 
@@ -314,26 +246,45 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 	}
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
-		U::insert(key.borrow(), val.borrow(), &RuntimeStorage)
+		U::insert(key.borrow(), val.borrow(), &mut RuntimeStorage)
 	}
 
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
-		U::remove(key.borrow(), &RuntimeStorage)
+		U::remove(key.borrow(), &mut RuntimeStorage)
 	}
 
 	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		U::mutate(key.borrow(), f, &RuntimeStorage)
+		U::mutate(key.borrow(), f, &mut RuntimeStorage)
 	}
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		U::take(key.borrow(), &RuntimeStorage)
+		U::take(key.borrow(), &mut RuntimeStorage)
+	}
+}
+
+/// A storage map with values that can be appended to.
+pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Append the given item to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>;
+}
+
+impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
+	where U: hashed::generator::AppendableStorageMap<K, V>
+{
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>
+	{
+		U::append(key.borrow(), items, &mut RuntimeStorage)
 	}
 }
 
 /// A storage map that can be enumerated.
 ///
-/// Note that type is primarily useful for off-chain computations.
-/// Runtime implementors should avoid enumerating storage entries.
+/// Primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries on-chain.
 pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Return current head element.
 	fn head() -> Option<K>;
@@ -342,7 +293,9 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: hashed::generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
+	where U: hashed::generator::EnumerableStorageMap<K, V>
+{
 	fn head() -> Option<K> {
 		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
@@ -444,19 +397,19 @@ where
 	}
 
 	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
-		U::take(k1.borrow(), k2.borrow(), &RuntimeStorage)
+		U::take(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
 	}
 
 	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg) {
-		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &RuntimeStorage)
+		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &mut RuntimeStorage)
 	}
 
 	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) {
-		U::remove(k1.borrow(), k2.borrow(), &RuntimeStorage)
+		U::remove(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
 	}
 
 	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1) {
-		U::remove_prefix(k1.borrow(), &RuntimeStorage)
+		U::remove_prefix(k1.borrow(), &mut RuntimeStorage)
 	}
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
@@ -465,7 +418,7 @@ where
 		KArg2: Borrow<K2>,
 		F: FnOnce(&mut Self::Query) -> R
 	{
-		U::mutate(k1.borrow(), k2.borrow(), f, &RuntimeStorage)
+		U::mutate(k1.borrow(), k2.borrow(), f, &mut RuntimeStorage)
 	}
 
 	fn append<KArg1, KArg2, I>(
@@ -479,7 +432,7 @@ where
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>,
 	{
-		U::append(k1.borrow(), k2.borrow(), items, &RuntimeStorage)
+		U::append(k1.borrow(), k2.borrow(), items, &mut RuntimeStorage)
 	}
 }
 

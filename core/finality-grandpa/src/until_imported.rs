@@ -29,12 +29,12 @@ use futures::stream::Fuse;
 use grandpa::voter;
 use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use substrate_primitives::ed25519::{Public as AuthorityId};
 use tokio::timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
+use fg_primitives::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 

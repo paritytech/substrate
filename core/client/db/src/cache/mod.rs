@@ -25,7 +25,7 @@ use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use crate::utils::{self, COLUMN_META, db_err};
 
@@ -35,8 +35,8 @@ mod list_cache;
 mod list_entry;
 mod list_storage;
 
-/// Minimal post-finalization age age of finalized blocks before they'll pruned.
-const PRUNE_DEPTH: u64 = 1024;
+/// Minimal post-finalization age of finalized blocks before they'll pruned.
+const PRUNE_DEPTH: u32 = 1024;
 
 /// The type of entry that is inserted to the cache.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,7 +77,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
 	authorities_column: Option<u32>,
@@ -88,7 +88,7 @@ pub struct DbCache<Block: BlockT> {
 impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
-		db: Arc<KeyValueDB>,
+		db: Arc<dyn KeyValueDB>,
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
@@ -150,7 +150,7 @@ impl<Block: BlockT> DbCache<Block> {
 fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: CacheKeyId,
-	db: &Arc<KeyValueDB>,
+	db: &Arc<dyn KeyValueDB>,
 	key_lookup: Option<u32>,
 	header: Option<u32>,
 	cache: Option<u32>,
@@ -166,7 +166,7 @@ fn get_cache_helper<'a, Block: BlockT>(
 					cache,
 				},
 			),
-			As::sa(PRUNE_DEPTH),
+			PRUNE_DEPTH.into(),
 			best_finalized_block.clone(),
 		)
 	})

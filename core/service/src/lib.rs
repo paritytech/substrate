@@ -31,20 +31,20 @@ use std::collections::HashMap;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::BlockchainEvents;
+use client::{BlockchainEvents, backend::Backend};
 use exit_future::Signal;
 use futures::prelude::*;
-use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
+use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -76,14 +76,13 @@ pub struct Service<Components: components::Components> {
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<Arc<tel::Telemetry>>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
+	_telemetry: Option<tel::Telemetry>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
@@ -106,7 +105,7 @@ pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 /// Used to hook on telemetry connection established events.
 pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 	/// Executor to which the hook is spawned.
@@ -158,11 +157,14 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let chain_info = client.info()?.chain;
+		let chain_info = client.info().chain;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => chain_info.best_number.as_(), "best" => ?chain_info.best_hash);
+		telemetry!(SUBSTRATE_INFO; "node.start";
+			"height" => chain_info.best_number.saturated_into::<u64>(),
+			"best" => ?chain_info.best_hash
+		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
@@ -173,16 +175,6 @@ impl<Components: components::Components> Service<Components> {
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 });
-
-		let network_params = network::config::Params {
-			config: network::config::ProtocolConfig { roles: config.roles },
-			network_config: config.network.clone(),
-			chain: client.clone(),
-			finality_proof_provider,
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			specialization: network_protocol,
-		};
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -197,17 +189,30 @@ impl<Components: components::Components> Service<Components> {
 			network::ProtocolId::from(protocol_id_full)
 		};
 
-		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
-		if let Some(on_demand) = on_demand.as_ref() {
-			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
-		}
+		let network_params = network::config::Params {
+			roles: config.roles,
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			finality_proof_provider,
+			on_demand,
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			import_queue,
+			protocol_id,
+			specialization: network_protocol,
+		};
 
-		let inherents_pool = Arc::new(InherentsPool::default());
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+		let network_mut = network::NetworkWorker::new(network_params)?;
+		let network = network_mut.service().clone();
+
+		task_executor.spawn(network_mut
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(())));
+
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
-				inherents_pool.clone(),
 				task_executor.clone(),
 			)))
 		} else {
@@ -301,11 +306,17 @@ impl<Components: components::Components> Service<Components> {
 		{
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
+			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
 					}
+					let status = transaction_pool_.status();
+					telemetry!(SUBSTRATE_INFO; "txpool.import";
+						"ready" => status.ready,
+						"future" => status.future
+					);
 					Ok(())
 				})
 				.select(exit.clone())
@@ -314,6 +325,56 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.spawn(events);
 		}
 
+		// Periodically notify the telemetry.
+		let transaction_pool_ = transaction_pool.clone();
+		let client_ = client.clone();
+		let network_ = network.clone();
+		let mut sys = System::new();
+		let self_pid = get_current_pid();
+		task_executor.spawn(network.status().for_each(move |sync_status| {
+			let info = client_.info();
+			let best_number = info.chain.best_number.saturated_into::<u64>();
+			let best_hash = info.chain.best_hash;
+			let num_peers = sync_status.num_peers;
+			let txpool_status = transaction_pool_.status();
+			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
+			let bandwidth_download = network_.average_download_per_sec();
+			let bandwidth_upload = network_.average_upload_per_sec();
+
+			#[allow(deprecated)]
+			let backend = (*client_).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
+			// get cpu usage and memory usage of this process
+			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
+				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
+				(proc.cpu_usage(), proc.memory())
+			} else { (0.0, 0) };
+
+			let network_state = network_.network_state();
+
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"network_state" => network_state,
+				"peers" => num_peers,
+				"height" => best_number,
+				"best" => ?best_hash,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
+			);
+
+			Ok(())
+		}).select(exit.clone()).then(|_| Ok(())));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -322,10 +383,23 @@ impl<Components: components::Components> Service<Components> {
 			impl_version: config.impl_version.into(),
 			properties: config.chain_spec.properties(),
 		};
+		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			system_rpc_tx,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
+		task_executor.spawn(build_system_rpc_handler::<Components>(
+			network.clone(),
+			system_rpc_rx,
+			has_bootnodes
+		));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -339,9 +413,15 @@ impl<Components: components::Components> Service<Components> {
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
-				on_connect: Box::new(move || {
+				wasm_external_transport: None,
+			});
+			let future = telemetry.clone()
+				.for_each(move |event| {
+					// Safe-guard in case we add more events in the future.
+					let tel::TelemetryEvent::Connected = event;
+
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
@@ -356,8 +436,12 @@ impl<Components: components::Components> Service<Components> {
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-				}),
-			}))
+					Ok(())
+				});
+			task_executor.spawn(future
+				.select(exit.clone())
+				.then(|_| Ok(())));
+			telemetry
 		});
 
 		Ok(Service {
@@ -365,7 +449,6 @@ impl<Components: components::Components> Service<Components> {
 			network: Some(network),
 			select_chain,
 			transaction_pool,
-			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -391,7 +474,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
@@ -415,11 +498,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -473,26 +551,36 @@ pub struct TransactionPoolAdapter<C: Components> {
 
 impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
+		Some(BlockId::hash(self.client.info().chain.best_hash))
 	}
+}
+
+/// Get transactions for propagation.
+///
+/// Function extracted to simplify the test and prevent creating `ServiceFactory`.
+fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+	-> Vec<(H, B::Extrinsic)>
+where
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+{
+	pool.ready()
+		.filter(|t| t.is_propagateable())
+		.map(|t| {
+			let hash = t.hash.clone();
+			let ex: B::Extrinsic = t.data.clone();
+			(hash, ex)
+		})
+		.collect()
 }
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
 	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
 {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready()
-			.map(|t| {
-				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.clone();
-				(hash, ex)
-			})
-			.collect()
+		transactions_to_propagate(&self.pool)
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -507,7 +595,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+					Ok(txpool::error::Error::AlreadyImported(hash)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
 					},
@@ -532,6 +620,39 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
+/// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
+fn build_system_rpc_handler<Components: components::Components>(
+	network: Arc<NetworkService<Components::Factory>>,
+	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	should_have_peers: bool,
+) -> impl Future<Item = (), Error = ()> {
+	rx.for_each(move |request| {
+		match request {
+			rpc::apis::system::Request::Health(sender) => {
+				let _ = sender.send(rpc::apis::system::Health {
+					peers: network.peers_debug_info().len(),
+					is_syncing: network.is_major_syncing(),
+					should_have_peers,
+				});
+			},
+			rpc::apis::system::Request::Peers(sender) => {
+				let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
+					peer_id: peer_id.to_base58(),
+					roles: format!("{:?}", p.roles),
+					protocol_version: p.protocol_version,
+					best_hash: p.best_hash,
+					best_number: p.best_number,
+				}).collect());
+			}
+			rpc::apis::system::Request::NetworkState(sender) => {
+				let _ = sender.send(network.network_state());
+			}
+		};
+
+		Ok(())
+	})
+}
+
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -550,12 +671,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # use client::{self, LongestChain};
 /// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock};
+/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
 /// # use runtime_primitives::Justification;
-/// # use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT};
+/// # use runtime_primitives::traits::Block as BlockT;
 /// # use grandpa;
 /// # construct_simple_protocol! {
 /// # 	pub struct NodeProtocol where Block = Block { }
@@ -568,7 +689,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }
@@ -606,7 +727,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 				#[allow(deprecated)]
+/// 				Ok(LongestChain::new(client.backend().clone()))
 /// 			}},
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
@@ -727,5 +849,43 @@ macro_rules! construct_service_factory {
 				})
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use consensus_common::SelectChain;
+	use runtime_primitives::traits::BlindCheckable;
+	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+
+	#[test]
+	fn should_not_propagate_transactions_that_are_marked_as_such() {
+		// given
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = Arc::new(TransactionPool::new(
+			Default::default(),
+			transaction_pool::ChainApi::new(client.clone())
+		));
+		let best = longest_chain.best_chain().unwrap();
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		assert_eq!(pool.status().ready, 2);
+
+		// when
+		let transactions = transactions_to_propagate(&pool);
+
+		// then
+		assert_eq!(transactions.len(), 1);
+		assert!(transactions[0].1.clone().check().is_ok());
+		// this should not panic
+		let _ = transactions[0].1.transfer();
 	}
 }

@@ -16,15 +16,16 @@
 
 //! Substrate chain configurations.
 
-use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::AccountId;
-use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
+use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
+use node_primitives::{AccountId, AuraId};
+use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
+	SudoConfig, ContractsConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
+use grandpa::AuthorityId as GrandpaId;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -43,27 +44,48 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// and
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
-	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
-		hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].unchecked_into(), // 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
-		hex!["781ead1e2fa9ccb74b44c19d29cb2a7a4b5be3972927ae98cd3877523976a276"].unchecked_into(), // 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
-		hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"].unchecked_into(), // 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
+	let initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)> = vec![(
+		// 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
+		hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].unchecked_into(),
+		// 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
+		hex!["781ead1e2fa9ccb74b44c19d29cb2a7a4b5be3972927ae98cd3877523976a276"].unchecked_into(),
+		// 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
+		hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"].unchecked_into(),
+		// 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
+		hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"].unchecked_into(),
 	),(
-		hex!["68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde78"].unchecked_into(), // 5ERawXCzCWkjVq3xz1W5KGNtVx2VdefvZ62Bw1FEuZW4Vny2
-		hex!["c8dc79e36b29395413399edaec3e20fcca7205fb19776ed8ddb25d6f427ec40e"].unchecked_into(), // 5Gc4vr42hH1uDZc93Nayk5G7i687bAQdHHc9unLuyeawHipF
-		hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"].unchecked_into(), // 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
+		// 5ERawXCzCWkjVq3xz1W5KGNtVx2VdefvZ62Bw1FEuZW4Vny2
+		hex!["68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde78"].unchecked_into(),
+		// 5Gc4vr42hH1uDZc93Nayk5G7i687bAQdHHc9unLuyeawHipF
+		hex!["c8dc79e36b29395413399edaec3e20fcca7205fb19776ed8ddb25d6f427ec40e"].unchecked_into(),
+		// 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
+		hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"].unchecked_into(),
+		// 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
+		hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"].unchecked_into(),
 	),(
-		hex!["547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d65"].unchecked_into(), // 5DyVtKWPidondEu8iHZgi6Ffv9yrJJ1NDNLom3X9cTDi98qp
-		hex!["9e42241d7cd91d001773b0b616d523dd80e13c6c2cab860b1234ef1b9ffc1526"].unchecked_into(), // 5FeD54vGVNpFX3PndHPXJ2MDakc462vBCD5mgtWRnWYCpZU9
-		hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"].unchecked_into(), // 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
+		// 5DyVtKWPidondEu8iHZgi6Ffv9yrJJ1NDNLom3X9cTDi98qp
+		hex!["547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d65"].unchecked_into(),
+		// 5FeD54vGVNpFX3PndHPXJ2MDakc462vBCD5mgtWRnWYCpZU9
+		hex!["9e42241d7cd91d001773b0b616d523dd80e13c6c2cab860b1234ef1b9ffc1526"].unchecked_into(),
+		// 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
+		hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"].unchecked_into(),
+		// 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
+		hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"].unchecked_into(),
 	),(
-		hex!["f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c2663"].unchecked_into(), // 5HYZnKWe5FVZQ33ZRJK1rG3WaLMztxWrrNDb1JRwaHHVWyP9
-		hex!["66bc1e5d275da50b72b15de072a2468a5ad414919ca9054d2695767cf650012f"].unchecked_into(), // 5EPQdAQ39WQNLCRjWsCk5jErsCitHiY5ZmjfWzzbXDoAoYbn
-		hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"].unchecked_into(), // 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
+		// 5HYZnKWe5FVZQ33ZRJK1rG3WaLMztxWrrNDb1JRwaHHVWyP9
+		hex!["f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c2663"].unchecked_into(),
+		// 5EPQdAQ39WQNLCRjWsCk5jErsCitHiY5ZmjfWzzbXDoAoYbn
+		hex!["66bc1e5d275da50b72b15de072a2468a5ad414919ca9054d2695767cf650012f"].unchecked_into(),
+		// 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
+		hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"].unchecked_into(),
+		// 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
+		hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"].unchecked_into(),
 	)];
 
 	// generated with secret: subkey inspect "$secret"/fir
 	let endowed_accounts: Vec<AccountId> = vec![
-		hex!["9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"].unchecked_into(), // 5Ff3iXP75ruzroPWRP2FYBHWnmGGBSb63857BgnzCoXNxfPo
+		// 5Ff3iXP75ruzroPWRP2FYBHWnmGGBSb63857BgnzCoXNxfPo
+		hex!["9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"].unchecked_into(),
 	];
 
 	const MILLICENTS: u128 = 1_000_000_000;
@@ -79,11 +101,11 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const STASH: u128 = 100 * DOLLARS;
 
 	GenesisConfig {
-		consensus: Some(ConsensusConfig {
+		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			_genesis_phantom_data: Default::default(),
+			changes_trie_config: Default::default(),
 		}),
-		system: None,
 		balances: Some(BalancesConfig {
 			transaction_base_fee: 1 * CENTS,
 			transaction_byte_fee: 10 * MILLICENTS,
@@ -103,8 +125,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			session_length: 5 * MINUTES,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -112,36 +133,25 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			session_reward: Perbill::from_parts(2_065),
 			current_session_reward: 0,
 			validator_count: 7,
-			sessions_per_era: 12,
-			bonding_duration: 12,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 10 * MINUTES,    // 1 day per public referendum
-			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
-			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
-			public_delay: 10 * MINUTES,
-			max_lock_periods: 6,
-		}),
+		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
 			candidacy_bond: 10 * DOLLARS,
 			voter_bond: 1 * DOLLARS,
+			voting_fee: 2 * DOLLARS,
 			present_slash_per_voter: 1 * CENTS,
 			carry_count: 6,
 			presentation_duration: 1 * DAYS,
 			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
+			decay_ratio: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 4 * DAYS,
-			voting_period: 1 * DAYS,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
@@ -152,7 +162,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			spend_period: 1 * DAYS,
 			burn: Permill::from_percent(50),
 		}),
-		contract: Some(ContractConfig {
+		contracts: Some(ContractsConfig {
 			signed_claim_handicap: 2,
 			rent_byte_price: 4,
 			rent_deposit_offset: 1000,
@@ -174,8 +184,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
+		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -202,25 +216,33 @@ pub fn get_account_id_from_seed(seed: &str) -> AccountId {
 		.public()
 }
 
-/// Helper function to generate AuthorityId from seed
-pub fn get_session_key_from_seed(seed: &str) -> AuthorityId {
+/// Helper function to generate AuraId from seed
+pub fn get_aura_id_from_seed(seed: &str) -> AuraId {
+	ed25519::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+/// Helper function to generate GrandpaId from seed
+pub fn get_grandpa_id_from_seed(seed: &str) -> GrandpaId {
 	ed25519::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuthorityId) {
+pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuraId, GrandpaId) {
 	(
 		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
-		get_session_key_from_seed(seed)
+		get_aura_id_from_seed(seed),
+		get_grandpa_id_from_seed(seed)
 	)
 }
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
+	initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
@@ -245,7 +267,8 @@ pub fn testnet_genesis(
 	const STASH: u128 = 1 << 20;
 	const ENDOWMENT: u128 = 1 << 20;
 
-	let mut contract_config = ContractConfig {
+	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
+	let mut contracts_config = ContractsConfig {
 		signed_claim_handicap: 2,
 		rent_byte_price: 4,
 		rent_deposit_offset: 1000,
@@ -265,14 +288,14 @@ pub fn testnet_genesis(
 		current_schedule: Default::default(),
 	};
 	// this should only be enabled on development chains
-	contract_config.current_schedule.enable_println = enable_println;
+	contracts_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
-		consensus: Some(ConsensusConfig {
+		system: Some(SystemConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			_genesis_phantom_data: Default::default(),
+			changes_trie_config: Default::default(),
 		}),
-		system: None,
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),
@@ -287,15 +310,12 @@ pub fn testnet_genesis(
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			session_length: 10,
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			minimum_validator_count: 1,
 			validator_count: 2,
-			sessions_per_era: 5,
-			bonding_duration: 12,
 			offline_slash: Perbill::zero(),
 			session_reward: Perbill::zero(),
 			current_session_reward: 0,
@@ -303,31 +323,22 @@ pub fn testnet_genesis(
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 9,
-			voting_period: 18,
-			minimum_deposit: 10,
-			public_delay: 0,
-			max_lock_periods: 6,
-		}),
+		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
-				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
+				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
+			voting_fee: 5,
 			present_slash_per_voter: 1,
 			carry_count: 4,
 			presentation_duration: 10,
 			approval_voting_period: 20,
 			term_duration: 1000000,
-			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
+			desired_seats: council_desired_seats,
+			decay_ratio: council_desired_seats / 3,
 			inactive_grace_period: 1,
-		}),
-		council_voting: Some(CouncilVotingConfig {
-			cooloff_period: 75,
-			voting_period: 20,
-			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.
@@ -338,12 +349,16 @@ pub fn testnet_genesis(
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
 		}),
-		contract: Some(contract_config),
+		contracts: Some(contracts_config),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
+		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -382,7 +397,7 @@ pub fn local_testnet_config() -> ChainSpec {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use service_test;
 	use crate::service::Factory;
@@ -393,13 +408,41 @@ mod tests {
 		genesis
 	}
 
+	fn local_testnet_genesis_instant_single() -> GenesisConfig {
+		let mut genesis = testnet_genesis(
+			vec![
+				get_authority_keys_from_seed("Alice"),
+			],
+			get_account_id_from_seed("Alice"),
+			None,
+			false,
+		);
+		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
+		genesis
+	}
+
+	/// Local testnet config (single validator - Alice)
+	pub fn integration_test_config_with_single_authority() -> ChainSpec {
+		ChainSpec::from_genesis(
+			"Integration Test",
+			"test",
+			local_testnet_genesis_instant_single,
+			vec![],
+			None,
+			None,
+			None,
+			None,
+		)
+	}
+
 	/// Local testnet config (multivalidator Alice + Bob)
-	pub fn integration_test_config() -> ChainSpec {
+	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
 		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
 	}
 
 	#[test]
+	#[ignore]
 	fn test_connectivity() {
-		service_test::connectivity::<Factory>(integration_test_config());
+		service_test::connectivity::<Factory>(integration_test_config_with_two_authorities());
 	}
 }
