@@ -279,6 +279,7 @@ mod benches;
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
+use srml_slashing::{Misconduct, OnSlashing, Slashing};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
@@ -1255,5 +1256,18 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+}
+
+impl<T: Trait> Slashing<T::AccountId> for Module<T> {
+	type Slash = StakingSlasher<T>;
+
+	fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
+		Self::Slash::on_slash(&who, misconduct);
+		misconduct.on_misconduct();
+	}
+
+	fn on_signal(misconduct: &mut impl Misconduct) {
+		misconduct.on_signal();
 	}
 }

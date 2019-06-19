@@ -46,23 +46,7 @@ mod tests {
 	use super::*;
 	use crate::mock::*;
 	use srml_slashing::{Slashing, misconduct::{Unresponsive, BlockProduction}};
-	use rstd::cmp;
 	use runtime_io::with_externalities;
-
-	struct SlashWrapper<T>(PhantomData<T>);
-
-	impl<T: Trait> Slashing<T::AccountId> for SlashWrapper<T> {
-		type Slash = StakingSlasher<T>;
-
-		fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
-			Self::Slash::on_slash(&who, misconduct);
-			misconduct.on_misconduct();
-		}
-
-		fn on_signal(misconduct: &mut impl Misconduct) {
-			misconduct.on_signal();
-		}
-	}
 
 	#[test]
 	fn it_works() {
@@ -70,8 +54,8 @@ mod tests {
 		|| {
 			let mut ur = Unresponsive::default();
 			let mut bp = BlockProduction::default();
-			SlashWrapper::<Test>::slash(&0, &mut ur);
-			SlashWrapper::<Test>::slash(&0, &mut bp);
+			Module::<Test>::slash(&0, &mut ur);
+			Module::<Test>::slash(&0, &mut bp);
 		});
 	}
 }
