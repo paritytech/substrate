@@ -675,9 +675,9 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 mod tests {
 	use crate::codec::{Encode, Decode};
 
-	macro_rules! per_thing_mul_upper_test {
+	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
-			// all sort of from_percent
+			// multiplication from all sort of from_percent
 			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 			assert_eq!(
 				$per::from_percent(99) * $num_type::max_value(),
@@ -686,6 +686,10 @@ mod tests {
 			assert_eq!($per::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
+
+			// multiplication with bounds
+			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
+			assert_eq!($per::zero() * $num_type::max_value(), 0);
 
 			// from_rational_approximation
 			assert_eq!(
@@ -700,10 +704,6 @@ mod tests {
 				$per::from_rational_approximation(1, u128::max_value()),
 				$per::zero(),
 			);
-
-			// bounds
-			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
-			assert_eq!($per::zero() * $num_type::max_value(), 0);
 		}
 	}
 
@@ -757,13 +757,14 @@ mod tests {
 		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
-		per_thing_mul_upper_test!(u32, Perbill);
-		per_thing_mul_upper_test!(u64, Perbill);
-		per_thing_mul_upper_test!(u128, Perbill);
+		per_thing_upper_test!(u32, Perbill);
+		per_thing_upper_test!(u64, Perbill);
+		per_thing_upper_test!(u128, Perbill);
 
-		per_thing_mul_upper_test!(u32, Permill);
-		per_thing_mul_upper_test!(u64, Permill);
-		per_thing_mul_upper_test!(u128, Permill);
+		per_thing_upper_test!(u32, Permill);
+		per_thing_upper_test!(u64, Permill);
+		per_thing_upper_test!(u128, Permill);
+
 	}
 
 	#[test]
