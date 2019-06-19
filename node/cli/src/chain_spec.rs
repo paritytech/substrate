@@ -224,8 +224,8 @@ pub fn testnet_genesis(
 		]
 	});
 
-	const STASH: u128 = 1 << 20;
-	const ENDOWMENT: u128 = 1 << 20;
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = 100 * DOLLARS;
 
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 	let mut contracts_config = ContractsConfig {
