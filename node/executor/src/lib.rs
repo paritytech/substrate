@@ -711,22 +711,23 @@ mod tests {
 	;;    input_data_len: u32
 	;; ) -> u32
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
-	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "deploy")
 	)
 	(func (export "call")
 		(block $fail
-			;; fail if ext_input_size != 4
+			;; load and check the input data (which is stored in the scratch buffer).
+			;; fail if the input size is not != 4
 			(br_if $fail
 				(i32.ne
 					(i32.const 4)
-					(call $ext_input_size)
+					(call $ext_scratch_size)
 				)
 			)
 
-			(call $ext_input_copy
+			(call $ext_scratch_copy
 				(i32.const 0)
 				(i32.const 0)
 				(i32.const 4)

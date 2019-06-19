@@ -605,16 +605,16 @@ const CODE_SET_RENT: &str = r#"
 		(set_local $input_size
 			(call $ext_scratch_size)
 		)
-		(call $ext_scratch_copy
-			(i32.const 0)
-			(i32.const 0)
-			(get_local $input_size)
-		)
 		(call $ext_set_storage
 			(i32.const 0)
 			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
+		)
+		(call $ext_scratch_copy
+			(i32.const 0)
+			(i32.const 0)
+			(get_local $input_size)
 		)
 		(call $ext_set_rent_allowance
 			(i32.const 0)
@@ -631,7 +631,7 @@ const CODE_SET_RENT: &str = r#"
 "#;
 
 // Use test_hash_and_code test to get the actual hash if the code changed.
-const HASH_SET_RENT: [u8; 32] = hex!("b2104e79e8757e2bc32ce3141850cb4af0229693165dc38401c94edf0797f390");
+const HASH_SET_RENT: [u8; 32] = hex!("69aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf");
 
 /// Input data for each call in set_rent code
 mod call {
@@ -1069,16 +1069,17 @@ const CODE_RESTORATION: &str = r#"
 	;; ACL
 	(data (i32.const 100) "\01")
 
-	;; Call
-	(data (i32.const 200) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90"
-		"\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00\08\01\00\00"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
-		"\00"
+	;; Serialized version of `T::Call` that encodes a call to `restore_to` function. For more
+	;; details check out the `ENCODED_CALL_LITERAL`.
+	(data (i32.const 200)
+		"\01\05\02\00\00\00\00\00\00\00\69\ae\df\b4\f6\c1\c3\98\e9\7f\8a\52\04\de\0f\95\ad\5e\7d\c3"
+		"\54\09\60\be\ab\11\a8\6c\56\9f\bf\cf\32\00\00\00\00\00\00\00\08\01\00\00\00\00\00\00\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01\00\00\00\00\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
 	)
 )
 "#;
-const HASH_RESTORATION: [u8; 32] = hex!("b393bfa8de97b02f08ba1580b46100a80c9489a97c8d870691c9ff7236b29bc7");
+const HASH_RESTORATION: [u8; 32] = hex!("02988182efba70fe605031f5c55bfa59e47f72c0a4707f22b6b74fffbf7803dc");
 
 #[test]
 fn restorations_dirty_storage_and_different_storage() {
@@ -1116,12 +1117,20 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		vec![acl_key, acl_key],
 	))));
 
-	let literal = "01050200000000000000b2104e79e8757e2bc32ce3141850cb4af0229693165dc38401c94edf079\
-		7f3903200000000000000080100000000000000000000000000000000000000000000000000000000000000010\
-		0000000000000000000000000000000000000000000000000000000000000";
-
-	assert_eq!(encoded, literal);
-	assert_eq!(115, hex::decode(literal).unwrap().len());
+	// `ENCODED_CALL_LITERAL` is encoded `T::Call` represented as a byte array. There is an exact
+	// same copy of this (modulo hex notation differences) in `CODE_RESTORATION`.
+	//
+	// When this assert is triggered make sure that you update the literals here and in
+	// `CODE_RESTORATION`. Hopefully, we switch to automatical injection of the code.
+	const ENCODED_CALL_LITERAL: &str =
+		"0105020000000000000069aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf320000\
+		0000000000080100000000000000000000000000000000000000000000000000000000000000010000000000000\
+		0000000000000000000000000000000000000000000000000";
+	assert_eq!(
+		encoded,
+		ENCODED_CALL_LITERAL,
+		"The literal was changed and requires updating here and in `CORE_RESOTRATION`",
+	);
 
 	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
 	let set_rent_wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
@@ -1153,14 +1162,18 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				},
 			]);
 
+			// Create an account with address `BOB` with code `HASH_SET_RENT`.
+			// The input parameter sets the rent allowance to 0.
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				30_000,
-				100_000, HASH_SET_RENT.into(),
+				100_000,
+				HASH_SET_RENT.into(),
 				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
-			// Check creation
+			// Check if `BOB` was created successfully and that the rent allowance is
+			// set to 0.
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 0);
 
@@ -1172,36 +1185,49 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				);
 			}
 
-			// Advance 4 blocks
+			// Advance 4 blocks, to the 5th.
 			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
-			// Trigger rent through call
+			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
+			// we expect that it will get removed leaving tombstone.
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
+			/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.
+			///
+			/// Note that we can't use `ALICE` for creating `DJANGO` so we create yet another
+			/// account `CHARLIE` and create `DJANGO` with it.
 			Balances::deposit_creating(&CHARLIE, 1_000_000);
 			assert_ok!(Contract::create(
 				Origin::signed(CHARLIE),
 				30_000,
-				100_000, HASH_RESTORATION.into(),
+				100_000,
+				HASH_RESTORATION.into(),
 				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
+			// Before performing a call to `DJANGO` save its original trie id.
 			let django_trie_id = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 				.get_alive().unwrap().trie_id;
 
 			if !test_restore_to_with_dirty_storage {
-				// Advance 1 blocks
+				// Advance 1 block, to the 6th.
 				System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			}
 
+			// Perform a call to `DJANGO`. This should either perform restoration successfully or
+			// fail depending on the test parameters.
 			assert_ok!(Contract::call(
 				Origin::signed(ALICE),
-				DJANGO, 0, 100_000,
+				DJANGO,
+				0,
+				100_000,
 				vec![],
 			));
 
 			if test_different_storage || test_restore_to_with_dirty_storage {
+				// Parametrization of the test imply restoration failure. Check that `DJANGO` aka
+				// restoration contract is still in place and also that `BOB` doesn't exist.
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
@@ -1209,6 +1235,8 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
 			} else {
+				// Here we expect that the restoration is succeeded. Check that the restoration
+				// contract `DJANGO` ceased to exist and that `BOB` returned back.
 				let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
