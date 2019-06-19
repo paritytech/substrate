@@ -167,12 +167,16 @@ fn should_query_storage() {
 
 		let add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
-			builder.push_transfer(runtime::Transfer {
-				from: AccountKeyring::Alice.into(),
-				to: AccountKeyring::Ferdie.into(),
-				amount: 42,
-				nonce,
-			}).unwrap();
+			// fake change: None -> None -> None
+			builder.push_storage_change(vec![1], None).unwrap();
+			// fake change: None -> Some(value) -> Some(value)
+			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
+			// actual change: None -> Some(value) -> None
+			builder.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None }).unwrap();
+			// actual change: None -> Some(value)
+			builder.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) }).unwrap();
+			// actual change: Some(value1) -> Some(value2)
+			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.bake().unwrap();
 			let hash = block.header.hash();
 			client.import(BlockOrigin::Own, block).unwrap();
@@ -182,32 +186,31 @@ fn should_query_storage() {
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
 
-		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
-
 		let mut expected = vec![
 			StorageChangeSet {
 				block: genesis_hash,
 				changes: vec![
-					(
-						StorageKey(alice_balance_key.to_vec()),
-						Some(StorageData(vec![232, 3, 0, 0, 0, 0, 0, 0]))
-					),
+					(StorageKey(vec![1]), None),
+					(StorageKey(vec![2]), None),
+					(StorageKey(vec![3]), None),
+					(StorageKey(vec![4]), None),
+					(StorageKey(vec![5]), None),
 				],
 			},
 			StorageChangeSet {
 				block: block1_hash,
 				changes: vec![
-					(
-						StorageKey(alice_balance_key.to_vec()),
-						Some(StorageData(vec![190, 3, 0, 0, 0, 0, 0, 0]))
-					),
+					(StorageKey(vec![2]), Some(StorageData(vec![2]))),
+					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
+					(StorageKey(vec![5]), Some(StorageData(vec![0]))),
 				],
 			},
 		];
 
 		// Query changes only up to block1
+		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
 		let result = api.query_storage(
-			vec![StorageKey(alice_balance_key.to_vec())],
+			keys.clone(),
 			genesis_hash,
 			Some(block1_hash).into(),
 		);
@@ -216,7 +219,7 @@ fn should_query_storage() {
 
 		// Query all changes
 		let result = api.query_storage(
-			vec![StorageKey(alice_balance_key.to_vec())],
+			keys.clone(),
 			genesis_hash,
 			None.into(),
 		);
@@ -224,10 +227,9 @@ fn should_query_storage() {
 		expected.push(StorageChangeSet {
 			block: block2_hash,
 			changes: vec![
-				(
-					StorageKey(alice_balance_key.to_vec()),
-					Some(StorageData(vec![148, 3, 0, 0, 0, 0, 0, 0]))
-				),
+				(StorageKey(vec![3]), None),
+				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
+				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
 			],
 		});
 		assert_eq!(result.unwrap(), expected);
