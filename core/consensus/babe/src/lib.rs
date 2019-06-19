@@ -639,7 +639,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 				let mut timestamps = self.timestamps.lock();
 				// Remainder of this block is a critical section.
 				let num_timestamps = timestamps.1.len();
-				if num_timestamps as u64 >= self.config.0.median_required_blocks {
+				if num_timestamps as u64 >= self.config.0.median_required_blocks.max(1) {
 					let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
 							let offset: u128 = u128::from(self.config.get())
 								.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
