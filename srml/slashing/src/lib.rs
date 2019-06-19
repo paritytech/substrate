@@ -58,7 +58,7 @@
 //!
 //!	impl Default for Unresponsive {
 //!		fn default() -> Self {
-//!			Self { severity: 1000 }
+//!			Self { severity: 100_000 }
 //!		}
 //!	}
 //!
