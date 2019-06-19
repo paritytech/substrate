@@ -1112,7 +1112,7 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// Returns the optional new validator set.
+	/// Returns the potential new validator set.
 	fn select_validators() -> Option<Vec<T::AccountId>> {
 		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
