@@ -189,7 +189,13 @@ fn should_query_storage() {
 		let mut expected = vec![
 			StorageChangeSet {
 				block: genesis_hash,
-				changes: vec![],
+				changes: vec![
+					(StorageKey(vec![1]), None),
+					(StorageKey(vec![2]), None),
+					(StorageKey(vec![3]), None),
+					(StorageKey(vec![4]), None),
+					(StorageKey(vec![5]), None),
+				],
 			},
 			StorageChangeSet {
 				block: block1_hash,
