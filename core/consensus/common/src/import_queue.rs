@@ -267,10 +267,15 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		};
 
 		if let Some(justification_import) = worker.justification_import.as_ref() {
-			justification_import.on_start(&mut worker.result_sender);
+			for (hash, number) in justification_import.on_start() {
+				worker.result_sender.request_justification(&hash, number);
+			}
 		}
+
 		if let Some(finality_proof_import) = worker.finality_proof_import.as_ref() {
-			finality_proof_import.on_start(&mut worker.result_sender);
+			for (hash, number) in finality_proof_import.on_start() {
+				worker.result_sender.request_finality_proof(&hash, number);
+			}
 		}
 
 		let future = futures::future::poll_fn(move || {

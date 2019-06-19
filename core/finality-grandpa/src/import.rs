@@ -76,7 +76,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		let mut out = Vec::new();
 		let chain_info = self.inner.info().chain;
 
 		// request justifications for all pending changes for which change blocks have already been imported
@@ -94,12 +95,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 				if let Ok(Some(hash)) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
-							link.request_justification(&header.hash(), *header.number());
+							out.push((header.hash(), *header.number()));
 						}
 					}
 				}
 			}
 		}
+
+		out
 	}
 
 	fn import_justification(
