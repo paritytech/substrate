@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::convert::TryInto;
 use primitives::{
-	generic::Digest, ApplyResult, ApplyError, DispatchError, Error as PrimitiveError,
+	generic::Digest, ApplyResult, ApplyOutcome, ApplyError, DispatchError, Error as PrimitiveError,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 		OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
@@ -231,8 +231,8 @@ where
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			ApplyResult::Success => (),
-			ApplyResult::DispatchError(e) => {
+			Ok(ApplyOutcome::Success) => (),
+			Ok(ApplyOutcome::Fail(e)) => {
 				runtime_io::print("Error:");
 				// as u8 first to ensure not using sign-extend
 				runtime_io::print(e.module as u8 as u64);
@@ -241,10 +241,10 @@ where
 					runtime_io::print(msg);
 				}
 			},
-			ApplyResult::ApplyError(ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
-			ApplyResult::ApplyError(ApplyError::BadSignature) => panic!("All extrinsics should be properly signed"),
-			ApplyResult::ApplyError(ApplyError::Stale) | ApplyResult::ApplyError(ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
-			ApplyResult::ApplyError(ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
+			Err(ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
+			Err(ApplyError::BadSignature) => panic!("All extrinsics should be properly signed"),
+			Err(ApplyError::Stale) | Err(ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
+			Err(ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
 		}
 	}
 
@@ -255,56 +255,49 @@ where
 		to_note: Option<Vec<u8>>,
 	) -> ApplyResult {
 		// Verify that the signature is good.
-		match uxt.check(&Default::default()) {
-			Err(_) => ApplyResult::ApplyError(ApplyError::BadSignature),
-			Ok(xt) => {
-				// Check the weight of the block if that extrinsic is applied.
-				let weight = xt.weight(encoded_len);
-				if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
-					return ApplyResult::ApplyError(ApplyError::FullBlock);
-				}
+		let xt = uxt.check(&Default::default()).map_err(|_| ApplyError::BadSignature)?;
+		// Check the weight of the block if that extrinsic is applied.
+		let weight = xt.weight(encoded_len);
+		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
+			return Err(ApplyError::FullBlock);
+		}
 
-				if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-					// check index
-					let expected_index = <system::Module<System>>::account_nonce(sender);
-					if index != &expected_index {
-						return if index < &expected_index {
-							ApplyResult::ApplyError(ApplyError::Stale)
-						} else {
-							ApplyResult::ApplyError(ApplyError::Future)
-						}
-					}
-					// pay any fees
-					// TODO: propagate why can't pay
-					match Payment::make_payment(sender, encoded_len) {
-						Err(_) => return ApplyResult::ApplyError(ApplyError::CantPay),
-						Ok(_) => ()
-					};
-
-					// AUDIT: Under no circumstances may this function panic from here onwards.
-					// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
-					// a linker error unless the compiler can prove it cannot be called).
-					// increment nonce in storage
-					<system::Module<System>>::inc_account_nonce(sender);
-				}
-
-				// Make sure to `note_extrinsic` only after we know it's going to be executed
-				// to prevent it from leaking in storage.
-				if let Some(encoded) = to_note {
-					<system::Module<System>>::note_extrinsic(encoded);
-				}
-
-				// Decode parameters and dispatch
-				let (f, s) = xt.deconstruct();
-				let r = f.dispatch(s.into()).map_err(Into::<DispatchError>::into);
-				<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
-
-				match r {
-					Ok(_) => ApplyResult::Success,
-					Err(e) => ApplyResult::DispatchError(e),
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
+			// check index
+			let expected_index = <system::Module<System>>::account_nonce(sender);
+			if index != &expected_index {
+				return if index < &expected_index {
+					Err(ApplyError::Stale)
+				} else {
+					Err(ApplyError::Future)
 				}
 			}
+			// pay any fees
+			// TODO: propagate why can't pay
+			Payment::make_payment(sender, encoded_len).map_err(|_| ApplyError::CantPay)?;
+
+			// AUDIT: Under no circumstances may this function panic from here onwards.
+			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
+			// a linker error unless the compiler can prove it cannot be called).
+			// increment nonce in storage
+			<system::Module<System>>::inc_account_nonce(sender);
 		}
+
+		// Make sure to `note_extrinsic` only after we know it's going to be executed
+		// to prevent it from leaking in storage.
+		if let Some(encoded) = to_note {
+			<system::Module<System>>::note_extrinsic(encoded);
+		}
+
+		// Decode parameters and dispatch
+		let (f, s) = xt.deconstruct();
+		let r = f.dispatch(s.into()).map_err(Into::<DispatchError>::into);
+		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
+
+		Ok(match r {
+			Ok(_) => ApplyOutcome::Success,
+			Err(e) => ApplyOutcome::Fail(e),
+		})
 	}
 
 	fn final_checks(header: &System::Header) {

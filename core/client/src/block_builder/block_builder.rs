@@ -17,7 +17,6 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use parity_codec::Encode;
-use runtime_primitives::ApplyResult;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
@@ -104,11 +103,11 @@ where
 				ExecutionContext::BlockConstruction,
 				xt.clone()
 			)? {
-				ApplyResult::Success | ApplyResult::DispatchError(_) => {
+				Ok(_) => {
 					extrinsics.push(xt);
 					Ok(())
 				}
-				ApplyResult::ApplyError(e) => {
+				Err(e) => {
 					Err(error::Error::ApplyExtrinsicFailed(e))
 				}
 			}

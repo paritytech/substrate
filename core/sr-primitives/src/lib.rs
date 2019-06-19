@@ -544,18 +544,18 @@ pub struct DispatchError {
 	pub message: Option<&'static str>,
 }
 
-// TODO: custom implement Encode & Decode to make it a two byte value
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+ #[cfg_attr(feature = "std", derive(Debug, Serialize))]
+ /// Outcome of a valid extrinsic application. Capable of being sliced.
+ pub enum ApplyOutcome {
+ 	/// Successful application (extrinsic reported no issue).
+ 	Success,
+ 	/// Failed application (extrinsic was probably a no-op other than fees).
+ 	Fail(DispatchError),
+ }
+
 /// Result from attempt to apply an extrinsic.
-pub enum ApplyResult {
-	/// Successful application (extrinsic reported no issue).
-	Success,
-	/// Failed application (extrinsic was probably a no-op other than fees).
-	DispatchError(DispatchError),
-	/// Invalid extrinsic application.
-	ApplyError(ApplyError),
-}
+pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
