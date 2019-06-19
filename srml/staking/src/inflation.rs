@@ -18,9 +18,9 @@
 
 use primitives::{Perbill, traits::SimpleArithmetic};
 
-/// Affine function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage
+/// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct Affine {
+struct Linear {
 	negative_a: bool,
 	// Perbill
 	a: u32,
@@ -28,7 +28,7 @@ struct Affine {
 	b: u32,
 }
 
-impl Affine {
+impl Linear {
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -41,52 +41,52 @@ impl Affine {
 	}
 }
 
-/// Affine per part function for PNPoS usage
+/// Piecewise Linear function for PNPoS usage
 #[derive(Debug, PartialEq, Eq)]
-struct AffinePerPart {
-	/// Array of tuple of Abscisse in Perbill and Affine.
+struct PiecewiseLinear {
+	/// Array of tuple of Abscisse in Perbill and Linear.
 	///
-	/// Each part start with at the abscisse up to the abscisse of the next part.
-	parts: [(u32, Affine); 20],
+	/// Each piece start with at the abscisse up to the abscisse of the next piece.
+	pieces: [(u32, Linear); 20],
 }
 
-impl AffinePerPart {
+impl PiecewiseLinear {
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
 	{
-		let part = self.parts.iter()
+		let part = self.pieces.iter()
 			.take_while(|(abscisse, _)| n > Perbill::from_parts(*abscisse) * d.clone())
 			.last()
-			.unwrap_or(&self.parts[0]);
+			.unwrap_or(&self.pieces[0]);
 
 		part.1.calculate_for_fraction_times_denominator(n, d)
 	}
 }
 
-// Affine per part approximation of I_NPoS.
-const I_NPOS: AffinePerPart = AffinePerPart {
-	parts: [
-		(0, Affine { negative_a: false, a: 150000000, b: 25000000 }),
-		(500000000, Affine { negative_a: true, a: 986493987, b: 593246993 }),
-		(507648979, Affine { negative_a: true, a: 884661327, b: 541551747 }),
-		(515726279, Affine { negative_a: true, a: 788373842, b: 491893761 }),
-		(524282719, Affine { negative_a: true, a: 697631517, b: 444319128 }),
-		(533378749, Affine { negative_a: true, a: 612434341, b: 398876765 }),
-		(543087019, Affine { negative_a: true, a: 532782338, b: 355618796 }),
-		(553495919, Affine { negative_a: true, a: 458675508, b: 314600968 }),
-		(564714479, Affine { negative_a: true, a: 390113843, b: 275883203 }),
-		(576879339, Affine { negative_a: true, a: 327097341, b: 239530285 }),
-		(590164929, Affine { negative_a: true, a: 269626004, b: 205612717 }),
-		(604798839, Affine { negative_a: true, a: 217699848, b: 174207838 }),
-		(621085859, Affine { negative_a: true, a: 171318873, b: 145401271 }),
-		(639447429, Affine { negative_a: true, a: 130483080, b: 119288928 }),
-		(660489879, Affine { negative_a: true, a: 95192479, b: 95979842 }),
-		(685131379, Affine { negative_a: true, a: 65447076, b: 75600334 }),
-		(714860569, Affine { negative_a: true, a: 41246910, b: 58300589 }),
-		(752334749, Affine { negative_a: true, a: 22592084, b: 44265915 }),
-		(803047659, Affine { negative_a: true, a: 9482996, b: 33738693 }),
-		(881691659, Affine { negative_a: true, a: 2572702, b: 27645944 })
+// Piecewise linear approximation of I_NPoS.
+const I_NPOS: PiecewiseLinear = PiecewiseLinear {
+	pieces: [
+		(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
+		(500000000, Linear { negative_a: true, a: 986493987, b: 593246993 }),
+		(507648979, Linear { negative_a: true, a: 884661327, b: 541551747 }),
+		(515726279, Linear { negative_a: true, a: 788373842, b: 491893761 }),
+		(524282719, Linear { negative_a: true, a: 697631517, b: 444319128 }),
+		(533378749, Linear { negative_a: true, a: 612434341, b: 398876765 }),
+		(543087019, Linear { negative_a: true, a: 532782338, b: 355618796 }),
+		(553495919, Linear { negative_a: true, a: 458675508, b: 314600968 }),
+		(564714479, Linear { negative_a: true, a: 390113843, b: 275883203 }),
+		(576879339, Linear { negative_a: true, a: 327097341, b: 239530285 }),
+		(590164929, Linear { negative_a: true, a: 269626004, b: 205612717 }),
+		(604798839, Linear { negative_a: true, a: 217699848, b: 174207838 }),
+		(621085859, Linear { negative_a: true, a: 171318873, b: 145401271 }),
+		(639447429, Linear { negative_a: true, a: 130483080, b: 119288928 }),
+		(660489879, Linear { negative_a: true, a: 95192479, b: 95979842 }),
+		(685131379, Linear { negative_a: true, a: 65447076, b: 75600334 }),
+		(714860569, Linear { negative_a: true, a: 41246910, b: 58300589 }),
+		(752334749, Linear { negative_a: true, a: 22592084, b: 44265915 }),
+		(803047659, Linear { negative_a: true, a: 9482996, b: 33738693 }),
+		(881691659, Linear { negative_a: true, a: 2572702, b: 27645944 })
 	]
 };
 
@@ -97,7 +97,6 @@ const I_NPOS: AffinePerPart = AffinePerPart {
 ///
 /// for x the staking rate in NPoS: `PNPoS(x) = INPoS(x) * current_total_token / era_per_year`
 /// i.e.  `PNPoS(x) = INPoS(x) * current_total_token * era_duration / year_duration`
-#[allow(unused)]
 pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N
 where
 	N: SimpleArithmetic + Clone
@@ -112,16 +111,16 @@ where
 mod test_inflation {
 	use std::convert::TryInto;
 
-	// Function `y = a*x + b`
+	// Function `y = a*x + b` using float used for testing precision of Linear
 	#[derive(Debug)]
-	struct AffineFloat {
+	struct LinearFloat {
 		a: f64,
 		b: f64,
 	}
 
-	impl AffineFloat {
+	impl LinearFloat {
 		fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
-			AffineFloat {
+			LinearFloat {
 				a: (y1 - y0) / (x1 - x0),
 				b: (x0*y1 - x1*y0) / (x0 - x1),
 			}
@@ -133,10 +132,11 @@ mod test_inflation {
 	}
 
 	#[test]
-	fn affine_test() {
-		assert_eq!(AffineFloat::new(1.0, 2.0, 4.0, 3.0).compute(7.0), 4.0);
+	fn linear_float_works() {
+		assert_eq!(LinearFloat::new(1.0, 2.0, 4.0, 3.0).compute(7.0), 4.0);
 	}
 
+	// Constants defined in paper
 	const I_0: f64 = 0.025;
 	const i_ideal: f64 = 0.2;
 	const x_ideal: f64 = 0.5;
@@ -152,6 +152,7 @@ mod test_inflation {
 		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
 	}
 
+	// Definition of I_NPoS in float
 	fn I_full(x: f64) -> f64 {
 		if x <= 0.5 {
 			I_left(x)
@@ -160,20 +161,32 @@ mod test_inflation {
 		}
 	}
 
-	fn I_NPoS_points() -> super::AffinePerPart {
+	// Compute approximation of I_NPoS into piecewise linear function
+	fn I_NPoS_points() -> super::PiecewiseLinear {
 		let mut points = vec![];
 
 		// Points for left part
 		points.push((0.0, I_0));
 		points.push((0.5, I_left(0.5)));
 
-		// Approximation for right part
+		// Approximation for right part.
+		//
+		// We start from 0.5 (x0) and we try to find the next point (x1) for which the linear
+		// approximation of (x0, x1) doesn't deviate from float definition by an error of
+		// GEN_ERROR.
+
+		// When computing deviation between linear approximation and float definition we iterate
+		// over all points with this step precision.
 		const STEP_PRECISION: f64 = 0.000_000_1;
-		// Max error used for generating points
+		// Max error used for generating points.
 		const GEN_ERROR: f64 = 0.000_1;
 
 		let mut x0: f64 = 0.5;
 		let mut x1: f64 = x0;
+
+		// This is just a step used to find next x1:
+		// if x1 + step result in a not enought precise approximation we reduce step and try again.
+		// we stop as soon as step is less than STEP_PRECISION.
 		let mut step: f64 = 0.1;
 
 		loop {
@@ -198,10 +211,10 @@ mod test_inflation {
 
 			// Long test on all points
 			if !error_overflowed {
-				let affine = AffineFloat::new(x0, y0, next_x1, next_y1);
+				let linear = LinearFloat::new(x0, y0, next_x1, next_y1);
 				let mut cursor = x0;
 				while cursor < x1 {
-					if (I_right(cursor) - affine.compute(cursor)).abs() > GEN_ERROR {
+					if (I_right(cursor) - linear.compute(cursor)).abs() > GEN_ERROR {
 						error_overflowed = true;
 					}
 					cursor += STEP_PRECISION;
@@ -221,32 +234,36 @@ mod test_inflation {
 			}
 		}
 
-		let parts: Vec<(u32, super::Affine)> = (0..points.len()-1)
+		// Convert points to piecewise linear definition
+		let pieces: Vec<(u32, super::Linear)> = (0..points.len()-1)
 			.map(|i| {
 				let p0 = points[i];
 				let p1 = points[i+1];
 
-				let affine = AffineFloat::new(p0.0, p0.1, p1.0, p1.1);
+				let linear = LinearFloat::new(p0.0, p0.1, p1.0, p1.1);
 
-				assert!(affine.a.abs() <= 1_000_000_000.0);
-				assert!(affine.b.abs() <= 1_000_000_000.0);
-				assert!(affine.b.signum() == 1.0);
+				// Needed if we want to use a Perbill later
+				assert!(linear.a.abs() <= 1.0);
+				// Needed if we want to use a Perbill later
+				assert!(linear.b.abs() <= 1.0);
+				// Needed to stick with our restrictive definition of linear
+				assert!(linear.b.signum() == 1.0);
 
 				(
 					(p0.0 * 1_000_000_000.0) as u32,
-					super::Affine {
-						negative_a: affine.a.signum() < 0.0,
-						a: (affine.a.abs() * 1_000_000_000.0) as u32,
-						b: (affine.b.abs() * 1_000_000_000.0) as u32,
+					super::Linear {
+						negative_a: linear.a.signum() < 0.0,
+						a: (linear.a.abs() * 1_000_000_000.0) as u32,
+						b: (linear.b.abs() * 1_000_000_000.0) as u32,
 					}
 				)
 			})
 			.collect();
 
-		println!("Generated parts: {:?}", parts);
-		assert_eq!(parts.len(), 20);
+		println!("Generated pieces: {:?}", pieces);
+		assert_eq!(pieces.len(), 20);
 
-		super::AffinePerPart { parts: (&parts[..]).try_into().unwrap() }
+		super::PiecewiseLinear { pieces: (&pieces[..]).try_into().unwrap() }
 	}
 
 	/// This test is only useful to generate a new set of points for the definition of I_NPoS.
@@ -255,7 +272,7 @@ mod test_inflation {
 		assert_eq!(super::I_NPOS, I_NPoS_points());
 	}
 
-	/// This test ensure that i_npos affine per part approximation is close to the actual function.
+	/// This test ensure that i_npos piecewise linear approximation is close to the actual function.
 	/// It does compare the result from a computation in integer of different capcity and in f64.
 	#[test]
 	fn i_npos_precision() {
