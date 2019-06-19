@@ -1028,12 +1028,10 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	type Hashing = T::Hashing;
-	type Digest = T::Digest;
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
-	type Log = T::Log;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

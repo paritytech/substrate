@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::{
-	testing::{Digest, DigestItem, Header},
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
@@ -44,12 +44,10 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
-	type Log = DigestItem;
 }
 
 impl Trait for Test {
