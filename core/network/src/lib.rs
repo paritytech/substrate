@@ -105,7 +105,7 @@
 //! - We periodically open an ephemeral substream in order to ask information from the remote. This
 //! is called [the `identify` protocol](https://github.com/libp2p/specs/tree/master/identify).
 //! - We periodically open ephemeral substreams for Kademlia random walk queries. Each Kademlia
-//! RPC query is done in a new separate substream. This uses the
+//! query is done in a new separate substream. This uses the
 //! [standard libp2p Kademlia protocol](https://github.com/libp2p/specs/pull/108).
 //! - We optionally keep a substream alive for all Substrate-based communications. The name of the
 //! protocol negotiated is based on the *protocol ID* passed as part of the network configuration.
@@ -128,7 +128,8 @@
 //! substream is closed, the entire connection is closed as well. This is a bug, and should be
 //! fixed by improving the protocol.
 //!
-//! Within the unique Substrate substream, messages encoded using *parity-codec* are exchanged.
+//! Within the unique Substrate substream, messages encoded using
+//! [*parity-scale-codec*](https://github.com/paritytech/parity-scale-codec) are exchanged.
 //! The detail of theses messages is not totally in place, but they can be found in the
 //! `message.rs` file.
 //!
@@ -137,7 +138,7 @@
 //!
 //! Communications within this substream include:
 //!
-//! - Syncing. Blocks are announced and requested to other nodes.
+//! - Syncing. Blocks are announced and requested from other nodes.
 //! - Light-client requests. When a light client requires information, a random node we have a
 //! substream open with is chosen, and the information is requested from it.
 //! - Gossiping. Used for example by grandpa.
