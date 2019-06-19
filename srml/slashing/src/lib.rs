@@ -80,7 +80,7 @@
 //!
 //! struct Balance<T>(PhantomData<T>);
 //!
-//! impl<T: Trait> OnSlashing<T> for Balance<T> {
+//! impl<T: Trait> OnSlashing<T::AccountId> for Balance<T> {
 //!
 //!		fn on_slash(who: &T::AccountId, misconduct: &impl Misconduct) {
 //!			// This doesn't compile, see `srml/staking/slash.rs` for a more elaborate example
@@ -93,7 +93,7 @@
 //!
 //!	struct SlashingWrapper<T>(PhantomData<T>);
 //!
-//!	impl<T: Trait> Slashing<T> for SlashingWrapper<T> {
+//!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
 //!		fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
