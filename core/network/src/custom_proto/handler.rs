@@ -585,7 +585,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			ProtocolState::Init { .. } | ProtocolState::Opening { .. } |
 			ProtocolState::Normal { .. } => KeepAlive::Yes,
 			ProtocolState::Disabled { .. } | ProtocolState::Poisoned |
-      ProtocolState::KillAsap => KeepAlive::No,
+	  		ProtocolState::KillAsap => KeepAlive::No,
 		}
 	}
 
