@@ -88,7 +88,7 @@ where
 			Some((signed, signature, index, era)) => {
 				let current_u64 = context.current_height().saturated_into::<u64>();
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
-					.ok_or(Error::Unknown("transaction birth block ancient"))?;
+					.ok_or("transaction birth block ancient".into())?;
 				let signed = context.lookup(signed).map_err(Into::into)?;
 				let raw_payload = (index, self.function, era, h);
 				if !raw_payload.using_encoded(|payload| {

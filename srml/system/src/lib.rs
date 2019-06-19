@@ -293,9 +293,9 @@ impl From<PrimitiveError> for Error {
 }
 
 // Exists for for backward compatibility purpose.
-impl From<Error> for &str {
-	fn from(err: Error) -> &'static str {
-		match err {
+impl Into<&'static str> for Error {
+	fn into(self) -> &'static str {
+		match self {
 			Error::Unknown(val) => val,
 			Error::BadSignature => "bad signature in extrinsic",
 			Error::BlockFull => "block size limit is reached",
