@@ -42,7 +42,7 @@ pub struct FreeingBumpHeapAllocator {
 	total_size: u32,
 }
 
-/// Create an alloctor error.
+/// Create an allocator error.
 fn error(msg: &'static str) -> Error {
 	Error::Allocator(msg)
 }
