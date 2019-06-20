@@ -86,7 +86,7 @@ use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-const CATCH_UP_IMPORT_TIMEOUT: Duration = Duration::from_secs(15);
+const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -455,6 +455,23 @@ pub(super) enum Action<H>  {
 	Discard(i32),
 }
 
+/// State of catch up request handling.
+#[derive(Debug)]
+enum PendingCatchUp {
+	/// No pending catch up requests.
+	None,
+	/// Pending catch up request which has not been answered yet.
+	Requesting {
+		who: PeerId,
+		request: CatchUpRequestMessage,
+		instant: Instant,
+	},
+	/// Pending catch up request that was answered and is being processed.
+	Processing {
+		instant: Instant,
+	},
+}
+
 struct Inner<Block: BlockT> {
 	local_view: Option<View<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
@@ -462,8 +479,7 @@ struct Inner<Block: BlockT> {
 	authorities: Vec<AuthorityId>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
-	pending_catch_up_request: Option<(PeerId, CatchUpRequestMessage, Instant)>,
-	pending_catch_up_import: Option<(PeerId, CatchUpRequestMessage, Instant)>,
+	pending_catch_up: PendingCatchUp,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -476,8 +492,7 @@ impl<Block: BlockT> Inner<Block> {
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
-			pending_catch_up_request: None,
-			pending_catch_up_import: None,
+			pending_catch_up: PendingCatchUp::None,
 			config,
 		}
 	}
@@ -630,10 +645,9 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_catch_up_message(&mut self, who: &PeerId, full: &FullCatchUpMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		match self.pending_catch_up_request.take() {
-			Some((peer, request, instant)) => {
-				if peer != *who {
-					self.pending_catch_up_request = Some((peer, request, instant));
+		match &self.pending_catch_up {
+			PendingCatchUp::Requesting { who: peer, request, instant } => {
+				if peer != who {
 					return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE);
 				}
 
@@ -649,21 +663,31 @@ impl<Block: BlockT> Inner<Block> {
 					return Action::Discard(cost::MALFORMED_CATCH_UP);
 				}
 
-				// move request to pending import state we won't push out any
-				// catch up requests until we import this one (either with a
-				// success or failure)
-				self.pending_catch_up_import = Some((peer, request, instant));
+				// move request to pending processing state, we won't push out
+				// any catch up requests until we import this one (either with a
+				// success or failure).
+				self.pending_catch_up = PendingCatchUp::Processing {
+					instant: instant.clone(),
+				};
 
 				// always discard catch up messages, they're point-to-point
 				let topic = super::global_topic::<Block>(full.set_id.0);
 				Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_CATCH_UP)
 			},
-			None => Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+			_ => Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
 		}
 	}
 
-	fn note_catch_up_message_imported(&mut self) {
-		self.pending_catch_up_import.take();
+	fn note_catch_up_message_processed(&mut self) {
+		match &self.pending_catch_up {
+			PendingCatchUp::Processing { .. } => {
+				self.pending_catch_up = PendingCatchUp::None;
+			},
+			state => trace!(target: "afg",
+				"Noted processed catch up message when state was: {:?}",
+				state,
+			),
+		}
 	}
 
 	fn handle_catch_up_request(
@@ -764,37 +788,31 @@ impl<Block: BlockT> Inner<Block> {
 		&mut self,
 		who: &PeerId,
 		catch_up_request: &CatchUpRequestMessage,
-	) -> bool {
-		match self.pending_catch_up_request.take() {
-			Some((peer, request, instant)) => {
-				if instant.elapsed() > CATCH_UP_REQUEST_TIMEOUT {
-					// FIXME: timeout cost
-					// self.report(peer, -1);
+	) -> (bool, Option<(PeerId, i32)>) {
+		let report = match &self.pending_catch_up {
+			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
+					return (false, None);
 				} else {
-					self.pending_catch_up_request = Some((peer, request, instant));
-					return false;
-				}
-			},
-			None => {},
-		}
+					// report peer for timeout
+					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
+				},
+			PendingCatchUp::Processing { instant, .. } =>
+				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
+					return (false, None);
+				} else {
+					None
+				},
+			_ => None,
+		};
 
-		match self.pending_catch_up_import.take() {
-			Some((peer, request, instant)) => {
-				if instant.elapsed() < CATCH_UP_IMPORT_TIMEOUT {
-					self.pending_catch_up_import = Some((peer, request, instant));
-					return false;
-				}
-			},
-			None => {},
-		}
+		self.pending_catch_up = PendingCatchUp::Requesting {
+			who: who.clone(),
+			request: catch_up_request.clone(),
+			instant: Instant::now(),
+		};
 
-		self.pending_catch_up_request = Some((
-			who.clone(),
-			catch_up_request.clone(),
-			Instant::now(),
-		));
-
-		true
+		(true, report)
 	}
 }
 
@@ -851,9 +869,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 		}
 	}
 
-	/// Note that we've imported a catch up message.
-	pub(super) fn note_catch_up_message_imported(&self)	{
-		self.inner.write().note_catch_up_message_imported();
+	/// Note that we've processed a catch up message.
+	pub(super) fn note_catch_up_message_processed(&self)	{
+		self.inner.write().note_catch_up_message_processed();
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: i32) {
@@ -942,14 +960,16 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				if peer.view.set_id == local_view.set_id &&
 					peer.view.round.0.saturating_sub(2) > local_view.round.0
 				{
-					// send catch up request if none pending
+					// send catch up request if allowed
 					let round = peer.view.round.0 - 1; // peer.view.round is > 0
 					let request = CatchUpRequestMessage {
 						set_id: peer.view.set_id,
 						round: Round(round),
 					};
 
-					if inner.note_catch_up_request(who, &request) {
+					let (catch_up_allowed, report) = inner.note_catch_up_request(who, &request);
+
+					if catch_up_allowed {
 						trace!(target: "afg", "Sending catch-up request for round {} to {}",
 							round,
 							who,
@@ -957,6 +977,10 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 						let message = GossipMessage::<Block>::CatchUpRequest(request);
 						context.send_message(who, message.encode());
+					}
+
+					if let Some((peer, cost)) = report {
+						self.report(peer, cost);
 					}
 				}
 			}
