@@ -128,8 +128,10 @@ pub struct BasicQueue<B: BlockT> {
 	result_port: BufferedLinkReceiver<B>,
 	/// Sent through the link as soon as possible.
 	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
-	/// If `Some`, contains a future to spawn on a background task as soon as possible. If `None`,
-	/// the future has already been spawned.
+	/// Since we have to be in a tokio context in order to spawn background tasks, we first store
+	/// the task to spawn here, then extract it as soon as we are in a tokio context.
+	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
+	/// been spawned.
 	future_to_spawn: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
