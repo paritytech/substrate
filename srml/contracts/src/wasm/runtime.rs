@@ -575,12 +575,18 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Returns the size of the scratch buffer.
+	//
+	// For more details on the scratch buffer see `ext_scratch_copy`.
 	ext_scratch_size(ctx) -> u32 => {
 		Ok(ctx.scratch_buf.len() as u32)
 	},
 
 	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract memory.
 	// The region at which the data should be put is specified by `dest_ptr`.
+	//
+	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
+	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
+	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
 	ext_scratch_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
 		let offset = offset as usize;
 		if offset > ctx.scratch_buf.len() {
