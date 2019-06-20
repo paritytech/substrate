@@ -1136,7 +1136,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		"The literal was changed and requires updating here and in `CODE_RESTORATION`",
 	);
 	assert_eq!(
-		hex::decode(literal).unwrap().len(),
+		hex::decode(ENCODED_CALL_LITERAL).unwrap().len(),
 		115,
 		"The size of the literal was changed and requires updating in `CODE_RESTORATION`",
 	);
