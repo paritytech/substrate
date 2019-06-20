@@ -43,7 +43,7 @@
 //!	### Example
 //!
 //! ```
-//!	use srml_slashing::{Slashing, Misconduct, OnSlashing};
+//!	use srml_slashing::{CheckpointMisconduct, ContinuousMisconduct, Fraction, Misconduct, OnSlashing, Slashing};
 //!	use srml_support::traits::Currency;
 //!	use rstd::{cmp, marker::PhantomData};
 //!
@@ -51,30 +51,22 @@
 //!		type Currency: Currency<Self::AccountId>;
 //! }
 //!
-//!	#[derive(Copy, Clone, Eq, PartialEq)]
-//!	struct Unresponsive {
-//!		severity: u64,
-//!	}
-//!
-//!	impl Default for Unresponsive {
-//!		fn default() -> Self {
-//!			Self { severity: 100_000 }
-//!		}
-//!	}
+//!	struct Unresponsive;
 //!
 //!	impl Misconduct for Unresponsive {
 //!		type Severity = u64;
+//!	}
 //!
-//!		fn on_misconduct(&mut self) {
-//!			self.severity = cmp::max(1, self.severity / 2);
-//!		}
+//! impl CheckpointMisconduct for Unresponsive {
+//!		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
+//!			let denominator = 20 * n;
+//!			let numerator = 3*k - 3;
 //!
-//!		fn on_signal(&mut self) {
-//!			self.severity = cmp::min(100_000, self.severity * 2);
-//!		}
-//!
-//!		fn severity(&self) -> Self::Severity {
-//!			self.severity
+//!			if numerator / n > 1 {
+//!				Fraction::new(1, 1)
+//!			} else {
+//!				Fraction::new(denominator, numerator)
+//!			}
 //!		}
 //!	}
 //!
@@ -82,10 +74,9 @@
 //!
 //! impl<T: Trait> OnSlashing<T::AccountId> for Balance<T> {
 //!
-//!		fn on_slash(who: &T::AccountId, misconduct: &impl Misconduct) {
+//!		fn on_slash(who: &T::AccountId, severity: Fraction<u64>) {
 //!			// This doesn't compile, see `srml/staking/slash.rs` for a more elaborate example
 //!			// let balance = T::Currency::free_balance(who);
-//!			// let severity = misconduct.severity();
 //!			// let slash = balance / severity;
 //!			// T::Currency::on_slash(who, balance);
 //!		}
@@ -96,48 +87,76 @@
 //!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
-//!		fn slash(who: &T::AccountId, misconduct: &mut impl Misconduct) {
-//!			Self::Slash::on_slash(&who, misconduct);
+//!		fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) {
+//!			Self::Slash::on_slash(&who, misconduct.severity());
 //!			misconduct.on_misconduct();
 //!		}
 //!
-//!		fn on_signal(misconduct: &mut impl Misconduct) {
-//!			misconduct.on_signal();
+//!		fn slash_on_checkpoint(
+//!			misbehaved: &[T::AccountId],
+//!			total_validators: u64,
+//!			misconduct: &impl CheckpointMisconduct
+//!		) {
+//!			let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
+//!
+//!			for who in misbehaved {
+//!				Self::Slash::on_slash(who, severity);
+//!			}
 //!		}
 //!	}
 //!
 //! fn main() {
-//!		let misconduct = Unresponsive::default();
-//!		let who = 0;
+//!		let misconduct = Unresponsive;
+//!		let misbehaved_validators = vec![1, 2, 3, 4, 5, 6];
+//!		let total_validators = 100;
 //!		// MyModule is type that implements `Trait`
-//!		// SlashingWrapper::<MyModule>::slash(&who, &mut misconduct);
+//!		// SlashingWrapper::<MyModule>::slash_on_checkpoint(&misbehaved_validators, total_validators);
 //! }
 //! ```
 
 use parity_codec::Codec;
 use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 
-/// Pre-defined misconduct types
+/// Pre-defined types
 pub mod misconduct;
 
-/// Estimates severity level based on misconduct
-pub trait Misconduct: {
-	/// Severity, must be able to encode in `u128` otherwise into() will be lossy
-	// TODO(niklasad1): better way than the hack?!
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+mod types;
 
-	/// Increase severity level on misconduct.
+pub use types::Fraction;
+
+/// We need two versions of this trait:
+//	1) only concerning the current era, thus on `end or era` calculate severity (doesn't need to keep state)
+//	2) calculate severity based on continuous reporting which keeps state,
+pub trait Misconduct {
+	/// Severity
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+}
+
+/// Behaviour based on misconduct reporting on end of era / timeslot.
+/// In those cases the reporter will keep state and report it.
+pub trait CheckpointMisconduct: Misconduct {
+
+	/// Estimate severity based `number of misbehaved validators` and `number of validators`
+	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<u64>;
+}
+
+/// Behaviour based on continuously reporting of misconducts
+/// The type the implements is expected to keep `severity`as part of the type
+pub trait ContinuousMisconduct: Misconduct {
+	/// Estimate severity based on previous state
+	fn severity(&self) -> Fraction<u64>;
+
+	/// Increase severity based on previous state
 	fn on_misconduct(&mut self);
-	/// Decrease severity level after a certain point up to the implementor to determine when.
+
+	/// Decrease severity based on previous state
 	fn on_signal(&mut self);
-	/// Get the severity level
-	fn severity(&self) -> Self::Severity;
 }
 
 /// Slashing interface
 pub trait OnSlashing<AccountId> {
 	/// Slash validator `who` based on severity_level `severity`
-	fn on_slash(who: &AccountId, misconduct: &impl Misconduct);
+	fn on_slash(who: &AccountId, severity: Fraction<u64>);
 }
 
 /// Slashing wrapper interface on top of `OnSlashing`
@@ -146,8 +165,8 @@ pub trait Slashing<AccountId> {
 	type Slash: OnSlashing<AccountId>;
 
 	/// Slash the given account `who`
-	fn slash(who: &AccountId, misconduct: &mut impl Misconduct);
+	fn slash(who: &AccountId, misconduct: &mut impl ContinuousMisconduct);
 
-	/// Decrease severity level after a certain point up to the implementer to determine when.
-	fn on_signal(misconduct: &mut impl Misconduct);
+	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot
+	fn slash_on_checkpoint(misbehaved: &[AccountId], total_validators: u64, misconduct: &impl CheckpointMisconduct);
 }
