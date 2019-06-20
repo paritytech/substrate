@@ -431,11 +431,13 @@ decl_module! {
 			// can alter the balance of the caller.
 			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
-			// Dispatch every recorded call with an appropriate origin.
-			ctx.calls.into_iter().for_each(|(who, call)| {
-				let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
-				Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-			});
+			if let Ok(_) = result {
+				// Dispatch every recorded call with an appropriate origin.
+				ctx.calls.into_iter().for_each(|(who, call)| {
+					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
+					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
+				});
+			}
 
 			result.map(|_| ())
 		}
