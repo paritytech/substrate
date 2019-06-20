@@ -337,8 +337,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			}
 		};
 
-		let (struct_trait, impl_trait, trait_and_instance, trait_lifetime) = if ext::type_contains_ident(value_type, traitinstance)
-			|| ext::type_contains_ident(kty, traitinstance)
+		let (struct_trait, impl_trait, trait_and_instance, trait_lifetime) = if ext::type_contains_ident(
+			value_type,
+			traitinstance
+		) || ext::type_contains_ident(kty, traitinstance)
 		{
 			(
 				quote!(#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance),
@@ -697,7 +699,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				quote!(#traitinstance, #instance),
 			)
 		} else {
-			(quote!(#instance #bound_instantiable #equal_default_instance), quote!(#instance #bound_instantiable), quote!(#instance))
+			(
+				quote!(#instance #bound_instantiable #equal_default_instance),
+				quote!(#instance #bound_instantiable),
+				quote!(#instance)
+			)
 		};
 
 		// generator for double map

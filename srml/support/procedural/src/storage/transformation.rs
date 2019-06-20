@@ -847,7 +847,10 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
-							<#name<#struct_trait #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
+							>::get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
@@ -867,7 +870,10 @@ fn impl_store_fns(
 							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
 							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
 						{
-							<#name<#struct_trait #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
