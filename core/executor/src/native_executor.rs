@@ -26,6 +26,7 @@ use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use primitives::storage::well_known_keys;
 use log::trace;
+use std::time::Instant;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -199,7 +200,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
-		RUNTIMES_CACHE.with(|c| {
+		let start = Instant::now();
+		let ret = RUNTIMES_CACHE.with(|c| {
 			let mut c = c.borrow_mut();
 			let (module, onchain_version) = match fetch_cached_runtime_version(
 				&self.fallback, &mut c, ext, self.default_heap_pages) {
@@ -262,7 +264,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
 				}
 			}
-		})
+		});
+		let duration = start.elapsed();
+		println!("duration for {:?}: {:?}µs", method, duration.as_micros());
+		ret
 	}
 }
 
