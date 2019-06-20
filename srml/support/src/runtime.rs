@@ -115,6 +115,7 @@ macro_rules! construct_runtime {
 			$( $rest )*
 		);
 	};
+	// `default` identifier given, expand to default + given extra modules
 	(
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
@@ -122,36 +123,9 @@ macro_rules! construct_runtime {
 			default
 			$(,
 				$modules:ident
-					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
-					$( ( $( $modules_args:ident ),* ) )*
-			)*
-		},
-		$( $rest:tt )*
-	) => {
-		$crate::construct_runtime!(
-			{ $( $preset )* };
-			{ $( $expanded )* };
-			$name: $module::{
-				Module, Call, Storage, Event<T>, Config<T>
-				$(,
-					$modules $( <$modules_generic $(, $modules_instance)?> )*
-					$( ( $( $modules_args ),* ) )*
-				)*
-			},
-			$( $rest )*
-		);
-	};
-	// `default` identifier given, expand to default + given extra modules
-	(
-		{ $( $preset:tt )* };
-		{ $( $expanded:tt )* };
-		$name:ident: $module:ident::{
-			default,
-			$(
-				$modules:ident
 					$( <$modules_generic:ident> )*
 					$( ( $( $modules_args:ident ),* ) )*
-			),*
+			)*
 		},
 		$( $rest:tt )*
 	) => {
@@ -160,11 +134,11 @@ macro_rules! construct_runtime {
 			{
 				$( $expanded )*
 				$name: $module::{
-					Module, Call, Storage, Event<T>, Config<T>,
-					$(
+					Module, Call, Storage, Event<T>, Config<T>
+					$(,
 						$modules $( <$modules_generic> )*
 						$( ( $( $modules_args ),* ) )*
-					),*
+					)*
 				},
 			};
 			$( $rest )*
