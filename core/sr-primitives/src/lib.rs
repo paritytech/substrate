@@ -78,9 +78,9 @@ impl Into<&'static str> for Error{
 	}
 }
 
-impl Into<Error> for &'static str {
-	fn into(self) -> Error {
-		Error::Unknown(self)
+impl From<&'static str> for Error {
+	fn from(val: &'static str) -> Error {
+		Error::Unknown(val)
 	}
 }
 

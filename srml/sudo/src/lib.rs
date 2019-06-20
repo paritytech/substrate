@@ -146,7 +146,7 @@ decl_module! {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
-			let new = T::Lookup::lookup(new).map_err(Into::into)?;
+			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);

@@ -213,7 +213,7 @@ decl_module! {
 			#[compact] assumed_vote_index: VoteIndex
 		) {
 			let reporter = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who).map_err(Into::into)?;
+			let who = T::Lookup::lookup(who)?;
 
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 			ensure!(Self::voter_info(&reporter).is_some(), "reporter must be a voter");
@@ -352,7 +352,7 @@ decl_module! {
 				"stake deposited to present winner and be added to leaderboard should be non-zero"
 			);
 
-			let candidate = T::Lookup::lookup(candidate).map_err(Into::into)?;
+			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
@@ -417,7 +417,7 @@ decl_module! {
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
 		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
-			let who = T::Lookup::lookup(who).map_err(Into::into)?;
+			let who = T::Lookup::lookup(who)?;
 			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 				.into_iter()
 				.filter(|i| i.0 != who)

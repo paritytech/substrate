@@ -118,7 +118,7 @@ pub trait StaticLookup {
 	/// Type to lookup into.
 	type Target;
 	/// Error type.
-	type Error: Into<&'static str>; // Into<&'static str> for backward compatibility purpose.
+	type Error;
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, Self::Error>;
 	/// Convert from Target back to Source.

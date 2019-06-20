@@ -93,7 +93,7 @@ where
 		Ok(match self.signature {
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
-				let signed = context.lookup(signed).map_err(Into::into)?;
+				let signed = context.lookup(signed)?;
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err(Error::BadSignature)
 				}

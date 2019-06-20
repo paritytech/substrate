@@ -122,7 +122,7 @@ decl_module! {
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
 			let proposer = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary).map_err(Into::into)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
