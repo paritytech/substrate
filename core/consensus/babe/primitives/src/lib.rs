@@ -82,7 +82,7 @@ decl_runtime_apis! {
 }
 
 /// Represents an Babe equivocation proof.
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct BabeEquivocationProof<H, S> {
 	first_header: H,
 	second_header: H,

@@ -162,7 +162,7 @@ pub trait Trait: timestamp::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + Default;
 
-	/// The signature of a header in an AuRa equivocation.
+	/// The signature type for an authority.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
 }
 

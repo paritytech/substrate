@@ -21,16 +21,20 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue};
-use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating}};
+use srml_support::{decl_storage, decl_module, StorageValue, Parameter};
+use timestamp::OnTimestampSet;
+use primitives::{
+	generic::DigestItem,
+	traits::{SaturatedConversion, Saturating, Member, Verify, ValidateUnsigned},
+	transaction_validity::TransactionValidity
+};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::BABE_ENGINE_ID;
+use babe_primitives::{BABE_ENGINE_ID, BabeEquivocationProof};
 
 pub use babe_primitives::AuthorityId;
 
@@ -106,6 +110,14 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+pub trait Trait: timestamp::Trait {
+	/// The identifier type for an authority.
+	type AuthorityId: Member + Parameter + Default;
+
+	/// The signature type for an authority.
+	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// The last timestamp.
@@ -117,7 +129,26 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Report equivocation.
+		fn report_equivocation(
+			_origin,
+			_equivocation_proof: BabeEquivocationProof<T::Header, T::Signature>
+		) {
+			// This is the place where we will slash.
+		}
+	}
+}
+
+impl<T: Trait> ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(proof) => TransactionValidity::Invalid(0),
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {
