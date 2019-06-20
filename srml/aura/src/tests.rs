@@ -20,7 +20,7 @@
 
 use lazy_static::lazy_static;
 use crate::mock::{System, Aura, new_test_ext};
-use primitives::traits::Header;
+use primitives::traits::{Header, Verify};
 use runtime_io::with_externalities;
 use parking_lot::Mutex;
 use crate::{AuraReport, HandleReport};
@@ -72,21 +72,21 @@ fn aura_reports_offline() {
 		}
 	}
 
-	// with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
-	// 	System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
-	// 	let slot_duration = Aura::slot_duration();
+	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+		let slot_duration = Aura::slot_duration();
 
-	// 	Aura::on_timestamp_set::<HandleTestReport>(5 * slot_duration, slot_duration);
-	// 	let header = System::finalize();
+		Aura::on_timestamp_set::<HandleTestReport>(5 * slot_duration, slot_duration);
+		let header = System::finalize();
 
-	// 	// no slashing when last step was 0.
-	// 	assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 0, 0]);
+		// no slashing when last step was 0.
+		assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 0, 0]);
 
-	// 	System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
-	// 	Aura::on_timestamp_set::<HandleTestReport>(8 * slot_duration, slot_duration);
-	// 	let _header = System::finalize();
+		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
+		Aura::on_timestamp_set::<HandleTestReport>(8 * slot_duration, slot_duration);
+		let _header = System::finalize();
 
-	// 	// Steps 6 and 7 were skipped.
-	// 	assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 1, 1]);
-	// });
+		// Steps 6 and 7 were skipped.
+		assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 1, 1]);
+	});
 }
