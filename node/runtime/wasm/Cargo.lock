@@ -1484,7 +1484,7 @@ dependencies = [
  "sr-version 2.0.0",
  "srml-aura 2.0.0",
  "srml-balances 2.0.0",
- "srml-contract 2.0.0",
+ "srml-contracts 2.0.0",
  "srml-council 2.0.0",
  "srml-democracy 2.0.0",
  "srml-executive 2.0.0",
@@ -2443,7 +2443,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "srml-contract"
+name = "srml-contracts"
 version = "2.0.0"
 dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
