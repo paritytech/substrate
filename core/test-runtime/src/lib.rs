@@ -45,7 +45,8 @@ use runtime_primitives::{
 use consensus_aura::AuraEquivocationProof;
 use consensus_grandpa::{
 	Equivocation, Prevote, Precommit, AuthorityId as GrandpaAuthorityId,
-	AuthoritySignature, GrandpaEquivocationProof, AuthorityWeight, ScheduledChange
+	AuthoritySignature, GrandpaEquivocationProof, AuthorityWeight, ScheduledChange,
+	PrevoteEquivocation, PrecommitEquivocation
 };
 
 use runtime_version::RuntimeVersion;
@@ -502,7 +503,7 @@ cfg_if! {
 		
 				fn construct_prevote_equivocation_report_call(
 					proof: GrandpaEquivocationProof<
-						Equivocation<GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
 					unimplemented!()
@@ -510,7 +511,7 @@ cfg_if! {
 		
 				fn construct_precommit_equivocation_report_call(
 					proof: GrandpaEquivocationProof<
-						Equivocation<GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
+						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
 					unimplemented!()
@@ -664,6 +665,38 @@ cfg_if! {
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
+			}
+
+			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_pending_change(digest: &DigestFor<Block>)
+					-> Option<ScheduledChange<NumberFor<Block>>> {
+					unimplemented!()
+				}
+				
+				fn grandpa_forced_change(digest: &DigestFor<Block>)
+					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)> {
+					unimplemented!()
+				}
+
+				fn grandpa_authorities() -> Vec<(GrandpaAuthorityId, AuthorityWeight)> {
+					unimplemented!()
+				}
+		
+				fn construct_prevote_equivocation_report_call(
+					proof: GrandpaEquivocationProof<
+						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					unimplemented!()
+				}
+		
+				fn construct_precommit_equivocation_report_call(
+					proof: GrandpaEquivocationProof<
+						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					unimplemented!()
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

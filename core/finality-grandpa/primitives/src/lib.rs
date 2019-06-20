@@ -80,7 +80,7 @@ decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait GrandpaApi {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.

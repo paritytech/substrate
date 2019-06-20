@@ -55,7 +55,6 @@ impl Trait for Test {
 	type HandleReport = ();
 	type AuthorityId = ed25519::Public;
 	type Signature = ed25519::Signature;
-	type AuraEquivocationProof = AuraEquivocationProof<Self::Header, Self::Signature>;
 }
 
 pub fn new_test_ext(authorities: Vec<ed25519::Public>) -> runtime_io::TestExternalities<Blake2Hasher> {

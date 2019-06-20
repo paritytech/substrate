@@ -164,9 +164,6 @@ pub trait Trait: timestamp::Trait {
 
 	/// The signature of a header in an AuRa equivocation.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
-
-	/// Proof of an equivocation misbehaviour.
-	type AuraEquivocationProof: AuthorshipEquivocationProof<Self::Header, Self::Signature> + Parameter;
 }
 
 fn verify_header<'a, T, P>(
@@ -190,7 +187,9 @@ where
 	None
 }
 
-fn handle_equivocation_proof<T: Trait>(proof: &T::AuraEquivocationProof) -> TransactionValidity
+fn handle_equivocation_proof<T: Trait>(
+	proof: &AuraEquivocationProof<T::Header, T::Signature>
+) -> TransactionValidity 
 {
 	let authorities = <Module<T>>::authorities();
 
@@ -251,7 +250,10 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
 		/// Report equivocation.
-		fn report_equivocation(_origin, _equivocation_proof: T::AuraEquivocationProof) {
+		fn report_equivocation(
+			_origin,
+			_equivocation_proof: AuraEquivocationProof<T::Header, T::Signature>
+		) {
 			// This is the place where we will slash.
 		}
 	}

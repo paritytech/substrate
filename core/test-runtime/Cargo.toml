@@ -51,6 +51,7 @@ std = [
 	"runtime_version/std",
 	"consensus_aura/std",
 	"consensus_babe/std",
+	"consensus_grandpa/std",
 	"primitives/std",
 	"substrate-trie/std",
 	"trie-db/std",

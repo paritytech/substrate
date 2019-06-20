@@ -112,7 +112,6 @@ impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
 	type Signature = ed25519::Signature;
-	type AuraEquivocationProof = AuraEquivocationProof<Self::Header, Self::Signature>;
 }
 
 impl indices::Trait for Runtime {

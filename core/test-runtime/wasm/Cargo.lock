@@ -2601,6 +2601,7 @@ version = "2.0.0"
 dependencies = [
  "finality-grandpa-primitives 0.8.0 (git+https://github.com/paritytech/finality-grandpa/?branch=mod-equivocation-reports)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
