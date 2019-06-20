@@ -124,7 +124,7 @@ fn execute_block_with_state_root_handler(
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+	if let Some(new_authorities) = <NewAuthorities>::get() {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
