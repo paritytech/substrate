@@ -87,6 +87,7 @@ use std::time::{Duration, Instant};
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(15);
+const CATCH_UP_THRESHOLD: u64 = 2;
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -954,11 +955,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
-		{
+		let catch_up = {
+			let mut catch_up = None;
 			let mut inner = self.inner.write();
+
 			if let (Some(peer), Some(local_view)) = (inner.peers.peer(who), &inner.local_view) {
 				if peer.view.set_id == local_view.set_id &&
-					peer.view.round.0.saturating_sub(2) > local_view.round.0
+					peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 				{
 					// send catch up request if allowed
 					let round = peer.view.round.0 - 1; // peer.view.round is > 0
@@ -975,8 +978,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							who,
 						);
 
-						let message = GossipMessage::<Block>::CatchUpRequest(request);
-						context.send_message(who, message.encode());
+						catch_up = Some(GossipMessage::<Block>::CatchUpRequest(request));
 					}
 
 					if let Some((peer, cost)) = report {
@@ -984,15 +986,21 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					}
 				}
 			}
-		}
+
+			catch_up
+		};
 
 		// not with lock held!
-		for topic in broadcast_topics {
-			context.send_topic(who, topic, false);
+		if let Some(msg) = catch_up {
+			context.send_message(who, msg.encode())
 		}
 
-		if let Some(reply) = peer_reply {
-			context.send_message(who, reply.encode());
+		if let Some(msg) = peer_reply {
+			context.send_message(who, msg.encode());
+		}
+
+		for topic in broadcast_topics {
+			context.send_topic(who, topic, false);
 		}
 
 		match action {
