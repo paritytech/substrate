@@ -28,7 +28,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
 };
 use grandpa::fg_primitives::{
-	self, ScheduledChange, GrandpaEquivocationProof, AuthorityId, AuthoritySignature,
+	self, ScheduledChange, GrandpaEquivocationProof, AuthoritySignature,
 	PrevoteEquivocation, PrecommitEquivocation
 };
 use client::{

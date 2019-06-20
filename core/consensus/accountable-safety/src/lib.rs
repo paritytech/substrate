@@ -20,18 +20,16 @@
 
 use client;
 use transaction_pool::txpool::{self, PoolApi};
-// use node_runtime::{UncheckedExtrinsic, Call};
 use parity_codec::{Encode, Decode};
-use std::sync::Arc;
 use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::generic::BlockId;
-use log::{error, warn, debug, info, trace};
+use log::info;
 use client::blockchain::HeaderBackend;
 
 /// Trait to submit report calls to the transaction pool.
 pub trait SubmitReport<C, Block> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]);
+	fn submit_report_call(&self, client: &C, extrinsic: &[u8]);
 }
 
 impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block> for T 
@@ -60,7 +58,6 @@ pub struct TestPool;
 
 impl<C, Block> SubmitReport<C, Block> for TestPool
 {
-	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
-
+	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
 	}
 }

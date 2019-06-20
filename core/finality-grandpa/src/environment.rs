@@ -43,8 +43,6 @@ use runtime_primitives::traits::{
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
-use transaction_pool::txpool::{self, PoolApi};
-
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,

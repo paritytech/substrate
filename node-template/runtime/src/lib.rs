@@ -272,7 +272,7 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+			_proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
 		) -> Vec<u8> {
 			vec![]
 		}

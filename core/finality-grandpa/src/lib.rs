@@ -64,7 +64,6 @@ use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
-use transaction_pool::txpool::{self, PoolApi};
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;

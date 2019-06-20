@@ -66,7 +66,6 @@ use srml_aura::{
 
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
-use transaction_pool::txpool::{self, PoolApi};
 use consensus_safety::SubmitReport;
 use safety_primitives::AuthorshipEquivocationProof;
 
