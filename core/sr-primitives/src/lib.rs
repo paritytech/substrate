@@ -509,6 +509,16 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+ #[cfg_attr(feature = "std", derive(Debug, Serialize))]
+ /// Outcome of a valid extrinsic application. Capable of being sliced.
+ pub enum ApplyOutcome {
+ 	/// Successful application (extrinsic reported no issue).
+ 	Success,
+ 	/// Failed application (extrinsic was probably a no-op other than fees).
+ 	Fail(DispatchError),
+ }
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -544,16 +554,6 @@ pub struct DispatchError {
 	#[codec(skip)]
 	pub message: Option<&'static str>,
 }
-
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
- #[cfg_attr(feature = "std", derive(Debug, Serialize))]
- /// Outcome of a valid extrinsic application. Capable of being sliced.
- pub enum ApplyOutcome {
- 	/// Successful application (extrinsic reported no issue).
- 	Success,
- 	/// Failed application (extrinsic was probably a no-op other than fees).
- 	Fail(DispatchError),
- }
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
