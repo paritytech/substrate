@@ -29,7 +29,7 @@ use node_primitives::{
 };
 use grandpa::fg_primitives::{
 	self, ScheduledChange, GrandpaEquivocationProof, AuthorityId, AuthoritySignature,
-	Equivocation, Prevote, Precommit
+	PrevoteEquivocation, PrecommitEquivocation
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -368,18 +368,18 @@ impl_runtime_apis! {
 		}
 
 		fn construct_prevote_equivocation_report_call(
-			_proof: GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
-			>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
 		) -> Vec<u8> {
-			vec![]
+			let report_call = Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof));
+			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+			extrinsic.encode()
 		}
 		fn construct_precommit_equivocation_report_call(
-			_proof: GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
-			>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
 		) -> Vec<u8> {
-			vec![]
+			let report_call = Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof));
+			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+			extrinsic.encode()
 		}
 	}
 

@@ -46,8 +46,8 @@ use runtime_primitives::traits::{
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
-	AuthorityId, GrandpaEquivocationProof, Equivocation, Precommit, Prevote,
-	AuthoritySignature
+	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation,
+	AuthoritySignature, 
 };
 use consensus_safety::TestPool;
 use authorities::AuthoritySet;
@@ -424,9 +424,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
-			>>,
+		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<Block>>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))
@@ -437,9 +435,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>
-			>>,
+		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<Block>>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))

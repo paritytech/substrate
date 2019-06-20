@@ -24,7 +24,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use parity_codec::{Encode, Decode};
-use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
+use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
@@ -45,6 +45,15 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
+
+/// Prevote equivocation.
+pub type PrevoteEquivocation<Block> =
+	Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>;
+
+/// Precommit equivocation.
+pub type PrecommitEquivocation<Block> =
+	Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>;
+
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
@@ -120,21 +129,17 @@ decl_runtime_apis! {
 		
 		/// Construct a call to report the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Prevote<Block::Hash, NumberFor<Block>>, AuthoritySignature>
-			>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
 		) -> Vec<u8>;
 		
 		/// Construct a call to report the precommit equivocation.
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<
-				Equivocation<AuthorityId, Precommit<Block::Hash, NumberFor<Block>>, AuthoritySignature>
-			>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
 		) -> Vec<u8>;
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct GrandpaEquivocationProof<E> {
 	pub set_id: u64,
 	pub round: u64,
