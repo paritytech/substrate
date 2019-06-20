@@ -343,7 +343,7 @@ impl Misbehavior {
 
 		match *self {
 			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
-			UndecodablePacket(bytes) =>  bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
+			UndecodablePacket(bytes) => bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
 			BadCatchUpMessage { signatures_checked } =>
 				cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked),
 			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
@@ -648,7 +648,7 @@ impl<Block: BlockT> Inner<Block> {
 		match &self.pending_catch_up {
 			PendingCatchUp::Requesting { who: peer, request, instant } => {
 				if peer != who {
-					return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE);
+					return Action::Discard(Misbehavior::OutOfScopeMessage.cost());
 				}
 
 				if request.set_id != full.set_id {
@@ -674,7 +674,7 @@ impl<Block: BlockT> Inner<Block> {
 				let topic = super::global_topic::<Block>(full.set_id.0);
 				Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_CATCH_UP)
 			},
-			_ => Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+			_ => Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
 		}
 	}
 
@@ -702,12 +702,12 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		if request.set_id != local_view.set_id {
-			return (None, Action::Discard(-1));
+			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
 		}
 
 		let last_completed_round = set_state.read().last_completed_round();
 		if last_completed_round.number < request.round.0 {
-			return (None, Action::Discard(-1));
+			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
 		}
 
 		trace!(target: "afg", "Replying to catch-up request for round {} from {} with round {}",
