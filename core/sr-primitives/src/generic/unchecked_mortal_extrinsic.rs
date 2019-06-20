@@ -201,6 +201,7 @@ mod tests {
 	impl Lookup for TestContext {
 		type Source = u64;
 		type Target = u64;
+		type Error = &'static str;
 		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
 	}
 	impl CurrentHeight for TestContext {
@@ -259,7 +260,7 @@ mod tests {
 	fn badly_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, vec![0u8]), Era::immortal());
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
 	}
 
 	#[test]
@@ -287,14 +288,14 @@ mod tests {
 	fn too_late_mortal_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
 	}
 
 	#[test]

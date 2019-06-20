@@ -119,7 +119,7 @@ impl<
 	Error: Into<DispatchError> + TryInto<system::Error>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context, Error=CheckableError> + Codec,
+	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable<Error=Error>,

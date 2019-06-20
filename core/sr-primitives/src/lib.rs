@@ -48,6 +48,7 @@ pub mod transaction_validity;
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 /// Error type
 pub enum Error {
 	/// Unknown error

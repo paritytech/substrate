@@ -190,7 +190,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Event: Parameter + Member + From<Event>;
 
 	/// The aggregated error type of the runtime.
-	type Error: Member + From<Error>;
+	type Error: Member + From<Error> + From<&'static str>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -819,10 +819,14 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
-	use srml_support::impl_outer_origin;
+	use srml_support::{impl_outer_origin, impl_outer_error};
 
-	impl_outer_origin!{
+	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
+	}
+
+	impl_outer_error! {
+		pub enum Error for Test where system = super {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -837,13 +841,14 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
+		type Error = Error;
 	}
 
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
 			match e {
 				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed => 101,
+				Event::ExtrinsicFailed(err) => Encode::using_encoded(&err, |s| (s[0] as u16) | ((s[1] as u16) << 8)),
 			}
 		}
 	}
@@ -881,8 +886,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(true, 0);
-			System::note_applied_extrinsic(false, 0);
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(DispatchError { module: 1, error: 2, message: None }), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
