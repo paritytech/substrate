@@ -74,7 +74,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
-	network: Option<Arc<components::NetworkService<Components::Factory>>>,
+	network: Arc<components::NetworkService<Components::Factory>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -446,7 +446,7 @@ impl<Components: components::Components> Service<Components> {
 
 		Ok(Service {
 			client,
-			network: Some(network),
+			network,
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
@@ -492,7 +492,7 @@ impl<Components> Service<Components> where Components: components::Components {
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.as_ref().expect("self.network always Some").clone()
+		self.network.clone()
 	}
 
 	/// Get shared transaction pool instance.
@@ -515,9 +515,6 @@ impl<Components> Service<Components> where Components: components::Components {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-
-		drop(self.network.take());
-
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
