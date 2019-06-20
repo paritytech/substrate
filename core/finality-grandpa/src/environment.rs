@@ -178,6 +178,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 		}
 	}
 
+	/// Returns the last completed round.
 	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
 		match self {
 			VoterSetState::Live { completed_rounds, .. } =>

@@ -254,21 +254,16 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 /// signed messages are imported.
 pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
 
+/// This blocks a global message import, i.e. a commit or catch up messages,
+/// until all blocks referenced in its votes are known.
+///
+/// This is used for compact commits and catch up messages which have already
+/// been checked for structural soundness (e.g. valid signatures).
 pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 	inner: Arc<(AtomicUsize, Mutex<Option<CommunicationIn<Block>>>)>,
 	target_number: NumberFor<Block>,
 }
 
-/// This blocks a catch up message's import until all blocks
-/// referenced in its votes are known.
-///
-/// This is used for catch up messages which have already been checked for
-/// structural soundness.
-/// This blocks a commit message's import until all blocks
-/// referenced in its votes are known.
-///
-/// This is used for compact commits which have already been checked for
-/// structural soundness.
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	type Blocked = CommunicationIn<Block>;
 
@@ -304,7 +299,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		{
 			// returns false when should early exit.
 			let mut query_known = |target_hash, perceived_number| -> Result<bool, Error> {
-				// check integrity: all precommits for same hash have same number.
+				// check integrity: all votes for same hash have same number.
 				let canon_number = match checked_hashes.entry(target_hash) {
 					Entry::Occupied(entry) => entry.get().number().clone(),
 					Entry::Vacant(entry) => {
@@ -321,8 +316,9 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 				};
 
 				if canon_number != perceived_number {
-					// invalid commit: messages targeting wrong number or
-					// at least different from other vote. in same commit.
+					// invalid global message: messages targeting wrong number
+					// or at least different from other vote in same global
+					// message.
 					return Ok(false);
 				}
 
@@ -363,8 +359,8 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			};
 		}
 
-		// none of the hashes in the catch up message were unknown.
-		// we can just return the catch up message directly.
+		// none of the hashes in the global message were unknown.
+		// we can just return the message directly.
 		if unknown_count == 0 {
 			ready(input);
 			return Ok(())
@@ -374,7 +370,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 
 		// schedule waits for all unknown messages.
 		// when the last one of these has `wait_completed` called on it,
-		// the commit will be returned.
+		// the global message will be returned.
 		//
 		// in the future, we may want to issue sync requests to the network
 		// if this is taking a long time.
@@ -420,10 +416,8 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	}
 }
 
-/// A stream which gates off incoming commit messages until all referenced
-/// block hashes have been imported.
-/// A stream which gates off incoming commit messages until all referenced
-/// block hashes have been imported.
+/// A stream which gates off incoming global messages, i.e. commit and catch up
+/// messages, until all referenced block hashes have been imported.
 pub(crate) type UntilGlobalMessageBlocksImported<Block, Status, I> = UntilImported<
 	Block,
 	Status,

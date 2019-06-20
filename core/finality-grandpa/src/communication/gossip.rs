@@ -46,7 +46,7 @@
 //! #### Propose
 //!
 //! This is a broadcast by a known voter of the last-round estimate.
-
+//!
 //! #### Commit
 //!
 //! These are used to announce past agreement of finality.
@@ -57,6 +57,21 @@
 //!
 //! Sending a commit is polite when it may finalize something that the receiving peer
 //! was not aware of.
+//!
+//! #### Catch Up
+//!
+//! These allow a peer to request another peer, which they perceive to be in a
+//! later round, to provide all the votes necessary to complete a given round
+//! `R`.
+//!
+//! It is impolite to send a catch up request for a round `R` to a peer whose
+//! announced view is behind `R`. It is also impolite to send a catch up request
+//! to a peer in a new different Set ID.
+//!
+//! The logic for issuing and tracking pending catch up requests is implemented
+//! in the `GossipValidator`. A catch up request is issued anytime we see a
+//! neighbor packet from a peer at a round `CATCH_UP_THRESHOLD` higher than at
+//! we are.
 //!
 //! ## Expiration
 //!
@@ -87,6 +102,8 @@ use std::time::{Duration, Instant};
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(15);
+/// Maximum number of rounds we are behind a peer before issuing a
+/// catch up request.
 const CATCH_UP_THRESHOLD: u64 = 2;
 
 /// An outcome of examining a message.

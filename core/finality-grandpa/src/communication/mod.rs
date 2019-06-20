@@ -466,9 +466,9 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			}).collect();
 
 		telemetry!(CONSENSUS_INFO; "afg.received_commit";
-				   "contains_precommits_signed_by" => ?precommits_signed_by,
-				   "target_number" => ?msg.message.target_number.clone(),
-				   "target_hash" => ?msg.message.target_hash.clone(),
+			"contains_precommits_signed_by" => ?precommits_signed_by,
+			"target_number" => ?msg.message.target_number.clone(),
+			"target_hash" => ?msg.message.target_hash.clone(),
 		);
 
 		if let Err(cost) = check_compact_commit::<B>(
@@ -524,9 +524,6 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		// FIXME: handle catch up replies and requests?
-		// signal to validator about import outcome,
-		// cleanup pending request after import!
 		let gossip_validator = gossip_validator.clone();
 		let service = service.clone();
 
