@@ -336,9 +336,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
 	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
-	use runtime_primitives::testing::Header;
+	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -378,7 +376,7 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			transaction_base_fee: 0,

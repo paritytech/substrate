@@ -395,9 +395,9 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, Header, Block};
+	use primitives::{
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup}, testing::{Digest, Header, Block}
+	};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
 	use hex_literal::hex;
@@ -466,7 +466,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
@@ -493,7 +493,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}

@@ -18,7 +18,6 @@
 
 #![cfg(test)]
 
-use primitives::BuildStorage;
 use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -106,7 +105,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			transaction_base_fee: self.transaction_base_fee,
 			transaction_byte_fee: self.transaction_byte_fee,

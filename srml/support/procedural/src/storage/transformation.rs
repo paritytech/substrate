@@ -470,7 +470,7 @@ fn decl_store_extra_genesis(
 			(quote!(), quote!())
 		};
 
-		let impl_trait = quote!(CreateModuleGenesisStorage<#traitinstance, #inherent_instance>);
+		let impl_trait = quote!(BuildModuleGenesisStorage<#traitinstance, #inherent_instance>);
 
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
@@ -495,7 +495,7 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#fparam_impl GenesisConfig#sparam {
-				fn build_storage #fn_generic (self) -> std::result::Result<
+				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
 						#scrate::runtime_primitives::StorageOverlay,
 						#scrate::runtime_primitives::ChildrenStorageOverlay,
@@ -509,7 +509,7 @@ fn decl_store_extra_genesis(
 				}
 
 				/// Assimilate the storage for this module into pre-existing overlays.
-				fn assimilate_storage #fn_generic (
+				pub fn assimilate_storage #fn_generic (
 					self,
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
@@ -528,7 +528,7 @@ fn decl_store_extra_genesis(
 			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
 				for GenesisConfig#sparam
 			{
-				fn create_module_genesis_storage(
+				fn build_module_genesis_storage(
 					self,
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,

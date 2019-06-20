@@ -41,7 +41,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use primitives::{
-		BuildStorage, traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
+		traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
 	};
 	pub use {seats, motions};
 
@@ -172,8 +172,8 @@ mod tests {
 			self
 		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-			t.extend(balances::GenesisConfig::<Test>{
+			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+			t.extend(balances::GenesisConfig::<Test> {
 				transaction_base_fee: 0,
 				transaction_byte_fee: 0,
 				balances: vec![

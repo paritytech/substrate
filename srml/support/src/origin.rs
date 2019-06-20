@@ -24,24 +24,24 @@ macro_rules! impl_outer_origin {
 
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
 	// form)
-
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
-			$( rest:tt )*
+			$( $rest_without_system:tt )*
 		}
 	) => {
 		$crate::impl_outer_origin! {
 			$(#[$attr])*
 			pub enum $name for $runtime where system = system {
-				$( $rest )*
+				$( $rest_without_system )*
 			}
 		}
 	};
+
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident where system = $system:ident {
-			$( $rest:tt )*
+			$( $rest_with_system:tt )*
 		}
 	) => {
 		$crate::impl_outer_origin!(
@@ -49,7 +49,7 @@ macro_rules! impl_outer_origin {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $rest )* };
+			Modules { $( $rest_with_system )* };
 		);
 	};
 
@@ -60,8 +60,8 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident $instance:ident <T>,
-			$( $rest_module:tt )*
+			$module:ident $instance:ident <T>
+			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
 	) => {
@@ -70,7 +70,7 @@ macro_rules! impl_outer_origin {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $rest_module )* };
+			Modules { $( $( $rest_module )* )? };
 			$( $parsed )* $module <$runtime> { $instance },
 		);
 	};
@@ -82,8 +82,8 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident $instance:ident,
-			$( $rest_module:tt )*
+			$module:ident $instance:ident
+			$(, $rest_module:tt )*
 		};
 		$( $parsed:tt )*
 	) => {
@@ -104,8 +104,8 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident <T>,
-			$( $rest_module:tt )*
+			$module:ident <T>
+			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
 	) => {
@@ -114,7 +114,7 @@ macro_rules! impl_outer_origin {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $rest_module )* };
+			Modules { $( $( $rest_module )* )? };
 			$( $parsed )* $module <$runtime>,
 		);
 	};
@@ -126,8 +126,8 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident,
-			$( $rest_module:tt )*
+			$module:ident
+			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
 	) => {
@@ -136,8 +136,8 @@ macro_rules! impl_outer_origin {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $rest_module )* };
-			$( $parsed )* $module <$runtime>,
+			Modules { $( $( $rest_module )* )? };
+			$( $parsed )* $module,
 		);
 	};
 

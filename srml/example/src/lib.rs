@@ -510,8 +510,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
-		testing::Header
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
 	};
 
 	impl_outer_origin! {
@@ -551,7 +550,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		// We use default for brevity, but you can configure as desired if needed.
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{

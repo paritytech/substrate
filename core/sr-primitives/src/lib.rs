@@ -28,7 +28,6 @@ pub use serde;
 #[doc(hidden)]
 pub use rstd;
 
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use paste;
 
@@ -112,10 +111,11 @@ pub trait BuildStorage: Sized {
 	) -> Result<(), String>;
 }
 
+/// Somethig that can build the genesis storage of a module.
 #[cfg(feature = "std")]
-pub trait CreateModuleGenesisStorage<T, I>: Sized {
+pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
-	fn create_module_genesis_storage(
+	fn build_module_genesis_storage(
 		self,
 		storage: &mut StorageOverlay,
 		child_storage: &mut ChildrenStorageOverlay
@@ -665,7 +665,7 @@ macro_rules! impl_outer_config {
 		$top:ident;
 		$children:ident;
 	) => {
-		$crate::CreateModuleGenesisStorage::<$runtime, $module::$instance>::create_module_genesis_storage(
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
 			$top,
 			$children,
@@ -679,7 +679,7 @@ macro_rules! impl_outer_config {
 		$top:ident;
 		$children:ident;
 	) => {
-		$crate::CreateModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::create_module_genesis_storage(
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
 			$top,
 			$children,

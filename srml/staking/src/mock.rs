@@ -17,7 +17,7 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use primitives::{BuildStorage, Perbill};
+use primitives::Perbill;
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -179,7 +179,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {

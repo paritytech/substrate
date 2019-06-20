@@ -135,7 +135,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<AuthorityId>) {
-		<Authorities<T>>::put(&new);
+		Authorities::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<system::Module<T>>::deposit_log(log.into());

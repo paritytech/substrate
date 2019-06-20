@@ -613,7 +613,7 @@ impl<T: Trait> Module<T> {
 		let mut set = Self::voters(set_index);
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
-		<VoterCount<T>>::mutate(|c| *c = *c - 1);
+		VoterCount::mutate(|c| *c = *c - 1);
 		Self::remove_all_approvals_of(voter);
 		<VoterInfoOf<T>>::remove(voter);
 	}
@@ -683,7 +683,7 @@ impl<T: Trait> Module<T> {
 			}
 
 			T::Currency::reserve(&who, Self::voting_bond())?;
-			<VoterCount<T>>::mutate(|c| *c = *c + 1);
+			VoterCount::mutate(|c| *c = *c + 1);
 		}
 
 		T::Currency::set_lock(
@@ -815,7 +815,7 @@ impl<T: Trait> Module<T> {
 
 		set.push(Some(who));
 		if len + 1 == VOTER_SET_SIZE {
-			<NextVoterSet<T>>::put(index + 1);
+			NextVoterSet::put(index + 1);
 		}
 	}
 
@@ -1356,7 +1356,7 @@ mod tests {
 		let mut t = ExtBuilder::default().build();
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);
-			<CandidateCount<Test>>::put(1);
+			CandidateCount::put(1);
 			<RegisterInfoOf<Test>>::insert(1, (0, 2));
 		});
 		t

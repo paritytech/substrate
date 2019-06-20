@@ -256,7 +256,7 @@ where
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| {
+		let new_seed = AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});

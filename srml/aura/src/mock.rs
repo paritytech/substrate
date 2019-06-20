@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use primitives::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
@@ -55,7 +55,7 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 	t.extend(timestamp::GenesisConfig::<Test>{
 		minimum_period: 1,
 	}.build_storage().unwrap().0);

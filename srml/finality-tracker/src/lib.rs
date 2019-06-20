@@ -261,13 +261,11 @@ mod tests {
 
 	use sr_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::Header;
+	use primitives::{
+		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT}, testing::Header
+	};
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
-	use lazy_static::lazy_static;
-	use parking_lot::Mutex;
 
 	#[derive(Clone, PartialEq, Debug)]
 	pub struct StallEvent {
@@ -275,65 +273,59 @@ mod tests {
 		further_wait: u64,
 	}
 
-	macro_rules! make_test_context {
-		() => {
-			#[derive(Clone, Eq, PartialEq)]
-			pub struct Test;
+	#[derive(Clone, Eq, PartialEq)]
+	pub struct Test;
 
-			impl_outer_origin! {
-				pub enum Origin for Test {}
-			}
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
 
-			impl system::Trait for Test {
-				type Origin = Origin;
-				type Index = u64;
-				type BlockNumber = u64;
-				type Hash = H256;
-				type Hashing = BlakeTwo256;
-				type AccountId = u64;
-				type Lookup = IdentityLookup<u64>;
-				type Header = Header;
-				type Event = ();
-			}
+	impl system::Trait for Test {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
+		type Header = Header;
+		type Event = ();
+	}
 
-			type System = system::Module<Test>;
+	type System = system::Module<Test>;
 
-			lazy_static! {
-				static ref NOTIFICATIONS: Mutex<Vec<StallEvent>> = Mutex::new(Vec::new());
-			}
+	thread_local! {
+		static NOTIFICATIONS: std::cell::RefCell<Vec<StallEvent>> = Default::default();
+	}
 
-			pub struct StallTracker;
-			impl OnFinalizationStalled<u64> for StallTracker {
-				fn on_stalled(further_wait: u64, _median: u64) {
-					let now = System::block_number();
-					NOTIFICATIONS.lock().push(StallEvent { at: now, further_wait });
-				}
-			}
-
-			impl Trait for Test {
-				type OnFinalizationStalled = StallTracker;
-			}
-
-			type FinalityTracker = Module<Test>;
+	pub struct StallTracker;
+	impl OnFinalizationStalled<u64> for StallTracker {
+		fn on_stalled(further_wait: u64, _median: u64) {
+			let now = System::block_number();
+			NOTIFICATIONS.with(|n| n.borrow_mut().push(StallEvent { at: now, further_wait }));
 		}
 	}
 
+	impl Trait for Test {
+		type OnFinalizationStalled = StallTracker;
+	}
+
+	type FinalityTracker = Module<Test>;
+
 	#[test]
 	fn median_works() {
-		make_test_context!();
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
-			assert!(NOTIFICATIONS.lock().is_empty());
+			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
 		});
 	}
 
 	#[test]
 	fn notifies_when_stalled() {
-		make_test_context!();
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			window_size: 11,
 			report_latency: 100
@@ -349,7 +341,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				NOTIFICATIONS.lock().to_vec(),
+				NOTIFICATIONS.with(|n| n.borrow().clone()),
 				vec![StallEvent { at: 105, further_wait: 10 }]
 			)
 		});
@@ -357,8 +349,7 @@ mod tests {
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		make_test_context!();
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			window_size: 11,
 			report_latency: 100
@@ -377,7 +368,7 @@ mod tests {
 				parent_hash = hdr.hash();
 			}
 
-			assert!(NOTIFICATIONS.lock().is_empty());
+			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
 		});
 	}
 }

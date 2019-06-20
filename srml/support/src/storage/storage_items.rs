@@ -820,13 +820,13 @@ mod test_map_vec_append {
 		use runtime_io::{with_externalities, TestExternalities};
 
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = <MapVec<Test>>::append(1, &[1, 2, 3]);
-			let _ = <MapVec<Test>>::append(1, &[4, 5]);
-			assert_eq!(<MapVec<Test>>::get(1), vec![1, 2, 3, 4, 5]);
+			let _ = MapVec::append(1, &[1, 2, 3]);
+			let _ = MapVec::append(1, &[4, 5]);
+			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = <JustVec<Test>>::append(&[1, 2, 3]);
-			let _ = <JustVec<Test>>::append(&[4, 5]);
-			assert_eq!(<JustVec<Test>>::get(), vec![1, 2, 3, 4, 5]);
+			let _ = JustVec::append(&[1, 2, 3]);
+			let _ = JustVec::append(&[4, 5]);
+			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
 }
