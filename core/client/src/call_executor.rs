@@ -110,7 +110,7 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-	) -> Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
+	) -> Result<(NativeOrEncoded<R>, (S::Transaction, H::Out), Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -314,7 +314,11 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+	) -> error::Result<(
+		NativeOrEncoded<R>,
+		(S::Transaction, <Blake2Hasher as Hasher>::Out),
+		Option<MemoryDB<Blake2Hasher>>,
+	)> {
 		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),

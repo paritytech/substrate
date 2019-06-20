@@ -115,8 +115,8 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> (B::Transaction, Option<MemoryDB<H>>) {
-		let _ = self.storage_root();
+	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<MemoryDB<H>>) {
+		let storage_root = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
 			self.storage_transaction
@@ -126,7 +126,7 @@ where
 		);
 
 		(
-			storage_transaction.0,
+			(storage_transaction.0, storage_root),
 			changes_trie_transaction,
 		)
 	}

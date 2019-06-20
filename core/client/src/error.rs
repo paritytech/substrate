@@ -94,6 +94,9 @@ pub enum Error {
 	/// Hash that is required for building CHT is missing.
 	#[display(fmt = "Failed to get hash of block for building CHT")]
 	MissingHashRequiredForCHT,
+	/// Invalid calculated state root on block import.
+	#[display(fmt = "Calculated state root does not match.")]
+	InvalidStateRoot,
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),
