@@ -25,7 +25,7 @@ use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{AuthorityId, GenesisConfig, Trait, Module, Signal};
+use crate::{AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Signal};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
@@ -43,7 +43,7 @@ impl From<Signal<u64>> for DigestItem<H256> {
 pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
-
+	type Signature = AuthoritySignature;
 }
 impl system::Trait for Test {
 	type Origin = Origin;

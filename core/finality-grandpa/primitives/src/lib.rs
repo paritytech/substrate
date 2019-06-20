@@ -47,12 +47,12 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 pub type AuthorityWeight = u64;
 
 /// Prevote equivocation.
-pub type PrevoteEquivocation<Block> =
-	Equivocation<AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>;
+pub type PrevoteEquivocation<Hash, Number> =
+	Equivocation<AuthorityId, Prevote<Hash, Number>, AuthoritySignature>;
 
 /// Precommit equivocation.
-pub type PrecommitEquivocation<Block> =
-	Equivocation<AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>, AuthoritySignature>;
+pub type PrecommitEquivocation<Hash, Number> =
+	Equivocation<AuthorityId, Precommit<Hash, Number>, AuthoritySignature>;
 
 
 /// A scheduled change of authority set.
@@ -129,12 +129,12 @@ decl_runtime_apis! {
 		
 		/// Construct a call to report the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8>;
 		
 		/// Construct a call to report the precommit equivocation.
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8>;
 	}
 }

@@ -247,6 +247,7 @@ impl sudo::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type Signature = AuthoritySignature;
 }
 
 impl finality_tracker::Trait for Runtime {
@@ -368,14 +369,14 @@ impl_runtime_apis! {
 		}
 
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8> {
 			let report_call = Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
 		}
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8> {
 			let report_call = Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);

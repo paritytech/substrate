@@ -33,16 +33,18 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use rstd::prelude::*;
-use parity_codec::{self as codec, Encode, Decode};
+use parity_codec::{self as codec, Encode, Decode, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::{CurrentHeight, NumberFor},
+	generic::{DigestItem, OpaqueDigestItemId},
+	traits::{CurrentHeight, NumberFor, MaybeSerializeDebug, ValidateUnsigned, Verify},
+	transaction_validity::TransactionValidity
 };
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof, Equivocation,
-	Prevote, Precommit, 
+	Prevote, Precommit, Message, PrevoteEquivocation, PrecommitEquivocation
 };
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
 use system::{ensure_signed, DigestOf};
@@ -84,6 +86,9 @@ impl<N> Signal<N> {
 pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+
+	/// The signature of the authority.
+	type Signature: Verify + Codec + Clone;
 }
 
 /// A stored pending change, old format.
@@ -157,7 +162,7 @@ decl_module! {
 		/// Report prevote equivocation in Grandpa.
 		fn report_prevote_equivocation(
 			_origin,
-			_equivocation_proof: GrandpaEquivocationProof<Equivocation<AuthorityId, Prevote<T::Hash, T::BlockNumber>, AuthoritySignature>>
+			_equivocation_proof: GrandpaEquivocationProof<PrevoteEquivocation<T::Hash, T::BlockNumber>>
 		) {
 			// Slash
 		}
@@ -165,7 +170,7 @@ decl_module! {
 		/// Report precommit equivocation in Grandpa.
 		fn report_precommit_equivocation(
 			_origin,
-			_equivocation_proof: GrandpaEquivocationProof<Equivocation<AuthorityId, Precommit<T::Hash, T::BlockNumber>, AuthoritySignature>>
+			_equivocation_proof: GrandpaEquivocationProof<PrecommitEquivocation<T::Hash, T::BlockNumber>>
 		) {
 			// Slash
 		}
@@ -311,4 +316,89 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 		// against `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
 	}
+}
+
+impl<T> ValidateUnsigned for Module<T> 
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_prevote_equivocation(proof) =>
+				handle_prevote_equivocation_proof::<T>(proof),
+			Call::report_precommit_equivocation(proof) =>
+				handle_precommit_equivocation_proof::<T>(proof),
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
+}
+
+fn handle_prevote_equivocation_proof<T: Trait>(
+	proof: &GrandpaEquivocationProof<PrevoteEquivocation<T::Hash, T::BlockNumber>>
+) -> TransactionValidity
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	let GrandpaEquivocationProof { set_id, round, equivocation } = proof;
+
+	let fst_sig = &equivocation.first.1;
+	let fst_message = Message::Prevote(equivocation.first.0.clone());
+	let fst_payload = (fst_message, round, set_id).encode();
+
+	let snd_sig = &equivocation.second.1;
+	let snd_message = Message::Prevote(equivocation.second.0.clone());
+	let snd_payload = (snd_message, round, set_id).encode();
+
+	let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation.identity);
+	let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation.identity);
+
+	if valid_sig1 && valid_sig2 {
+		return TransactionValidity::Valid {
+			priority: 0,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615,
+			propagate: true,
+		}
+	}
+	TransactionValidity::Invalid(0)
+}
+
+fn handle_precommit_equivocation_proof<T>(
+	proof: &GrandpaEquivocationProof<PrecommitEquivocation<T::Hash, T::BlockNumber>>
+) -> TransactionValidity
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	let GrandpaEquivocationProof { set_id, round, equivocation } = proof;
+
+	let fst_sig = &equivocation.first.1;
+	let fst_message = Message::Precommit(equivocation.first.0.clone());
+	let fst_payload = (fst_message, round, set_id).encode();
+
+	let snd_sig = &equivocation.second.1;
+	let snd_message = Message::Precommit(equivocation.second.0.clone());
+	let snd_payload = (snd_message, round, set_id).encode();
+
+	let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation.identity);
+	let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation.identity);
+
+	if valid_sig1 && valid_sig2 {
+		return TransactionValidity::Valid {
+			priority: 0,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615,
+			propagate: true,
+		}
+	}
+	TransactionValidity::Invalid(0)
 }

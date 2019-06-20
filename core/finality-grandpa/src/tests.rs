@@ -424,7 +424,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<Block>>>,
+		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))
@@ -435,7 +435,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<Block>>>,
+		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))
