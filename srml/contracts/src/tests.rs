@@ -590,7 +590,6 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				),
 				"during execution"
 			);
-
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -619,6 +618,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
 					topics: vec![],
 				},
+				// ABSENCE of events which would be caused by dispatched Balances::transfer call
 			]);
 		},
 	);
