@@ -238,6 +238,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
+		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
 	}
 }
 
@@ -270,6 +271,14 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
 	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
 	<NewAuthorities>::put(new_authorities);
+	Ok(ApplyOutcome::Success)
+}
+
+fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
+	match value {
+		Some(value) => storage::unhashed::put_raw(key, value),
+		None => storage::unhashed::kill(key),
+	}
 	Ok(ApplyOutcome::Success)
 }
 

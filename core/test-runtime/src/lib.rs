@@ -106,6 +106,7 @@ pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
+	StorageChange(Vec<u8>, Option<Vec<u8>>),
 }
 
 #[cfg(feature = "std")]
@@ -129,6 +130,7 @@ impl BlindCheckable for Extrinsic {
 				}
 			},
 			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
 }
