@@ -1041,8 +1041,12 @@ const CODE_RESTORATION: &str = r#"
 
 	(func (export "call")
 		(call $ext_dispatch_call
-			(i32.const 200) ;; Pointer to the start of encoded call buffer
-			(i32.const 115) ;; Length of the buffer
+			;; Pointer to the start of the encoded call buffer
+			(i32.const 200)
+			;; The length of the encoded call buffer.
+			;;
+			;; NB: This is required to keep in sync with the values in `restoration`.
+			(i32.const 115)
 		)
 	)
 	(func (export "deploy")
@@ -1129,7 +1133,12 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	assert_eq!(
 		encoded,
 		ENCODED_CALL_LITERAL,
-		"The literal was changed and requires updating here and in `CORE_RESOTRATION`",
+		"The literal was changed and requires updating here and in `CODE_RESTORATION`",
+	);
+	assert_eq!(
+		hex::decode(literal).unwrap().len(),
+		115,
+		"The size of the literal was changed and requires updating in `CODE_RESTORATION`",
 	);
 
 	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
