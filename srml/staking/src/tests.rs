@@ -1985,3 +1985,36 @@ fn phragmen_large_scale_test_2() {
 		assert_total_expo(5, nom_budget / 2 + c_budget);
 	})
 }
+
+#[test]
+fn reward_validator_slashing_validator_doesnt_overflow() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+		let stake = u32::max_value() as u64 * 2;
+		let reward_slash = u32::max_value() as u64 * 2;
+
+		// Assert multiplication overflows in balance arithmetic.
+		assert!(stake.checked_mul(reward_slash).is_none());
+
+		// Set staker
+		let _ = Balances::make_free_balance_be(&11, stake);
+		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: stake, others: vec![] });
+
+		// Check reward
+		Staking::reward_validator(&11, reward_slash);
+		assert_eq!(Balances::total_balance(&11), stake * 2);
+
+		// Set staker
+		let _ = Balances::make_free_balance_be(&11, stake);
+		let _ = Balances::make_free_balance_be(&2, stake);
+		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: 1, others: vec![
+			IndividualExposure { who: 2, value: stake - 1 }
+		]});
+
+		// Check slashing
+		Staking::slash_validator(&11, reward_slash);
+		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&2), 1);
+	})
+}
