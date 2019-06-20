@@ -706,6 +706,14 @@ impl<Block: BlockT> Inner<Block> {
 			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
 		}
 
+		match self.peers.peer(who) {
+			None =>
+				return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
+			Some(peer) if peer.view.round >= request.round =>
+				return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
+			_ => {},
+		}
+
 		let last_completed_round = set_state.read().last_completed_round();
 		if last_completed_round.number < request.round.0 {
 			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
