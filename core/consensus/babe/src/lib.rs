@@ -82,7 +82,7 @@ use futures::{Future, IntoFuture, future};
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
 pub use babe_primitives::AuthorityId;
 
@@ -337,7 +337,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		Box::new(proposal_work.map(move |b| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
-			let slot_after_building = slot_now(slot_duration, Default::default(), true);
+			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
 			if slot_after_building != slot_num {
 				info!(
 					target: "babe",
@@ -639,7 +639,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 				let mut timestamps = self.timestamps.lock();
 				// Remainder of this block is a critical section.
 				let num_timestamps = timestamps.1.len();
-				let { median_required_blocks, .. } = self.config.0;
+				let median_required_blocks = self.config.0.median_required_blocks;
 				if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
 					let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
 							let offset: u128 = u128::from(self.config.get())
@@ -655,7 +655,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					let &median = new_list
 						.get(num_timestamps / 2)
 						.expect("we have at least one timestamp, so this is a valid index; qed");
-					timestamps.1.clear()
+					timestamps.1.clear();
 					// Compute the (relative!) start time of the blockchain ―
 					// that is, the issue time of the genesis block that would
 					// give the values we observed.

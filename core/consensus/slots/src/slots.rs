@@ -39,13 +39,28 @@ pub fn duration_now() -> Duration {
 	))
 }
 
-/// Get the slot for now.
-pub fn slot_now(slot_duration: u64, offset: Duration, is_positive: bool) -> u64 {
-	if is_positive {
-		duration_now() + offset
-	} else {
-		duration_now() - offset
-	}.as_secs() / slot_duration
+
+/// A `Duration` with a sign (before or after).  Immutable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SignedDuration {
+	offset: Duration,
+	is_positive: bool,
+}
+
+impl SignedDuration {
+	/// Construct a `SignedDuration`
+	pub fn new(offset: Duration, is_positive: bool) -> Self {
+		Self { offset, is_positive }
+	}
+
+	/// Get the slot for now.  Panics if `slot_duration` is 0.
+	pub fn slot_now(&self, slot_duration: u64) -> u64 {
+		if self.is_positive {
+			duration_now() + self.offset
+		} else {
+			duration_now() - self.offset
+		}.as_secs() / slot_duration
+	}
 }
 
 /// Returns the duration until the next slot, based on current duration since
