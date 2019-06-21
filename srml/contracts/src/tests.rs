@@ -580,6 +580,8 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				vec![],
 			));
 
+			// Call the newly created contract. The contract is expected to dispatch a call
+			// and then trap.
 			assert_err!(
 				Contract::call(
 					Origin::signed(ALICE),
