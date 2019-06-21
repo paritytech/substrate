@@ -1262,21 +1262,24 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 	type Slash = StakingSlasher<T>;
 
-	fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) {
-		Self::Slash::on_slash(&who, misconduct.severity());
+	fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) -> u8 {
+		let severity = misconduct.severity();
+		Self::Slash::on_slash(&who, severity);
 		misconduct.on_misconduct();
+		severity.as_misconduct_level()
 	}
 
 	fn slash_on_checkpoint(
 		misbehaved: &[T::AccountId],
 		total_validators: u64,
 		misconduct: &impl CheckpointMisconduct
-	) {
+	) -> u8 {
 		let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
 
 		for who in misbehaved {
 			Self::Slash::on_slash(who, severity);
 		}
 
+		severity.as_misconduct_level()
 	}
 }

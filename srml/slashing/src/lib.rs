@@ -26,8 +26,6 @@
 //! The Slashing interfaces specifies a generic API with functionality to specialize
 //! any kind of misconduct with possibility to increase the punishment on concurrent misconducts.
 //! It need to be implemented on top of some module that implements the `Balance` module.
-//! In order to punish concurrent misconduct there something called `severity level` which may
-//! be used to increase or decrease the punishment for a given misconduct.
 //!
 //! ### Terminology
 //!
@@ -37,8 +35,7 @@
 //! ## Usage
 //!
 //! The following example show how to implement and use the `Slashing interface` on your custom module
-//! with a `Unresponsive` misconduct which is slashed 0.00001% for isolated misconducts and increases
-//! exponentially on concurrent misconducts.
+//! with a `Unresponsive` misconduct.
 //!
 //!	### Example
 //!
@@ -87,30 +84,34 @@
 //!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
-//!		fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) {
-//!			Self::Slash::on_slash(&who, misconduct.severity());
+//!		fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) -> u8 {
+//!			let severity = misconduct.severity();
+//!			Self::Slash::on_slash(&who, severity);
 //!			misconduct.on_misconduct();
+//!			severity.as_misconduct_level()
 //!		}
 //!
 //!		fn slash_on_checkpoint(
 //!			misbehaved: &[T::AccountId],
 //!			total_validators: u64,
 //!			misconduct: &impl CheckpointMisconduct
-//!		) {
+//!		) -> u8 {
 //!			let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
 //!
 //!			for who in misbehaved {
 //!				Self::Slash::on_slash(who, severity);
 //!			}
+//!
+//!			severity.as_misconduct_level()
 //!		}
 //!	}
 //!
 //! fn main() {
-//!		let misconduct = Unresponsive;
+//!		let unresponsive = Unresponsive;
 //!		let misbehaved_validators = vec![1, 2, 3, 4, 5, 6];
 //!		let total_validators = 100;
 //!		// MyModule is type that implements `Trait`
-//!		// SlashingWrapper::<MyModule>::slash_on_checkpoint(&misbehaved_validators, total_validators);
+//!		// SlashingWrapper::<MyModule>::slash_on_checkpoint(&misbehaved_validators, total_validators, &unresponsive);
 //! }
 //! ```
 
@@ -124,11 +125,16 @@ mod types;
 
 pub use types::Fraction;
 
-/// We need two versions of this trait:
-//	1) only concerning the current era, thus on `end or era` calculate severity (doesn't need to keep state)
-//	2) calculate severity based on continuous reporting which keeps state,
+// The specification specifices four different misconduct levels:
+//		1) Slashing: 0 <= x <= 0.001
+//		2) Slashing: 0.001 < x <= 0.01
+//		3) Slashing: 0.01 < x <= 0.1
+//		4) Slashing: 0.1 < x <= 1.0
+type MisconductLevel = u8;
+
+/// Base trait for representing misconducts
 pub trait Misconduct {
-	/// Severity
+	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 }
 
@@ -137,6 +143,7 @@ pub trait Misconduct {
 pub trait CheckpointMisconduct: Misconduct {
 
 	/// Estimate severity based `number of misbehaved validators` and `number of validators`
+	// TODO: use `Fraction<Self::Severity> instead
 	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<u64>;
 }
 
@@ -144,6 +151,7 @@ pub trait CheckpointMisconduct: Misconduct {
 /// The type the implements is expected to keep `severity`as part of the type
 pub trait ContinuousMisconduct: Misconduct {
 	/// Estimate severity based on previous state
+	// TODO: use `Fraction<Self::Severity> instead
 	fn severity(&self) -> Fraction<u64>;
 
 	/// Increase severity based on previous state
@@ -156,6 +164,7 @@ pub trait ContinuousMisconduct: Misconduct {
 /// Slashing interface
 pub trait OnSlashing<AccountId> {
 	/// Slash validator `who` based on severity_level `severity`
+	// TODO: use `Fraction<Misconduct::Severity> instead
 	fn on_slash(who: &AccountId, severity: Fraction<u64>);
 }
 
@@ -165,8 +174,14 @@ pub trait Slashing<AccountId> {
 	type Slash: OnSlashing<AccountId>;
 
 	/// Slash the given account `who`
-	fn slash(who: &AccountId, misconduct: &mut impl ContinuousMisconduct);
+	/// Returns the misconduct level
+	fn slash(who: &AccountId, misconduct: &mut impl ContinuousMisconduct) -> MisconductLevel;
 
 	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot
-	fn slash_on_checkpoint(misbehaved: &[AccountId], total_validators: u64, misconduct: &impl CheckpointMisconduct);
+	/// Returns the misconduct level for all misbehaved validators
+	fn slash_on_checkpoint(
+		misbehaved: &[AccountId],
+		total_validators: u64,
+		misconduct: &impl CheckpointMisconduct
+	) -> MisconductLevel;
 }

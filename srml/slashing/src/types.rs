@@ -40,15 +40,55 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 	pub fn numerator(&self) -> N {
 		self.numerator
 	}
+
+	/// Convert fraction into severity level
+	// TODO: extract into default trait impl
+	pub fn as_misconduct_level(&self) -> u8 {
+		if self.denominator.saturating_mul(10_u32.into()) > self.numerator {
+			4
+		} else if self.denominator.saturating_mul(100_u32.into()) > self.numerator {
+			3
+		} else if self.denominator.saturating_mul(1000_u32.into()) > self.numerator {
+			2
+		} else {
+			1
+		}
+	}
 }
 
 /// temp naive gcd algorithm
 fn gcd<N: SimpleArithmetic + Copy>(mut x: N, mut y: N) -> N {
-    while y != Zero::zero() {
-        let tmp = x;
-        x = y;
-        y = tmp % y;
-    }
+	while y != Zero::zero() {
+		let tmp = x;
+		x = y;
+		y = tmp % y;
+	}
+	x
+}
 
-    x
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn it_works() {
+		let f = Fraction::new(48_u32, 26_u32);
+		assert_eq!(f.denominator(), 24, "gcd 2");
+		assert_eq!(f.numerator(), 13, "gcd 2");
+
+		let ff = Fraction::new(999_u64, 13_u64);
+		assert_eq!(ff.denominator(), 999, "999 and 13 are relative prime numbers");
+		assert_eq!(ff.numerator(), 13, "999 and 13 are relative prime numbers");
+	}
+
+	fn misconduct_level() {
+		assert_eq!(4, Fraction::new(10_u32, 10_u32).as_misconduct_level(), "100% should be severity level 4");
+		assert_eq!(4, Fraction::new(2_u32, 10_u32).as_misconduct_level(), "20% should be severity level 4");
+		assert_eq!(3, Fraction::new(5_u32, 100_u32).as_misconduct_level(), "5% should be severity level 3");
+		assert_eq!(3, Fraction::new(2_u32, 100_u32).as_misconduct_level(), "2% should be severity level 3");
+		assert_eq!(2, Fraction::new(1_u32, 100_u32).as_misconduct_level(), "1% should be severity level 2");
+		assert_eq!(2, Fraction::new(2_u32, 1000_u32).as_misconduct_level(), "0.2% should be severity level 2");
+		assert_eq!(1, Fraction::new(1_u32, 1000_u32).as_misconduct_level(), "0.1% should be severity level 1");
+	}
 }
