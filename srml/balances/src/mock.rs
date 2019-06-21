@@ -29,8 +29,14 @@ impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
 
+mod balances {
+	pub use crate::Error;
+}
+
 impl_outer_error! {
-	pub enum Error for Runtime {}
+	pub enum Error for Runtime {
+		balances,
+	}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -56,6 +62,7 @@ impl Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type Error = Error;
 }
 
 pub struct ExtBuilder {

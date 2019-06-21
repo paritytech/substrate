@@ -424,7 +424,10 @@ macro_rules! decl_module {
 	};
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -438,13 +441,46 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $error_type }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	// Add default Error if none supplied
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ }
+		[ $($t:tt)* ]
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ &'static str }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -530,37 +566,6 @@ macro_rules! decl_module {
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
-			$($rest)*
-		);
-	};
-	// Add default Error if none supplied
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<
-			$trait_instance:ident:
-				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
-			>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ }
-		[ $($t:tt)* ]
-		$($rest:tt)*
-	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<
-				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
-			>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $deposit_event )* }
-			{ $( $on_initialize )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ &'static str }
-			[ $($t)* ]
 			$($rest)*
 		);
 	};

@@ -202,7 +202,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error;
+		type Error = T::Error;
 
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {

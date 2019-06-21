@@ -152,7 +152,7 @@
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
 use parity_codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, decl_error};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -169,6 +169,8 @@ mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+
+pub type DispatchResult<T, I> = srml_support::dispatch::DispatchResult<<T as Trait<I>>::Error>;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -211,6 +213,9 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+
+	/// The overarching error type.
+	type Error: From<Error> + From<system::Error> + From<&'static str>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -232,6 +237,19 @@ decl_event!(
 		Transfer(AccountId, AccountId, Balance, Balance),
 	}
 );
+
+decl_error! {
+	pub enum Error {
+	}
+}
+
+impl From<Error> for &'static str {
+	fn from(err: Error) -> &'static str {
+		match err {
+			Error::Unknown(msg) => msg,
+		}
+	}
+}
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
@@ -340,6 +358,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		type Error = <T as Trait<I>>::Error;
+
 		fn deposit_event<T, I>() = default;
 
 		/// Transfer some liquid free balance to another account.
@@ -707,6 +727,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
+	type Error = &'static str;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>

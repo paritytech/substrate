@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::{BuildStorage, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use srml_support::impl_outer_origin;
+use srml_support::{impl_outer_origin, impl_outer_error};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
@@ -28,14 +28,13 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
+impl_outer_error! {
+	pub enum Error for Runtime {}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
-
-#[allow(non_camel_case_types)]
-pub enum Error {
-	system(system::Error)
-}
 
 impl system::Trait for Test {
 	type Origin = Origin;

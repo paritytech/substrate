@@ -96,7 +96,7 @@ macro_rules! impl_outer_error {
 		impl Into<$crate::runtime_primitives::DispatchError> for $name {
 			fn into(self) -> $crate::runtime_primitives::DispatchError {
 				match self {
-					$name::system(err) => match err {
+					$name::system(ref err) => match err {
 						$system::Error::Unknown(msg) =>
 							$crate::runtime_primitives::DispatchError {
 								module: 0,
@@ -110,15 +110,15 @@ macro_rules! impl_outer_error {
 							},
 					},
 					$(
-						$name::$module(err) => match err {
+						$name::$module(ref err) => match err {
 							$module::Error::Unknown(msg) =>
 								$crate::runtime_primitives::DispatchError {
-									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
+									module: $crate::codec::Encode::using_encoded(&self, |s| s[0]),
 									error: 0,
 									message: Some(msg),
 								},
 							_ => $crate::runtime_primitives::DispatchError {
-									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
+									module: $crate::codec::Encode::using_encoded(&self, |s| s[0]),
 									error: Into::<u8>::into(err),
 									message: None,
 								},
@@ -130,7 +130,7 @@ macro_rules! impl_outer_error {
 
 		$(
 			impl From<$module::Error> for $name {
-				fn from(err: $system::Error) -> Self {
+				fn from(err: $module::Error) -> Self {
 					$name::$module(err)
 				}
 			}
@@ -174,11 +174,12 @@ macro_rules! decl_error {
 		impl From<Error> for () {
 			fn from(_: Error) -> () { () }
 		}
-		impl Into<u8> for Error {
-			fn into(self) -> u8 {
-				match self {
+
+		impl From<&Error> for u8 {
+			fn from(err: &Error) -> u8 {
+				match err {
 					Error::Unknown(_) => 0,
-					_ => $crate::codec::Encode::using_encoded(&self, |s| s[0]),
+					_ => $crate::codec::Encode::using_encoded(err, |s| s[0]),
 				}
 			}
 		}
