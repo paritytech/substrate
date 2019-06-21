@@ -1759,7 +1759,7 @@ mod tests {
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
 			let anchor = state_machine::ChangesTrieAnchorBlockId {
-				hash: backend.blockchain().header(BlockId::Number(block)).unwrap().unwrap().hash(),
+				hash: backend.blockchain().header(&BlockId::Number(block)).unwrap().unwrap().hash(),
 				number: block
 			};
 			assert_eq!(backend.changes_tries_storage.root(&anchor, block), Ok(Some(changes_root)));
