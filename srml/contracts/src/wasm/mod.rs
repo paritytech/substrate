@@ -175,7 +175,7 @@ mod tests {
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
 	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
-	use crate::gas::GasMeter;
+	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
 	use crate::CodeHash;
@@ -906,14 +906,20 @@ mod tests {
 	fn gas_left() {
 		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
+
+		let mut return_buf = Vec::new();
 		execute(
 			CODE_GAS_LEFT,
 			&[],
-			&mut Vec::new(),
+			&mut return_buf,
 			&mut mock_ext,
 			&mut gas_meter,
 		)
 		.unwrap();
+
+		let gas_left = Gas::decode(&mut &return_buf[..]).unwrap();
+		assert!(gas_left < 50_000, "gas_left must be less than initial");
+		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
