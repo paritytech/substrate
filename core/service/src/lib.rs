@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend};
+use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -341,9 +341,7 @@ impl<Components: components::Components> Service<Components> {
 			let bandwidth_download = network_.average_download_per_sec();
 			let bandwidth_upload = network_.average_upload_per_sec();
 
-			#[allow(deprecated)]
-			let backend = (*client_).backend();
-			let used_state_cache_size = match backend.used_state_cache_size(){
+			let used_state_cache_size = match info.used_state_cache_size {
 				Some(size) => size,
 				None => 0,
 			};

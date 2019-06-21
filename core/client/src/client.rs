@@ -183,6 +183,8 @@ pub trait BlockBody<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: ChainInfo<Block>,
+	/// State Cache Size currently used by the backend
+	pub used_state_cache_size: Option<usize>,
 }
 
 /// Block status.
@@ -1221,6 +1223,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let info = self.backend.blockchain().info();
 		ClientInfo {
 			chain: info,
+			used_state_cache_size: self.backend.used_state_cache_size(),
 		}
 	}
 
