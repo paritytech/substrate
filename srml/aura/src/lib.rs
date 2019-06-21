@@ -193,28 +193,37 @@ fn handle_equivocation_proof<T: Trait>(
 	proof: &AuraEquivocationProof<T::Header, T::Signature>
 ) -> TransactionValidity 
 {
+	let header1 = proof.first_header();
+	let header2 = proof.second_header();
+
+	if header1 == header2 {
+		return TransactionValidity::Invalid(0)
+	}
+
+	let maybe_slot1 = find_pre_digest(header1);
+	let maybe_slot2 = find_pre_digest(header2);
+
+	if maybe_slot1.is_err() || maybe_slot2.is_err() || maybe_slot1 != maybe_slot2 {
+		return TransactionValidity::Invalid(0)
+	}
+
 	let authorities = <Module<T>>::authorities();
 
 	let fst_author = verify_header::<T, <T::Signature as Verify>::Signer>(
-		&mut proof.first_header().clone(),
+		&mut header1.clone(),
 		proof.first_signature().clone(),
 		authorities.as_slice()
 	);
 
 	let snd_author = verify_header::<T, <T::Signature as Verify>::Signer>(
-		&mut proof.second_header().clone(),
+		&mut header2.clone(),
 		proof.second_signature().clone(),
 		authorities.as_slice()
 	);
 
-	let proof_is_valid = fst_author.map_or(
-		false,
-		|f| snd_author.map_or(false, |s| f == s),
-	);
-
-	if  proof_is_valid {
+	if fst_author.is_some() && fst_author == snd_author {
 		TransactionValidity::Valid {
-			priority: 0,
+			priority: 10,
 			requires: vec![],
 			provides: vec![],
 			longevity: 18446744073709551615,

@@ -23,7 +23,7 @@ use primitives::{
 };
 use srml_support::impl_outer_origin;
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher, ed25519};
+use substrate_primitives::{H256, Blake2Hasher, sr25519};
 use parity_codec::{Encode, Decode};
 use crate::{Trait, Module, GenesisConfig, AuraEquivocationProof};
 
@@ -41,7 +41,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -54,22 +54,11 @@ impl timestamp::Trait for Test {
 
 impl Trait for Test {
 	type HandleReport = ();
-	type AuthorityId = u32;
-	type Signature = TestSignature;
+	type AuthorityId = sr25519::Public;
+	type Signature = sr25519::Signature;
 }
 
-#[derive(Debug, Decode, Encode, Clone, Eq, PartialEq)]
-pub struct TestSignature;
-
-impl Verify for TestSignature {
-	type Signer = u32;
-
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		true
-	}
-}
-
-pub fn new_test_ext(authorities: Vec<u32>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<sr25519::Public>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(timestamp::GenesisConfig::<Test>{
 		minimum_period: 1,

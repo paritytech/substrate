@@ -699,7 +699,7 @@ mod tests {
 	use network::test::{
 		Block as TestBlock, PeersClient, PeersFullClient
 	};
-	use runtime_primitives::generic::{Header};
+	use runtime_primitives::generic::Header;
 	use runtime_primitives::traits::{
 		Block as BlockT, DigestFor, Header as HeaderT, BlakeTwo256
 	};
