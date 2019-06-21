@@ -75,9 +75,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
-	network: Option<Arc<components::NetworkService<Components::Factory>>>,
-	/// Sinks to propagate network status updates.
-	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
+	network: Arc<components::NetworkService<Components::Factory>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -452,8 +450,7 @@ impl<Components: components::Components> Service<Components> {
 
 		Ok(Service {
 			client,
-			network: Some(network),
-			network_status_sinks,
+			network,
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
@@ -499,7 +496,7 @@ impl<Components> Service<Components> where Components: components::Components {
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.as_ref().expect("self.network always Some").clone()
+		self.network.clone()
 	}
 
 	/// Returns a receiver that periodically receives a status of the network.
@@ -580,9 +577,6 @@ pub struct NetworkStatus<B: BlockT> {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-
-		drop(self.network.take());
-
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
