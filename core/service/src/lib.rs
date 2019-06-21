@@ -76,6 +76,8 @@ pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Arc<components::NetworkService<Components::Factory>>,
+	/// Sinks to propagate network status updates.
+	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -451,6 +453,7 @@ impl<Components: components::Components> Service<Components> {
 		Ok(Service {
 			client,
 			network,
+			network_status_sinks,
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
