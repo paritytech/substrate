@@ -72,6 +72,7 @@ mod tests {
 		assert_eq!(ff.numerator(), 13, "999 and 13 are relative prime numbers");
 	}
 
+	#[test]
 	fn misconduct_level() {
 		assert_eq!(4, Fraction::new(10_u32, 10_u32).as_misconduct_level(), "100% should be severity level 4");
 		assert_eq!(4, Fraction::new(2_u32, 10_u32).as_misconduct_level(), "20% should be severity level 4");
