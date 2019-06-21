@@ -93,7 +93,6 @@ pub struct GasMeter<T: Trait> {
 	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
-	#[cfg(test)]
 	pub fn with_limit(gas_limit: Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
 		GasMeter {
 			limit: gas_limit,
@@ -162,13 +161,7 @@ impl<T: Trait> GasMeter<T> {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter {
-				limit: amount,
-				gas_left: amount,
-				gas_price: self.gas_price,
-				#[cfg(test)]
-				tokens: Vec::new(),
-			};
+			let mut nested = GasMeter::with_limit(amount, self.gas_price);
 
 			let r = f(Some(&mut nested));
 
@@ -231,14 +224,7 @@ pub fn buy_gas<T: Trait>(
 		ExistenceRequirement::KeepAlive
 	)?;
 
-	Ok((GasMeter {
-		limit: gas_limit,
-		gas_left: gas_limit,
-		gas_price,
-
-		#[cfg(test)]
-		tokens: Vec::new(),
-	}, imbalance))
+	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
 }
 
 /// Refund the unused gas.
