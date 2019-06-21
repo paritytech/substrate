@@ -53,15 +53,17 @@ use std::collections::HashSet;
 mod blocks;
 mod extra_requests;
 
-// Maximum blocks to request in a single packet.
+/// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
-// Maximum blocks to store in the import queue.
+/// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
-// Number of blocks in the queue that prevents ancestry search.
+/// We use a heuristic that with a high likelihood, by the time `MAJOR_SYNC_BLOCKS` have been
+/// imported we'll be on the same chain as (or at least closer to) the peer so we want to delay the
+/// ancestor search to not waste time doing that when we're so far behind.
 const MAJOR_SYNC_BLOCKS: usize = 5;
-// Number of recently announced blocks to track for each peer.
+/// Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
-// Max number of blocks to download for unknown forks.
+/// Max number of blocks to download for unknown forks.
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 /// Reputation change when a peer sent us a status message that led to a database read error.
 const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
@@ -90,15 +92,24 @@ pub trait Context<B: BlockT> {
 }
 
 #[derive(Debug, Clone)]
+/// All the data we have about a Peer that we are trying to sync with
 pub(crate) struct PeerSync<B: BlockT> {
+	/// The common number is the block number that is a common point of ancestry for both our chains
+	/// (as far as we know)
 	pub common_number: NumberFor<B>,
+	/// The hash of the best block that we've seen for this peer
 	pub best_hash: B::Hash,
+	/// The number of the best block that we've seen for this peer
 	pub best_number: NumberFor<B>,
+	/// The state of syncing this peer is in for us, generally categories into `Available` or "busy"
+	/// with something as defined by `PeerSyncState`.
 	pub state: PeerSyncState<B>,
+	/// A queue of blocks that this peer has announced to us, should only contain
+	/// `ANNOUNCE_HISTORY_SIZE` entries.
 	pub recently_announced: VecDeque<B::Hash>,
 }
 
-/// Peer sync status.
+/// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
 pub(crate) struct PeerInfo<B: BlockT> {
 	/// Their best block hash.
@@ -108,6 +119,8 @@ pub(crate) struct PeerInfo<B: BlockT> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+/// The ancestor search state expresses which algorithm, and its stateful parameters, we are using to
+/// try to find an ancestor block
 pub(crate) enum AncestorSearchState<B: BlockT> {
 	/// Use exponential backoff to find an ancestor, then switch to binary search.
 	/// We keep track of the exponent.
@@ -118,26 +131,45 @@ pub(crate) enum AncestorSearchState<B: BlockT> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+/// The state of syncing between a Peer and ourselves. Generally two categories, "busy" or
+/// `Available`. If busy, the Enum defines what we are busy with.
 pub(crate) enum PeerSyncState<B: BlockT> {
+	/// Searching for ancestors the Peer has in common with us.
 	AncestorSearch(NumberFor<B>, AncestorSearchState<B>),
+	/// Available for sync requests.
 	Available,
+	/// Actively downloading new blocks, starting from the given Number.
 	DownloadingNew(NumberFor<B>),
+	/// Downloading a stale block with given Hash. Stale means that it's a block with a number that
+	/// is lower than our best number. It might be from a fork and not necessarily already imported.
 	DownloadingStale(B::Hash),
+	/// Downloading justification for given block hash.
 	DownloadingJustification(B::Hash),
+	/// Downloading finality proof for given block hash.
 	DownloadingFinalityProof(B::Hash),
 }
 
-/// Relay chain sync strategy.
+/// The main data structure to contain all the state for a chains active syncing strategy.
 pub struct ChainSync<B: BlockT> {
+	/// The active peers that we are using to sync and their PeerSync status
 	peers: HashMap<PeerId, PeerSync<B>>,
+	/// A `BlockCollection` of blocks that are being downloaded from peers
 	blocks: BlockCollection<B>,
+	/// The best block number in our queue of blocks to import
 	best_queued_number: NumberFor<B>,
+	/// The best block hash in our queue of blocks to import
 	best_queued_hash: B::Hash,
+	/// The role of this node, e.g. light or full
 	role: Roles,
+	/// What block attributes we require for this node, usually derived from what role we are, but
+	/// could be customized
 	required_block_attributes: message::BlockAttributes,
 	extra_finality_proofs: ExtraRequests<B>,
 	extra_justifications: ExtraRequests<B>,
+	/// A set of hashes of blocks that are being downloaded or have been downloaded and are queued
+	/// for import.
 	queue_blocks: HashSet<B::Hash>,
+	/// The best block number that we are currently importing
 	best_importing_number: NumberFor<B>,
 	request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 }
@@ -203,10 +235,14 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Returns the number for the best seen blocks among connected peers, if any
 	fn best_seen_block(&self) -> Option<NumberFor<B>> {
 		self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number)
 	}
 
+	/// Returns the SyncState that we are currently in based on a provided `best_seen` block number.
+	/// A chain is classified as downloading if the provided best block is more than `MAJOR_SYNC_BLOCKS`
+	/// behind the best queued block.
 	fn state(&self, best_seen: &Option<NumberFor<B>>) -> SyncState {
 		match best_seen {
 			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > 5.into() => SyncState::Downloading,
@@ -266,7 +302,9 @@ impl<B: BlockT> ChainSync<B> {
 				protocol.disconnect_peer(who);
 			},
 			(Ok(BlockStatus::Unknown), _) if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS => {
-				// when actively syncing the common point moves too fast.
+				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
+				// enough to do in the import queue that it's not worth kicking off
+				// an ancestor search, which is what we do in the next match case below.
 				debug!(
 					target:"sync",
 					"New peer with unknown best hash {} ({}), assuming common block.",
@@ -329,6 +367,13 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// This function handles the ancestor search strategy used. The goal is to find a common point
+	/// that both our chains agree on that is as close to the tip as possible.
+	/// The way this works is we first have an exponential backoff strategy, where we try to step
+	/// forward until we find a block hash mismatch. The size of the step doubles each step we take.
+	///
+	/// When we've found a block hash mismatch we then fall back to a binary search between the two
+	/// last known points to find the common block closest to the tip.
 	fn handle_ancestor_search_state(
 		state: AncestorSearchState<B>,
 		curr_block_num: NumberFor<B>,
@@ -690,7 +735,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.request_builder = Some(builder)
 	}
 
-	/// Notify about successful import of the given block.
+	/// Log that a block has been successfully imported
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
 	}
@@ -714,6 +759,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Called when a block has been queued for import. Updates our internal state for best queued
+	/// block and then goes through all peers to update our view of their state as well.
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		if number > self.best_queued_number {
 			self.best_queued_number = number;
@@ -743,7 +790,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Sets the new head of chain.
+	/// Signal that `best_header` has been queued for import and update the `ChainSync` state with
+	/// that information.
 	pub(crate) fn update_chain_info(&mut self, best_header: &B::Header) {
 		let hash = best_header.hash();
 		self.block_queued(&hash, best_header.number().clone())
@@ -751,8 +799,9 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Call when a node announces a new block.
 	///
-	/// If true is returned, then the caller MUST try to import passed header (call `on_block_data).
+	/// If true is returned, then the caller MUST try to import passed header (call `on_block_data`).
 	/// The network request isn't sent in this case.
+	/// Both hash and header is passed as an optimization to avoid rehashing the header.
 	#[must_use]
 	pub(crate) fn on_block_announce(
 		&mut self,
@@ -791,6 +840,8 @@ impl<B: BlockT> ChainSync<B> {
 		if let PeerSyncState::AncestorSearch(_, _) = peer.state {
 			return false;
 		}
+		// We assume that the announced block is the latest they have seen, and so our common number
+		// is either one further ahead or it's the one they just announced, if we know about it.
 		if header.parent_hash() == &self.best_queued_hash || known_parent {
 			peer.common_number = number - One::one();
 		} else if known {
@@ -805,8 +856,7 @@ impl<B: BlockT> ChainSync<B> {
 
 		// stale block case
 		let requires_additional_data = !self.role.is_light();
-		let stale = number <= self.best_queued_number;
-		if stale {
+		if number <= self.best_queued_number {
 			if !(known_parent || self.is_already_downloading(header.parent_hash())) {
 				if protocol.client().block_status(&BlockId::Number(*header.number()))
 					.unwrap_or(BlockStatus::Unknown) == BlockStatus::InChainPruned
@@ -879,10 +929,14 @@ impl<B: BlockT> ChainSync<B> {
 		true
 	}
 
+	/// Convenience function to iterate through all peers and see if there are any that we are
+	/// downloading this hash from.
 	fn is_already_downloading(&self, hash: &B::Hash) -> bool {
 		self.peers.iter().any(|(_, p)| p.state == PeerSyncState::DownloadingStale(*hash))
 	}
 
+	/// Returns true if the block with given hash exists in the import queue with known status or is
+	/// already imported.
 	fn is_known(&self, protocol: &mut dyn Context<B>, hash: &B::Hash) -> bool {
 		block_status(&*protocol.client(), &self.queue_blocks, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
@@ -1025,6 +1079,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Request the ancestry for a block. Sends a request for header and justification for the given
+	/// block number. Used during ancestry search.
 	fn request_ancestry(protocol: &mut dyn Context<B>, who: PeerId, block: NumberFor<B>) {
 		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, who);
 		let request = message::generic::BlockRequest {
@@ -1039,7 +1095,8 @@ impl<B: BlockT> ChainSync<B> {
 	}
 }
 
-/// Get block status, taking into account import queue.
+/// Returns the BlockStatus for given block hash, looking first in the import queue and then in the
+/// provided chain.
 fn block_status<B: BlockT>(
 	chain: &dyn crate::chain::Client<B>,
 	queue_blocks: &HashSet<B::Hash>,
