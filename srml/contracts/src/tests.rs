@@ -745,7 +745,7 @@ mod call {
 	pub fn null() -> Vec<u8> { vec![0, 0, 0] }
 }
 
-/// Test correspondance of set_rent code and its hash.
+/// Test correspondence of set_rent code and its hash.
 /// Also test that encoded extrinsic in code correspond to the correct transfer
 #[test]
 fn test_set_rent_code_and_hash() {
@@ -957,9 +957,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
+			let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
+
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 100);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -967,6 +970,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -974,6 +978,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 		}
 	);
 
@@ -994,6 +999,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
+			assert_eq!(Balances::free_balance(&BOB), 1_000);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1001,6 +1007,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			// Balance should be initial balance - initial rent_allowance
+			assert_eq!(Balances::free_balance(&BOB), 900);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1008,6 +1016,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), 900);
 		}
 	);
 
@@ -1028,10 +1037,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 50 + Balances::minimum_balance());
 
 			// Transfer funds
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1039,6 +1050,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1046,6 +1058,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 		}
 	);
 }

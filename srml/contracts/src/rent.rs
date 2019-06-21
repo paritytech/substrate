@@ -145,14 +145,18 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		if can_withdraw_rent && !go_below_subsistence {
 			T::Currency::withdraw(
 				account,
+				// TODO(jimpo): This should be dues_limited otherwise deducts more than rent_allowance
 				dues,
 				WithdrawReason::Fee,
 				ExistenceRequirement::KeepAlive,
 			)
 			.expect("Can withdraw and don't go below subsistence");
 		} else if !is_below_subsistence {
+			// TODO(jimpo): This over-deducts if can_withdraw_rent is false due to locks/holds.
 			T::Currency::make_free_balance_be(account, subsistence_threshold);
 		} else {
+			// TODO(jimpo): No need to take the remaining balance if between existential_deposit
+			// and subsistence threshold?
 			T::Currency::make_free_balance_be(account, <BalanceOf<T>>::zero());
 		}
 
