@@ -163,7 +163,7 @@ impl Permill {
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
 
-	/// Approximate the fracion `p/q` into a per million fraction
+	/// Approximate the fraction `p/q` into a per million fraction
 	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 		where N: traits::SimpleArithmetic + Clone
 	{
@@ -270,7 +270,7 @@ impl Perbill {
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 
-	/// Approximate the fracion `p/q` into a per billion fraction
+	/// Approximate the fraction `p/q` into a per billion fraction
 	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 		where N: traits::SimpleArithmetic + Clone
 	{
