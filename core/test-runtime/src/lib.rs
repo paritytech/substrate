@@ -508,7 +508,7 @@ cfg_if! {
 						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
-					unimplemented!()
+					vec![]
 				}
 		
 				fn construct_precommit_equivocation_report_call(
@@ -516,7 +516,7 @@ cfg_if! {
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
-					unimplemented!()
+					vec![]
 				}
 			}
 
@@ -689,7 +689,7 @@ cfg_if! {
 						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
-					unimplemented!()
+					vec![]
 				}
 		
 				fn construct_precommit_equivocation_report_call(
@@ -697,7 +697,7 @@ cfg_if! {
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
-					unimplemented!()
+					vec![]
 				}
 			}
 

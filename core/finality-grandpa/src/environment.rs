@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::ops::Deref;
 
-use log::{debug, warn, info};
+use log::{debug, warn, info, error};
 use parity_codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio::timer::Delay;
@@ -734,12 +734,18 @@ where
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		self.transaction_pool.submit_report_call(
-			self.inner.deref(),
-			self.inner.runtime_api()
-				.construct_prevote_equivocation_report_call(&block_id, proof)
-				.unwrap().as_slice(),
-		);
+		let maybe_call = self.inner.runtime_api()
+			.construct_prevote_equivocation_report_call(&block_id, proof);
+
+		if let Ok(call) = maybe_call {
+			self.transaction_pool.submit_report_call(
+				self.inner.deref(),
+				call.as_slice(),
+			);
+			info!(target: "afg", "A report for a prevote equivocation has been submitted");
+		} else {
+			error!(target: "afg", "Prevote equivocation received but report couldn't be constructed");
+		}
 	}
 
 	fn precommit_equivocation(
@@ -754,12 +760,18 @@ where
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		self.transaction_pool.submit_report_call(
-			self.inner.deref(),
-			self.inner.runtime_api()
-				.construct_precommit_equivocation_report_call(&block_id, proof)
-				.unwrap().as_slice(),
-		);
+		let maybe_call = self.inner.runtime_api()
+			.construct_precommit_equivocation_report_call(&block_id, proof);
+
+		if let Ok(call) = maybe_call {
+			self.transaction_pool.submit_report_call(
+				self.inner.deref(),
+				call.as_slice(),
+			);
+			info!(target: "afg", "A report for a precommit equivocation has been submitted");
+		} else {
+			error!(target: "afg", "Precommit equivocation received but report couldn't be constructed");
+		}
 	}
 }
 
