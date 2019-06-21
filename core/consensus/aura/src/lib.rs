@@ -695,17 +695,25 @@ mod tests {
 	use super::*;
 	use futures::stream::Stream as _;
 	use consensus_common::NoNetwork as DummyOracle;
-	use consensus_safety::TestPool;
 	use network::test::*;
-	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
-	use runtime_primitives::traits::{Block as BlockT, DigestFor};
+	use network::test::{
+		Block as TestBlock, PeersClient, PeersFullClient
+	};
+	use runtime_primitives::generic::{Header};
+	use runtime_primitives::traits::{
+		Block as BlockT, DigestFor, Header as HeaderT, BlakeTwo256
+	};
+	use runtime_primitives::testing::{
+		Digest as DigestTest, DigestItem as DigestItemTest
+	};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
-	use primitives::sr25519;
+	use primitives::{sr25519, H256};
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
+	use std::sync::RwLock;
 
 	type Error = client::error::Error;
 
@@ -834,7 +842,8 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let client = net.lock().peer(*peer_id).client().as_full().expect("full clients are created").clone();
+			let client = net.lock().peer(*peer_id)
+				.client().as_full().expect("full clients are created").clone();
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
@@ -886,6 +895,18 @@ mod tests {
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}
 
+
+	pub struct TestPool {
+		pool: RwLock<u32>
+	}
+
+	impl<C, B> SubmitReport<C, B> for TestPool {
+		fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
+			let mut pool = self.pool.write().unwrap();
+			*pool += 1;
+		}
+	}
+
 	#[test]
 	fn authorities_call_works() {
 		let client = test_client::new();
@@ -896,5 +917,154 @@ mod tests {
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
+	}
+
+	#[test]
+	fn submit_equivocation_works_submit_case() {
+		let client = test_client::new();
+		let transaction_pool = Some(Arc::new(TestPool{ pool: RwLock::new(0) }));
+
+		let parent_hash = H256::random();
+		let num1 = 2u64;
+		let num2 = 3u64;
+
+		let mut header1 = Header::<_, BlakeTwo256> {
+			parent_hash,
+			number: num1,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		let mut header2 = Header::<_, BlakeTwo256> {
+			parent_hash,
+			number: num2,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		let slot = 3;
+		let pre = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot);
+
+		header1.digest_mut().push(pre.clone());
+		header2.digest_mut().push(pre);
+
+		let hash1 = header1.hash();
+		let hash2 = header2.hash();
+
+		let (pair, _seed) = sr25519::Pair::generate();
+		let public = pair.public();
+		let authorities = &[public];
+
+		let sig1 = pair.sign(hash1.as_ref());
+		let sig2 = pair.sign(hash2.as_ref());
+
+		let seal1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig1);
+		let seal2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig2);
+
+		header1.digest_mut().push(seal1);
+		header2.digest_mut().push(seal2);
+
+		assert!(
+			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			&client,
+			&transaction_pool,
+			3,
+			header1,
+			parent_hash,
+			authorities,
+		).is_ok());
+
+		assert!(
+			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			&client,
+			&transaction_pool,
+			4,
+			header2,
+			parent_hash,
+			authorities,
+		).is_ok());
+
+		let txpool = transaction_pool.unwrap();
+		let pool = txpool.pool.read().unwrap();
+
+		assert_eq!(*pool, 1);
+	}
+
+	#[test]
+	fn submit_equivocation_works_no_submit_case() {
+		let client = test_client::new();
+		let transaction_pool = Some(Arc::new(TestPool{ pool: RwLock::new(0) }));
+
+		let parent_hash = H256::random();
+		let num1 = 2u64;
+		let num2 = 3u64;
+
+		let mut header1 = Header::<_, BlakeTwo256> {
+			parent_hash,
+			number: num1,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		let mut header2 = Header::<_, BlakeTwo256> {
+			parent_hash,
+			number: num2,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		let slot1 = 3;
+		let slot2 = 4;
+
+		let pre1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot1);
+		let pre2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot2);
+
+		header1.digest_mut().push(pre1);
+		header2.digest_mut().push(pre2);
+
+		let hash1 = header1.hash();
+		let hash2 = header2.hash();
+
+		let (pair, _seed) = sr25519::Pair::generate();
+		let public = pair.public();
+		let authorities = &[public];
+
+		let sig1 = pair.sign(hash1.as_ref());
+		let sig2 = pair.sign(hash2.as_ref());
+
+		let seal1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig1);
+		let seal2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig2);
+
+		header1.digest_mut().push(seal1);
+		header2.digest_mut().push(seal2);
+
+		assert!(
+			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			&client,
+			&transaction_pool,
+			3,
+			header1,
+			parent_hash,
+			authorities,
+		).is_ok());
+
+		assert!(
+			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			&client,
+			&transaction_pool,
+			4,
+			header2,
+			parent_hash,
+			authorities,
+		).is_ok());
+
+		let txpool = transaction_pool.unwrap();
+		let pool = txpool.pool.read().unwrap();
+
+		assert_eq!(*pool, 0);
 	}
 }
