@@ -1,4 +1,5 @@
-use primitives::traits::{SimpleArithmetic, Zero};
+use primitives::traits::SimpleArithmetic;
+use num_integer::Integer;
 
 /// Type to keep a fraction represented as integers `until the result is computed`
 /// The use case might be to calculate `0.05 * min( 3(k-1) / n, 1)`
@@ -21,12 +22,12 @@ pub struct Fraction<N> {
 }
 
 
-impl<N: SimpleArithmetic + Copy> Fraction<N> {
+impl<N: Integer + SimpleArithmetic + Copy> Fraction<N> {
 
 	/// Create a new `Fraction` which uses `gcd` to create as numerator as possible
 	/// Because of `integer semantics` i.e, a large denominator will likely be zero
 	pub fn new(denominator: N, numerator: N) -> Self {
-		let gcd = gcd(denominator, numerator);
+		let gcd = denominator.gcd(&numerator);
 
 		Self { denominator: denominator / gcd, numerator: numerator / gcd }
 	}
@@ -55,17 +56,6 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 		}
 	}
 }
-
-/// temp naive gcd algorithm
-fn gcd<N: SimpleArithmetic + Copy>(mut x: N, mut y: N) -> N {
-	while y != Zero::zero() {
-		let tmp = x;
-		x = y;
-		y = tmp % y;
-	}
-	x
-}
-
 
 #[cfg(test)]
 mod tests {

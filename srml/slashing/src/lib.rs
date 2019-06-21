@@ -56,11 +56,11 @@
 //!
 //! impl CheckpointMisconduct for Unresponsive {
 //!		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
-//!			let denominator = 20 * n;
-//!			let numerator = 3*k - 3;
+//!			let numerator = 20 * n;
+//!			let denominator = 3*k - 3;
 //!
-//!			if numerator / n > 1 {
-//!				Fraction::new(1, 1)
+//!			if numerator / n >= 1 {
+//!				Fraction::new(1, 20)
 //!			} else {
 //!				Fraction::new(denominator, numerator)
 //!			}

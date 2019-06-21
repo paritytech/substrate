@@ -14,8 +14,8 @@ impl CheckpointMisconduct for Unresponsive {
 		let numerator = 20 * n;
 		let denominator = 3*k - 3;
 
-		if denominator / n > 1 {
-			Fraction::new(1, 1)
+		if denominator / n >= 1 {
+			Fraction::new(1, 20)
 		} else {
 			Fraction::new(denominator, numerator)
 		}
@@ -29,8 +29,19 @@ mod tests {
 
 	#[test]
 	fn unresponsiveness() {
+		// 0.12 * 0.05 = 0.006
 		let s = CheckpointMisconduct::severity(&Unresponsive, 5, 100);
 		let rate = s.denominator() as f64 / s.numerator() as f64;
 		assert_eq!(rate, 0.006);
+
+		// min(27, 1) * 0.05 = 0.05
+		let s = CheckpointMisconduct::severity(&Unresponsive, 10, 10);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 0.05);
+
+		// 0.99 * 0.05 = 0.0495
+		let s = CheckpointMisconduct::severity(&Unresponsive, 34, 100);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 0.0495);
 	}
 }

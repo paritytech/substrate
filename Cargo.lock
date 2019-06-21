@@ -3724,6 +3724,7 @@ dependencies = [
 name = "srml-slashing"
 version = "0.1.0"
 dependencies = [
+ "num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
