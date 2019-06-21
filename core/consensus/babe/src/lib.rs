@@ -546,6 +546,37 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
+fn median_algorithm(
+	median_required_blocks: u64,
+	slot_duration: u64,
+	slot_num: u64,
+	slot_now: u64,
+	timestamps: &mut (Option<Duration>, Vec<(Instant, u64)>),
+) {
+	let num_timestamps = timestamps.1.len();
+	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
+		let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
+				let offset: u128 = u128::from(slot_duration)
+					.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
+					.and_then(|x| x.checked_mul(u128::from(slot_num).saturating_sub(u128::from(sl))))
+					.expect("we cannot have timespans long enough for this to overflow; qed");
+				const NANOS_PER_SEC: u32 = 1_000_000_000;
+				let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
+				let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
+				t + Duration::new(secs, nanos)
+			}).collect();
+		// FIXME use a selection algorithm instead of a full sorting algorithm.
+		new_list.sort_unstable();
+		let &median = new_list
+			.get(num_timestamps / 2)
+			.expect("we have at least one timestamp, so this is a valid index; qed");
+		timestamps.1.clear();
+		timestamps.0.replace(Instant::now() - median);
+	} else {
+		timestamps.1.push((Instant::now(), slot_now))
+	}
+}
+
 impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
@@ -635,35 +666,13 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
-				const NANOS_PER_SEC: u32 = 1_000_000_000;
-				let mut timestamps = self.timestamps.lock();
-				// Remainder of this block is a critical section.
-				let num_timestamps = timestamps.1.len();
-				let median_required_blocks = self.config.0.median_required_blocks;
-				if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
-					let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
-							let offset: u128 = u128::from(self.config.get())
-								.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
-								.and_then(|x| x.checked_mul(u128::from(slot_num).saturating_sub(u128::from(sl))))
-								.expect("we cannot have timespans long enough for this to overflow; qed");
-							let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
-							let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
-							t + Duration::new(secs, nanos)
-						}).collect();
-					// FIXME use a selection algorithm instead of a full sorting algorithm.
-					new_list.sort_unstable();
-					let &median = new_list
-						.get(num_timestamps / 2)
-						.expect("we have at least one timestamp, so this is a valid index; qed");
-					timestamps.1.clear();
-					// Compute the (relative!) start time of the blockchain ―
-					// that is, the issue time of the genesis block that would
-					// give the values we observed.
-					timestamps.0.replace(Instant::now() - median);
-				} else {
-					timestamps.1.push((Instant::now(), slot_now))
-				}
-
+				median_algorithm(
+					self.config.0.median_required_blocks,
+					self.config.get(),
+					slot_num,
+					slot_now,
+					&mut *self.timestamps.lock(),
+				);
 				// FIXME #1019 extract authorities
 				Ok((import_block, maybe_keys))
 			}
