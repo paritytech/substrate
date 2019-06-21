@@ -247,7 +247,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Restart the sync process.
 	pub fn restart(&mut self) {
-		self.protocol.restart(&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle });
+		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
+		self.protocol.restart(&mut net_out);
 	}
 
 	/// Notify about successful import of the given block.
@@ -288,6 +289,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		self.protocol.finality_proof_import_result(request_block, finalization_result)
 	}
 
+	pub fn tick(&mut self) {
+		self.protocol.tick(&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle });
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
