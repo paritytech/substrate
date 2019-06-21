@@ -290,7 +290,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
 	let encoded_vote_one = {
-		let round = 0;
+		let round = 1;
 		let set_id = 1;
 
 		let signed = {
@@ -320,7 +320,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 	};
 
 	let encoded_vote_two = {
-		let round = 1;
+		let round = 2;
 		let set_id = 2;
 
 		let signed = {
@@ -361,12 +361,14 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 			// start round.
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
-			{
+			{	println!("start");
+            	tester.gossip_validator.note_round(Round(1), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_one[..]);
 				match action {
 					gossip::Action::Keep(_, _) => {},
 					_ => panic!("wrong expected outcome from initial commit validation"),
 				}
+				println!("start 2");
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
 				match action {
 					gossip::Action::Discard(_) => {},
@@ -376,7 +378,8 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 			// start another round.
 			tester.net_handle.global_communication(SetId(2), voter_set, false);
 
-			{
+			{	println!("start 3");
+				tester.gossip_validator.note_round(Round(2), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
 				match action {
 					gossip::Action::Keep(_, _) => {},
