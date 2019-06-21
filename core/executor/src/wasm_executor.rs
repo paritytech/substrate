@@ -900,15 +900,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		new_value_len: u32
 	) -> u32 => {
 		let key = this.memory.get(key, key_len as usize)
-			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 		let old_value = this.memory.get(old_value, old_value_len as usize)
-			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 		let new_value = this.memory.get(new_value, new_value_len as usize)
-			.map_err(|_| UserError("OOB while ext_local_storage_compare_and_set: wasm"))?;
+			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
 		let res = this.ext.offchain()
 			.map(|api| api.local_storage_compare_and_set(&key, &old_value, &new_value))
-			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_compare_andset: wasm"))?;
+			.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_andset: wasm")?;
 
 		Ok(if res { 0 } else { 1 })
 
