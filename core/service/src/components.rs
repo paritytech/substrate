@@ -40,8 +40,11 @@ use futures::sync::mpsc;
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 
 /// Network service type for `Components`.
-pub type NetworkService<C> =
-	network::NetworkService<ComponentBlock<C>, <<C as Components>::Factory as ServiceFactory>::NetworkProtocol, ComponentExHash<C>>;
+pub type NetworkService<C> = network::NetworkService<
+	ComponentBlock<C>,
+	<<C as Components>::Factory as ServiceFactory>::NetworkProtocol,
+	ComponentExHash<C>
+>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;

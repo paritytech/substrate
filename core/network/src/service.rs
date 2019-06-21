@@ -191,8 +191,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		// Build the swarm.
 		let (mut swarm, bandwidth) = {
-			let user_agent = format!("{} ({})", params.network_config.client_version, params.network_config.node_name);
-			let behaviour = Behaviour::new(protocol, user_agent, local_public, known_addresses, params.network_config.enable_mdns);
+			let user_agent = format!(
+				"{} ({})",
+				params.network_config.client_version,
+				params.network_config.node_name
+			);
+			let behaviour = Behaviour::new(
+				protocol,
+				user_agent,
+				local_public,
+				known_addresses,
+				params.network_config.enable_mdns
+			);
 			let (transport, bandwidth) = transport::build_transport(
 				local_identity,
 				params.network_config.wasm_external_transport
@@ -374,7 +384,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 				Some((peer_id.to_base58(), NetworkStatePeer {
 					endpoint,
-					version_string: swarm.node(peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					version_string: swarm.node(peer_id)
+						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
 					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
 					enabled: swarm.user_protocol().is_enabled(&peer_id),
 					open: swarm.user_protocol().is_open(&peer_id),
@@ -389,7 +400,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 				.cloned().collect::<Vec<_>>();
 			list.into_iter().map(move |peer_id| {
 				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
-					version_string: swarm.node(&peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					version_string: swarm.node(&peer_id)
+						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
 					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
 					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
 						.into_iter().collect(),
@@ -419,7 +431,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for NetworkService<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
+	::consensus::SyncOracle for NetworkService<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
@@ -569,7 +582,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Implementation of `protocol::NetworkOut` trait using the available local variables.
-		struct Context<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(&'a mut Swarm<B, S, H>, &'a PeersetHandle);
+		struct Context<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
+			&'a mut Swarm<B, S, H>,
+			&'a PeersetHandle
+		);
 		impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkOut<B> for Context<'a, B, S, H> {
 			fn report_peer(&mut self, who: PeerId, reputation: i32) {
 				self.1.report_peer(who, reputation)
@@ -727,7 +743,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ProtocolMsg::RequestFinalityProof(hash, number) =>
 					network_service.user_protocol_mut().request_finality_proof(&hash, number),
 				ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
-					network_service.user_protocol_mut().finality_proof_import_result(requested_block, finalziation_result),
+					network_service.user_protocol_mut()
+						.finality_proof_import_result(requested_block, finalziation_result),
 				ProtocolMsg::PropagateExtrinsics =>
 					network_service.user_protocol_mut().propagate_extrinsics(),
 				#[cfg(any(test, feature = "test-helpers"))]
