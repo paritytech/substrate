@@ -428,6 +428,7 @@ pub(crate) type UntilGlobalMessageBlocksImported<Block, Status, I> = UntilImport
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::CompactCommit;
 	use tokio::runtime::current_thread::Runtime;
 	use tokio::timer::Delay;
 	use test_client::runtime::{Block, Hash, Header};
@@ -492,6 +493,15 @@ mod tests {
 		)
 	}
 
+	// unwrap the commit from `CommunicationIn` returning its fields in a tuple,
+	// panics if the given message isn't a commit
+	fn unapply_commit(msg: CommunicationIn<Block>) -> (u64, CompactCommit::<Block>) {
+		match msg {
+			voter::CommunicationIn::Commit(round, commit, ..) => (round, commit),
+			_ => panic!("expected commit"),
+		}
+	}
+
 	#[test]
 	fn blocking_commit_message() {
 		let h1 = make_header(5);
@@ -517,15 +527,21 @@ mod tests {
 			auth_data: Vec::new(), // not used
 		};
 
-		let (commit_tx, commit_rx) = mpsc::unbounded();
-
-		let until_imported = UntilCommitBlocksImported::new(
-			import_notifications,
-			block_status,
-			commit_rx.map_err(|_| panic!("should never error")),
+		let unknown_commit = || voter::CommunicationIn::Commit(
+			0,
+			unknown_commit.clone(),
+			voter::Callback::Blank,
 		);
 
-		commit_tx.unbounded_send((0, unknown_commit.clone(), ())).unwrap();
+		let (global_tx, global_rx) = mpsc::unbounded();
+
+		let until_imported = UntilGlobalMessageBlocksImported::new(
+			import_notifications,
+			block_status,
+			global_rx.map_err(|_| panic!("should never error")),
+		);
+
+		global_tx.unbounded_send(unknown_commit()).unwrap();
 
 		let inner_chain_state = chain_state.clone();
 		let work = until_imported
@@ -545,7 +561,10 @@ mod tests {
 			});
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit, ())));
+		assert_eq!(
+			unapply_commit(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()),
+			unapply_commit(unknown_commit()),
+		);
 	}
 
 	#[test]
@@ -573,23 +592,32 @@ mod tests {
 			auth_data: Vec::new(), // not used
 		};
 
+		let known_commit = || voter::CommunicationIn::Commit(
+			0,
+			known_commit.clone(),
+			voter::Callback::Blank,
+		);
+
 		chain_state.import_header(h1);
 		chain_state.import_header(h2);
 		chain_state.import_header(h3);
 
-		let (commit_tx, commit_rx) = mpsc::unbounded();
+		let (global_tx, global_rx) = mpsc::unbounded();
 
-		let until_imported = UntilCommitBlocksImported::new(
+		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
 			block_status,
-			commit_rx.map_err(|_| panic!("should never error")),
+			global_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send((0, known_commit.clone(), ())).unwrap();
+		global_tx.unbounded_send(known_commit()).unwrap();
 
 		let work = until_imported.into_future();
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit, ())));
+		assert_eq!(
+			unapply_commit(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()),
+			unapply_commit(known_commit()),
+		);
 	}
 }

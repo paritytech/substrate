@@ -1181,6 +1181,7 @@ fn voter_persists_its_votes() {
 	// sender is dropped the voter is stopped.
 	{
 		let net = net.clone();
+		let client = client.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
 			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
@@ -1244,11 +1245,19 @@ fn voter_persists_its_votes() {
 			local_key: Some(Arc::new(peers[1].clone().into())),
 			name: Some(format!("peer#{}", 1)),
 		};
+
+		let set_state = {
+			let (_, _, _, _, link) = net.lock().make_block_import(client);
+			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
+			let PersistentData { set_state, .. } = persistent_data;
+			set_state
+		};
+
 		let routing = MessageRouting::new(net.clone(), 1);
 		let (network, routing_work) = communication::NetworkBridge::new(
 			routing,
 			config.clone(),
-			None,
+			set_state,
 			Exit,
 		);
 		runtime.block_on(routing_work).unwrap();

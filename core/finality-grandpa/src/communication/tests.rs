@@ -26,6 +26,7 @@ use std::sync::Arc;
 use keyring::AuthorityKeyring;
 use parity_codec::Encode;
 
+use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
@@ -125,6 +126,33 @@ fn config() -> crate::Config {
 	}
 }
 
+// dummy voter set state
+fn voter_set_state() -> SharedVoterSetState<Block> {
+	use crate::authorities::AuthoritySet;
+	use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
+	use grandpa::round::State as RoundState;
+	use substrate_primitives::H256;
+
+	let state = RoundState::genesis((H256::zero(), 0));
+	let base = state.prevote_ghost.unwrap();
+	let voters = AuthoritySet::genesis(Vec::new());
+	let set_state = VoterSetState::Live {
+		completed_rounds: CompletedRounds::new(
+			CompletedRound {
+				state,
+				number: 0,
+				votes: Vec::new(),
+				base,
+			},
+			0,
+			&voters,
+		),
+		current_round: HasVoted::No,
+	};
+
+	set_state.into()
+}
+
 // needs to run in a tokio runtime.
 fn make_test_network() -> impl Future<Item=Tester,Error=()> {
 	let (tx, rx) = mpsc::unbounded();
@@ -145,7 +173,7 @@ fn make_test_network() -> impl Future<Item=Tester,Error=()> {
 	let (bridge, startup_work) = super::NetworkBridge::new(
 		net.clone(),
 		config(),
-		None,
+		voter_set_state(),
 		Exit,
 	);
 
@@ -228,7 +256,7 @@ fn good_commit_leads_to_relay() {
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
 			{
-				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_commit[..]);
+				let (action, ..) = tester.gossip_validator.do_validate(&id, &encoded_commit[..]);
 				match action {
 					gossip::Action::ProcessAndDiscard(t, _) => assert_eq!(t, global_topic),
 					_ => panic!("wrong expected outcome from initial commit validation"),
@@ -257,8 +285,19 @@ fn good_commit_leads_to_relay() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					let (_, _, mut callback) = item.unwrap();
-					(callback)(super::CommitProcessingOutcome::Good);
+					match item.unwrap() {
+						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
+							// NOTE: the type is opaque and there's no way to
+							// create it outside of the `finality-grandpa`
+							// crate. currently we don't do anything with it so
+							// it's safe to keep it uninitialized
+							let data: grandpa::voter::GoodCommit = unsafe {
+								std::mem::uninitialized()
+							};
+							callback.run(grandpa::voter::CommitProcessingOutcome::Good(data));
+						},
+						_ => panic!("commit expected"),
+					}
 				})
 				.map_err(|_| panic!("could not process commit"));
 
@@ -339,7 +378,7 @@ fn bad_commit_leads_to_report() {
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
 			{
-				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_commit[..]);
+				let (action, ..) = tester.gossip_validator.do_validate(&id, &encoded_commit[..]);
 				match action {
 					gossip::Action::ProcessAndDiscard(t, _) => assert_eq!(t, global_topic),
 					_ => panic!("wrong expected outcome from initial commit validation"),
@@ -368,8 +407,19 @@ fn bad_commit_leads_to_report() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					let (_, _, mut callback) = item.unwrap();
-					(callback)(super::CommitProcessingOutcome::Bad);
+					match item.unwrap() {
+						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
+							// NOTE: the type is opaque and there's no way to
+							// create it outside of the `finality-grandpa`
+							// crate. currently we don't do anything with it so
+							// it's safe to keep it uninitialized
+							let data: grandpa::voter::BadCommit = unsafe {
+								std::mem::uninitialized()
+							};
+							callback.run(grandpa::voter::CommitProcessingOutcome::Bad(data));
+						},
+						_ => panic!("commit expected"),
+					}
 				})
 				.map_err(|_| panic!("could not process commit"));
 

@@ -1199,6 +1199,7 @@ impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
 
@@ -1210,6 +1211,33 @@ mod tests {
 			local_key: None,
 			name: None,
 		}
+	}
+
+	// dummy voter set state
+	fn voter_set_state() -> SharedVoterSetState<Block> {
+		use crate::authorities::AuthoritySet;
+		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
+		use grandpa::round::State as RoundState;
+		use substrate_primitives::H256;
+
+		let state = RoundState::genesis((H256::zero(), 0));
+		let base = state.prevote_ghost.unwrap();
+		let voters = AuthoritySet::genesis(Vec::new());
+		let set_state = VoterSetState::Live {
+			completed_rounds: CompletedRounds::new(
+				CompletedRound {
+					state,
+					number: 0,
+					votes: Vec::new(),
+					base,
+				},
+				0,
+				&voters,
+			),
+			current_round: HasVoted::No,
+		};
+
+		set_state.into()
 	}
 
 	#[test]
@@ -1353,7 +1381,10 @@ mod tests {
 
 	#[test]
 	fn messages_not_expired_immediately() {
-		let (val, _) = GossipValidator::<Block>::new(config());
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
 
 		let set_id = 1;
 
@@ -1385,7 +1416,10 @@ mod tests {
 	fn message_from_unknown_authority_discarded() {
 		assert!(cost::UNKNOWN_VOTER != cost::BAD_SIGNATURE);
 
-		let (val, _) = GossipValidator::<Block>::new(config());
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
 		let set_id = 1;
 		let auth = AuthorityId::from_raw([1u8; 32]);
 		let peer = PeerId::random();
