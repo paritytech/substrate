@@ -204,7 +204,8 @@ fn decl_store_extra_genesis(
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
-	let mut assimilate_require_generic = false;
+	let mut assimilate_require_generic = instance.is_some();
+	let mut builders_clone_bound = Vec::new();
 
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
@@ -246,19 +247,36 @@ fn decl_store_extra_genesis(
 				);
 			};
 
-			if type_infos.kind.is_simple()
-				&& ext::type_contains_ident(type_infos.value_type, traitinstance) {
+			if ext::type_contains_ident(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
+			}
+
+			if opt_build.is_none() {
+				builders_clone_bound.push(type_infos.value_type.clone());
 			}
 
 			let value_type = &type_infos.value_type;
 			serde_complete_bound.push(quote!( #value_type ));
 			match type_infos.kind {
-				DeclStorageTypeInfosKind::Map { key_type, .. } =>
-					serde_complete_bound.push(quote!( #key_type )),
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+					serde_complete_bound.push(quote!( #key_type ));
+					is_trait_needed = is_trait_needed
+						|| ext::type_contains_ident(key_type, traitinstance);
+
+					if opt_build.is_none() {
+						builders_clone_bound.push(key_type.clone());
+					}
+				},
 				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
 					serde_complete_bound.push(quote!( #key1_type ));
 					serde_complete_bound.push(quote!( #key2_type ));
+					is_trait_needed = is_trait_needed
+						|| ext::type_contains_ident(key1_type, traitinstance)
+						|| ext::type_contains_ident(key2_type, traitinstance);
+					if opt_build.is_none() {
+						builders_clone_bound.push(key1_type.clone());
+						builders_clone_bound.push(key2_type.clone());
+					}
 				},
 				_ => {},
 			}
@@ -292,18 +310,13 @@ fn decl_store_extra_genesis(
 
 			config_field_default.extend(quote!( #ident: #fielddefault, ));
 
-			opt_build
-				.map(Some)
-				.unwrap_or_else(||
-					Some(quote!( (|config: &Self| config.#ident.clone()) ))
-				)
+			opt_build.or_else(|| Some(quote!( (|config: &Self| config.#ident.clone()) )))
 		} else {
 			opt_build
 		};
 
 		let typ = type_infos.typ;
 		if let Some(builder) = builder {
-			assimilate_require_generic = true;
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance) {
@@ -472,6 +485,8 @@ fn decl_store_extra_genesis(
 
 		let impl_trait = quote!(BuildModuleGenesisStorage<#traitinstance, #inherent_instance>);
 
+		let builders_clone_bound = quote!( #( #builders_clone_bound: Clone ),* );
+
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
 			#[cfg(feature = "std")]
@@ -494,7 +509,7 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl GenesisConfig#sparam {
+			impl#fparam_impl GenesisConfig#sparam where #builders_clone_bound {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
 						#scrate::runtime_primitives::StorageOverlay,
@@ -526,7 +541,7 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
-				for GenesisConfig#sparam
+				for GenesisConfig#sparam where #builders_clone_bound
 			{
 				fn build_module_genesis_storage(
 					self,
@@ -1056,15 +1071,6 @@ enum DeclStorageTypeInfosKind<'a> {
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
 		key2_hasher: HasherKind,
-	}
-}
-
-impl<'a> DeclStorageTypeInfosKind<'a> {
-	fn is_simple(&self) -> bool {
-		match *self {
-			DeclStorageTypeInfosKind::Simple => true,
-			_ => false,
-		}
 	}
 }
 

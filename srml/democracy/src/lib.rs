@@ -1007,7 +1007,7 @@ mod tests {
 			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::default().build_storage::<Test>().unwrap().0);
+		t.extend(GenesisConfig::default().build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 
