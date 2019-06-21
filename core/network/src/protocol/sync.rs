@@ -194,22 +194,6 @@ pub struct Status<B: BlockT> {
 	pub num_peers: u32,
 }
 
-impl<B: BlockT> Status<B> {
-	/// Whether the synchronization status is doing major downloading work or
-	/// is near the head of the chain.
-	pub fn is_major_syncing(&self) -> bool {
-		match self.state {
-			SyncState::Idle => false,
-			SyncState::Downloading => true,
-		}
-	}
-
-	/// Are we all alone?
-	pub fn is_offline(&self) -> bool {
-		self.num_peers == 0
-	}
-}
-
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance. Pass the initial known state of the chain.
 	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
