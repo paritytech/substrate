@@ -850,7 +850,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
 			let tree_route = ::client::blockchain::tree_route(
-				&self.blockchain,
+				|id| self.blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(meta.best_hash),
 				BlockId::Hash(route_to),
 			)?;
@@ -1971,6 +1971,7 @@ mod tests {
 	#[test]
 	fn tree_route_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 
 		// fork from genesis: 3 prong.
@@ -1984,7 +1985,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(b2)
 			).unwrap();
@@ -1996,7 +1997,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a1),
 				BlockId::Hash(a3),
 			).unwrap();
@@ -2008,7 +2009,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(a1),
 			).unwrap();
@@ -2020,7 +2021,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a2),
 				BlockId::Hash(a2),
 			).unwrap();
@@ -2034,13 +2035,14 @@ mod tests {
 	#[test]
 	fn tree_route_child() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(block0),
 				BlockId::Hash(block1),
 			).unwrap();

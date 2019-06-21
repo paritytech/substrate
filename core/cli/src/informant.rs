@@ -23,7 +23,7 @@ use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use network::SyncState;
-use client::{backend::Backend, BlockchainEvents};
+use client::BlockchainEvents;
 use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;
@@ -89,8 +89,7 @@ where C: Components {
 		if let Some((ref last_num, ref last_hash)) = last {
 			if n.header.parent_hash() != last_hash {
 				let tree_route = ::client::blockchain::tree_route(
-					#[allow(deprecated)]
-					client.backend().blockchain(),
+					|id| client.header(&id)?.ok_or(::client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 					BlockId::Hash(last_hash.clone()),
 					BlockId::Hash(n.hash),
 				);

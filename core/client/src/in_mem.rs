@@ -223,7 +223,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				None
 			} else {
 				let route = crate::blockchain::tree_route(
-					self,
+					|id| self.header(id)?.ok_or(error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 					BlockId::Hash(best_hash),
 					BlockId::Hash(*header.parent_hash()),
 				)?;
