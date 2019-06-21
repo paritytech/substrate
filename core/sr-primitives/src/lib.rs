@@ -536,23 +536,38 @@ pub enum ApplyError {
 	FullBlock = 255,
 }
 
-impl codec::Encode for ApplyError {
+impl Encode for ApplyError {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[*self as u8])
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index
-	pub module: i8, // use i8 instead of u8 because u8 is not supported by parity-codec
+	pub module: u8,
 	/// Module specific error value
-	pub error: i8,
-	/// Optional error message
-	#[codec(skip)]
+	pub error: u8,
+	/// Optional error message.
 	pub message: Option<&'static str>,
+}
+
+impl Encode for DispatchError {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&[self.module, self.error])
+	}
+}
+
+impl Decode for DispatchError {
+	fn decode<R: codec::Input>(input: &mut R) -> Option<Self> {
+		Some(DispatchError {
+			module: input.read_byte()?,
+			error: input.read_byte()?,
+			message: None,
+		})
+	}
 }
 
 /// Result from attempt to apply an extrinsic.

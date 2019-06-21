@@ -105,7 +105,7 @@ macro_rules! impl_outer_error {
 							},
 						_ => $crate::runtime_primitives::DispatchError {
 								module: 0,
-								error: Into::<u8>::into(err) as i8,
+								error: Into::<u8>::into(err),
 								message: None,
 							},
 					},
@@ -119,7 +119,7 @@ macro_rules! impl_outer_error {
 								},
 							_ => $crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode.using_encoded(&self, |s| s[0]),
-									error: Into::<u8>::into(err) as i8,
+									error: Into::<u8>::into(err),
 									message: None,
 								},
 						},

@@ -234,9 +234,8 @@ where
 			Ok(ApplyOutcome::Success) => (),
 			Ok(ApplyOutcome::Fail(e)) => {
 				runtime_io::print("Error:");
-				// as u8 first to ensure not using sign-extend
-				runtime_io::print(e.module as u8 as u64);
-				runtime_io::print(e.error as u8 as u64);
+				runtime_io::print(e.module as u64);
+				runtime_io::print(e.error as u64);
 				if let Some(msg) = e.message {
 					runtime_io::print(msg);
 				}
