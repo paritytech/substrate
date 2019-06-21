@@ -141,19 +141,6 @@ pub trait CustomMessage {
 		where Self: Sized;
 }
 
-// This trait implementation exist mostly for testing convenience. This should eventually be
-// removed.
-
-impl CustomMessage for Vec<u8> {
-	fn into_bytes(self) -> Vec<u8> {
-		self
-	}
-
-	fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-		Ok(bytes.to_vec())
-	}
-}
-
 /// Event produced by the `RegisteredProtocolSubstream`.
 #[derive(Debug, Clone)]
 pub enum RegisteredProtocolEvent<TMessage> {

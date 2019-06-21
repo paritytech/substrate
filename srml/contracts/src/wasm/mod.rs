@@ -134,7 +134,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 
 		let mut runtime = Runtime::new(
 			ext,
-			input_data,
+			input_data.to_vec(),
 			empty_output_buf,
 			&self.schedule,
 			memory,
@@ -419,7 +419,10 @@ mod tests {
 	;; Input data to pass to the contract being created.
 	(data (i32.const 12) "\01\02\03\04")
 	;; Hash of code.
-	(data (i32.const 16) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
+	(data (i32.const 16)
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+	)
 )
 "#;
 
@@ -569,7 +572,10 @@ mod tests {
 
 	(func (export "deploy"))
 
-	(data (i32.const 4) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
+	(data (i32.const 4)
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+	)
 )
 "#;
 

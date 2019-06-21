@@ -525,6 +525,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
 	/// Works only for runtimes that are supporting changes tries.
+	///
+	/// Changes are returned in descending order (i.e. last block comes first).
 	pub fn key_changes(
 		&self,
 		first: NumberFor<Block>,

@@ -75,7 +75,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
-	network: Option<Arc<components::NetworkService<Components::Factory>>>,
+	network: Arc<components::NetworkService<Components::Factory>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -420,7 +420,12 @@ impl<Components: components::Components> Service<Components> {
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
 				wasm_external_transport: None,
-				on_connect: Box::new(move || {
+			});
+			let future = telemetry.clone()
+				.for_each(move |event| {
+					// Safe-guard in case we add more events in the future.
+					let tel::TelemetryEvent::Connected = event;
+
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
@@ -435,9 +440,9 @@ impl<Components: components::Components> Service<Components> {
 					telemetry_connection_sinks_.lock().retain(|sink| {
 						sink.unbounded_send(()).is_ok()
 					});
-				}),
-			});
-			task_executor.spawn(telemetry.clone()
+					Ok(())
+				});
+			task_executor.spawn(future
 				.select(exit.clone())
 				.then(|_| Ok(())));
 			telemetry
@@ -445,7 +450,7 @@ impl<Components: components::Components> Service<Components> {
 
 		Ok(Service {
 			client,
-			network: Some(network),
+			network,
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
@@ -491,7 +496,7 @@ impl<Components> Service<Components> where Components: components::Components {
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.as_ref().expect("self.network always Some").clone()
+		self.network.clone()
 	}
 
 	/// Get shared transaction pool instance.
@@ -514,9 +519,6 @@ impl<Components> Service<Components> where Components: components::Components {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-
-		drop(self.network.take());
-
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
