@@ -28,6 +28,7 @@ pub mod error;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::time::Duration;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -39,7 +40,7 @@ use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, SaturatedConversion};
+use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -75,6 +76,8 @@ pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Arc<components::NetworkService<Components::Factory>>,
+	/// Sinks to propagate network status updates.
+	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -204,8 +207,9 @@ impl<Components: components::Components> Service<Components> {
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network_mut = network::NetworkWorker::new(network_params)?;
 		let network = network_mut.service().clone();
+		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		task_executor.spawn(network_mut
+		task_executor.spawn(build_network_future(network_mut, network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
 			.then(|_| Ok(())));
@@ -331,15 +335,17 @@ impl<Components: components::Components> Service<Components> {
 		let network_ = network.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid();
-		task_executor.spawn(network.status().for_each(move |sync_status| {
+		let (netstat_tx, netstat_rx) = mpsc::unbounded();
+		network_status_sinks.lock().push(netstat_tx);
+		task_executor.spawn(netstat_rx.for_each(move |net_status| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
-			let num_peers = sync_status.num_peers;
+			let num_peers = net_status.num_connected_peers;
 			let txpool_status = transaction_pool_.status();
 			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-			let bandwidth_download = network_.average_download_per_sec();
-			let bandwidth_upload = network_.average_upload_per_sec();
+			let bandwidth_download = net_status.average_download_per_sec;
+			let bandwidth_upload = net_status.average_upload_per_sec;
 
 			#[allow(deprecated)]
 			let backend = (*client_).backend();
@@ -447,6 +453,7 @@ impl<Components: components::Components> Service<Components> {
 		Ok(Service {
 			client,
 			network,
+			network_status_sinks,
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
@@ -495,6 +502,13 @@ impl<Components> Service<Components> where Components: components::Components {
 		self.network.clone()
 	}
 
+	/// Returns a receiver that periodically receives a status of the network.
+	pub fn network_status(&self) -> mpsc::UnboundedReceiver<NetworkStatus<ComponentBlock<Components>>> {
+		let (sink, stream) = mpsc::unbounded();
+		self.network_status_sinks.lock().push(sink);
+		stream
+	}
+
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
@@ -511,6 +525,57 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 }
 
+/// Builds a never-ending future that continuously polls the network.
+///
+/// The `status_sink` contain a list of senders to send a periodic network status to.
+fn build_network_future<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: network::ExHashT>(
+	mut network: network::NetworkWorker<B, S, H>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<B>>>>>,
+) -> impl Future<Item = (), Error = ()> {
+	// Interval at which we send status updates on the status stream.
+	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
+	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
+
+	futures::future::poll_fn(move || {
+		while let Ok(Async::Ready(_)) = status_interval.poll() {
+			let status = NetworkStatus {
+				sync_state: network.sync_state(),
+				best_seen_block: network.best_seen_block(),
+				num_sync_peers: network.num_sync_peers(),
+				num_connected_peers: network.num_connected_peers(),
+				num_active_peers: network.num_active_peers(),
+				average_download_per_sec: network.average_download_per_sec(),
+				average_upload_per_sec: network.average_upload_per_sec(),
+			};
+
+			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
+		}
+
+		network.poll()
+			.map_err(|err| {
+				warn!(target: "service", "Error in network: {:?}", err);
+			})
+	})
+}
+
+/// Overview status of the network.
+#[derive(Clone)]
+pub struct NetworkStatus<B: BlockT> {
+	/// Current global sync state.
+	pub sync_state: network::SyncState,
+	/// Target sync block number.
+	pub best_seen_block: Option<NumberFor<B>>,
+	/// Number of peers participating in syncing.
+	pub num_sync_peers: u32,
+	/// Total number of connected peers
+	pub num_connected_peers: usize,
+	/// Total number of active peers.
+	pub num_active_peers: usize,
+	/// Downloaded bytes per second averaged over the past few seconds.
+	pub average_download_per_sec: u64,
+	/// Uploaded bytes per second averaged over the past few seconds.
+	pub average_upload_per_sec: u64,
+}
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {

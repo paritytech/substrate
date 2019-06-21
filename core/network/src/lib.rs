@@ -184,8 +184,8 @@ pub use service::{
 	NetworkMsg, ExHashT, ReportHandle,
 };
 pub use config::{NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret};
-pub use protocol::{ProtocolStatus, PeerInfo, Context, consensus_gossip, message, specialization};
-pub use protocol::sync::{Status as SyncStatus, SyncState};
+pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
+pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
 pub use libp2p::{identity, PeerId, core::PublicKey};
 
