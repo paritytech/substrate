@@ -48,6 +48,7 @@ mod system {
 
 	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			type Error = Error;
 			pub fn deposit_event(_event: T::Event) {
 			}
 		}
@@ -89,6 +90,11 @@ mod system {
 		where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 	{
 		o.into().map(|_| ()).map_err(|_| "bad origin: expected to be a root origin")
+	}
+
+	srml_support::decl_error! {
+		pub enum Error {
+		}
 	}
 }
 

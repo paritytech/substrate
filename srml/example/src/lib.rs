@@ -504,7 +504,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, assert_ok};
+	use srml_support::{impl_outer_origin, impl_outer_error, assert_ok};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -516,6 +516,10 @@ mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
+	}
+
+	impl_outer_error! {
+		pub enum Error for Test {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -533,6 +537,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
+		type Error = Error;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

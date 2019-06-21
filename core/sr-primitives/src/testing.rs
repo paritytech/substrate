@@ -22,6 +22,7 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
 use crate::generic;
 use crate::weights::{Weighable, Weight};
+use crate::Error;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -200,8 +201,8 @@ impl<Call> Debug for TestXt<Call> {
 
 impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
-	type Error = &'static str;
-	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
+	type Error = Error;
+	fn check(self, _: &Context) -> Result<Self::Checked, Self::Error> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
 	fn is_signed(&self) -> Option<bool> {

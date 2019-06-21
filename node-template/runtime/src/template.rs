@@ -82,6 +82,11 @@ mod tests {
 		pub enum Origin for Test {}
 	}
 
+	#[allow(non_camel_case_types)]
+	pub enum Error {
+		system(system::Error)
+	}
+
 	// For testing the module, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of modules we want to use.
@@ -97,6 +102,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
+		type Error = Error;
 	}
 	impl Trait for Test {
 		type Event = ();

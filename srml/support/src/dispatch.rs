@@ -416,8 +416,8 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
-			{ $( $error_type )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
+			{ $( $error_type )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -559,11 +559,10 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ Error }
+			{ &'static str }
 			[ $($t)* ]
 			$($rest)*
 		);
-		pub type Error = &'static str;
 	};
 	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize

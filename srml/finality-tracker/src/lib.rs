@@ -264,7 +264,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::Header;
-	use srml_support::impl_outer_origin;
+	use srml_support::{impl_outer_origin, impl_outer_error};
 	use srml_system as system;
 	use lazy_static::lazy_static;
 	use parking_lot::Mutex;
@@ -284,6 +284,10 @@ mod tests {
 				pub enum Origin for Test {}
 			}
 
+			impl_outer_error! {
+				pub enum Error for Test {}
+			}
+
 			impl system::Trait for Test {
 				type Origin = Origin;
 				type Index = u64;
@@ -294,6 +298,7 @@ mod tests {
 				type Lookup = IdentityLookup<u64>;
 				type Header = Header;
 				type Event = ();
+				type Error = Error;
 			}
 
 			type System = system::Module<Test>;

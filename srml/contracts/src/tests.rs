@@ -33,7 +33,7 @@ use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
-	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
+	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, impl_outer_error, storage::child,
 	traits::Currency, StorageMap, StorageValue
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -64,6 +64,10 @@ impl_outer_dispatch! {
 	}
 }
 
+impl_outer_error! {
+	pub enum Error for Test {}
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 impl system::Trait for Test {
@@ -76,6 +80,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
+	type Error = Error;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

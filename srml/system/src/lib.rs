@@ -423,7 +423,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureRoot<AccountId> {
 	type Success = ();
-	type Error = ();
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(()),
@@ -438,7 +438,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
-	type Error = ();
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(who) => Ok(who),
@@ -454,7 +454,7 @@ impl<
 	AccountId: PartialEq + Clone,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
-	type Error = ();
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
@@ -469,7 +469,7 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureNone<AccountId> {
 	type Success = ();
-	type Error = ();
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::None => Ok(()),
@@ -481,7 +481,7 @@ impl<
 pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
-	type Error = ();
+	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
 	}

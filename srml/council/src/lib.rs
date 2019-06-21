@@ -38,7 +38,7 @@ mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
+	use srml_support::{impl_outer_origin, impl_outer_error, impl_outer_event, impl_outer_dispatch, parameter_types};
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use primitives::{
 		BuildStorage, traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
@@ -64,6 +64,10 @@ mod tests {
 		}
 	}
 
+	impl_outer_error! {
+		pub enum Error for Test {}
+	}
+
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
@@ -77,6 +81,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
+		type Error = Error;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

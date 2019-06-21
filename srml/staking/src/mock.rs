@@ -22,7 +22,7 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency};
+use srml_support::{impl_outer_origin, impl_outer_error, parameter_types, assert_ok, traits::Currency};
 use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination};
 
 /// The AccountId alias in this test module.
@@ -70,6 +70,10 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
+impl_outer_error! {
+	pub enum Error for Test {}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -83,6 +87,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type Error = Error;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

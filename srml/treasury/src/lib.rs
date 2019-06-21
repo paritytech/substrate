@@ -334,7 +334,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
+	use srml_support::{impl_outer_origin, impl_outer_error, assert_ok, assert_noop};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
@@ -342,6 +342,10 @@ mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
+	}
+
+	impl_outer_error! {
+		pub enum Error for Test where system = system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -356,6 +360,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
+		type Error = Error;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

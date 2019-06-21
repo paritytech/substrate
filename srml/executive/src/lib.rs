@@ -116,13 +116,13 @@ impl<
 	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-	Error: Into<DispatchError> + TryInto<system::Error>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Error=Error>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	<CallOf<Block::Extrinsic, Context> as Dispatchable>::Error: Into<DispatchError> + TryInto<system::Error>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -138,13 +138,13 @@ impl<
 	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-	Error: Into<DispatchError> + TryInto<system::Error>,
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Error=Error>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	<CallOf<Block::Extrinsic, Context> as Dispatchable>::Error: Into<DispatchError> + TryInto<system::Error>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -402,7 +402,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
-	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
+	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event, impl_outer_error};
 	use system;
 	use hex_literal::hex;
 
@@ -415,6 +415,10 @@ mod tests {
 		pub enum MetaEvent for Runtime {
 			balances<T>,
 		}
+	}
+
+	impl_outer_error! {
+		pub enum Error for Runtime {}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -430,6 +434,7 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
+		type Error = Error;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;

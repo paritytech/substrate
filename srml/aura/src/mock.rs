@@ -32,6 +32,11 @@ impl_outer_origin!{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 
+#[allow(non_camel_case_types)]
+pub enum Error {
+	system(system::Error)
+}
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -42,6 +47,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type Error = Error;
 }
 
 impl timestamp::Trait for Test {
