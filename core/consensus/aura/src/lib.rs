@@ -404,14 +404,16 @@ fn check_header<C, B: Block, P: Pair, T>(
 					equivocation_proof.second_header().hash(),
 				);
 				let block_id = BlockId::number(client.info().best_number);
-				transaction_pool.as_ref().map(|txpool|
-					txpool.submit_report_call(
-						client,
-						client.runtime_api()
-							.construct_equivocation_report_call(&block_id, equivocation_proof)
-							.unwrap().as_slice(),
-					)
-				);
+				let maybe_report_call = client.runtime_api()
+					.construct_equivocation_report_call(&block_id, equivocation_proof);
+				if let Ok(report_call) = maybe_report_call {
+					transaction_pool.as_ref().map(|txpool|
+						txpool.submit_report_call(client, report_call.as_slice())
+					);
+					info!(target: "aura", "A report for an equivocation has been submitted");
+				} else {
+					error!(target: "aura", "Equivocation received but report couldn't be constructed");
+				}
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
