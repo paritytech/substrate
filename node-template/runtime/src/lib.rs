@@ -162,6 +162,8 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// The ubiquitous event type.
+	type Error = Error;
 
 	type TransactionPayment = ();
 	type DustRemoval = ();

@@ -82,9 +82,8 @@ mod tests {
 		pub enum Origin for Test {}
 	}
 
-	#[allow(non_camel_case_types)]
-	pub enum Error {
-		system(system::Error)
+	impl_outer_error! {
+		pub enum Error for Test {}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means

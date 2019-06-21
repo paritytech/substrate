@@ -65,7 +65,9 @@ impl_outer_dispatch! {
 }
 
 impl_outer_error! {
-	pub enum Error for Test {}
+	pub enum Error for Test {
+		balances
+	}
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -90,6 +92,7 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type Error = Error;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;

@@ -345,7 +345,9 @@ mod tests {
 	}
 
 	impl_outer_error! {
-		pub enum Error for Test where system = system {}
+		pub enum Error for Test {
+			balances
+		}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -370,6 +372,7 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type Error = Error;
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;

@@ -940,7 +940,9 @@ mod tests {
 	}
 
 	impl_outer_error! {
-		pub enum Error for Test {}
+		pub enum Error for Test {
+			balances
+		}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -966,6 +968,7 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type Error = Error;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;

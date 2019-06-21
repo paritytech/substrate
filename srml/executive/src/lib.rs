@@ -417,7 +417,9 @@ mod tests {
 	}
 
 	impl_outer_error! {
-		pub enum Error for Runtime {}
+		pub enum Error for Runtime {
+			balances
+		}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -443,6 +445,7 @@ mod tests {
 		type TransactionPayment = ();
 		type DustRemoval = ();
 		type TransferPayment = ();
+		type Error = Error;
 	}
 
 	impl ValidateUnsigned for Runtime {
@@ -639,7 +642,7 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
-			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail));
+			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail(DispatchError { module: 0, error: 0, message: None })));
 		});
 	}
 }

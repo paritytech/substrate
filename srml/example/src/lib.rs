@@ -519,7 +519,9 @@ mod tests {
 	}
 
 	impl_outer_error! {
-		pub enum Error for Test {}
+		pub enum Error for Test {
+			balances
+		}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -547,6 +549,7 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type Error = Error;
 	}
 	impl Trait for Test {
 		type Event = ();

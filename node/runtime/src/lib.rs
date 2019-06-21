@@ -119,6 +119,7 @@ impl balances::Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type Error = Error;
 }
 
 impl timestamp::Trait for Runtime {
