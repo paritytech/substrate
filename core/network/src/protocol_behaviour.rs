@@ -50,7 +50,7 @@ pub struct ProtocolBehaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT>
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S, H> {
-	/// Builds a new `ProtocolsBehaviour`.
+	/// Builds a new `ProtocolBehaviour`.
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<dyn Client<B>>,
@@ -76,7 +76,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
-	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
+	pub fn open_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.behaviour.open_peers()
 	}
 
@@ -152,7 +152,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		&'a mut self,
 	) -> (&'a mut Protocol<B, S, H>, LocalNetworkOut<'a, B>) {
 		let net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
-		(&mut self.protocol, net_out)	
+		(&mut self.protocol, net_out)
 	}
 
 	/// Gossip a consensus message to the network.
@@ -173,9 +173,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	}
 
 	// TODO: needed?
-	pub fn propagate_extrinsics(
-		&mut self,
-	) {
+	pub fn propagate_extrinsics(&mut self) {
 		self.protocol.propagate_extrinsics(
 			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
 			&*self.transaction_pool
@@ -332,13 +330,11 @@ ProtocolBehaviour<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		{
-			let mut net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
-			match self.protocol.poll(&mut net_out, &*self.transaction_pool) {
-				Ok(Async::Ready(v)) => void::unreachable(v),
-				Ok(Async::NotReady) => {}
-				Err(err) => void::unreachable(err),
-			}
+		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
+		match self.protocol.poll(&mut net_out, &*self.transaction_pool) {
+			Ok(Async::Ready(v)) => void::unreachable(v),
+			Ok(Async::NotReady) => {}
+			Err(err) => void::unreachable(err),
 		}
 
 		let event = match self.behaviour.poll(params) {
