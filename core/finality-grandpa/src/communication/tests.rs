@@ -361,24 +361,23 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 			// start round.
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
-			{	println!("start");
+			{
             	tester.gossip_validator.note_round(Round(1), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_one[..]);
 				match action {
 					gossip::Action::Keep(_, _) => {},
 					_ => panic!("wrong expected outcome from initial commit validation"),
 				}
-				println!("start 2");
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
 				match action {
 					gossip::Action::Discard(_) => {},
 					_ => panic!("wrong expected outcome from initial commit validation"),
 				}
 			}
-			// start another round.
+			// start another round, tallies should be reset.
 			tester.net_handle.global_communication(SetId(2), voter_set, false);
 
-			{	println!("start 3");
+			{
 				tester.gossip_validator.note_round(Round(2), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
 				match action {
@@ -401,7 +400,7 @@ fn non_existent_votes_excluded_from_tallies() {
 	let unknown_public = make_ids(&[AuthorityKeyring::Charlie]);
 
 	let encoded_vote_one = {
-		let round = 0;
+		let round = 2;
 		let set_id = 1;
 
 		let signed = {
@@ -432,7 +431,7 @@ fn non_existent_votes_excluded_from_tallies() {
 
 	// Vote from unknown authority.
 	let encoded_vote_two = {
-		let round = 1;
+		let round = 2;
 		let set_id = 2;
 
 		let signed = {
@@ -475,6 +474,8 @@ fn non_existent_votes_excluded_from_tallies() {
 
 			{
 				// Unknown voter.
+				tester.gossip_validator.note_round(Round(1), |_, _| {});
+				tester.gossip_validator.note_round(Round(2), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_two[..]);
 				match action {
 					gossip::Action::Discard(_) => {},
