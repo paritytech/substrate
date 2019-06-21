@@ -134,7 +134,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 
 		let mut runtime = Runtime::new(
 			ext,
-			input_data,
+			input_data.to_vec(),
 			empty_output_buf,
 			&self.schedule,
 			memory,
