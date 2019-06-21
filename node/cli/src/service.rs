@@ -233,7 +233,7 @@ mod tests {
 	use node_runtime::{Call, BalancesCall, UncheckedExtrinsic};
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
-		crypto::Pair as CryptoPair, ed25519::{Pair, Signature}, blake2_256,
+		crypto::Pair as CryptoPair, ed25519::Signature, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};

@@ -77,7 +77,7 @@ fn async_import_queue_drops() {
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = Arc::new(PassThroughVerifier(true));
-		let mut queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None, None, None);
+		let queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None, None, None);
 		drop(queue);
 	}
 }

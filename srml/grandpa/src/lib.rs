@@ -33,22 +33,21 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use rstd::prelude::*;
-use rstd::hash::Hash;
 use parity_codec::{self as codec, Encode, Decode, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId},
-	traits::{CurrentHeight, NumberFor, MaybeSerializeDebug, ValidateUnsigned, Verify},
+	traits::{CurrentHeight, MaybeSerializeDebug, ValidateUnsigned, Verify},
 	transaction_validity::TransactionValidity
 };
 use fg_primitives::{
-	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof, Equivocation,
-	Prevote, Precommit, Message, PrevoteEquivocation, PrecommitEquivocation
+	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof,
+	Message, PrevoteEquivocation, PrecommitEquivocation
 };
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
-use system::{ensure_signed, DigestOf};
+use system::DigestOf;
 
 mod mock;
 mod tests;

@@ -18,18 +18,14 @@
 
 #![cfg(test)]
 
-use primitives::testing::{Digest, Header as HeaderTest};
+use primitives::testing::Digest;
 use primitives::traits::{Header, OnFinalize, ValidateUnsigned};
 use substrate_primitives::{ed25519, H256, crypto::Pair};
 use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};
 use codec::{Decode, Encode};
-use rstd::hash::Hash;
-use fg_primitives::{
-	ScheduledChange, Equivocation, Precommit, Prevote,
-	PrevoteEquivocation, PrecommitEquivocation
-};
+use fg_primitives::{ScheduledChange, Equivocation, Prevote};
 use super::*;
 
 #[test]

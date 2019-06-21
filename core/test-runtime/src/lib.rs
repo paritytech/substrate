@@ -42,15 +42,15 @@ use runtime_primitives::{
 		GetNodeBlockType, GetRuntimeBlockType, Verify, NumberFor, DigestFor,
 	},
 };
+
 use consensus_aura::AuraEquivocationProof;
 use consensus_grandpa::{
-	Equivocation, Prevote, Precommit, AuthorityId as GrandpaAuthorityId,
-	AuthoritySignature, GrandpaEquivocationProof, AuthorityWeight, ScheduledChange,
-	PrevoteEquivocation, PrecommitEquivocation
+	AuthorityId as GrandpaAuthorityId, GrandpaEquivocationProof, AuthorityWeight,
+	ScheduledChange, PrevoteEquivocation, PrecommitEquivocation
 };
 
 use runtime_version::RuntimeVersion;
-use primitives::{sr25519, ed25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -471,7 +471,7 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					proof: AuraEquivocationProof<<Block as BlockT>::Header,sr25519::Signature>
+					_proof: AuraEquivocationProof<<Block as BlockT>::Header,sr25519::Signature>
 				) -> Vec<u8> {
 					vec![]
 				}
@@ -489,12 +489,12 @@ cfg_if! {
 			}
 
 			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_pending_change(digest: &DigestFor<Block>)
+				fn grandpa_pending_change(_digest: &DigestFor<Block>)
 					-> Option<ScheduledChange<NumberFor<Block>>> {
 					unimplemented!()
 				}
 				
-				fn grandpa_forced_change(digest: &DigestFor<Block>)
+				fn grandpa_forced_change(_digest: &DigestFor<Block>)
 					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)> {
 					unimplemented!()
 				}
@@ -504,7 +504,7 @@ cfg_if! {
 				}
 		
 				fn construct_prevote_equivocation_report_call(
-					proof: GrandpaEquivocationProof<
+					_proof: GrandpaEquivocationProof<
 						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
@@ -512,7 +512,7 @@ cfg_if! {
 				}
 		
 				fn construct_precommit_equivocation_report_call(
-					proof: GrandpaEquivocationProof<
+					_proof: GrandpaEquivocationProof<
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
@@ -652,7 +652,7 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					proof: AuraEquivocationProof<<Block as BlockT>::Header, sr25519::Signature>
+					_proof: AuraEquivocationProof<<Block as BlockT>::Header, sr25519::Signature>
 				) -> Vec<u8> {
 					vec![]
 				}
@@ -670,7 +670,7 @@ cfg_if! {
 			}
 
 			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_pending_change(digest: &DigestFor<Block>)
+				fn grandpa_pending_change(_digest: &DigestFor<Block>)
 					-> Option<ScheduledChange<NumberFor<Block>>> {
 					unimplemented!()
 				}
@@ -685,7 +685,7 @@ cfg_if! {
 				}
 		
 				fn construct_prevote_equivocation_report_call(
-					proof: GrandpaEquivocationProof<
+					_proof: GrandpaEquivocationProof<
 						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
@@ -693,7 +693,7 @@ cfg_if! {
 				}
 		
 				fn construct_precommit_equivocation_report_call(
-					proof: GrandpaEquivocationProof<
+					_proof: GrandpaEquivocationProof<
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {

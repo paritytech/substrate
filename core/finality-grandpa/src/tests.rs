@@ -46,8 +46,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
-	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation,
-	AuthoritySignature, 
+	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
 };
 use consensus_safety::TestPool;
 use authorities::AuthoritySet;
@@ -422,7 +421,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 
 	fn GrandpaApi_construct_prevote_equivocation_report_call_runtime_api_impl(
 		&self,
-		at: &BlockId<Block>,
+		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
 		_: Vec<u8>,
@@ -433,7 +432,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 	/// Construct a call to report the precommit equivocation.
 	fn GrandpaApi_construct_precommit_equivocation_report_call_runtime_api_impl(
 		&self,
-		at: &BlockId<Block>,
+		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
 		_: Vec<u8>,
