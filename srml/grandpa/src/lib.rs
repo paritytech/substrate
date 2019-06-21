@@ -33,6 +33,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use rstd::prelude::*;
+use rstd::hash::Hash;
 use parity_codec::{self as codec, Encode, Decode, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
@@ -349,18 +350,18 @@ where
 
 	let fst_sig = &equivocation.first.1;
 	let fst_message = Message::Prevote(equivocation.first.0.clone());
-	let fst_payload = (fst_message, round, set_id).encode();
+	let fst_payload = (fst_message.clone(), round, set_id).encode();
 
 	let snd_sig = &equivocation.second.1;
 	let snd_message = Message::Prevote(equivocation.second.0.clone());
-	let snd_payload = (snd_message, round, set_id).encode();
+	let snd_payload = (snd_message.clone(), round, set_id).encode();
 
 	let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation.identity);
 	let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation.identity);
 
-	if valid_sig1 && valid_sig2 {
+	if valid_sig1 && valid_sig2 && fst_message != snd_message {
 		return TransactionValidity::Valid {
-			priority: 0,
+			priority: 10,
 			requires: vec![],
 			provides: vec![],
 			longevity: 18446744073709551615,

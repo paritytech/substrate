@@ -18,13 +18,18 @@
 
 #![cfg(test)]
 
-use primitives::testing::Digest;
-use primitives::traits::{Header, OnFinalize};
+use primitives::testing::{Digest, Header as HeaderTest};
+use primitives::traits::{Header, OnFinalize, ValidateUnsigned};
+use substrate_primitives::{ed25519, H256, crypto::Pair};
 use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};
 use codec::{Decode, Encode};
-use fg_primitives::ScheduledChange;
+use rstd::hash::Hash;
+use fg_primitives::{
+	ScheduledChange, Equivocation, Precommit, Prevote,
+	PrevoteEquivocation, PrecommitEquivocation
+};
 use super::*;
 
 #[test]
@@ -200,5 +205,74 @@ fn dispatch_forced_change() {
 			header = System::finalize();
 		}
 		let _ = header;
+	});
+}
+
+#[test]
+fn validate_unsigned_works() {
+	let (pair, _seed) = ed25519::Pair::generate();
+	let public = pair.public();
+	let authorities = vec![(public.clone(), 1)];
+
+	let hash1 = H256::random();
+	let hash2 = H256::random();
+
+	let prevote1 = Prevote { target_hash: hash1, target_number: 1 };
+	let message1 = Message::Prevote(prevote1.clone());
+	let payload1 = (message1, 0u64, 0u64).encode();
+	let sig1 = pair.sign(payload1.as_slice());
+
+	let prevote2 = Prevote { target_hash: hash2, target_number: 2 };
+	let message2 = Message::Prevote(prevote2.clone());
+	let payload2 = (message2, 0u64, 0u64).encode();
+	let sig2 = pair.sign(payload2.as_slice());
+
+	let proof1 = GrandpaEquivocationProof {
+		set_id: 0,
+		round: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (prevote1.clone(), sig1.clone()),
+			second: (prevote2.clone(), sig2.clone()),
+		},
+	};
+
+	let proof2 = GrandpaEquivocationProof {
+		set_id: 0,
+		round: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (prevote1.clone(), sig1.clone()),
+			second: (prevote1.clone(), sig1.clone()),
+		},
+	};
+
+	let proof3 = GrandpaEquivocationProof {
+		set_id: 0,
+		round: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (prevote1.clone(), sig1.clone()),
+			second: (prevote2.clone(), sig1.clone()),
+		},
+	};
+
+	let call1 = Call::report_prevote_equivocation(proof1);
+	let call2 = Call::report_prevote_equivocation(proof2);
+	let call3 = Call::report_prevote_equivocation(proof3);
+
+	with_externalities(&mut new_test_ext_sig(authorities), || {
+		assert_eq!(Grandpa::validate_unsigned(&call1), TransactionValidity::Valid {
+			priority: 10,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615,
+			propagate: true,
+		});
+		assert_eq!(Grandpa::validate_unsigned(&call2), TransactionValidity::Invalid(0));
+		assert_eq!(Grandpa::validate_unsigned(&call3), TransactionValidity::Invalid(0));
 	});
 }

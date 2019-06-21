@@ -51,7 +51,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AuthorityId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
@@ -76,6 +76,15 @@ pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternaliti
 	t.extend(GenesisConfig::<Test> {
 		_genesis_phantom_data: Default::default(),
 		authorities: to_authorities(authorities),
+	}.build_storage().unwrap().0);
+	t.into()
+}
+
+pub fn new_test_ext_sig(authorities: Vec<(AuthorityId, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
+	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+	t.extend(GenesisConfig::<Test> {
+		_genesis_phantom_data: Default::default(),
+		authorities,
 	}.build_storage().unwrap().0);
 	t.into()
 }
