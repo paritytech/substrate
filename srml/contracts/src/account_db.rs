@@ -75,7 +75,12 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
+	fn get_storage(
+		&self,
+		_account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey,
+	) -> Option<Vec<u8>> {
 		// see issue FIXME #2744 to stop querying child trie
 		trie_id.and_then(|id| {
 			child::child_trie(&prefixed_child_trie(&id)[..])
@@ -252,7 +257,12 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
+	fn get_storage(
+		&self,
+		account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey
+	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)
