@@ -208,7 +208,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 5, 9),
-				mock::Error::balances(Error::Unknown("value too low to create account"))
+				mock::Error::system(system::Error::Unknown("value too low to create account"))
 			);
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			assert_eq!(Balances::free_balance(&1), 100);
@@ -349,7 +349,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_noop!(
 			Balances::transfer(Some(1).into(), 2, 69),
-			mock::Error::balances(Error::Unknown("balance too low to send value"))
+			mock::Error::system(system::Error::Unknown("balance too low to send value"))
 		);
 	});
 }
@@ -478,7 +478,7 @@ fn transferring_too_high_value_should_not_panic() {
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
-			mock::Error::balances(Error::Unknown("destination balance too high to receive value"))
+			mock::Error::system(system::Error::Unknown("destination balance too high to receive value"))
 		);
 
 		assert_eq!(Balances::free_balance(&1), u64::max_value());
@@ -556,7 +556,7 @@ fn transfer_overflow_isnt_exploitable() {
 
 			assert_err!(
 				Balances::transfer(Some(1).into(), 5, evil_value),
-				mock::Error::balances(Error::Unknown("got overflow after adding a fee to value"))
+				mock::Error::system(system::Error::Unknown("got overflow after adding a fee to value"))
 			);
 		}
 	);
@@ -620,7 +620,7 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(Balances::vesting_balance(&1), 90); // Account 1 has only 10 units vested at block 1
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 2, 11),
-				mock::Error::balances(Error::Unknown("vesting balance too high to send value"))
+				mock::Error::system(system::Error::Unknown("vesting balance too high to send value"))
 			); // Account 1 cannot send more than vested amount
 		}
 	);
