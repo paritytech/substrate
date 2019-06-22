@@ -19,7 +19,7 @@
 use crate::{ExHashT, DiscoveryNetBehaviour, ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use crate::chain::{Client, FinalityProofProvider};
-use crate::protocol::{self, CustomMessageOutcome, Protocol, ProtocolConfig, ProtocolStatus};
+use crate::protocol::{self, CustomMessageOutcome, Protocol, ProtocolConfig, sync::SyncState};
 use crate::protocol::{PeerInfo, NetworkOut, message::Message, on_demand::RequestData};
 use crate::protocol::consensus_gossip::MessageRecipient as GossipMessageRecipient;
 use crate::protocol::specialization::NetworkSpecialization;
@@ -115,17 +115,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		self.behaviour.peerset_debug_info()
 	}
 
-	/// Returns an object representing the status of the protocol.
-	pub fn status(&self) -> ProtocolStatus<B> {
-		self.protocol.status()
+	/// Returns the number of peers we're connected to.
+	pub fn num_connected_peers(&self) -> usize {
+		self.protocol.num_connected_peers()
 	}
 
-	pub fn is_major_syncing(&self) -> bool {
-		self.protocol.is_major_syncing()
+	/// Returns the number of peers we're connected to and that are being queried.
+	pub fn num_active_peers(&self) -> usize {
+		self.protocol.num_active_peers()
 	}
 
-	pub fn is_offline(&self) -> bool {
-		self.protocol.is_offline()
+	/// Current global sync state.
+	pub fn sync_state(&self) -> SyncState {
+		self.protocol.sync_state()
+	}
+
+	/// Target sync block number.
+	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+		self.protocol.best_seen_block()
+	}
+
+	/// Number of peers participating in syncing.
+	pub fn num_sync_peers(&self) -> u32 {
+		self.protocol.num_sync_peers()
 	}
 
 	/// Starts a new data demand request.
