@@ -934,6 +934,8 @@ mod tests {
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
+			type Error = Error;
+
 			balances::Balances,
 			democracy::Democracy,
 		}
@@ -941,7 +943,7 @@ mod tests {
 
 	impl_outer_error! {
 		pub enum Error for Test {
-			balances
+			balances,
 		}
 	}
 

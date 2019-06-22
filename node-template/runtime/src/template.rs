@@ -71,7 +71,7 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
-	use support::{impl_outer_origin, assert_ok};
+	use support::{impl_outer_origin, impl_outer_error, assert_ok};
 	use runtime_primitives::{
 		BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},

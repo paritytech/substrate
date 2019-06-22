@@ -59,6 +59,8 @@ impl_outer_origin! {
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
+		type Error = Error;
+
 		balances::Balances,
 		contract::Contract,
 	}
