@@ -28,7 +28,7 @@ use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
-use sr_primitives::generic::Era;
+use sr_primitives::generic::{Era, Tip};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;
@@ -54,6 +54,7 @@ pub struct FactoryState<N> {
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 
+// TODO: fix the tip amount here.
 impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
@@ -140,7 +141,8 @@ impl RuntimeAdapter for FactoryState<Number> {
 					),
 					(*amount).into()
 				)
-			)
+			),
+			tip: Tip::default(),
 		}, key, &prior_block_hash, phase)
 	}
 
@@ -246,11 +248,13 @@ fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 			UncheckedExtrinsic {
 				signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 				function: payload.1,
+				tip: Tip::default(),
 			}
 		}
 		None => UncheckedExtrinsic {
 			signature: None,
 			function: xt.function,
+			tip: Tip::default(),
 		},
 	};
 

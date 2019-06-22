@@ -24,8 +24,7 @@ use crate::codec::{Encode, Decode};
 /// stream.
 /// If non-existent, the default implementation will be used.s
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg(feature = "std")]
-#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum Tip<Balance> {
     /// This transaction does not include any tips.
     None,

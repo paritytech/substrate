@@ -20,6 +20,8 @@ pub use crate::rstd::vec::Vec;
 pub use crate::runtime_primitives::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
 pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+#[doc(hidden)]
+pub use crate::runtime_primitives::generic::Tip;
 
 
 /// Implement the outer inherent.
@@ -58,10 +60,11 @@ macro_rules! impl_outer_inherent {
 
 				let mut inherents = Vec::new();
 
+				// TODO: fix tip value here.
 				$(
 					if let Some(inherent) = $module::create_inherent(self) {
 						inherents.push($uncheckedextrinsic::new_unsigned(
-							Call::$call(inherent))
+							Call::$call(inherent), $crate::inherent::Tip::default())
 						);
 					}
 				)*

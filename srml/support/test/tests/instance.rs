@@ -294,7 +294,7 @@ srml_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature, u32>;
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
