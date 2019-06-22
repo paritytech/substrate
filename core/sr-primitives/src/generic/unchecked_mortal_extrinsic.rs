@@ -84,7 +84,7 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 	type Error = Error;
 
-	fn check(self, context: &Context) -> Result<Self::Checked, Error> {
+	fn check(self, context: &Context) -> Result<Self::Checked, Self::Error> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
 				let current_u64 = context.current_height().saturated_into::<u64>();
@@ -202,7 +202,7 @@ mod tests {
 		type Source = u64;
 		type Target = u64;
 		type Error = &'static str;
-		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
+		fn lookup(&self, s: u64) -> Result<u64, Self::Error> { Ok(s) }
 	}
 	impl CurrentHeight for TestContext {
 		type BlockNumber = u64;
