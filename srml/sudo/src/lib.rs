@@ -99,7 +99,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin, Error=<Self as system::Trait>::Error>;
 }
 
 decl_module! {
@@ -123,9 +123,8 @@ decl_module! {
 
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
-				Err(_e) => {
-					// TODO: not sure how to deal with this
-					// sr_io::print(e);
+				Err(e) => {
+					sr_io::print(e);
 					false
 				}
 			};

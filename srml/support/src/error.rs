@@ -82,6 +82,18 @@ macro_rules! impl_outer_error {
 			}
 		}
 
+		impl $crate::Printable for $name {
+			fn print(self) {
+				$crate::print("Error:");
+				let err = Into::<$crate::runtime_primitives::DispatchError>::into(self);
+				$crate::print(err.module as u64);
+				$crate::print(err.error as u64);
+				if let Some(msg) = err.message {
+					$crate::print(msg);
+				}
+			}
+		}
+
 		impl $crate::rstd::convert::TryInto<$system::Error> for $name {
 			type Error = Self;
 			fn try_into(self) -> $crate::dispatch::result::Result<$system::Error, Self::Error> {
