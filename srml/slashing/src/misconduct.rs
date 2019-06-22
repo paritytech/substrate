@@ -39,6 +39,27 @@ pub mod grandpa {
 			Fraction::new(1, 10)
 		}
 	}
+
+	/// An equivocation is defined as a validator signing two or more votes
+	/// in the same round, for the same vote type
+	pub struct Equivocation;
+
+	impl Misconduct for Equivocation {
+		type Severity = u64;
+	}
+
+	impl CheckpointMisconduct for Equivocation {
+		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
+			let denominator = (3*k)*(3*k);
+			let numerator = n*n;
+
+			if denominator / numerator >= 1 {
+				Fraction::new(1, 1)
+			} else {
+				Fraction::new(denominator, numerator)
+			}
+		}
+	}
 }
 
 #[cfg(test)]
@@ -68,5 +89,23 @@ mod tests {
 		let s = CheckpointMisconduct::severity(&grandpa::UnjustifiedVote, 0, 0);
 		let rate = s.denominator() as f64 / s.numerator() as f64;
 		assert_eq!(rate, 0.10);
+	}
+
+	#[test]
+	fn grandpa_equivocation() {
+		// min(1, (3*1 / 10)^2)) = 0.09
+		let s = CheckpointMisconduct::severity(&grandpa::Equivocation, 1, 10);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 0.09);
+
+		// min(1, (3*3 / 10)^2)) = 0.81
+		let s = CheckpointMisconduct::severity(&grandpa::Equivocation, 3, 10);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 0.81);
+
+		// min(1, (4*3 / 10)^2)) = 1
+		let s = CheckpointMisconduct::severity(&grandpa::Equivocation, 4, 10);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 1.00);
 	}
 }
