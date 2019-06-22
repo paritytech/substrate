@@ -701,7 +701,6 @@ mod tests {
 		run_test(3);
 		run_test(4);
 		run_test(5);
-		assert!(true);
 	}
 
 	#[test]
