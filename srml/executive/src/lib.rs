@@ -642,7 +642,10 @@ mod tests {
 
 		with_externalities(&mut t, || {
 			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
-			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail(DispatchError { module: 0, error: 0, message: None })));
+			assert_eq!(
+				Executive::apply_extrinsic(xt),
+				Ok(ApplyOutcome::Fail(DispatchError { module: 0, error: 0, message: None }))
+			);
 		});
 	}
 }

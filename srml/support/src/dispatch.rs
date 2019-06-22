@@ -1208,7 +1208,10 @@ macro_rules! decl_module {
 
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::DispatchResult<D::Error> {
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
+				d: D,
+				origin: D::Origin
+			) -> $crate::dispatch::DispatchResult<D::Error> {
 				d.dispatch(origin)
 			}
 		}
