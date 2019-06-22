@@ -89,7 +89,7 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 	type Error = Error;
 
-	fn check(self, context: &Context) -> Result<Self::Checked, Error> {
+	fn check(self, context: &Context) -> Result<Self::Checked, Self::Error> {
 		Ok(match self.signature {
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);

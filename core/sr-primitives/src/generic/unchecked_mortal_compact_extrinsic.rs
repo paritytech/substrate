@@ -83,7 +83,7 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 	type Error = Error;
 
-	fn check(self, context: &Context) -> Result<Self::Checked, Error> {
+	fn check(self, context: &Context) -> Result<Self::Checked, Self::Error> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
 				let current_u64 = context.current_height().saturated_into::<u64>();
