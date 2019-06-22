@@ -688,6 +688,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
+	use super::DispatchError;
 	use crate::codec::{Encode, Decode};
 
 	macro_rules! per_thing_mul_upper_test {
@@ -785,5 +786,22 @@ mod tests {
 			super::Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
+	}
+
+	#[test]
+	fn dispatch_error_encoding() {
+		let error = DispatchError {
+			module: 1,
+			error: 2,
+			message: Some("error message"),
+		};
+		let encoded = error.encode();
+		let decoded = DispatchError::decode(&mut &*encoded).unwrap();
+		assert_eq!(encoded, vec![1, 2]);
+		assert_eq!(decoded, DispatchError {
+			module: 1,
+			error: 2,
+			message: None,
+		});
 	}
 }
