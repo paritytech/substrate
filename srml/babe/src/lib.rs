@@ -127,19 +127,23 @@ impl<T: Trait> Module<T> {
 		// the majority of their slot.
 		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
-}
 
-impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(_moment: T::Moment) { }
-}
-
-impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
+
+	fn get_inherent_digests() -> DigestOf<T> {
+		<system::Module<T>>::get_digests
+	}
+
+	pub fn current_
+}
+
+impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
+	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {

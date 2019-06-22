@@ -517,6 +517,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	pub fn get_inherent_digests() -> DigestOf<T> {
+		<Digest<T>>::get()
+	}
+
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
