@@ -226,7 +226,7 @@ mod tests {
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest, Tip}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
@@ -273,6 +273,7 @@ mod tests {
 			let xt = UncheckedExtrinsic {
 				signature: Some((RawAddress::Id(id), signature, payload.0, Era::immortal())),
 				function: payload.1,
+				tip: Tip::default(),
 			}.encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 			OpaqueExtrinsic(v)
@@ -356,6 +357,7 @@ mod tests {
 				from.into(),
 				signature.into(),
 				era,
+				Tip::default(),
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 

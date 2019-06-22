@@ -24,7 +24,7 @@ use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256};
 use parity_codec::{Encode, Decode, Compact};
-use sr_primitives::generic::Era;
+use sr_primitives::generic::{Era, Tip};
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
 
@@ -166,6 +166,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.public().into(),
 				signature.into(),
 				era,
+				Tip::default(),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -207,6 +208,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.public().into(),
 				signature.into(),
 				era,
+				Tip::default(),
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
