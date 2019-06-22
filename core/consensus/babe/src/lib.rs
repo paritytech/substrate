@@ -565,12 +565,13 @@ fn median_algorithm(
 				let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
 				t + Duration::new(secs, nanos)
 			}).collect();
-		// FIXME use a selection algorithm instead of a full sorting algorithm.
+		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
 		new_list.sort_unstable();
 		let &median = new_list
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
 		timestamps.1.clear();
+		// FIXME #2927: pass this to the block authoring logic somehow
 		timestamps.0.replace(Instant::now() - median);
 	} else {
 		timestamps.1.push((Instant::now(), slot_now))
@@ -809,9 +810,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		)));
 	let genesis_authorities = authorities(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
-		.map_err(map_err)?;
-
-	Ok(())
+		.map_err(map_err)
 }
 
 /// Start an import queue for the Babe consensus algorithm.
