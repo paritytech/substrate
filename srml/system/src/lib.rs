@@ -895,7 +895,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 0x0201u16, topics: vec![] },
 				EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
 			]);
 		});
