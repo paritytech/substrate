@@ -164,6 +164,7 @@ impl Decode for Vote {
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type Error = &'static str;
 
 pub trait Trait: system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
@@ -191,23 +192,23 @@ pub trait Trait: system::Trait + Sized {
 
 	/// Origin from which the next tabled referendum may be forced. This is a normal
 	/// "super-majority-required" referendum.
-	type ExternalOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
+	type ExternalOrigin: EnsureOrigin<Self::Origin, Error = Error>;
 
 	/// Origin from which the next tabled referendum may be forced; this allows for the tabling of
 	/// a majority-carries referendum.
-	type ExternalMajorityOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
+	type ExternalMajorityOrigin: EnsureOrigin<Self::Origin, Error = Error>;
 
 	/// Origin from which emergency referenda may be scheduled.
-	type EmergencyOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
+	type EmergencyOrigin: EnsureOrigin<Self::Origin, Error = Error>;
 
 	/// Minimum voting period allowed for an emergency referendum.
 	type EmergencyVotingPeriod: Get<Self::BlockNumber>;
 
 	/// Origin from which any referenda may be cancelled in an emergency.
-	type CancellationOrigin: EnsureOrigin<Self::Origin, Error = &'static str>;
+	type CancellationOrigin: EnsureOrigin<Self::Origin, Error = Error>;
 
 	/// Origin for anyone able to veto proposals.
-	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId, Error = &'static str>;
+	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId, Error = Error>;
 
 	/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 	type CooloffPeriod: Get<Self::BlockNumber>;
