@@ -337,16 +337,16 @@ where
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			Err(err) => {
-				match err.into() {
+				return match err.into() {
 					// An unknown account index implies that the transaction may yet become valid.
 					// TODO: avoid hardcoded error string here
 					PrimitiveError::Unknown("invalid account index") =>
-						return TransactionValidity::Unknown(INVALID_INDEX),
+						TransactionValidity::Unknown(INVALID_INDEX),
 					// Technically a bad signature could also imply an out-of-date account index, but
 					// that's more of an edge case.
 					PrimitiveError::BadSignature =>
-						return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
-					_ => return TransactionValidity::Invalid(UNKNOWN_ERROR),
+						TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+					_ => TransactionValidity::Invalid(UNKNOWN_ERROR),
 				}
 			}
 		};
