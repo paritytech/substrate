@@ -727,25 +727,21 @@ where
 		round: u64,
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
-		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		let proof = GrandpaEquivocationProof {
 			set_id: self.set_id,
 			round,
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		let maybe_call = self.inner.runtime_api()
-			.construct_prevote_equivocation_report_call(&block_id, proof);
-
-		if let Ok(call) = maybe_call {
-			self.transaction_pool.submit_report_call(
-				self.inner.deref(),
-				call.as_slice(),
+		self.inner.runtime_api()
+			.construct_prevote_equivocation_report_call(&block_id, proof)
+			.map(|call| {
+				self.transaction_pool.submit_report_call(self.inner.deref(), call.as_slice());
+				info!(target: "afg", "Equivocation report has been submitted")
+			}).unwrap_or_else(|err|
+				error!(target: "afg", "Error constructing equivocation report: {}", err)
 			);
-			info!(target: "afg", "A report for a prevote equivocation has been submitted");
-		} else {
-			error!(target: "afg", "Prevote equivocation received but report couldn't be constructed");
-		}
 	}
 
 	fn precommit_equivocation(
@@ -753,25 +749,21 @@ where
 		round: u64,
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
-		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
+		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		let proof = GrandpaEquivocationProof {
 			set_id: self.set_id,
 			round,
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		let maybe_call = self.inner.runtime_api()
-			.construct_precommit_equivocation_report_call(&block_id, proof);
-
-		if let Ok(call) = maybe_call {
-			self.transaction_pool.submit_report_call(
-				self.inner.deref(),
-				call.as_slice(),
+		self.inner.runtime_api()
+			.construct_precommit_equivocation_report_call(&block_id, proof)
+			.map(|call| {
+				self.transaction_pool.submit_report_call(self.inner.deref(), call.as_slice());
+				info!(target: "afg", "Equivocation report has been submitted")
+			}).unwrap_or_else(|err|
+				error!(target: "afg", "Error constructing equivocation report: {}", err)
 			);
-			info!(target: "afg", "A report for a precommit equivocation has been submitted");
-		} else {
-			error!(target: "afg", "Precommit equivocation received but report couldn't be constructed");
-		}
 	}
 }
 

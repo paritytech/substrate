@@ -345,8 +345,6 @@ macro_rules! aura_err {
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-//
-// FIXME #1018 needs misbehavior types
 fn check_header<C, B: Block, P: Pair, T>(
 	client: &C,
 	transaction_pool: &Option<Arc<T>>,
@@ -403,17 +401,19 @@ fn check_header<C, B: Block, P: Pair, T>(
 					equivocation_proof.first_header().hash(),
 					equivocation_proof.second_header().hash(),
 				);
+
+				// Submit a transaction reporting the equivocation.
 				let block_id = BlockId::number(client.info().best_number);
-				let maybe_report_call = client.runtime_api()
-					.construct_equivocation_report_call(&block_id, equivocation_proof);
-				if let Ok(report_call) = maybe_report_call {
-					transaction_pool.as_ref().map(|txpool|
-						txpool.submit_report_call(client, report_call.as_slice())
+				client.runtime_api()
+					.construct_equivocation_report_call(&block_id, equivocation_proof)
+					.map(|call| {
+						transaction_pool.as_ref().map(|txpool|
+							txpool.submit_report_call(client, call.as_slice())
+						);
+						info!(target: "afg", "Equivocation report has been submitted")
+					}).unwrap_or_else(|err|
+						error!(target: "afg", "Error constructing equivocation report: {}", err)
 					);
-					info!(target: "aura", "A report for an equivocation has been submitted");
-				} else {
-					error!(target: "aura", "Equivocation received but report couldn't be constructed");
-				}
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
