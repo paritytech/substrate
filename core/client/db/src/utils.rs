@@ -189,7 +189,6 @@ pub fn block_id_to_lookup_key<Block>(
 
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
-	use std::error::Error;
 	client::error::Error::Backend(format!("{}", err))
 }
 

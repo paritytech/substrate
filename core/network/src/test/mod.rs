@@ -517,7 +517,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		use_tokio: bool,
 		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
-		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
+		_network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		network_port: mpsc::UnboundedReceiver<NetworkMsg<Block>>,
 		data: D,
 	) -> Self {
