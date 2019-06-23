@@ -129,9 +129,6 @@ where
 impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
 	for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature, Balance>
 where
-	// Index: HasCompact + Codec,
-	// Signature: Codec,
-	// Address: Codec,
 	Balance: Clone,
 {
 	fn tip(&self) -> Tip<Balance> {

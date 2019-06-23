@@ -54,7 +54,6 @@ pub struct FactoryState<N> {
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 
-// TODO: fix the tip amount here.
 impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
@@ -141,7 +140,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					),
 					(*amount).into()
 				)
-			),
+			)
 		}, key, &prior_block_hash, phase)
 	}
 

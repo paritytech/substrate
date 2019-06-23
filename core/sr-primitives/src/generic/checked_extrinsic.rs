@@ -56,8 +56,7 @@ where
 	}
 }
 
-impl<AccountId, Index, Call> Weighable
-	for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call> Weighable for CheckedExtrinsic<AccountId, Index, Call>
 where
 	Call: Weighable,
 {

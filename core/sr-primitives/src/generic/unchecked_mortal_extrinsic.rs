@@ -27,7 +27,7 @@ use crate::traits::{
 	Lookup, Checkable, Extrinsic, SaturatedConversion
 };
 use super::{CheckedExtrinsic, Era};
-use super::Tip;
+use super::{Tip, Tippable};
 
 const TRANSACTION_VERSION: u8 = 1;
 
@@ -139,6 +139,16 @@ where
 				function: self.function,
 			},
 		})
+	}
+}
+
+impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
+where
+	Balance: Clone,
+{
+	fn tip(&self) -> Tip<Balance> {
+		self.tip.clone()
 	}
 }
 

@@ -129,7 +129,7 @@ impl<
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
-where // TODO: replace u128 with actual balance.
+where
 	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
