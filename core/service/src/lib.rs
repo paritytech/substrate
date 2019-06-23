@@ -728,7 +728,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// ```
 /// # use substrate_service::{
 /// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, Executor
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
