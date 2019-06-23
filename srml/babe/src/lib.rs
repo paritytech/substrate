@@ -30,9 +30,9 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, BabePreDigest};
+use babe_primitives::BABE_ENGINE_ID;
 
-pub use babe_primitives::AuthorityId;
+pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -141,7 +141,12 @@ impl<T: Trait> Module<T> {
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }) {
-			let _: BabePreDigest = i;
+			let (_vrf_output, _vrf_proof, _author, _slot_num): (
+				[u8; VRF_OUTPUT_LENGTH],
+				[u8; VRF_PROOF_LENGTH],
+				[u8; PUBLIC_KEY_LENGTH],
+				u64,
+			) = i;
 		}
 	}
 

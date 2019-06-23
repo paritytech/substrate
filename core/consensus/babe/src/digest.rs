@@ -16,10 +16,10 @@
 
 //! Private mplementation details of BABE digests.
 
-use substrate_primitives::sr25519::{Public, Signature};
-use super::BABE_ENGINE_ID;
+use primitives::sr25519::{Public, Signature};
+use babe_primitives::{self, BABE_ENGINE_ID};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
-use rstd::fmt::Debug;
+use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
 use schnorrkel::{
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
@@ -34,14 +34,10 @@ use schnorrkel::{
 /// * The slot number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
-	/// The VRF output
-	pub vrf_output: VRFOutput,
-	/// The VRF proof
-	pub proof: VRFProof,
-	/// The block author
-	pub author: Public,
-	/// The slot number
-	pub slot_num: u64,
+	pub(super) vrf_output: VRFOutput,
+	pub(super) proof: VRFProof,
+	pub(super) author: Public,
+	pub(super) slot_num: u64,
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -69,6 +65,11 @@ impl Encode for BabePreDigest {
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
 		let (output, proof, public_key, slot_num): TmpDecode = Decode::decode(i)?;
+
+		// Verify (at compile time) that the sizes in babe_primitives are correct
+		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;
+		let _: [u8; babe_primitives::VRF_PROOF_LENGTH] = proof;
+		let _: [u8; babe_primitives::PUBLIC_KEY_LENGTH] = public_key;
 		Some(BabePreDigest {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,

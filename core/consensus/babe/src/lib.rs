@@ -25,6 +25,9 @@
 //! of malicious validators, that are essential for a production network.
 #![forbid(unsafe_code, missing_docs)]
 extern crate core;
+mod digest;
+use digest::CompatibleDigestItem;
+pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::import_queue::{
