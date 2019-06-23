@@ -12,6 +12,7 @@ runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives
 substrate-primitives = { path = "../../../primitives", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 parity-codec = { version = "3.5.1", default-features = false }
+schnorrkel = { version = "0.1.1", default-features = false }
 
 [features]
 default = ["std"]

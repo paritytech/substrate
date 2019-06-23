@@ -18,6 +18,8 @@
 #![deny(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod digest;
+pub use digest::*;
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;

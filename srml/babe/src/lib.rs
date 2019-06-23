@@ -30,7 +30,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::BABE_ENGINE_ID;
+use babe_primitives::{BABE_ENGINE_ID, BabePreDigest};
 
 pub use babe_primitives::AuthorityId;
 
@@ -135,11 +135,19 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn get_inherent_digests() -> DigestOf<T> {
-		<system::Module<T>>::get_digests
+	fn process_inherent_digests() {
+		for i in Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }) {
+			let _: BabePreDigest = i;
+		}
 	}
 
-	pub fn current_
+	fn get_inherent_digests() -> system::DigestOf<T> {
+		<system::Module<T>>::get_inherent_digests()
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
