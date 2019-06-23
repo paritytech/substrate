@@ -17,32 +17,27 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use rstd::marker::{Sync, Send}; // TODO: where did this come from?
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use crate::weights::{Weighable, Weight};
-use super::Tip;
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
 /// regards to the signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CheckedExtrinsic<AccountId, Index, Call, Balance> {
+pub struct CheckedExtrinsic<AccountId, Index, Call> {
 	/// Who this purports to be from and the number of extrinsics have come before
 	/// from the same signer, if anyone (note this is not a signature).
 	pub signed: Option<(AccountId, Index)>,
 	/// The function that should be called.
 	pub function: Call,
-	/// The tip for this transaction
-	pub tip: Tip<Balance>,
 }
 
-impl<AccountId, Index, Call, Balance> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call, Balance>
+impl<AccountId, Index, Call> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call>
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
 	Call: Member,
-	Balance: Sync + Send,
 {
 	type Index = Index;
 	type AccountId = AccountId;
@@ -61,8 +56,8 @@ where
 	}
 }
 
-impl<AccountId, Index, Call, Balance> Weighable
-	for CheckedExtrinsic<AccountId, Index, Call, Balance>
+impl<AccountId, Index, Call> Weighable
+	for CheckedExtrinsic<AccountId, Index, Call>
 where
 	Call: Weighable,
 {

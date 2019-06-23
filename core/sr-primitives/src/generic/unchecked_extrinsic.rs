@@ -58,15 +58,14 @@ where
 	Address: Codec,
 	Index: HasCompact + Codec,
 	Signature: Codec,
-	// Balance: Codec,
 {
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index,
 		function: Call,
 		signed: Address,
 		signature: Signature,
-		tip: Tip<Balance>)
-	-> Self {
+		tip: Tip<Balance>,
+	) -> Self {
 		UncheckedExtrinsic {
 			signature: Some(SignatureContent{signed, signature, index}),
 			function,
@@ -93,9 +92,8 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId> + Codec,
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
-	// Balance: Codec,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -108,19 +106,16 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
 					function: payload.1,
-					tip: self.tip,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
-				tip: self.tip,
 			},
 		})
 	}
 }
 
-// TODO: remove not needed encode/decode bounds for balance
 impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
 	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
 where
@@ -146,9 +141,13 @@ impl<
 	}
 }
 
-impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode, Balance: Codec> Decode
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
-{
+impl<
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Call: Decode,
+	Balance: Decode
+> Decode for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
@@ -164,9 +163,13 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode, 
 	}
 }
 
-impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode, Balance: Codec> Encode
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
-{
+impl<
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Call: Encode,
+	Balance: Encode
+> Encode for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
 			self.signature.encode_to(v);
@@ -177,9 +180,13 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode, 
 }
 
 #[cfg(feature = "std")]
-impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode, Balance: Codec> serde::Serialize
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
-{
+impl<
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Call: Encode,
+	Balance: Codec
+> serde::Serialize for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}

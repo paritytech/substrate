@@ -69,7 +69,7 @@
 //! # 	}
 //! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Balances, Runtime, AllModules>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -341,6 +341,10 @@ where
 
 		// TODO: use thi(s to tweak `priority` field.
 		let tip = uxt.tip();
+		let _ = match tip {
+			Tip::None => (),
+			_ => (),
+		};
 
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.

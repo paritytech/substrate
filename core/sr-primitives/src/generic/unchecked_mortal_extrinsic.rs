@@ -78,7 +78,7 @@ impl<
 	}
 }
 
-impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode, Balance: Encode> Extrinsic
+impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode, Balance> Extrinsic
 	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 {
 	fn is_signed(&self) -> Option<bool> {
@@ -86,8 +86,17 @@ impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode, Balance: E
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber, Balance> Checkable<Context>
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
+impl<
+	Address,
+	AccountId,
+	Index,
+	Call,
+	Signature,
+	Context,
+	Hash,
+	BlockNumber,
+	Balance
+> Checkable<Context> for UncheckedMortalExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Member + MaybeDisplay,
 	Index: Encode + Member + MaybeDisplay + SimpleArithmetic,
@@ -100,7 +109,7 @@ where
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -123,13 +132,11 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, raw_payload.0)),
 					function: raw_payload.1,
-					tip: self.tip,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
-				tip: self.tip,
 			},
 		})
 	}
@@ -259,7 +266,7 @@ mod tests {
 	type Balance = u64;
 
 	type Ex = UncheckedMortalExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>>;
 
 	#[test]
 	fn unsigned_codec_should_work() {
@@ -334,7 +341,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default() })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] })
 		);
 	}
 
@@ -351,7 +358,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default()})
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0]})
 		);
 	}
 
@@ -368,7 +375,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::default() })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] })
 		);
 	}
 
