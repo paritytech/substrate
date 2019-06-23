@@ -37,10 +37,8 @@ pub use self::era::{Era, Phase};
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
-pub use self::digest::{
-	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId
-};
-pub use self::tip::Tip;
+pub use self::digest::{Digest, DigestItem, DigestItemRef, OpaqueDigestItemId};
+pub use self::tip::{Tip, Tippable};
 
 use crate::codec::Encode;
 use rstd::prelude::*;

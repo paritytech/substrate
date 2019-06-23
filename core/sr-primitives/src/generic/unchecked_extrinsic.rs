@@ -15,14 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
-
 #[cfg(feature = "std")]
 use std::fmt;
 
 use rstd::prelude::*;
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
-use super::{CheckedExtrinsic, Tip};
+use super::{CheckedExtrinsic, Tip, Tippable};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct SignatureContent<Address, Index, Signature>
@@ -59,7 +58,7 @@ where
 	Address: Codec,
 	Index: HasCompact + Codec,
 	Signature: Codec,
-	Balance: Codec,
+	// Balance: Codec,
 {
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index,
@@ -94,7 +93,7 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId> + Codec,
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
-	Balance: Codec,
+	// Balance: Codec,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
 
@@ -121,12 +120,26 @@ where
 	}
 }
 
+// TODO: remove not needed encode/decode bounds for balance
+impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
+	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
+where
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Address: Codec,
+	Balance: Clone,
+{
+	fn tip(&self) -> Tip<Balance> {
+		self.tip.clone()
+	}
+}
+
 impl<
 	Address: Codec,
 	Index: HasCompact + Codec,
 	Signature: Codec,
 	Call,
-	Balance: Codec,
+	Balance,
 > Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())

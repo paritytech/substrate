@@ -17,7 +17,7 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use rstd::marker::{Sync, Send}; // TODO: what the fucking hell.
+use rstd::marker::{Sync, Send}; // TODO: where did this come from?
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use crate::weights::{Weighable, Weight};
 use super::Tip;

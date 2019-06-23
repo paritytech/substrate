@@ -21,10 +21,10 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input, Compact};
+use crate::codec::{Decode, Encode, Codec, HasCompact, Input, Compact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
 	Lookup, Checkable, Extrinsic, SaturatedConversion};
-use super::{CheckedExtrinsic, Era, Tip};
+use super::{CheckedExtrinsic, Era, Tip, Tippable};
 
 const TRANSACTION_VERSION: u8 = 1;
 
@@ -125,6 +125,19 @@ where
 				tip: self.tip,
 			},
 		})
+	}
+}
+
+impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
+	for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature, Balance>
+where
+	// Index: HasCompact + Codec,
+	// Signature: Codec,
+	// Address: Codec,
+	Balance: Clone,
+{
+	fn tip(&self) -> Tip<Balance> {
+		self.tip.clone()
 	}
 }
 

@@ -77,7 +77,7 @@
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::{generic::Digest, traits::{
+use primitives::{generic::{Digest, Tip, Tippable}, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
 	ValidateUnsigned,
@@ -116,8 +116,8 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
+pub struct Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>(
+	PhantomData<(System, Block, Context, Payment, Balance, UnsignedValidator, AllModules)>
 );
 
 impl<
@@ -125,18 +125,19 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
+	Balance,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
-where
-	Block::Extrinsic: Checkable<Context> + Codec,
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
+where // TODO: replace u128 with actual balance.
+	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
 
@@ -145,11 +146,12 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
+	Balance,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
+> Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -337,6 +339,9 @@ where
 
 		let encoded_len = uxt.encode().len();
 
+		// TODO: use thi(s to tweak `priority` field.
+		let tip = uxt.tip();
+
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -460,6 +465,7 @@ mod tests {
 		Block<TestXt>,
 		system::ChainContext<Runtime>,
 		balances::Module<Runtime>,
+		u64,
 		Runtime,
 		()
 	>;

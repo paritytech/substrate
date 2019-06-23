@@ -17,14 +17,13 @@
 //! Tip structure for a transaction.
 
 use crate::codec::{Encode, Decode};
-// use crate::traits::SimpleArithmetic;
 
 /// Representation of a transaction tip.
 /// Upon decoding, all transaction types try and decode this from the end of the encoded byte
 /// stream.
 /// If non-existent, the default implementation will be used.s
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub enum Tip<Balance> {
     /// This transaction does not include any tips.
     None,
@@ -32,8 +31,15 @@ pub enum Tip<Balance> {
     Sender(Balance),
 }
 
+/// Default implementation for tip.
 impl<Balance> Default for Tip<Balance> {
     fn default() -> Self {
         Tip::None
     }
+}
+
+/// A trait for a generic transaction that contains a tip. The tip itself migth yeild something
+/// that translates to "no tip".
+pub trait Tippable<Balance> {
+    fn tip(&self) -> Tip<Balance>;
 }
