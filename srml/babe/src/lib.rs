@@ -163,6 +163,8 @@ impl<T: Trait> Module<T> {
 	fn get_inherent_digests() -> system::DigestOf<T> {
 		<system::Module<T>>::get_inherent_digests()
 	}
+
+	fn hash_randomness(vrf_outputs: Vec<[u8; VRF_OUTPUT_LENGTH]>) { }
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -181,6 +183,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
 			}
+			Self::hash_randomness(<VRFOutputs<T>>::take())
 		}
 	}
 	fn on_disabled(_i: usize) {
