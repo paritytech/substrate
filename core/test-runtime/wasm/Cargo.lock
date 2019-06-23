@@ -2358,6 +2358,7 @@ dependencies = [
 name = "srml-system"
 version = "2.0.0"
 dependencies = [
+ "curve25519-dalek 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
