@@ -21,7 +21,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use network::PeerId;
-use tokio::timer::Delay;
+use tokio_timer::Delay;
 use log::warn;
 use parity_codec::Encode;
 

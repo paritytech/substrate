@@ -1,6 +1,6 @@
 use crate::service;
 use futures::{future, Future, sync::oneshot};
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
 use substrate_cli::{informant, parse_and_execute, NoCustom};
@@ -25,7 +25,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
 			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
-			let executor = runtime.executor();
+			let executor = Arc::new(runtime.executor());
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,

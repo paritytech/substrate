@@ -104,7 +104,8 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+					executor.execute(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))))
+						.expect("failed to spawn task");
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -125,12 +126,12 @@ construct_service_factory! {
 
 				match config.local_key {
 					None => {
-						executor.spawn(grandpa::run_grandpa_observer(
+						executor.execute(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
 							service.network(),
 							service.on_exit(),
-						)?);
+						)?)).expect("failed to spawn task");
 					},
 					Some(_) => {
 						let telemetry_on_connect = TelemetryOnConnect {
@@ -146,7 +147,8 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						executor.spawn(grandpa::run_grandpa_voter(grandpa_config)?);
+						executor.execute(Box::new(grandpa::run_grandpa_voter(grandpa_config)?))
+							.expect("failed to spawn task");
 					},
 				}
 

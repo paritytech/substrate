@@ -179,7 +179,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(::tokio::timer::Error),
+	Timer(::tokio_timer::Error),
 }
 
 impl From<GrandpaError> for Error {
@@ -522,7 +522,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 			})
 			.then(|_| Ok(()));
 		let events = events.select(telemetry_on_connect.on_exit).then(|_| Ok(()));
-		telemetry_on_connect.executor.spawn(events);
+		telemetry_on_connect.executor.execute(Box::new(events))
+			.expect("failed to spawn task");
 	}
 
 	let voters = authority_set.current_authorities();

@@ -18,7 +18,6 @@
 
 use std::{sync::Arc, net::SocketAddr, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
-use tokio::runtime::TaskExecutor;
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
@@ -34,7 +33,7 @@ use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
-use futures::sync::mpsc;
+use futures::{future::Executor, future::Future, sync::mpsc};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -293,6 +292,9 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}
+
+/// Alias for a an implementation of `futures::future::Executor`.
+pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
 
 /// A collection of types and methods to build a service on top of the substrate service.
 pub trait ServiceFactory: 'static + Sized {

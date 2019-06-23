@@ -59,7 +59,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, TaskExecutor
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -67,7 +67,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
-pub use tokio::runtime::TaskExecutor;
+pub use futures::future::Executor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -209,10 +209,11 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		task_executor.spawn(build_network_future(network_mut, network_status_sinks.clone())
+		task_executor.execute(Box::new(build_network_future(network_mut, network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
-			.then(|_| Ok(())));
+			.then(|_| Ok(()))))
+			.expect("failed to spawn task");
 
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
@@ -258,7 +259,7 @@ impl<Components: components::Components> Service<Components> {
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			task_executor.spawn(events);
+			task_executor.execute(Box::new(events)).expect("failed to spawn task");
 		}
 
 		{
@@ -304,7 +305,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			task_executor.execute(Box::new(events)).expect("failed to spawn task");
 		}
 
 		{
@@ -326,7 +327,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			task_executor.execute(Box::new(events)).expect("failed to spawn task");
 		}
 
 		// Periodically notify the telemetry.
@@ -337,7 +338,7 @@ impl<Components: components::Components> Service<Components> {
 		let self_pid = get_current_pid();
 		let (netstat_tx, netstat_rx) = mpsc::unbounded();
 		network_status_sinks.lock().push(netstat_tx);
-		task_executor.spawn(netstat_rx.for_each(move |net_status| {
+		let tel_task = netstat_rx.for_each(move |net_status| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -380,7 +381,8 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(())));
+		}).select(exit.clone()).then(|_| Ok(()));
+		task_executor.execute(Box::new(tel_task)).expect("failed to spawn task");
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -401,11 +403,11 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.clone(),
 			transaction_pool.clone(),
 		)?;
-		task_executor.spawn(build_system_rpc_handler::<Components>(
+		task_executor.execute(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		));
+		))).expect("failed to spawn task");
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -444,9 +446,9 @@ impl<Components: components::Components> Service<Components> {
 					});
 					Ok(())
 				});
-			task_executor.spawn(future
+			task_executor.execute(Box::new(future
 				.select(exit.clone())
-				.then(|_| Ok(())));
+				.then(|_| Ok(())))).expect("failed to spawn task");
 			telemetry
 		});
 
@@ -726,7 +728,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// ```
 /// # use substrate_service::{
 /// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, Executor
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;

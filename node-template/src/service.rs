@@ -8,8 +8,7 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	TaskExecutor,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
 	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
@@ -87,7 +86,8 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+					executor.execute(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))))
+						.expect("failed to spawn task");
 				}
 
 				Ok(service)

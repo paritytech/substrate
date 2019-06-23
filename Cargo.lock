@@ -4224,6 +4224,8 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-executor 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

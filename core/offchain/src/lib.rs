@@ -34,6 +34,7 @@
 #![warn(missing_docs)]
 
 use std::{
+	fmt,
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -45,7 +46,7 @@ use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-use tokio::runtime::TaskExecutor;
+use futures::future::{Executor, Future};
 use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
@@ -55,18 +56,23 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
-#[derive(Debug)]
 pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
-	executor: TaskExecutor,
+	executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
 	_block: PhantomData<Block>,
+}
+
+impl<C, Block: traits::Block> fmt::Debug for OffchainWorkers<C, Block> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_tuple("OffchainWorkers").finish()
+	}
 }
 
 impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
-		executor: TaskExecutor,
+		executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
 	) -> Self {
 		Self {
 			client,
@@ -96,7 +102,8 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::Api::new(pool.clone(), at.clone());
-			self.executor.spawn(runner.process());
+			self.executor.execute(Box::new(runner.process()))
+				.expect("failed to spawn task");
 
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
@@ -119,7 +126,7 @@ mod tests {
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
 
 		// when
-		let offchain = OffchainWorkers::new(client, runtime.executor());
+		let offchain = OffchainWorkers::new(client, Arc::new(runtime.executor()));
 		offchain.on_block_imported(&0u64, &pool);
 
 		// then

@@ -29,7 +29,7 @@ fn should_return_header() {
 
 	let client = Chain {
 		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(remote),
+		subscriptions: Subscriptions::new(Arc::new(remote)),
 	};
 
 	assert_matches!(
@@ -67,7 +67,7 @@ fn should_return_a_block() {
 
 	let api = Chain {
 		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(remote),
+		subscriptions: Subscriptions::new(Arc::new(remote)),
 	};
 
 	let block = api.client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -121,7 +121,7 @@ fn should_return_block_hash() {
 
 	let client = Chain {
 		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(remote),
+		subscriptions: Subscriptions::new(Arc::new(remote)),
 	};
 
 	assert_matches!(
@@ -165,7 +165,7 @@ fn should_return_finalized_hash() {
 
 	let client = Chain {
 		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(remote),
+		subscriptions: Subscriptions::new(Arc::new(remote)),
 	};
 
 	assert_matches!(
@@ -199,7 +199,7 @@ fn should_notify_about_latest_block() {
 	{
 		let api = Chain {
 			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(remote),
+			subscriptions: Subscriptions::new(Arc::new(remote)),
 		};
 
 		api.subscribe_new_head(Default::default(), subscriber);
@@ -230,7 +230,7 @@ fn should_notify_about_finalized_block() {
 	{
 		let api = Chain {
 			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(remote),
+			subscriptions: Subscriptions::new(Arc::new(remote)),
 		};
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);

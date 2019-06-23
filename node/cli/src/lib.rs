@@ -28,7 +28,7 @@ use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter};
@@ -156,7 +156,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			info!("Roles: {:?}", config.roles);
 			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
 				.map_err(|e| format!("{:?}", e))?;
-			let executor = runtime.executor();
+			let executor = Arc::new(runtime.executor());
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
