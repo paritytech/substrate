@@ -113,6 +113,9 @@ decl_storage! {
 
 		/// The current authorities set.
 		Authorities get(authorities): Vec<AuthorityId>;
+
+		/// The VRF output
+		pub VRFOutputs get(vrf_output): Vec<[u8; VRF_OUTPUT_LENGTH]>;
 	}
 }
 
@@ -135,18 +138,25 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn process_inherent_digests() {
+	fn deposit_vrf_output(vrf_output: [u8; VRF_OUTPUT_LENGTH]) {
+		let mut l = <VRFOutputs<T>>::get();
+		l.push(vrf_output);
+		<VRFOutputs<T>>::put(l);
+	}
+
+	pub fn process_inherent_digests() {
 		for i in Self::get_inherent_digests()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }) {
-			let (_vrf_output, _vrf_proof, _author, _slot_num): (
+			let (vrf_output, _vrf_proof, _author, _slot_num): (
 				[u8; VRF_OUTPUT_LENGTH],
 				[u8; VRF_PROOF_LENGTH],
 				[u8; PUBLIC_KEY_LENGTH],
 				u64,
 			) = i;
+			Self::deposit_vrf_output(vrf_output)
 		}
 	}
 
