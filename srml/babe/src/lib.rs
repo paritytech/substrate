@@ -17,7 +17,7 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
@@ -115,7 +115,10 @@ decl_storage! {
 		Authorities get(authorities): Vec<AuthorityId>;
 
 		/// The VRF output
-		pub VRFOutputs get(vrf_output): Vec<[u8; VRF_OUTPUT_LENGTH]>;
+		VRFOutputs get(vrf_output): Vec<[u8; VRF_OUTPUT_LENGTH]>;
+
+		/// The randomness we have right now
+		pub Randomness: [u8; 32];
 	}
 }
 
@@ -145,26 +148,41 @@ impl<T: Trait> Module<T> {
 	}
 
 	pub fn process_inherent_digests() {
+		let mut is_first_babe_digest = true;
 		for i in Self::get_inherent_digests()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
-			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }) {
+			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID {
+				Decode::decode(&mut data)
+			} else { None }) {
+			assert!(is_first_babe_digest, "BABE only allows one BABE pre-digest; qed");
+			is_first_babe_digest = false;
 			let (vrf_output, _vrf_proof, _author, _slot_num): (
 				[u8; VRF_OUTPUT_LENGTH],
 				[u8; VRF_PROOF_LENGTH],
 				[u8; PUBLIC_KEY_LENGTH],
 				u64,
 			) = i;
-			Self::deposit_vrf_output(vrf_output)
+			Self::deposit_vrf_output(vrf_output);
 		}
+		assert!(!is_first_babe_digest, "BABE requires exactly one BABE pre-digest; qed")
 	}
 
 	fn get_inherent_digests() -> system::DigestOf<T> {
 		<system::Module<T>>::get_inherent_digests()
 	}
 
-	fn hash_randomness(vrf_outputs: Vec<[u8; VRF_OUTPUT_LENGTH]>) { }
+	#[allow(unsafe_code)]
+	fn hash_randomness(vrf_outputs: Vec<[u8; VRF_OUTPUT_LENGTH]>) -> [u8; VRF_OUTPUT_LENGTH] {
+		// yucky unsafe code, but at least I don’t need to write 32 XORs!
+		vrf_outputs.iter().fold([0; VRF_OUTPUT_LENGTH], |x, &y| unsafe {
+			use rstd::mem::transmute;
+			let i: [u64; 4] = transmute(x);
+			let j: [u64; 4] = transmute(y);
+			transmute([i[0]^j[0], i[1]^j[1], i[2]^j[2], i[3]^j[3]])
+		})
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -183,7 +201,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
 			}
-			Self::hash_randomness(<VRFOutputs<T>>::take())
+			<Randomness<T>>::put(Self::hash_randomness(<VRFOutputs<T>>::take()))
 		}
 	}
 	fn on_disabled(_i: usize) {
