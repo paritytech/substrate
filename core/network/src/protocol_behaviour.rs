@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -246,12 +246,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	pub fn blocks_processed(
 		&mut self,
 		processed_blocks: Vec<B::Hash>,
-		has_error: bool
+		has_error: bool,
 	) {
 		self.protocol.blocks_processed(
 			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
 			processed_blocks,
-			has_error
+			has_error,
 		)
 	}
 
@@ -282,12 +282,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	pub fn request_finality_proof(
 		&mut self,
 		hash: &B::Hash,
-		number: NumberFor<B>
+		number: NumberFor<B>,
 	) {
 		self.protocol.request_finality_proof(
 			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
 			&hash,
-			number
+			number,
 		);
 	}
 
@@ -328,14 +328,14 @@ ProtocolBehaviour<B, S, H> {
 	fn inject_node_event(
 		&mut self,
 		peer_id: PeerId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
 		self.behaviour.inject_node_event(peer_id, event)
 	}
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters
+		params: &mut PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
@@ -364,7 +364,7 @@ ProtocolBehaviour<B, S, H> {
 
 		let mut network_out = LocalNetworkOut {
 			inner: &mut self.behaviour,
-			peerset_handle: &self.peerset_handle
+			peerset_handle: &self.peerset_handle,
 		};
 
 		let outcome = match event {
@@ -435,8 +435,8 @@ ProtocolBehaviour<B, S, H> {
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour for
-ProtocolBehaviour<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour
+	for ProtocolBehaviour<B, S, H> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.behaviour.add_discovered_nodes(peer_ids)
 	}
