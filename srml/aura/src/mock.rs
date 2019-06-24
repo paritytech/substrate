@@ -18,14 +18,11 @@
 
 #![cfg(test)]
 
-use primitives::{
-	BuildStorage, traits::{IdentityLookup, Lazy, Verify}, testing::{Header, UintAuthorityId}
-};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::Header};
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher, sr25519};
-use parity_codec::{Encode, Decode};
-use crate::{Trait, Module, GenesisConfig, AuraEquivocationProof};
+use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}

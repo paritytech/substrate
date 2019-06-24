@@ -168,27 +168,6 @@ pub trait Trait: timestamp::Trait {
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
 }
 
-fn verify_header<'a, T, P>(
-	header: &mut <T as system::Trait>::Header,
-	signature: <T as Trait>::Signature,
-	authorities: &'a [T::AuthorityId],
-) -> Option<&'a T::AuthorityId>
-where 
-	T: Trait,
-{
-	if let Ok(slot_num) = find_pre_digest(header) {
-		let author = match slot_author(slot_num, authorities) {
-			None => return None,
-			Some(author) => author,
-		};
-		let pre_hash = header.hash();
-		if signature.verify(pre_hash.as_ref(), author) {
-			return Some(author)
-		}
-	}
-	None
-}
-
 fn handle_equivocation_proof<T: Trait>(
 	proof: &AuraEquivocationProof<T::Header, T::Signature>
 ) -> TransactionValidity 
@@ -203,35 +182,39 @@ fn handle_equivocation_proof<T: Trait>(
 	let maybe_slot1 = find_pre_digest(header1);
 	let maybe_slot2 = find_pre_digest(header2);
 
-	if maybe_slot1.is_err() || maybe_slot2.is_err() || maybe_slot1 != maybe_slot2 {
-		return TransactionValidity::Invalid(0)
-	}
+	if maybe_slot1.is_ok() && maybe_slot1 == maybe_slot2 {
+		let slot = maybe_slot1.expect("OK by previous line; qed");
 
-	let authorities = <Module<T>>::authorities();
+		// FIX: What if there is a different set of authorities?
+		let authorities = <Module<T>>::authorities();
 
-	let fst_author = verify_header::<T, <T::Signature as Verify>::Signer>(
-		&mut header1.clone(),
-		proof.first_signature().clone(),
-		authorities.as_slice()
-	);
+		let author = match slot_author(slot, authorities.as_slice()) {
+			None => return TransactionValidity::Invalid(0),
+			Some(author) => author,
+		};
 
-	let snd_author = verify_header::<T, <T::Signature as Verify>::Signer>(
-		&mut header2.clone(),
-		proof.second_signature().clone(),
-		authorities.as_slice()
-	);
+		let pre_hash1 = header1.hash();
 
-	if fst_author.is_some() && fst_author == snd_author {
-		TransactionValidity::Valid {
+		if !proof.first_signature().verify(pre_hash1.as_ref(), author) {
+			return TransactionValidity::Invalid(0)
+		}
+
+		let pre_hash2 = header2.hash();
+
+		if !proof.second_signature().verify(pre_hash2.as_ref(), author) {
+			return TransactionValidity::Invalid(0)
+		}
+
+		return TransactionValidity::Valid {
 			priority: 10,
 			requires: vec![],
 			provides: vec![],
 			longevity: 18446744073709551615,
 			propagate: true,
 		}
-	} else {
-		TransactionValidity::Invalid(0)
 	}
+
+	TransactionValidity::Invalid(0)
 }
 
 impl<T> ValidateUnsigned for Module<T> 

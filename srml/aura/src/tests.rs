@@ -19,11 +19,8 @@
 #![cfg(test)]
 
 use lazy_static::lazy_static;
-use crate::mock::{System, Aura, new_test_ext, Origin};
-use primitives::generic::Header;
-use primitives::traits::{
-	Header as HeaderT, Verify, ValidateUnsigned, BlakeTwo256
-};
+use crate::mock::{System, Aura, new_test_ext};
+use primitives::traits::{Header as HeaderT, ValidateUnsigned};
 use primitives::testing::{
 	Header as HeaderTest, DigestItem as DigestItemTest, Digest as DigestTest
 };
