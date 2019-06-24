@@ -39,13 +39,12 @@ use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as Gos
 use crate::protocol::message::Message;
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
-use crate::protocol::{ProtocolStatus, PeerInfo, NetworkOut};
+use crate::protocol::{PeerInfo, NetworkOut};
+use crate::protocol::sync::SyncState;
 use crate::config::Params;
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
-/// Interval at which we send status updates on the status stream.
-const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -90,8 +89,6 @@ impl ReportHandle {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>> {
-	/// Sinks to propagate status updates.
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	/// Are we connected to any peer?
 	is_offline: Arc<AtomicBool>,
 	/// Are we actively catching up with the chain?
@@ -122,7 +119,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	) -> Result<NetworkWorker<B, S, H>, Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
-		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
@@ -148,7 +144,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			};
 
 		let service = Arc::new(NetworkService {
-			status_sinks: status_sinks.clone(),
 			bandwidth,
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
@@ -172,11 +167,44 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			finality_proof_provider: params.finality_proof_provider,
 			network_port,
 			protocol_rx,
-			status_sinks,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
-			status_interval: tokio_timer::Interval::new_interval(STATUS_INTERVAL),
 			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
 		})
+	}
+
+	/// Returns the downloaded bytes per second averaged over the past few seconds.
+	pub fn average_download_per_sec(&self) -> u64 {
+		self.service.bandwidth.average_download_per_sec()
+	}
+
+	/// Returns the uploaded bytes per second averaged over the past few seconds.
+	pub fn average_upload_per_sec(&self) -> u64 {
+		self.service.bandwidth.average_upload_per_sec()
+	}
+
+	/// Returns the number of peers we're connected to.
+	pub fn num_connected_peers(&self) -> usize {
+		self.protocol.num_connected_peers()
+	}
+
+	/// Returns the number of peers we're connected to and that are being queried.
+	pub fn num_active_peers(&self) -> usize {
+		self.protocol.num_active_peers()
+	}
+
+	/// Current global sync state.
+	pub fn sync_state(&self) -> SyncState {
+		self.protocol.sync_state()
+	}
+
+	/// Target sync block number.
+	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+		self.protocol.best_seen_block()
+	}
+
+	/// Number of peers participating in syncing.
+	pub fn num_sync_peers(&self) -> u32 {
+		self.protocol.num_sync_peers()
 	}
 
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
@@ -187,16 +215,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
-	/// Returns the downloaded bytes per second averaged over the past few seconds.
-	pub fn average_download_per_sec(&self) -> u64 {
-		self.bandwidth.average_download_per_sec()
-	}
-
-	/// Returns the uploaded bytes per second averaged over the past few seconds.
-	pub fn average_upload_per_sec(&self) -> u64 {
-		self.bandwidth.average_upload_per_sec()
-	}
-
 	/// Returns the network identity of the node.
 	pub fn local_peer_id(&self) -> PeerId {
 		Swarm::<B>::local_peer_id(&*self.network.lock()).clone()
@@ -285,13 +303,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	/// Are we in the process of downloading the chain?
 	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
-	}
-
-	/// Get sync status
-	pub fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
-		let (sink, stream) = mpsc::unbounded();
-		self.status_sinks.lock().push(sink);
-		stream
 	}
 
 	/// Get network state.
@@ -497,12 +508,9 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 
-	/// Interval at which we send status updates on the `status_sinks`.
-	status_interval: tokio_timer::Interval,
 	/// Interval at which we update the `connected_peers` Arc.
 	connected_peers_interval: tokio_timer::Interval,
 }
@@ -578,11 +586,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
 				self.protocol.set_finality_proof_request_builder(builder)
 			}
-		}
-
-		while let Ok(Async::Ready(_)) = self.status_interval.poll() {
-			let status = self.protocol.status();
-			self.status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 		}
 
 		{
@@ -742,8 +745,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			}
 		}
 
-		self.is_offline.store(self.protocol.is_offline(), Ordering::Relaxed);
-		self.is_major_syncing.store(self.protocol.is_major_syncing(), Ordering::Relaxed);
+		self.is_offline.store(self.protocol.num_connected_peers() == 0, Ordering::Relaxed);
+		self.is_major_syncing.store(match self.protocol.sync_state() {
+			SyncState::Idle => false,
+			SyncState::Downloading => true,
+		}, Ordering::Relaxed);
 
 		Ok(Async::NotReady)
 	}

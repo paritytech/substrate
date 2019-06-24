@@ -23,29 +23,44 @@ use consensus_common::Error;
 use futures::prelude::*;
 use futures::try_ready;
 use inherents::{InherentData, InherentDataProviders};
-use log::warn;
+
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 use tokio_timer::Delay;
 
 /// Returns current duration since unix epoch.
-pub fn duration_now() -> Option<Duration> {
+pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
-
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH)
-		.map_err(|e| {
-			warn!(
-				"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-				now, e
-			);
-		})
-		.ok()
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
+		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
+		now,
+		e,
+	))
 }
 
-/// Get the slot for now.
-pub fn slot_now(slot_duration: u64) -> Option<u64> {
-	duration_now().map(|s| s.as_secs() / slot_duration)
+
+/// A `Duration` with a sign (before or after).  Immutable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SignedDuration {
+	offset: Duration,
+	is_positive: bool,
+}
+
+impl SignedDuration {
+	/// Construct a `SignedDuration`
+	pub fn new(offset: Duration, is_positive: bool) -> Self {
+		Self { offset, is_positive }
+	}
+
+	/// Get the slot for now.  Panics if `slot_duration` is 0.
+	pub fn slot_now(&self, slot_duration: u64) -> u64 {
+		if self.is_positive {
+			duration_now() + self.offset
+		} else {
+			duration_now() - self.offset
+		}.as_secs() / slot_duration
+	}
 }
 
 /// Returns the duration until the next slot, based on current duration since
@@ -112,11 +127,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 		self.inner_delay = match self.inner_delay.take() {
 			None => {
 				// schedule wait.
-				let wait_until = match duration_now() {
-					None => return Ok(Async::Ready(None)),
-					Some(now) => Instant::now() + time_until_next(now, slot_duration),
-				};
-
+				let wait_until = Instant::now() + time_until_next(duration_now(), slot_duration);
 				Some(Delay::new(wait_until))
 			}
 			Some(d) => Some(d),
