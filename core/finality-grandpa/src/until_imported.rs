@@ -20,7 +20,7 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
+use super::{BlockStatus, CatchUp, CommunicationIn, Error, SignedMessage};
 
 use log::{debug, warn};
 use client::ImportNotifications;
@@ -502,14 +502,88 @@ mod tests {
 		}
 	}
 
+	// unwrap the catch up from `CommunicationIn` returning its inner representation,
+	// panics if the given message isn't a catch up
+	fn unapply_catch_up(msg: CommunicationIn<Block>) -> CatchUp<Block> {
+		match msg {
+			voter::CommunicationIn::CatchUp(catch_up, ..) => catch_up,
+			_ => panic!("expected catch up"),
+		}
+	}
+
+	fn message_all_dependencies_satisfied<F>(
+		msg: CommunicationIn<Block>,
+		enact_dependencies: F,
+	) -> CommunicationIn<Block> where
+		F: FnOnce(&TestChainState),
+	{
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		// enact all dependencies before importing the message
+		enact_dependencies(&chain_state);
+
+		let (global_tx, global_rx) = mpsc::unbounded();
+
+		let until_imported = UntilGlobalMessageBlocksImported::new(
+			import_notifications,
+			block_status,
+			global_rx.map_err(|_| panic!("should never error")),
+		);
+
+		global_tx.unbounded_send(msg).unwrap();
+
+		let work = until_imported.into_future();
+
+		let mut runtime = Runtime::new().unwrap();
+		runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+	}
+
+	fn blocking_message_on_dependencies<F>(
+		msg: CommunicationIn<Block>,
+		enact_dependencies: F,
+	) -> CommunicationIn<Block> where
+		F: FnOnce(&TestChainState),
+	{
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		let (global_tx, global_rx) = mpsc::unbounded();
+
+		let until_imported = UntilGlobalMessageBlocksImported::new(
+			import_notifications,
+			block_status,
+			global_rx.map_err(|_| panic!("should never error")),
+		);
+
+		global_tx.unbounded_send(msg).unwrap();
+
+		// NOTE: needs to be cloned otherwise it is moved to the stream and
+		// dropped too early.
+		let inner_chain_state = chain_state.clone();
+		let work = until_imported
+			.into_future()
+			.select2(Delay::new(Instant::now() + Duration::from_millis(100)))
+			.then(move |res| match res {
+				Err(_) => panic!("neither should have had error"),
+				Ok(Either::A(_)) => panic!("timeout should have fired first"),
+				Ok(Either::B((_, until_imported))) => {
+					// timeout fired. push in the headers.
+					enact_dependencies(&inner_chain_state);
+
+					until_imported
+				}
+			});
+
+		let mut runtime = Runtime::new().unwrap();
+		runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+	}
+
 	#[test]
 	fn blocking_commit_message() {
 		let h1 = make_header(5);
 		let h2 = make_header(6);
 		let h3 = make_header(7);
-
-		let (chain_state, import_notifications) = TestChainState::new();
-		let block_status = chain_state.block_status();
 
 		let unknown_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
@@ -533,36 +607,17 @@ mod tests {
 			voter::Callback::Blank,
 		);
 
-		let (global_tx, global_rx) = mpsc::unbounded();
-
-		let until_imported = UntilGlobalMessageBlocksImported::new(
-			import_notifications,
-			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+		let res = blocking_message_on_dependencies(
+			unknown_commit(),
+			|chain_state| {
+				chain_state.import_header(h1);
+				chain_state.import_header(h2);
+				chain_state.import_header(h3);
+			},
 		);
 
-		global_tx.unbounded_send(unknown_commit()).unwrap();
-
-		let inner_chain_state = chain_state.clone();
-		let work = until_imported
-			.into_future()
-			.select2(Delay::new(Instant::now() + Duration::from_millis(100)))
-			.then(move |res| match res {
-				Err(_) => panic!("neither should have had error"),
-				Ok(Either::A(_)) => panic!("timeout should have fired first"),
-				Ok(Either::B((_, until_imported))) => {
-					// timeout fired. push in the headers.
-					inner_chain_state.import_header(h1);
-					inner_chain_state.import_header(h2);
-					inner_chain_state.import_header(h3);
-
-					until_imported
-				}
-			});
-
-		let mut runtime = Runtime::new().unwrap();
 		assert_eq!(
-			unapply_commit(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()),
+			unapply_commit(res),
 			unapply_commit(unknown_commit()),
 		);
 	}
@@ -572,9 +627,6 @@ mod tests {
 		let h1 = make_header(5);
 		let h2 = make_header(6);
 		let h3 = make_header(7);
-
-		let (chain_state, import_notifications) = TestChainState::new();
-		let block_status = chain_state.block_status();
 
 		let known_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
@@ -598,26 +650,150 @@ mod tests {
 			voter::Callback::Blank,
 		);
 
-		chain_state.import_header(h1);
-		chain_state.import_header(h2);
-		chain_state.import_header(h3);
-
-		let (global_tx, global_rx) = mpsc::unbounded();
-
-		let until_imported = UntilGlobalMessageBlocksImported::new(
-			import_notifications,
-			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+		let res = message_all_dependencies_satisfied(
+			known_commit(),
+			|chain_state| {
+				chain_state.import_header(h1);
+				chain_state.import_header(h2);
+				chain_state.import_header(h3);
+			},
 		);
 
-		global_tx.unbounded_send(known_commit()).unwrap();
-
-		let work = until_imported.into_future();
-
-		let mut runtime = Runtime::new().unwrap();
 		assert_eq!(
-			unapply_commit(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()),
+			unapply_commit(res),
 			unapply_commit(known_commit()),
+		);
+	}
+
+	#[test]
+	fn blocking_catch_up_message() {
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		let signed_prevote = |header: &Header| {
+			grandpa::SignedPrevote {
+				id: Default::default(),
+				signature: Default::default(),
+				prevote: grandpa::Prevote {
+					target_hash: header.hash(),
+					target_number: *header.number(),
+				},
+			}
+		};
+
+		let signed_precommit = |header: &Header| {
+			grandpa::SignedPrecommit {
+				id: Default::default(),
+				signature: Default::default(),
+				precommit: grandpa::Precommit {
+					target_hash: header.hash(),
+					target_number: *header.number(),
+				},
+			}
+		};
+
+		let prevotes = vec![
+			signed_prevote(&h1),
+			signed_prevote(&h3),
+		];
+
+		let precommits = vec![
+			signed_precommit(&h1),
+			signed_precommit(&h2),
+		];
+
+		let unknown_catch_up = grandpa::CatchUp {
+			round_number: 1,
+			prevotes,
+			precommits,
+			base_hash: h1.hash(),
+			base_number: *h1.number(),
+		};
+
+		let unknown_catch_up = || voter::CommunicationIn::CatchUp(
+			unknown_catch_up.clone(),
+			voter::Callback::Blank,
+		);
+
+		let res = blocking_message_on_dependencies(
+			unknown_catch_up(),
+			|chain_state| {
+				chain_state.import_header(h1);
+				chain_state.import_header(h2);
+				chain_state.import_header(h3);
+			},
+		);
+
+		assert_eq!(
+			unapply_catch_up(res),
+			unapply_catch_up(unknown_catch_up()),
+		);
+	}
+
+	#[test]
+	fn catch_up_message_all_known() {
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		let signed_prevote = |header: &Header| {
+			grandpa::SignedPrevote {
+				id: Default::default(),
+				signature: Default::default(),
+				prevote: grandpa::Prevote {
+					target_hash: header.hash(),
+					target_number: *header.number(),
+				},
+			}
+		};
+
+		let signed_precommit = |header: &Header| {
+			grandpa::SignedPrecommit {
+				id: Default::default(),
+				signature: Default::default(),
+				precommit: grandpa::Precommit {
+					target_hash: header.hash(),
+					target_number: *header.number(),
+				},
+			}
+		};
+
+		let prevotes = vec![
+			signed_prevote(&h1),
+			signed_prevote(&h3),
+		];
+
+		let precommits = vec![
+			signed_precommit(&h1),
+			signed_precommit(&h2),
+		];
+
+		let unknown_catch_up = grandpa::CatchUp {
+			round_number: 1,
+			prevotes,
+			precommits,
+			base_hash: h1.hash(),
+			base_number: *h1.number(),
+		};
+
+		let unknown_catch_up = || voter::CommunicationIn::CatchUp(
+			unknown_catch_up.clone(),
+			voter::Callback::Blank,
+		);
+
+		let res = message_all_dependencies_satisfied(
+			unknown_catch_up(),
+			|chain_state| {
+				chain_state.import_header(h1);
+				chain_state.import_header(h2);
+				chain_state.import_header(h3);
+			},
+		);
+
+		assert_eq!(
+			unapply_catch_up(res),
+			unapply_catch_up(unknown_catch_up()),
 		);
 	}
 }
