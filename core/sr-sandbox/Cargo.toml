@@ -9,7 +9,7 @@ edition = "2018"
 rustc_version = "0.2"
 
 [dependencies]
-wasmi = { path = "../../../wasmi", optional = true, features = [ "threadsafe" ] }
+wasmi = { git = "https://github.com/paritytech/wasmi", branch = "cmichi-add-threadsafety-feature-flag", optional = true, features = [ "threadsafe" ] }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 codec = { package = "parity-codec", version = "3.2", default-features = false }

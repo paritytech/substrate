@@ -14,7 +14,7 @@ serializer = { package = "substrate-serializer", path = "../serializer" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
-wasmi = { path = "../../../wasmi", features = [ "threadsafe" ] }
+wasmi = { git = "https://github.com/paritytech/wasmi", branch = "cmichi-add-threadsafety-feature-flag", features = [ "threadsafe" ] }
 byteorder = "1.1"
 lazy_static = "1.0"
 parking_lot = "0.8.0"
