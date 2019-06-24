@@ -60,19 +60,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		protocol_id: ProtocolId,
 		versions: &[u8],
-		peerset: peerset::Peerset,
-		peerset_handle: peerset::PeersetHandle,
-	) -> crate::error::Result<Self> {
+		peerset_config: peerset::PeersetConfig,
+	) -> crate::error::Result<(Self, peerset::PeersetHandle)> {
+		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
+
 		let protocol = Protocol::new(config, chain, checker, specialization)?;
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
-		Ok(ProtocolBehaviour {
+		let behaviour = ProtocolBehaviour {
 			protocol,
 			behaviour,
-			peerset_handle,
+			peerset_handle: peerset_handle.clone(),
 			transaction_pool,
 			finality_proof_provider,
-		})
+		};
+
+		Ok((behaviour, peerset_handle))
 	}
 
 	/// Returns the list of all the peers we have an open channel to.

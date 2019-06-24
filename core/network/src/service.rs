@@ -148,14 +148,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
-		// Build the peerset.
-		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset::PeersetConfig {
+		let peerset_config = peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
 			reserved_nodes,
-		});
+		};
 
 		// Private and public keys configuration.
 		if let NodeKeyConfig::Secp256k1(_) = params.network_config.node_key {
@@ -170,7 +169,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let protocol = ProtocolBehaviour::new(
+		let (protocol, peerset_handle) = ProtocolBehaviour::new(
 			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
@@ -180,8 +179,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.finality_proof_provider,
 			params.protocol_id,
 			&((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>(),
-			peerset,
-			peerset_handle.clone(),
+			peerset_config,
 		)?;
 
 		// Build the swarm.
