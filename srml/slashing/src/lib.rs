@@ -115,7 +115,6 @@
 //! }
 //! ```
 
-use num_integer::Integer;
 use parity_codec::Codec;
 use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 
@@ -136,7 +135,7 @@ type MisconductLevel = u8;
 /// Base trait for representing misconducts
 pub trait Misconduct {
 	/// Severity represented as a fraction
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128> + Integer;
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 }
 
 /// Behaviour based on misconduct reporting on end of era / timeslot.
@@ -149,7 +148,7 @@ pub trait EraMisconduct: Misconduct {
 }
 
 /// Behaviour based on continuously reporting of misconducts
-/// The type the implements is expected to keep `severity`as part of the type
+/// The type that implements this trait is expected to keep `severity` as member variable
 pub trait ContinuousMisconduct: Misconduct {
 	/// Estimate severity based on previous state
 	fn severity(&self) -> Fraction<Self::Severity>;
@@ -176,7 +175,7 @@ pub trait Slashing<AccountId> {
 	/// Returns the misconduct level
 	fn slash<CM: ContinuousMisconduct>(who: &AccountId, misconduct: &mut CM) -> MisconductLevel;
 
-	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot
+	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot/era
 	/// Returns the misconduct level for all misbehaved validators
 	// TODO(niklasad1): shall this be generic?
 	fn slash_on_checkpoint<EM: EraMisconduct>(

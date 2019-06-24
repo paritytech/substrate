@@ -25,7 +25,7 @@ impl EraMisconduct for Unresponsive {
 pub mod grandpa {
 	use crate::{EraMisconduct, Misconduct, Fraction};
 
-	/// Unjustified vote(s) from only one validator in the same era then slash 10%
+	/// Unjustified vote from only one validator in the same era then slash 10%
 	// assumption: this is called in the end of the era otherwise it would be impossible to know
 	// that only one validator had performed a culprit in the era.
 	pub struct UnjustifiedVote;
