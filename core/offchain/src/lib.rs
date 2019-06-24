@@ -46,7 +46,7 @@ use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-use futures::future::{Executor, Future};
+use futures::future::Future;
 use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
@@ -58,7 +58,6 @@ pub use offchain_primitives::OffchainWorkerApi;
 /// An offchain workers manager.
 pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
-	executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
 	_block: PhantomData<Block>,
 }
 
@@ -72,11 +71,9 @@ impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
-		executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
 	) -> Self {
 		Self {
 			client,
-			executor,
 			_block: PhantomData,
 		}
 	}
@@ -88,11 +85,12 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	C::Api: OffchainWorkerApi<Block>,
 {
 	/// Start the offchain workers after given block.
+	#[must_use]
 	pub fn on_block_imported<A>(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
-	) where
+	) -> impl Future<Item = (), Error = ()> where
 		A: ChainApi<Block=Block> + 'static,
 	{
 		let runtime = self.client.runtime_api();
@@ -102,12 +100,13 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::Api::new(pool.clone(), at.clone());
-			self.executor.execute(Box::new(runner.process()))
-				.expect("failed to spawn task");
-
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
 			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
+			futures::future::Either::A(runner.process())
+
+		} else {
+			futures::future::Either::B(futures::future::empty())
 		}
 	}
 }

@@ -214,10 +214,7 @@ impl<Components: components::Components> Service<Components> {
 			.then(|_| Ok(()))));
 
 		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(
-				client.clone(),
-				task_executor.clone(),
-			)))
+			Some(Arc::new(offchain::OffchainWorkers::new(client.clone())))
 		} else {
 			None
 		};
@@ -228,6 +225,7 @@ impl<Components: components::Components> Service<Components> {
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+			let task_executor = task_executor.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
@@ -246,11 +244,15 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						Components::RuntimeServices::offchain_workers(
+						let future = Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,
 							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
+
+						if let Err(err) = task_executor.execute(future) {
+							error!(target: "service", "Failed to spawn background task: {:?}", err);
+						}
 					}
 
 					Ok(())

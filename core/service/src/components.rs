@@ -257,7 +257,7 @@ pub trait OffchainWorker<C: Components> {
 		number: &FactoryBlockNumber<C::Factory>,
 		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> error::Result<()>;
+	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
 
 impl<C: Components> OffchainWorker<Self> for C where
@@ -268,8 +268,8 @@ impl<C: Components> OffchainWorker<Self> for C where
 		number: &FactoryBlockNumber<C::Factory>,
 		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> error::Result<()> {
-		Ok(offchain.on_block_imported(number, pool))
+	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
+		Ok(Box::new(offchain.on_block_imported(number, pool)))
 	}
 }
 
