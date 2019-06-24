@@ -704,13 +704,14 @@ mod tests {
 	;; ext_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
-	;;    gas: u64,
+	;;    gas_ptr: u32,
+	;;    gas_len: u32,
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
 	;;    input_data_len: u32
 	;; ) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -763,9 +764,10 @@ mod tests {
 				(call $ext_call
 					(i32.const 4)  ;; Pointer to "callee" address.
 					(i32.const 32)  ;; Length of "callee" address.
-					(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
-					(i32.const 36)  ;; Pointer to the buffer with value to transfer
-					(i32.const 16)   ;; Length of the buffer with value to transfer.
+					(i32.const 36)  ;; Pointer to amount of gas to devote for the execution.
+					(i32.const 8)   ;; Length of the buffer with the gas amount.
+					(i32.const 44)  ;; Pointer to the buffer with value to transfer
+					(i32.const 16)  ;; Length of the buffer with value to transfer.
 					(i32.const 0)   ;; Pointer to input data buffer address
 					(i32.const 0)   ;; Length of input data buffer
 				)
@@ -782,9 +784,12 @@ mod tests {
 		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
 		"\00\00\00\00"
 	)
+	;; Amount of gas to devote for the execution. 0 = all.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 36) "\00\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
 	;; Represented by u128 (16 bytes long) in little endian.
-	(data (i32.const 36)
+	(data (i32.const 44)
 		"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
 		"\00\00"
 	)

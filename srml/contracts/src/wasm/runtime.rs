@@ -27,7 +27,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{CheckedMul, CheckedAdd, Bounded, SaturatedConversion};
+use runtime_primitives::traits::{CheckedMul, CheckedAdd, Bounded, Zero};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -212,6 +212,24 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ctx.memory().get(ptr, buf).map_err(Into::into)
 }
 
+/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
+/// gas, and attempt to decode into the specified type.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+/// - the buffer contents cannot be decoded as the required type.
+fn read_sandbox_memory_as<E: Ext, D: Decode>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<D, sandbox::HostError> {
+	let buf = read_sandbox_memory(ctx, ptr, len)?;
+	D::decode(&mut &buf[..]).ok_or_else(|| sandbox::HostError)
+}
+
 /// Write the given buffer to the designated location in the sandbox memory, consuming
 /// an appropriate amount of gas.
 ///
@@ -303,7 +321,9 @@ define_env!(Env, <E: Ext>,
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - callee_len: length of the address buffer.
-	// - gas: how much gas to devote to the execution.
+	// - gas_ptr: a pointer to the buffer with the amount of gas to devote to the execution.
+	//   Should be decodable as a `T::Gas`. Traps otherwise.
+	// - gas_len: length of the gas buffer.
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
@@ -313,22 +333,17 @@ define_env!(Env, <E: Ext>,
 		ctx,
 		callee_ptr: u32,
 		callee_len: u32,
-		gas: u64,
+		gas_ptr: u32,
+		gas_len: u32,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let callee = {
-			let callee_buf = read_sandbox_memory(ctx, callee_ptr, callee_len)?;
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
-		};
-		let value = {
-			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
-		};
+		let callee: <<E as Ext>::T as system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
+		let gas: <<E as Ext>::T as Trait>::Gas = read_sandbox_memory_as(ctx, gas_ptr, gas_len)?;
+		let value: BalanceOf::<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Grab the scratch buffer and put in its' place an empty one.
@@ -336,10 +351,10 @@ define_env!(Env, <E: Ext>,
 		let scratch_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
 		let empty_output_buf = EmptyOutputBuf::from_spare_vec(scratch_buf);
 
-		let nested_gas_limit = if gas == 0 {
+		let nested_gas_limit = if gas.is_zero() {
 			ctx.gas_meter.gas_left()
 		} else {
-			gas.saturated_into()
+			gas
 		};
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -379,7 +394,9 @@ define_env!(Env, <E: Ext>,
 	//
 	// - init_code_ptr: a pointer to the buffer that contains the initializer code.
 	// - init_code_len: length of the initializer code buffer.
-	// - gas: how much gas to devote to the execution of the initializer code.
+	// - gas_ptr: a pointer to the buffer with the amount of gas to devote to the execution of the
+	//   initializer code. Should be decodable as a `T::Gas`. Traps otherwise.
+	// - gas_len: length of the gas buffer.
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
@@ -389,30 +406,26 @@ define_env!(Env, <E: Ext>,
 		ctx,
 		init_code_ptr: u32,
 		init_code_len: u32,
-		gas: u64,
+		gas_ptr: u32,
+		gas_len: u32,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let code_hash = {
-			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
-			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
-		};
-		let value = {
-			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
-		};
+		let code_hash: CodeHash<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, init_code_ptr, init_code_len)?;
+		let gas: <<E as Ext>::T as Trait>::Gas = read_sandbox_memory_as(ctx, gas_ptr, gas_len)?;
+		let value: BalanceOf::<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Clear the scratch buffer in any case.
 		ctx.scratch_buf.clear();
 
-		let nested_gas_limit = if gas == 0 {
+		let nested_gas_limit = if gas.is_zero() {
 			ctx.gas_meter.gas_left()
 		} else {
-			gas.saturated_into()
+			gas
 		};
 		let ext = &mut ctx.ext;
 		let instantiate_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -509,7 +522,7 @@ define_env!(Env, <E: Ext>,
 
 	// Stores the amount of gas left into the scratch buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	// The data is encoded as T::Gas. The current contents of the scratch buffer are overwritten.
 	ext_gas_left(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);

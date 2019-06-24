@@ -328,23 +328,25 @@ mod tests {
 	;; ext_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
-	;;    gas: u64,
+	;;    gas_ptr: u32,
+	;;    gas_len: u32,
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
 	;;    input_data_len: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_call
 				(i32.const 4)  ;; Pointer to "callee" address.
 				(i32.const 8)  ;; Length of "callee" address.
-				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
-				(i32.const 12) ;; Pointer to the buffer with value to transfer
+				(i32.const 12) ;; Pointer to amount of gas to devote for the execution.
+				(i32.const 8)  ;; Length of the buffer with the gas amount.
+				(i32.const 20) ;; Pointer to the buffer with value to transfer
 				(i32.const 8)  ;; Length of the buffer with value to transfer.
-				(i32.const 20) ;; Pointer to input data buffer address
+				(i32.const 28) ;; Pointer to input data buffer address
 				(i32.const 4)  ;; Length of input data buffer
 			)
 		)
@@ -354,11 +356,14 @@ mod tests {
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	;; Amount of gas to devote for the execution. 0 = all.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\00\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	(data (i32.const 20) "\06\00\00\00\00\00\00\00")
 
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 28) "\01\02\03\04")
 )
 "#;
 
@@ -380,7 +385,7 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49970,
+				gas_left: 49961,
 			}]
 		);
 	}
@@ -390,36 +395,41 @@ mod tests {
 	;; ext_create(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
-	;;     gas: u64,
+	;;     gas_ptr: u32,
+	;;     gas_len: u32,
 	;;     value_ptr: u32,
 	;;     value_len: u32,
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_create
-				(i32.const 16)   ;; Pointer to `code_hash`
+				(i32.const 24)   ;; Pointer to `code_hash`
 				(i32.const 32)   ;; Length of `code_hash`
-				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
-				(i32.const 4)    ;; Pointer to the buffer with value to transfer
+				(i32.const 4)    ;; Pointer to amount of gas to devote for the execution.
+				(i32.const 8)    ;; Length of the buffer with the gas amount.
+				(i32.const 12)   ;; Pointer to the buffer with value to transfer
 				(i32.const 8)    ;; Length of the buffer with value to transfer
-				(i32.const 12)   ;; Pointer to input data buffer address
+				(i32.const 20)   ;; Pointer to input data buffer address
 				(i32.const 4)    ;; Length of input data buffer
 			)
 		)
 	)
 	(func (export "deploy"))
 
+	;; Amount of gas to devote for the execution. 0 = all.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\00\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
+	(data (i32.const 12) "\03\00\00\00\00\00\00\00")
 	;; Input data to pass to the contract being created.
-	(data (i32.const 12) "\01\02\03\04")
+	(data (i32.const 20) "\01\02\03\04")
 	;; Hash of code.
-	(data (i32.const 16)
+	(data (i32.const 24)
 		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
 		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
 	)
@@ -444,7 +454,7 @@ mod tests {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49946,
+				gas_left: 49937,
 			}]
 		);
 	}
@@ -454,23 +464,25 @@ mod tests {
 	;; ext_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
-	;;    gas: u64,
+	;;    gas_ptr: u32,
+	;;    gas_len: u32,
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
 	;;    input_data_len: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_call
 				(i32.const 4)  ;; Pointer to "callee" address.
 				(i32.const 8)  ;; Length of "callee" address.
-				(i64.const 228)  ;; How much gas to devote for the execution.
-				(i32.const 12)  ;; Pointer to the buffer with value to transfer
+				(i32.const 12)  ;; Pointer to amount of gas to devote for the execution.
+				(i32.const 8)   ;; Length of the buffer with the gas amount.
+				(i32.const 20)  ;; Pointer to the buffer with value to transfer
 				(i32.const 8)   ;; Length of the buffer with value to transfer.
-				(i32.const 20)   ;; Pointer to input data buffer address
+				(i32.const 28)  ;; Pointer to input data buffer address
 				(i32.const 4)   ;; Length of input data buffer
 			)
 		)
@@ -480,11 +492,14 @@ mod tests {
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	;; Amount of gas to devote for the execution.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\e4\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	(data (i32.const 20) "\06\00\00\00\00\00\00\00")
 
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 28) "\01\02\03\04")
 )
 "#;
 
