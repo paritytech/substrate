@@ -279,7 +279,7 @@ mod benches;
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
-use srml_slashing::{CheckpointMisconduct, ContinuousMisconduct, OnSlashing, Slashing};
+use srml_slashing::{EraMisconduct, ContinuousMisconduct, OnSlashing, Slashing};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
@@ -1262,22 +1262,22 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 	type Slash = StakingSlasher<T>;
 
-	fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) -> u8 {
+	fn slash<CM: ContinuousMisconduct>(who: &T::AccountId, misconduct: &mut CM) -> u8 {
 		let severity = misconduct.severity();
-		Self::Slash::on_slash(&who, severity);
+		Self::Slash::on_slash::<CM>(&who, severity);
 		misconduct.on_misconduct();
 		severity.as_misconduct_level()
 	}
 
-	fn slash_on_checkpoint(
+	fn slash_on_checkpoint<EM: EraMisconduct>(
 		misbehaved: &[T::AccountId],
 		total_validators: u64,
-		misconduct: &impl CheckpointMisconduct
+		misconduct: &EM
 	) -> u8 {
 		let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
 
 		for who in misbehaved {
-			Self::Slash::on_slash(who, severity);
+			Self::Slash::on_slash::<EM>(who, severity);
 		}
 
 		severity.as_misconduct_level()

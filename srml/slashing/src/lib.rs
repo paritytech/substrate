@@ -40,7 +40,7 @@
 //!	### Example
 //!
 //! ```
-//!	use srml_slashing::{CheckpointMisconduct, ContinuousMisconduct, Fraction, Misconduct, OnSlashing, Slashing};
+//!	use srml_slashing::{EraMisconduct, ContinuousMisconduct, Fraction, Misconduct, OnSlashing, Slashing};
 //!	use srml_support::traits::Currency;
 //!	use rstd::{cmp, marker::PhantomData};
 //!
@@ -54,7 +54,7 @@
 //!		type Severity = u64;
 //!	}
 //!
-//! impl CheckpointMisconduct for Unresponsive {
+//! impl EraMisconduct for Unresponsive {
 //!		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
 //!			let numerator = 20 * n;
 //!			let denominator = 3*k - 3;
@@ -71,7 +71,7 @@
 //!
 //! impl<T: Trait> OnSlashing<T::AccountId> for Balance<T> {
 //!
-//!		fn on_slash(who: &T::AccountId, severity: Fraction<u64>) {
+//!		fn on_slash<M: Misconduct>(who: &T::AccountId, severity: Fraction<M::Severity>) {
 //!			// This doesn't compile, see `srml/staking/slash.rs` for a more elaborate example
 //!			// let balance = T::Currency::free_balance(who);
 //!			// let slash = balance / severity;
@@ -84,22 +84,22 @@
 //!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
-//!		fn slash(who: &T::AccountId, misconduct: &mut impl ContinuousMisconduct) -> u8 {
+//!		fn slash<CM: ContinuousMisconduct>(who: &T::AccountId, misconduct: &mut CM) -> u8 {
 //!			let severity = misconduct.severity();
-//!			Self::Slash::on_slash(&who, severity);
+//!			Self::Slash::on_slash::<CM>(&who, severity);
 //!			misconduct.on_misconduct();
 //!			severity.as_misconduct_level()
 //!		}
 //!
-//!		fn slash_on_checkpoint(
+//!		fn slash_on_checkpoint<EM: EraMisconduct>(
 //!			misbehaved: &[T::AccountId],
 //!			total_validators: u64,
-//!			misconduct: &impl CheckpointMisconduct
+//!			misconduct: &EM
 //!		) -> u8 {
 //!			let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
 //!
 //!			for who in misbehaved {
-//!				Self::Slash::on_slash(who, severity);
+//!				Self::Slash::on_slash::<EM>(who, severity);
 //!			}
 //!
 //!			severity.as_misconduct_level()
@@ -115,6 +115,7 @@
 //! }
 //! ```
 
+use num_integer::Integer;
 use parity_codec::Codec;
 use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 
@@ -135,24 +136,23 @@ type MisconductLevel = u8;
 /// Base trait for representing misconducts
 pub trait Misconduct {
 	/// Severity represented as a fraction
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128> + Integer;
 }
 
 /// Behaviour based on misconduct reporting on end of era / timeslot.
 /// In those cases the reporter will keep state and report it.
-pub trait CheckpointMisconduct: Misconduct {
+pub trait EraMisconduct: Misconduct {
 
 	/// Estimate severity based `number of misbehaved validators` and `number of validators`
-	// TODO: use `Fraction<Self::Severity> instead
-	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<u64>;
+	// TODO(niklasad1): shall this be generic?
+	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity>;
 }
 
 /// Behaviour based on continuously reporting of misconducts
 /// The type the implements is expected to keep `severity`as part of the type
 pub trait ContinuousMisconduct: Misconduct {
 	/// Estimate severity based on previous state
-	// TODO: use `Fraction<Self::Severity> instead
-	fn severity(&self) -> Fraction<u64>;
+	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Increase severity based on previous state
 	fn on_misconduct(&mut self);
@@ -164,8 +164,7 @@ pub trait ContinuousMisconduct: Misconduct {
 /// Slashing interface
 pub trait OnSlashing<AccountId> {
 	/// Slash validator `who` based on severity_level `severity`
-	// TODO: use `Fraction<Misconduct::Severity> instead
-	fn on_slash(who: &AccountId, severity: Fraction<u64>);
+	fn on_slash<M: Misconduct>(who: &AccountId, severity: Fraction<M::Severity>);
 }
 
 /// Slashing wrapper interface on top of `OnSlashing`
@@ -175,13 +174,14 @@ pub trait Slashing<AccountId> {
 
 	/// Slash the given account `who`
 	/// Returns the misconduct level
-	fn slash(who: &AccountId, misconduct: &mut impl ContinuousMisconduct) -> MisconductLevel;
+	fn slash<CM: ContinuousMisconduct>(who: &AccountId, misconduct: &mut CM) -> MisconductLevel;
 
 	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot
 	/// Returns the misconduct level for all misbehaved validators
-	fn slash_on_checkpoint(
+	// TODO(niklasad1): shall this be generic?
+	fn slash_on_checkpoint<EM: EraMisconduct>(
 		misbehaved: &[AccountId],
 		total_validators: u64,
-		misconduct: &impl CheckpointMisconduct
+		misconduct: &EM
 	) -> MisconductLevel;
 }

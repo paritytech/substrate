@@ -16,7 +16,7 @@
 
 use crate::{BalanceOf, Module, Trait};
 use rstd::marker::PhantomData;
-use srml_slashing::{OnSlashing, Fraction};
+use srml_slashing::{OnSlashing, Misconduct, Fraction};
 use primitives::traits::Convert;
 
 type ExtendedBalance = u128;
@@ -25,7 +25,7 @@ type ExtendedBalance = u128;
 pub struct StakingSlasher<T>(PhantomData<T>);
 
 impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T> {
-	fn on_slash(who: &T::AccountId, severity: Fraction<u64>) {
+	fn on_slash<M: Misconduct>(who: &T::AccountId, severity: Fraction<M::Severity>) {
 		// hack to convert both to `u128` and calculate the amount to slash
 		// then convert it back `BalanceOf<T>`
 		let to_balance = |b: ExtendedBalance|
@@ -34,7 +34,7 @@ impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T> {
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
 		let balance = to_u128(<Module<T>>::slashable_balance(&who));
-		let slash = to_balance((balance / severity.numerator() as u128) * severity.denominator() as u128);
+		let slash = to_balance((balance / severity.numerator().into()) * severity.denominator().into());
 		<Module<T>>::slash_validator(who, slash);
 	}
 }
