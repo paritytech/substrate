@@ -93,6 +93,18 @@ impl super::Network<Block> for TestNetwork {
 	}
 }
 
+impl network_gossip::ValidatorContext<Block> for TestNetwork {
+	fn broadcast_topic(&mut self, _: Hash, _: bool) { }
+
+	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {	}
+
+	fn send_message(&mut self, who: &network::PeerId, data: Vec<u8>) {
+		<Self as super::Network<Block>>::send_message(self, vec![who.clone()], data);
+	}
+
+	fn send_topic(&mut self, _: &network::PeerId, _: Hash, _: bool) { }
+}
+
 struct Tester {
 	net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
@@ -154,7 +166,10 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 }
 
 // needs to run in a tokio runtime.
-fn make_test_network() -> impl Future<Item=Tester,Error=()> {
+fn make_test_network() -> (
+	impl Future<Item=Tester,Error=()>,
+	TestNetwork,
+) {
 	let (tx, rx) = mpsc::unbounded();
 	let net = TestNetwork { sender: tx };
 
@@ -177,11 +192,14 @@ fn make_test_network() -> impl Future<Item=Tester,Error=()> {
 		Exit,
 	);
 
-	startup_work.map(move |()| Tester {
-		gossip_validator: bridge.validator.clone(),
-		net_handle: bridge,
-		events: rx,
-	})
+	(
+		startup_work.map(move |()| Tester {
+			gossip_validator: bridge.validator.clone(),
+			net_handle: bridge,
+			events: rx,
+		}),
+		net,
+	)
 }
 
 fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
@@ -245,7 +263,7 @@ fn good_commit_leads_to_relay() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network()
+	let test = make_test_network().0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -367,7 +385,7 @@ fn bad_commit_leads_to_report() {
 	let id = network::PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
-	let test = make_test_network()
+	let test = make_test_network().0
 		.and_then(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
@@ -438,6 +456,64 @@ fn bad_commit_leads_to_report() {
 				})
 			})
 				.map_err(|_| panic!("could not watch for peer report"))
+				.map(|_| ())
+		});
+
+	current_thread::block_on_all(test).unwrap();
+}
+
+#[test]
+fn peer_with_higher_view_leads_to_catch_up_request() {
+	let id = network::PeerId::random();
+
+	let (tester, mut net) = make_test_network();
+	let test = tester
+		.and_then(move |tester| {
+			// register a peer.
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
+			Ok((tester, id))
+		})
+		.and_then(move |(tester, id)| {
+			// send neighbor message at round 10 and height 50
+			let result = tester.gossip_validator.validate(
+				&mut net,
+				&id,
+				&gossip::GossipMessage::<Block>::from(gossip::NeighborPacket {
+					set_id: SetId(0),
+					round: Round(10),
+					commit_finalized_height: 50,
+				}).encode(),
+			);
+
+			// neighbor packets are always discard
+			match result {
+				network_gossip::ValidationResult::Discard => {},
+				_ => panic!("wrong expected outcome from neighbor validation"),
+			}
+
+			// a catch up request should be sent to the peer for round - 1
+			tester.filter_network_events(move |event| match event {
+				Event::SendMessage(peers, message) => {
+					assert_eq!(
+						peers,
+						vec![id.clone()],
+					);
+
+					assert_eq!(
+						message,
+						gossip::GossipMessage::<Block>::CatchUpRequest(
+							gossip::CatchUpRequestMessage {
+								set_id: SetId(0),
+								round: Round(9),
+							}
+						).encode(),
+					);
+
+					true
+				},
+				_ => false,
+			})
+				.map_err(|_| panic!("could not watch for peer send message"))
 				.map(|_| ())
 		});
 

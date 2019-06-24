@@ -288,9 +288,12 @@ pub(super) struct FullCommitMessage<Block: BlockT> {
 /// and are not repropagated. These contain information about the node's state.
 #[derive(Debug, Encode, Decode, Clone)]
 pub(super) struct NeighborPacket<N> {
-	round: Round,
-	set_id: SetId,
-	commit_finalized_height: N,
+	/// The round the node is currently at.
+	pub(super) round: Round,
+	/// The set ID the node is currently at.
+	pub(super) set_id: SetId,
+	/// The highest finalizing commit observed.
+	pub(super) commit_finalized_height: N,
 }
 
 /// A versioned neighbor packet.
