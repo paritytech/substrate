@@ -109,7 +109,8 @@ macro_rules! construct_runtime {
 	) => {
 		$crate::construct_runtime!(
 			{ $( $preset )* };
-			{ $( $expanded )* $name: $module::{Module, Call, Storage, Event<T>, Config<T>}, };
+			{ $( $expanded )* };
+			$name: $module::{default},
 			$( $rest )*
 		);
 	};
@@ -117,27 +118,25 @@ macro_rules! construct_runtime {
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
 		$name:ident: $module:ident::{
-			default,
-			$(
+			default
+			$(,
 				$modules:ident
 					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
 					$( ( $( $modules_args:ident ),* ) )*
-			),*
+			)*
 		},
 		$( $rest:tt )*
 	) => {
 		$crate::construct_runtime!(
 			{ $( $preset )* };
-			{
-				$( $expanded )*
-				$name: $module::{
-					Module, Call, Storage, Event<T>, Config<T>,
-					$(
-						$modules $( <$modules_generic $(, $modules_instance)?> )*
-						$( ( $( $modules_args ),* ) )*
-					),*
-				},
-			};
+			{ $( $expanded )* };
+			$name: $module::{
+				Module, Call, Storage, Event<T>, Config<T>
+				$(,
+					$modules $( <$modules_generic $(, $modules_instance)?> )*
+					$( ( $( $modules_args ),* ) )*
+				)*
+			},
 			$( $rest )*
 		);
 	};
