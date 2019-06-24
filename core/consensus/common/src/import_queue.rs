@@ -26,7 +26,7 @@
 //! queues to be instantiated simply.
 
 use std::{sync::Arc, collections::HashMap};
-use futures::{prelude::*, sync::mpsc};
+use futures::{prelude::*, future::Executor, sync::mpsc};
 use runtime_primitives::{Justification, traits::{
 	Block as BlockT, Header as HeaderT, NumberFor,
 }};
@@ -133,6 +133,10 @@ pub struct BasicQueue<B: BlockT> {
 	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
 	/// been spawned.
 	future_to_spawn: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
+	/// "no std" environment), we instead put it in `manual_poll`. It is then polled manually from
+	/// `poll_actions`.
+	manual_poll: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
 impl<B: BlockT> BasicQueue<B> {
@@ -161,6 +165,7 @@ impl<B: BlockT> BasicQueue<B> {
 			result_port,
 			finality_proof_request_builder,
 			future_to_spawn: Some(Box::new(future)),
+			manual_poll: None,
 		}
 	}
 
@@ -200,8 +205,21 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 	}
 
 	fn poll_actions(&mut self, link: &mut dyn Link<B>) {
+		// Try to spawn the future in `future_to_spawn`.
 		if let Some(future) = self.future_to_spawn.take() {
-			tokio_executor::spawn(future);
+			if let Err(err) = tokio_executor::DefaultExecutor::current().execute(future) {
+				debug_assert!(self.manual_poll.is_none());
+				self.manual_poll = Some(err.into_future());
+			}
+		}
+
+		// As a backup mechanism, if we failed to spawn the `future_to_spawn`, we instead poll
+		// manually here.
+		if let Some(manual_poll) = self.manual_poll.as_mut() {
+			match manual_poll.poll() {
+				Ok(Async::NotReady) => {}
+				_ => self.manual_poll = None,
+			}
 		}
 
 		if let Some(fprb) = self.finality_proof_request_builder.take() {
