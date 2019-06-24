@@ -35,11 +35,13 @@ mod wasm_executor;
 mod native_executor;
 mod sandbox;
 mod allocator;
+mod wasm_runtimes_cache;
 
 pub mod error;
 pub use wasmi;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
+pub use wasm_runtimes_cache::RuntimesCache;
 pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use parity_codec::Codec;

@@ -22,6 +22,7 @@
 #[cfg(feature = "benchmarks")] extern crate test;
 
 pub use substrate_executor::NativeExecutor;
+pub use substrate_executor::RuntimesCache;
 use substrate_executor::native_executor_instance;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
