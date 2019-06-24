@@ -44,7 +44,7 @@ use primitives::{
 };
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof,
-	Message, PrevoteEquivocation, PrecommitEquivocation
+	Message, PrevoteEquivocation, PrecommitEquivocation, localized_payload
 };
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
 use system::DigestOf;
@@ -345,20 +345,32 @@ where
 	<<T as Trait>::Signature as Verify>::Signer:
 		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
-	let GrandpaEquivocationProof { set_id, round, equivocation } = proof;
+	let GrandpaEquivocationProof { set_id, equivocation } = proof;
+	
+	if equivocation.round_number != equivocation.round_number {
+		return TransactionValidity::Invalid(0)
+	}
 
-	let fst_sig = &equivocation.first.1;
-	let fst_message = Message::Prevote(equivocation.first.0.clone());
-	let fst_payload = (fst_message.clone(), round, set_id).encode();
+	let round = equivocation.round_number;
 
-	let snd_sig = &equivocation.second.1;
-	let snd_message = Message::Prevote(equivocation.second.0.clone());
-	let snd_payload = (snd_message.clone(), round, set_id).encode();
+	let first_signature = &equivocation.first.1;
+	let first_message = Message::Prevote(equivocation.first.0.clone());
+	let first_payload = localized_payload(round, set_id.clone(), &first_message);
 
-	let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation.identity);
-	let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation.identity);
+	let second_signature = &equivocation.second.1;
+	let second_message = Message::Prevote(equivocation.second.0.clone());
+	let second_payload = localized_payload(round, *set_id, &second_message);
 
-	if valid_sig1 && valid_sig2 && fst_message != snd_message {
+	let valid_signature1 = first_signature.verify(
+		first_payload.as_slice(),
+		&equivocation.identity
+	);
+	let valid_signature2 = second_signature.verify(
+		second_payload.as_slice(),
+		&equivocation.identity
+	);
+
+	if valid_signature1 && valid_signature2 && first_message != second_message {
 		return TransactionValidity::Valid {
 			priority: 10,
 			requires: vec![],
@@ -378,22 +390,34 @@ where
 	<<T as Trait>::Signature as Verify>::Signer:
 		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
-	let GrandpaEquivocationProof { set_id, round, equivocation } = proof;
+	let GrandpaEquivocationProof { set_id, equivocation } = proof;
+	
+	if equivocation.round_number != equivocation.round_number {
+		return TransactionValidity::Invalid(0)
+	}
 
-	let fst_sig = &equivocation.first.1;
-	let fst_message = Message::Precommit(equivocation.first.0.clone());
-	let fst_payload = (fst_message, round, set_id).encode();
+	let round = equivocation.round_number;
 
-	let snd_sig = &equivocation.second.1;
-	let snd_message = Message::Precommit(equivocation.second.0.clone());
-	let snd_payload = (snd_message, round, set_id).encode();
+	let first_signature = &equivocation.first.1;
+	let first_message = Message::Precommit(equivocation.first.0.clone());
+	let first_payload = localized_payload(round, set_id.clone(), &first_message);
 
-	let valid_sig1 = fst_sig.verify(fst_payload.as_slice(), &equivocation.identity);
-	let valid_sig2 = snd_sig.verify(snd_payload.as_slice(), &equivocation.identity);
+	let second_signature = &equivocation.second.1;
+	let second_message = Message::Precommit(equivocation.second.0.clone());
+	let second_payload = localized_payload(round, *set_id, &second_message);
 
-	if valid_sig1 && valid_sig2 {
+	let valid_signature1 = first_signature.verify(
+		first_payload.as_slice(),
+		&equivocation.identity
+	);
+	let valid_signature2 = second_signature.verify(
+		second_payload.as_slice(),
+		&equivocation.identity
+	);
+
+	if valid_signature1 && valid_signature2 && first_message != second_message {
 		return TransactionValidity::Valid {
-			priority: 0,
+			priority: 10,
 			requires: vec![],
 			provides: vec![],
 			longevity: 18446744073709551615,

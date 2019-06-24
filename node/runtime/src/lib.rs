@@ -46,7 +46,7 @@ use council::{motions as council_motions};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::{OpaqueMetadata, ed25519};
+use substrate_primitives::OpaqueMetadata;
 use grandpa::{
 	AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight
 };
@@ -111,7 +111,7 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
-	type Signature = ed25519::Signature;
+	type Signature = AuthoritySignature;
 }
 
 impl indices::Trait for Runtime {
@@ -383,7 +383,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId, ed25519::Signature> for Runtime {
+	impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
@@ -393,7 +393,7 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<<Block as BlockT>::Header, ed25519::Signature>,
+			proof: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature>,
 		) -> Vec<u8> {
 			let report_call = Call::Aura(AuraCall::report_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);

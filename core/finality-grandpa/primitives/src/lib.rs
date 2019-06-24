@@ -142,6 +142,9 @@ decl_runtime_apis! {
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct GrandpaEquivocationProof<E> {
 	pub set_id: u64,
-	pub round: u64,
 	pub equivocation: E,
+}
+
+pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+	(message, round, set_id).encode()
 }

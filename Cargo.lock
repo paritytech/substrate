@@ -3466,8 +3466,8 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -4051,6 +4051,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-accountable-safety-primitives"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+]
+
+[[package]]
 name = "substrate-consensus-aura"
 version = "2.0.0"
 dependencies = [
@@ -4066,9 +4073,9 @@ dependencies = [
  "srml-support 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-accountable-safety 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
@@ -4091,7 +4098,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4114,9 +4121,9 @@ dependencies = [
  "srml-babe 2.0.0",
  "srml-support 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
@@ -4138,7 +4145,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -4188,13 +4195,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-consensus-safety-primitives"
-version = "2.0.0"
-dependencies = [
- "sr-primitives 2.0.0",
-]
-
-[[package]]
 name = "substrate-consensus-slots"
 version = "2.0.0"
 dependencies = [
@@ -4204,8 +4204,8 @@ dependencies = [
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",

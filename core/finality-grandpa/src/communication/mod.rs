@@ -40,6 +40,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
+use fg_primitives::localized_payload;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
 use crate::environment::HasVoted;
@@ -529,10 +530,6 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 			neighbor_sender: self.neighbor_sender.clone(),
 		}
 	}
-}
-
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
 }
 
 /// Type-safe wrapper around u64 when indicating that it's a round number.

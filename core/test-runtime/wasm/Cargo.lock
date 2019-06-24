@@ -2506,6 +2506,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-accountable-safety-primitives"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+]
+
+[[package]]
 name = "substrate-consensus-aura-primitives"
 version = "2.0.0"
 dependencies = [
@@ -2513,7 +2520,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -2525,7 +2532,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -2550,13 +2557,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-consensus-safety-primitives"
-version = "2.0.0"
-dependencies = [
- "sr-primitives 2.0.0",
-]
-
-[[package]]
 name = "substrate-consensus-slots"
 version = "2.0.0"
 dependencies = [
@@ -2566,8 +2566,8 @@ dependencies = [
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",

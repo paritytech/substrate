@@ -22,17 +22,16 @@
 use runtime_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Header
 };
-use substrate_primitives::ed25519::Signature as Signature;
 use parity_codec::{Encode, Codec};
 use crate::AURA_ENGINE_ID;
 
 /// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<S> {
+pub trait CompatibleDigestItem<Signature> {
 	/// Construct a digest item which contains a signature on the hash.
-	fn aura_seal(signature: S) -> Self;
+	fn aura_seal(signature: Signature) -> Self;
 
 	/// If this item is an Aura seal, return the signature.
-	fn as_aura_seal(&self) -> Option<S>;
+	fn as_aura_seal(&self) -> Option<Signature>;
 
 	/// Construct a digest item which contains the slot number
 	fn aura_pre_digest(slot_num: u64) -> Self;
@@ -41,13 +40,13 @@ pub trait CompatibleDigestItem<S> {
 	fn as_aura_pre_digest(&self) -> Option<u64>;
 }
 
-impl<Hash, S: Codec> CompatibleDigestItem<S> for DigestItem<Hash>
+impl<Hash, Signature: Codec> CompatibleDigestItem<Signature> for DigestItem<Hash>
 {
-	fn aura_seal(signature: S) -> Self {
+	fn aura_seal(signature: Signature) -> Self {
 		DigestItem::Seal(AURA_ENGINE_ID, signature.encode())
 	}
 
-	fn as_aura_seal(&self) -> Option<S> {
+	fn as_aura_seal(&self) -> Option<Signature> {
 		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
 	}
 
@@ -64,10 +63,10 @@ impl<Hash, S: Codec> CompatibleDigestItem<S> for DigestItem<Hash>
 pub type DigestItemForHeader<H> = DigestItem<<H as Header>::Hash>;
 
 /// Find pre digest in Aura header.
-pub fn find_pre_digest<H>(header: &H) -> Result<u64, &str>
+pub fn find_pre_digest<H, S>(header: &H) -> Result<u64, &str>
 where
 	H: Header,
-	DigestItemForHeader<H>: CompatibleDigestItem<Signature>,
+	DigestItemForHeader<H>: CompatibleDigestItem<S>,
 {
 	let mut pre_digest: Option<u64> = None;
 	for log in header.digest().logs() {

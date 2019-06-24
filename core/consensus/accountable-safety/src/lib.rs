@@ -50,13 +50,3 @@ where
 		}
 	}
 }
-
-// / Testing transaction pool for accountable safety operations.
-// #[derive(Debug, Encode, Decode, Clone)]
-// pub struct TestPool;
-
-// impl<C, Block> SubmitReport<C, Block> for TestPool
-// {
-// 	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
-// 	}
-// }

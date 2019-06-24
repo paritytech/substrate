@@ -40,7 +40,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash, ProvideRuntimeApi
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use substrate_primitives::{Blake2Hasher, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -55,7 +55,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthoritySignature};
 
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
@@ -466,7 +466,7 @@ where
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
-	type Signature = ed25519::Signature;
+	type Signature = AuthoritySignature;
 
 	// regular round message streams
 	type In = Box<dyn Stream<
@@ -724,13 +724,12 @@ where
 
 	fn prevote_equivocation(
 		&self,
-		round: u64,
+		_round: u64,
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		let proof = GrandpaEquivocationProof {
 			set_id: self.set_id,
-			round,
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
@@ -746,13 +745,12 @@ where
 
 	fn precommit_equivocation(
 		&self,
-		round: u64,
+		_round: u64,
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		let proof = GrandpaEquivocationProof {
 			set_id: self.set_id,
-			round,
 			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);

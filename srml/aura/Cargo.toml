@@ -17,13 +17,12 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
-safety-primitives = { package = "substrate-consensus-safety-primitives", path = "../../core/consensus/accountable-safety/primitives" }
+consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../core/consensus/accountable-safety/primitives" }
 
 [dev-dependencies]
 lazy_static = "1.0"
 parking_lot = "0.8.0"
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
-
 
 [features]
 default = ["std"]

@@ -19,7 +19,6 @@
 #![cfg(test)]
 
 use lazy_static::lazy_static;
-use crate::mock::{System, Aura, new_test_ext};
 use primitives::traits::{Header as HeaderT, ValidateUnsigned};
 use primitives::testing::{
 	Header as HeaderTest, DigestItem as DigestItemTest, Digest as DigestTest
@@ -29,7 +28,9 @@ use runtime_io::with_externalities;
 use parking_lot::Mutex;
 use substrate_primitives::{sr25519, crypto::Pair, H256};
 use substrate_consensus_aura_primitives::{AuraEquivocationProof, CompatibleDigestItem};
-use safety_primitives::AuthorshipEquivocationProof;
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
+
+use crate::mock::{System, Aura, new_test_ext};
 use crate::{AuraReport, HandleReport, Call};
 
 #[test]

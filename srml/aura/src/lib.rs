@@ -71,7 +71,7 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{
 	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author, AuraEquivocationProof
 };
-use safety_primitives::AuthorshipEquivocationProof;
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 mod mock;
 mod tests;
@@ -179,8 +179,8 @@ fn handle_equivocation_proof<T: Trait>(
 		return TransactionValidity::Invalid(0)
 	}
 
-	let maybe_slot1 = find_pre_digest(header1);
-	let maybe_slot2 = find_pre_digest(header2);
+	let maybe_slot1 = find_pre_digest::<_, T::Signature>(header1);
+	let maybe_slot2 = find_pre_digest::<_, T::Signature>(header2);
 
 	if maybe_slot1.is_ok() && maybe_slot1 == maybe_slot2 {
 		let slot = maybe_slot1.expect("OK by previous line; qed");

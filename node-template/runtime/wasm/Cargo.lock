@@ -2380,8 +2380,8 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -2636,6 +2636,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-accountable-safety-primitives"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+]
+
+[[package]]
 name = "substrate-consensus-aura-primitives"
 version = "2.0.0"
 dependencies = [
@@ -2643,7 +2650,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-safety-primitives 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -2664,13 +2671,6 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "tokio-executor 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-consensus-safety-primitives"
-version = "2.0.0"
-dependencies = [
- "sr-primitives 2.0.0",
 ]
 
 [[package]]

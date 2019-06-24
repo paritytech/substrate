@@ -481,7 +481,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	T: SubmitReport<Client<B, E, Block, RA>, Block> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	// <RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 {
 	let GrandpaParams {
@@ -756,7 +755,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	T: Sync + Send + 'static + SubmitReport<Client<B, E, Block, RA>, Block>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	// <RA as ConstructRuntimeApi<Block, Client<B, E, Block, RA>>>::RuntimeApi: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 {
 	run_grandpa_voter(grandpa_params)

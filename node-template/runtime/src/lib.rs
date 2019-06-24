@@ -132,7 +132,7 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type AuthorityId = AuraId;
-	type Signature = ed25519::Signature;
+	type Signature = AuraSignature;
 }
 
 impl indices::Trait for Runtime {

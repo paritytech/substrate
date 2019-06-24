@@ -23,7 +23,7 @@ use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
-use safety_primitives::AuthorshipEquivocationProof;
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.

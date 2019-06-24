@@ -36,8 +36,8 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
 };
 use consensus_common::import_queue::{
-	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport,
+	SharedFinalityProofImport, SharedFinalityProofRequestBuilder,
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -75,7 +75,7 @@ use slots::{
 	check_equivocation, SignedDuration
 };
 use consensus_accountable_safety::SubmitReport;
-use safety_primitives::AuthorshipEquivocationProof;
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -292,7 +292,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<u64, &str> = find_pre_digest::<H>(&header);
+			let pre_digest: Result<u64, &str> = find_pre_digest::<H, P::Signature>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -380,7 +380,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let slot_num = find_pre_digest::<B::Header>(&header)?;
+	let slot_num = find_pre_digest::<B::Header, P::Signature>(&header)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -689,7 +689,7 @@ pub fn import_queue<B, C, P, T>(
 	let verifier = Arc::new(
 		AuraVerifier::<C, P, T> {
 			client: client.clone(),
-			transaction_pool: transaction_pool,
+			transaction_pool,
 			inherent_data_providers,
 			phantom: PhantomData,
 		}
@@ -723,7 +723,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
-	use primitives::{sr25519, H256};
+	use primitives::{sr25519::{Pair, Signature}, H256, crypto::Pair as _};
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
 	use std::sync::RwLock;
@@ -775,7 +775,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, sr25519::Pair, TestPool>;
+		type Verifier = AuraVerifier<PeersFullClient, Pair, TestPool>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -876,7 +876,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
@@ -933,7 +933,7 @@ mod tests {
 	}
 
 	#[test]
-	fn submit_equivocation_works_submit_case() {
+	fn submit_equivocation_works_case_valid_tx() {
 		let client = test_client::new();
 		let transaction_pool = Some(Arc::new(TestPool{ pool: RwLock::new(0) }));
 
@@ -958,7 +958,7 @@ mod tests {
 		};
 
 		let slot = 3;
-		let pre = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot);
+		let pre = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_pre_digest(slot);
 
 		header1.digest_mut().push(pre.clone());
 		header2.digest_mut().push(pre);
@@ -966,21 +966,25 @@ mod tests {
 		let hash1 = header1.hash();
 		let hash2 = header2.hash();
 
-		let (pair, _seed) = sr25519::Pair::generate();
+		let (pair, _seed) = Pair::generate();
 		let public = pair.public();
 		let authorities = &[public];
 
 		let sig1 = pair.sign(hash1.as_ref());
 		let sig2 = pair.sign(hash2.as_ref());
 
-		let seal1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig1);
-		let seal2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig2);
+		let seal1 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_seal(sig1);
+		let seal2 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_seal(sig2);
 
 		header1.digest_mut().push(seal1);
 		header2.digest_mut().push(seal2);
 
+		// We process two different headers signed by the same author in the
+		// same slot. This makes submit_report_call to be executed, pushing a tx
+		// to the pool.
+
 		assert!(
-			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			check_header::<_, TestBlock, Pair, TestPool>(
 			&client,
 			&transaction_pool,
 			3,
@@ -990,7 +994,7 @@ mod tests {
 		).is_ok());
 
 		assert!(
-			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			check_header::<_, TestBlock, Pair, TestPool>(
 			&client,
 			&transaction_pool,
 			4,
@@ -1006,7 +1010,7 @@ mod tests {
 	}
 
 	#[test]
-	fn submit_equivocation_works_no_submit_case() {
+	fn submit_equivocation_works_case_invalid_tx() {
 		let client = test_client::new();
 		let transaction_pool = Some(Arc::new(TestPool{ pool: RwLock::new(0) }));
 
@@ -1033,8 +1037,8 @@ mod tests {
 		let slot1 = 3;
 		let slot2 = 4;
 
-		let pre1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot1);
-		let pre2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_pre_digest(slot2);
+		let pre1 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_pre_digest(slot1);
+		let pre2 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_pre_digest(slot2);
 
 		header1.digest_mut().push(pre1);
 		header2.digest_mut().push(pre2);
@@ -1042,21 +1046,24 @@ mod tests {
 		let hash1 = header1.hash();
 		let hash2 = header2.hash();
 
-		let (pair, _seed) = sr25519::Pair::generate();
+		let (pair, _seed) = Pair::generate();
 		let public = pair.public();
 		let authorities = &[public];
 
 		let sig1 = pair.sign(hash1.as_ref());
 		let sig2 = pair.sign(hash2.as_ref());
 
-		let seal1 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig1);
-		let seal2 = <DigestItemTest as CompatibleDigestItem<sr25519::Signature>>::aura_seal(sig2);
+		let seal1 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_seal(sig1);
+		let seal2 = <DigestItemTest as CompatibleDigestItem<Signature>>::aura_seal(sig2);
 
 		header1.digest_mut().push(seal1);
 		header2.digest_mut().push(seal2);
 
+		// We process two different headers signed by the same author but in
+		// *different* slots. This *doesn't* execute submit_report_call.
+
 		assert!(
-			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			check_header::<_, TestBlock, Pair, TestPool>(
 			&client,
 			&transaction_pool,
 			3,
@@ -1066,7 +1073,7 @@ mod tests {
 		).is_ok());
 
 		assert!(
-			check_header::<_, TestBlock, sr25519::Pair, TestPool>(
+			check_header::<_, TestBlock, Pair, TestPool>(
 			&client,
 			&transaction_pool,
 			4,

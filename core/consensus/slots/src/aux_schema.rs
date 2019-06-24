@@ -20,7 +20,7 @@ use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header, Verify};
-use safety_primitives::AuthorshipEquivocationProof;
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use std::ops::Deref;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -70,13 +70,13 @@ pub fn check_equivocation<C, H, E, V>(
 	}
 
 	// Key for this slot.
-	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
-	slot.using_encoded(|s| curr_slot_key.extend(s));
+	let mut current_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
+	slot.using_encoded(|s| current_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, V, V::Signer)>>(
+	let mut headers_with_signature = load_decode::<_, Vec<(H, V, V::Signer)>>(
 		backend.deref(), 
-		&curr_slot_key[..],
+		&current_slot_key[..],
 	)?.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
@@ -84,7 +84,7 @@ pub fn check_equivocation<C, H, E, V>(
 	let first_saved_slot = load_decode::<_, u64>(backend.deref(), &slot_header_start[..])?
 		.unwrap_or(slot);
 
-	for (prev_header, prev_signature, prev_signer) in headers_with_sig.iter() {
+	for (prev_header, prev_signature, prev_signer) in headers_with_signature.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
 		if prev_signer == signer {
@@ -119,11 +119,11 @@ pub fn check_equivocation<C, H, E, V>(
 		}
 	}
 
-	headers_with_sig.push((header.clone(), signature.clone(), signer.clone()));
+	headers_with_signature.push((header.clone(), signature.clone(), signer.clone()));
 
 	backend.insert_aux(
 		&[
-			(&curr_slot_key[..], headers_with_sig.encode().as_slice()),
+			(&current_slot_key[..], headers_with_signature.encode().as_slice()),
 			(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
 		],
 		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
@@ -138,7 +138,7 @@ mod test {
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
-	use safety_primitives::AuthorshipEquivocationProof;
+	use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 

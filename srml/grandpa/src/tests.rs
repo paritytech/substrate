@@ -25,7 +25,7 @@ use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};
 use codec::{Decode, Encode};
-use fg_primitives::{ScheduledChange, Equivocation, Prevote};
+use fg_primitives::{ScheduledChange, Equivocation, Prevote, Precommit, localized_payload};
 use super::*;
 
 #[test]
@@ -205,7 +205,7 @@ fn dispatch_forced_change() {
 }
 
 #[test]
-fn validate_unsigned_works() {
+fn validate_unsigned_works_for_prevote() {
 	let (pair, _seed) = ed25519::Pair::generate();
 	let public = pair.public();
 	let authorities = vec![(public.clone(), 1)];
@@ -215,50 +215,119 @@ fn validate_unsigned_works() {
 
 	let prevote1 = Prevote { target_hash: hash1, target_number: 1 };
 	let message1 = Message::Prevote(prevote1.clone());
-	let payload1 = (message1, 0u64, 0u64).encode();
-	let sig1 = pair.sign(payload1.as_slice());
+	let payload1 = localized_payload(0, 0, &message1);
+	let signature1 = pair.sign(payload1.as_slice());
 
 	let prevote2 = Prevote { target_hash: hash2, target_number: 2 };
 	let message2 = Message::Prevote(prevote2.clone());
-	let payload2 = (message2, 0u64, 0u64).encode();
-	let sig2 = pair.sign(payload2.as_slice());
+	let payload2 = localized_payload(0, 0, &message2);
+	let signature2 = pair.sign(payload2.as_slice());
 
+	// Valid proof.
 	let proof1 = GrandpaEquivocationProof {
 		set_id: 0,
-		round: 0,
 		equivocation: Equivocation {
 			round_number: 0,
 			identity: public.clone(),
-			first: (prevote1.clone(), sig1.clone()),
-			second: (prevote2.clone(), sig2.clone()),
+			first: (prevote1.clone(), signature1.clone()),
+			second: (prevote2.clone(), signature2.clone()),
 		},
 	};
 
+	// Invalid proof: same votes.
 	let proof2 = GrandpaEquivocationProof {
 		set_id: 0,
-		round: 0,
 		equivocation: Equivocation {
 			round_number: 0,
 			identity: public.clone(),
-			first: (prevote1.clone(), sig1.clone()),
-			second: (prevote1.clone(), sig1.clone()),
+			first: (prevote1.clone(), signature1.clone()),
+			second: (prevote1.clone(), signature1.clone()),
 		},
 	};
 
+	// Invalid proof: bad signature.
 	let proof3 = GrandpaEquivocationProof {
 		set_id: 0,
-		round: 0,
 		equivocation: Equivocation {
 			round_number: 0,
 			identity: public.clone(),
-			first: (prevote1.clone(), sig1.clone()),
-			second: (prevote2.clone(), sig1.clone()),
+			first: (prevote1.clone(), signature1.clone()),
+			second: (prevote2.clone(), signature1.clone()),
 		},
 	};
 
 	let call1 = Call::report_prevote_equivocation(proof1);
 	let call2 = Call::report_prevote_equivocation(proof2);
 	let call3 = Call::report_prevote_equivocation(proof3);
+
+	with_externalities(&mut new_test_ext_sig(authorities), || {
+		assert_eq!(Grandpa::validate_unsigned(&call1), TransactionValidity::Valid {
+			priority: 10,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615,
+			propagate: true,
+		});
+		assert_eq!(Grandpa::validate_unsigned(&call2), TransactionValidity::Invalid(0));
+		assert_eq!(Grandpa::validate_unsigned(&call3), TransactionValidity::Invalid(0));
+	});
+}
+
+#[test]
+fn validate_unsigned_works_for_precommit() {
+	let (pair, _seed) = ed25519::Pair::generate();
+	let public = pair.public();
+	let authorities = vec![(public.clone(), 1)];
+
+	let hash1 = H256::random();
+	let hash2 = H256::random();
+
+	let precommit1 = Precommit { target_hash: hash1, target_number: 1 };
+	let message1 = Message::Precommit(precommit1.clone());
+	let payload1 = localized_payload(0, 0, &message1);
+	let signature1 = pair.sign(payload1.as_slice());
+
+	let precommit2 = Precommit { target_hash: hash2, target_number: 2 };
+	let message2 = Message::Precommit(precommit2.clone());
+	let payload2 = localized_payload(0, 0, &message2);
+	let signature2 = pair.sign(payload2.as_slice());
+
+	// Valid proof.
+	let proof1 = GrandpaEquivocationProof {
+		set_id: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (precommit1.clone(), signature1.clone()),
+			second: (precommit2.clone(), signature2.clone()),
+		},
+	};
+
+	// Invalid proof: same votes.
+	let proof2 = GrandpaEquivocationProof {
+		set_id: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (precommit1.clone(), signature1.clone()),
+			second: (precommit1.clone(), signature1.clone()),
+		},
+	};
+
+	// Invalid proof: bad signature.
+	let proof3 = GrandpaEquivocationProof {
+		set_id: 0,
+		equivocation: Equivocation {
+			round_number: 0,
+			identity: public.clone(),
+			first: (precommit1.clone(), signature1.clone()),
+			second: (precommit2.clone(), signature1.clone()),
+		},
+	};
+
+	let call1 = Call::report_precommit_equivocation(proof1);
+	let call2 = Call::report_precommit_equivocation(proof2);
+	let call3 = Call::report_precommit_equivocation(proof3);
 
 	with_externalities(&mut new_test_ext_sig(authorities), || {
 		assert_eq!(Grandpa::validate_unsigned(&call1), TransactionValidity::Valid {
