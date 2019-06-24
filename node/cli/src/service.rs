@@ -135,9 +135,7 @@ construct_service_factory! {
 					},
 					Some(_) => {
 						let telemetry_on_connect = TelemetryOnConnect {
-							on_exit: Box::new(service.on_exit()),
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-							executor: &executor,
 						};
 						let grandpa_config = grandpa::GrandpaParams {
 							config: config,
