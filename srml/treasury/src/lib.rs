@@ -331,11 +331,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
-		if let Err(amount) = T::Currency::resolve_into_existing(&Self::account_id(), amount) {
-			// Author account doesn't exist. That shouldn't be possible, but whatever. We'll just
-			// drop the imbalance safely.
-			drop(amount);
-		}
+		T::Currency::resolve_creating(&Self::account_id(), amount);
 	}
 }
 
@@ -547,6 +543,7 @@ mod tests {
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -564,25 +561,27 @@ mod tests {
 	fn on_dilution_quantization_effects() {
 		with_externalities(&mut new_test_ext(), || {
 			// minted = 1% of total issuance for all cases
-			let _ = Treasury::set_pot(0);
 			assert_eq!(Balances::total_issuance(), 200);
 
 			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
 			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
-			assert_eq!(Treasury::pot(), 6); // should increase by 2 (200 - 67) / 67 * 2
+			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 67) / 67 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 2 (200 - 100) / 100 * 2
+			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 100) / 100 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
 			// then the pot will not increase.
 			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 101) / 101 * 2
+			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 101) / 101 * 2
 
 			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 134) / 134 * 2
+			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 134) / 134 * 2
 		});
 	}
 
@@ -600,7 +599,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150);
-			assert_eq!(Treasury::pot(), 25);
+			assert_eq!(Treasury::pot(), 75);
 		});
 	}
 }

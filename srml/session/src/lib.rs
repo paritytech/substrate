@@ -232,10 +232,14 @@ decl_storage! {
 		/// True if anything has changed in this session.
 		Changed: bool;
 
-		/// The next key for a given validator.
+		/// The next key for a given validator that will be moved to QueuedKeyFor from the next
+		/// session.
 		NextKeyFor build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::Keys>;
+
+		/// The key that will come into effect for an identity from the next session.
+		QueuedKeyFor: map T::AccountId => Option<T::Keys>;
 
 		/// The keys that are currently active.
 		Active build(|config: &GenesisConfig<T>| {
@@ -270,7 +274,7 @@ decl_module! {
 		///
 		/// The dispatch origin of this function must be signed.
 		///
-		/// # <weight>
+		/// # <weight>kk
 		/// - O(1).
 		/// - One extra DB entry.
 		/// # </weight>
