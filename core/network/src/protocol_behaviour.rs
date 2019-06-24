@@ -184,7 +184,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		);
 	}
 
-	// TODO: needed?
+	/// Call when we must propagate ready extrinsics to peers.
 	pub fn propagate_extrinsics(&mut self) {
 		self.protocol.propagate_extrinsics(
 			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
