@@ -61,11 +61,19 @@ use log::{error, warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
+	timestamp::{
+		TimestampInherentData, InherentType as TimestampInherent,
+		InherentError as TIError
+	}
 };
 
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
-use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
+use substrate_telemetry::{
+	telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO
+};
+use slots::{
+	CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now,
+	check_equivocation, SignedDuration
+};
 use consensus_safety::SubmitReport;
 use safety_primitives::AuthorshipEquivocationProof;
 
@@ -89,7 +97,8 @@ impl SlotDuration {
 		S: Verify<Signer=A> + Encode + Decode,
 		C::Api: AuraApi<B, A, S>,
 	{
-		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
+		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b))
+			.map(Self)
 	}
 
 	/// Get the slot duration in milliseconds.
@@ -270,8 +279,8 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 		Box::new(proposal_work.map(move |b| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
-			let slot_after_building = slot_now(slot_duration);
-			if slot_after_building != Some(slot_num) {
+			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
+			if slot_after_building != slot_num {
 				info!(
 					"Discarding proposal for slot {}; block production took too long",
 					slot_num
@@ -298,7 +307,8 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+			let signature_digest_item =
+				<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -341,7 +351,8 @@ macro_rules! aura_err {
 	};
 }
 
-/// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
+/// Check a header has been signed by the right key.
+/// If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.

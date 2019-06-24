@@ -46,7 +46,8 @@ use crate::message::Message;
 use libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher};
-use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
+use crate::SyncState;
+use crate::protocol::{Context, Protocol, ProtocolConfig, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -365,7 +366,8 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// instantiation paths or field names is too much hassle, hence
 	/// we allow it to be unused.
 	#[cfg_attr(not(test), allow(unused))]
-	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
+	/// `(is_offline, is_major_syncing, num_peers)`
+	protocol_status: Arc<RwLock<(bool, bool, usize)>>,
 	import_queue: Arc<Mutex<Box<BasicQueue<Block>>>>,
 	pub data: D,
 	best_hash: Mutex<Option<H256>>,
@@ -509,7 +511,7 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
-		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
+		protocol_status: Arc<RwLock<(bool, bool, usize)>>,
 		client: PeersClient,
 		import_queue: Arc<Mutex<Box<BasicQueue<Block>>>>,
 		use_tokio: bool,
@@ -560,19 +562,19 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// SyncOracle: are we connected to any peer?
 	#[cfg(test)]
 	fn is_offline(&self) -> bool {
-		self.protocol_status.read().sync.is_offline()
+		self.protocol_status.read().0
 	}
 
 	/// SyncOracle: are we in the process of catching-up with the chain?
 	#[cfg(test)]
 	fn is_major_syncing(&self) -> bool {
-		self.protocol_status.read().sync.is_major_syncing()
+		self.protocol_status.read().1
 	}
 
 	/// Get protocol status.
 	#[cfg(test)]
-	fn protocol_status(&self) -> ProtocolStatus<Block> {
-		self.protocol_status.read().clone()
+	fn num_peers(&self) -> usize {
+		self.protocol_status.read().2
 	}
 
 	/// Called on connection to other indicated peer.
@@ -873,7 +875,7 @@ pub trait TestNetFactory: Sized {
 	/// Add created peer.
 	fn add_peer(
 		&mut self,
-		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
+		protocol_status: Arc<RwLock<(bool, bool, usize)>>,
 		import_queue: Arc<Mutex<Box<BasicQueue<Block>>>>,
 		tx_pool: EmptyTransactionPool,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
@@ -1009,7 +1011,11 @@ pub trait TestNetFactory: Sized {
 					return Ok(Async::Ready(()))
 				}
 
-				*protocol_status.write() = protocol.status();
+				*protocol_status.write() = (
+					protocol.num_connected_peers() == 0,
+					protocol.sync_state() == SyncState::Downloading,
+					protocol.num_connected_peers()
+				);
 				Ok(Async::NotReady)
 			}));
 		});
@@ -1054,7 +1060,7 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
-		let protocol_status = Arc::new(RwLock::new(protocol.status()));
+		let protocol_status = Arc::new(RwLock::new((true, false, 0)));
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
@@ -1110,7 +1116,7 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
-		let protocol_status = Arc::new(RwLock::new(protocol.status()));
+		let protocol_status = Arc::new(RwLock::new((true, false, 0)));
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
