@@ -75,7 +75,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
-	network: Arc<components::NetworkService<Components::Factory>>,
+	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
@@ -498,7 +498,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
+	pub fn network(&self) -> Arc<components::NetworkService<Components>> {
 		self.network.clone()
 	}
 
@@ -684,7 +684,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 /// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
 fn build_system_rpc_handler<Components: components::Components>(
-	network: Arc<NetworkService<Components::Factory>>,
+	network: Arc<NetworkService<Components>>,
 	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
