@@ -256,13 +256,15 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 		GAS_PRICE.with(|v| *v.borrow_mut() = self.gas_price);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
-
+	}
+	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		self.set_associated_consts();
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
 			.unwrap()
