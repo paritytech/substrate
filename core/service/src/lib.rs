@@ -556,6 +556,18 @@ impl<Components> Future for Service<Components> where Components: components::Co
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		Future::poll(&mut &*self)
+	}
+}
+
+// Note that this implementation is totally unnecessary. It exists only because of tests. The tests
+// should eventually be reworked, as it would make it possible to remove the `Mutex`es. that we
+// lock here.
+impl<'a, Components> Future for &'a Service<Components> where Components: components::Components {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// The user is supposed to poll only one service, so it doesn't matter if we keep this
 		// mutex locked.
 		let mut to_poll = self.to_poll.lock();
