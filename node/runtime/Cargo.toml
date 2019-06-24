@@ -17,7 +17,7 @@ version = { package = "sr-version", path = "../../core/sr-version", default-feat
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
-contract = { package = "srml-contract", path = "../../srml/contract", default-features = false }
+contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 council = { package = "srml-council", path = "../../srml/council", default-features = false }
 democracy = { package = "srml-democracy", path = "../../srml/democracy", default-features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
@@ -39,7 +39,7 @@ substrate-keyring = { path = "../../core/keyring", optional = true }
 [features]
 default = ["std"]
 core = [
-	"contract/core",
+	"contracts/core",
 ]
 std = [
 	"parity-codec/std",
@@ -49,7 +49,7 @@ std = [
 	"support/std",
 	"aura/std",
 	"balances/std",
-	"contract/std",
+	"contracts/std",
 	"council/std",
 	"democracy/std",
 	"executive/std",

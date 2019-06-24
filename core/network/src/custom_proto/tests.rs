@@ -58,11 +58,15 @@ fn build_nodes<T: CustomMessage + Send + 'static>()
 		let (peerset, _) = peerset::Peerset::from_config(peerset::PeersetConfig {
 			in_peers: 25,
 			out_peers: 25,
-			bootnodes: keypairs
-				.iter()
-				.enumerate()
-				.filter_map(|(n, p)| if n != index { Some(p.public().into_peer_id()) } else { None })
-				.collect(),
+			bootnodes: if index == 0 {
+				keypairs
+					.iter()
+					.skip(1)
+					.map(|keypair| keypair.public().into_peer_id())
+					.collect()
+			} else {
+				vec![]
+			},
 			reserved_only: false,
 			reserved_nodes: Vec::new(),
 		});

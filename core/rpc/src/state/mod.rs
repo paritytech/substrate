@@ -258,9 +258,9 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 		&self,
 		range: &QueryStorageRange<Block>,
 		keys: &[StorageKey],
+		last_values: &mut HashMap<StorageKey, Option<StorageData>>,
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
-		let mut last_state: HashMap<_, Option<_>> = Default::default();
 		for block in range.unfiltered_range.start..range.unfiltered_range.end {
 			let block_hash = range.hashes[block].clone();
 			let mut block_changes = StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
@@ -268,15 +268,19 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key)?;
-					let prev_data = last_state.get(key).and_then(|x| x.as_ref());
-					(curr_data.as_ref() != prev_data, curr_data)
+					match last_values.get(key) {
+						Some(prev_data) => (curr_data != *prev_data, curr_data),
+						None => (true, curr_data),
+					}
 				};
 				if has_changed {
 					block_changes.changes.push((key.clone(), data.clone()));
 				}
-				last_state.insert(key.clone(), data);
+				last_values.insert(key.clone(), data);
 			}
-			changes.push(block_changes);
+			if !block_changes.changes.is_empty() {
+				changes.push(block_changes);
+			}
 		}
 		Ok(())
 	}
@@ -286,6 +290,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 		&self,
 		range: &QueryStorageRange<Block>,
 		keys: &[StorageKey],
+		last_values: &HashMap<StorageKey, Option<StorageData>>,
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
 		let (begin, end) = match range.filtered_range {
@@ -298,17 +303,24 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 		let mut changes_map: BTreeMap<NumberFor<Block>, StorageChangeSet<Block::Hash>> = BTreeMap::new();
 		for key in keys {
 			let mut last_block = None;
-			for (block, _) in self.client.key_changes(begin, end, key)? {
+			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
+			for (block, _) in self.client.key_changes(begin, end, key)?.into_iter().rev() {
 				if last_block == Some(block) {
 					continue;
 				}
+
 				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
 				let id = BlockId::Hash(block_hash);
 				let value_at_block = self.client.storage(&id, key)?;
+				if last_value == value_at_block {
+					continue;
+				}
+
 				changes_map.entry(block)
 					.or_insert_with(|| StorageChangeSet { block: block_hash, changes: Vec::new() })
-					.changes.push((key.clone(), value_at_block));
+					.changes.push((key.clone(), value_at_block.clone()));
 				last_block = Some(block);
+				last_value = value_at_block;
 			}
 		}
 		if let Some(additional_capacity) = changes_map.len().checked_sub(changes.len()) {
@@ -432,8 +444,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
 		let range = self.split_query_storage_range(from, to)?;
 		let mut changes = Vec::new();
-		self.query_storage_unfiltered(&range, &keys, &mut changes)?;
-		self.query_storage_filtered(&range, &keys, &mut changes)?;
+		let mut last_values = HashMap::new();
+		self.query_storage_unfiltered(&range, &keys, &mut last_values, &mut changes)?;
+		self.query_storage_filtered(&range, &keys, &last_values, &mut changes)?;
 		Ok(changes)
 	}
 
