@@ -1457,4 +1457,122 @@ mod tests {
 		assert_eq!(unknown_voter, Action::Discard(cost::UNKNOWN_VOTER));
 		assert_eq!(bad_sig, Action::Discard(cost::BAD_SIGNATURE));
 	}
+
+	#[test]
+	fn unsolicited_catch_up_messages_discarded() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+		let set_id = 1;
+		let auth = AuthorityId::from_raw([1u8; 32]);
+		let peer = PeerId::random();
+
+		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
+		val.note_round(Round(0), |_, _| {});
+
+		let validate_catch_up = || {
+			let mut inner = val.inner.write();
+			inner.validate_catch_up_message(&peer, &FullCatchUpMessage {
+				set_id: SetId(set_id),
+				message: grandpa::CatchUp {
+					round_number: 10,
+					prevotes: Default::default(),
+					precommits: Default::default(),
+					base_hash: Default::default(),
+					base_number: Default::default(),
+				}
+			})
+		};
+
+		// the catch up is discarded because we have no pending request
+		assert_eq!(validate_catch_up(), Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
+
+		let noted = val.inner.write().note_catch_up_request(
+			&peer,
+			&CatchUpRequestMessage {
+				set_id: SetId(set_id),
+				round: Round(10),
+			}
+		);
+
+		assert!(noted.0);
+
+		// catch up is allowed because we have requested it, but it's rejected
+		// because it's malformed (empty prevotes and precommits)
+		assert_eq!(validate_catch_up(), Action::Discard(cost::MALFORMED_CATCH_UP));
+	}
+
+	#[test]
+	fn unanswerable_catch_up_requests_discarded() {
+		// create voter set state with round 1 completed
+		let set_state: SharedVoterSetState<Block> = {
+			let mut completed_rounds = voter_set_state().read().completed_rounds();
+
+			assert!(completed_rounds.push(environment::CompletedRound {
+				number: 1,
+				state: grandpa::round::State::genesis(Default::default()),
+				base: Default::default(),
+				votes: Default::default(),
+			}));
+
+			let set_state = environment::VoterSetState::<Block>::Live {
+				completed_rounds,
+				current_round: environment::HasVoted::No,
+			};
+
+			set_state.into()
+		};
+
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			set_state.clone(),
+		);
+
+		let set_id = 1;
+		let auth = AuthorityId::from_raw([1u8; 32]);
+		let peer = PeerId::random();
+
+		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
+		val.note_round(Round(2), |_, _| {});
+
+		// add the peer making the request to the validator,
+		// otherwise it is discarded
+		let mut inner = val.inner.write();
+		inner.peers.new_peer(peer.clone());
+
+		let res = inner.handle_catch_up_request(
+			&peer,
+			CatchUpRequestMessage {
+				set_id: SetId(set_id),
+				round: Round(10),
+			},
+			&set_state,
+		);
+
+		// we're at round 2, a catch up request for round 10 is out of scope
+		assert!(res.0.is_none());
+		assert_eq!(res.1, Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
+
+		let res = inner.handle_catch_up_request(
+			&peer,
+			CatchUpRequestMessage {
+				set_id: SetId(set_id),
+				round: Round(1),
+			},
+			&set_state,
+		);
+
+		// a catch up request for round 1 should be answered successfully
+		match res.0.unwrap() {
+			GossipMessage::CatchUp(catch_up) => {
+				assert_eq!(catch_up.set_id, SetId(set_id));
+				assert_eq!(catch_up.message.round_number, 1);
+
+				assert_eq!(res.1, Action::Discard(0));
+			},
+			_ => panic!("expected catch up message"),
+		};
+	}
 }
