@@ -59,12 +59,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		protocol_id: ProtocolId,
-		versions: &[u8],
 		peerset_config: peerset::PeersetConfig,
 	) -> crate::error::Result<(Self, peerset::PeersetHandle)> {
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 
 		let protocol = Protocol::new(config, chain, checker, specialization)?;
+		let versions = &((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let behaviour = ProtocolBehaviour {

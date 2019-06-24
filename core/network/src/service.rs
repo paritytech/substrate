@@ -178,7 +178,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.transaction_pool,
 			params.finality_proof_provider,
 			params.protocol_id,
-			&((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>(),
 			peerset_config,
 		)?;
 
