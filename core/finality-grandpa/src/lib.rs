@@ -68,7 +68,7 @@ use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use consensus_common::SelectChain;
-use consensus_safety::SubmitReport;
+use consensus_accountable_safety::SubmitReport;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;

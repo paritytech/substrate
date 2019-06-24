@@ -71,10 +71,10 @@ use substrate_telemetry::{
 	telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO
 };
 use slots::{
-	CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now,
+	CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible,
 	check_equivocation, SignedDuration
 };
-use consensus_safety::SubmitReport;
+use consensus_accountable_safety::SubmitReport;
 use safety_primitives::AuthorshipEquivocationProof;
 
 pub use aura_primitives::*;

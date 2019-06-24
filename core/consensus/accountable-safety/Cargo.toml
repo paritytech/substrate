@@ -1,8 +1,8 @@
 [package]
-name = "substrate-consensus-safety"
+name = "substrate-consensus-accountable-safety"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Common utilities for substrate accountable safety"
+description = "Common utilities for accountable safety"
 edition = "2018"
 
 [dependencies]

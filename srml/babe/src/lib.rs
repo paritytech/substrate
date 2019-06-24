@@ -145,7 +145,7 @@ impl<T: Trait> ValidateUnsigned for Module<T> {
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
-			Call::report_equivocation(proof) => TransactionValidity::Invalid(0),
+			Call::report_equivocation(_proof) => TransactionValidity::Invalid(0),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}

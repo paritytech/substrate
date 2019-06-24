@@ -4037,6 +4037,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-accountable-safety"
+version = "2.0.0"
+dependencies = [
+ "finality-grandpa 0.8.0 (git+https://github.com/paritytech/finality-grandpa/?branch=mod-equivocation-reports)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-runtime 2.0.0",
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-transaction-pool 2.0.0",
+]
+
+[[package]]
 name = "substrate-consensus-aura"
 version = "2.0.0"
 dependencies = [
@@ -4051,9 +4065,9 @@ dependencies = [
  "srml-aura 2.0.0",
  "srml-support 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-accountable-safety 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety 2.0.0",
  "substrate-consensus-safety-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-executor 2.0.0",
@@ -4174,20 +4188,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-consensus-safety"
-version = "2.0.0"
-dependencies = [
- "finality-grandpa 0.8.0 (git+https://github.com/paritytech/finality-grandpa/?branch=mod-equivocation-reports)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-runtime 2.0.0",
- "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-transaction-pool 2.0.0",
-]
-
-[[package]]
 name = "substrate-consensus-safety-primitives"
 version = "2.0.0"
 dependencies = [
@@ -4254,8 +4254,8 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-finality-tracker 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-accountable-safety 2.0.0",
  "substrate-consensus-common 2.0.0",
- "substrate-consensus-safety 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",

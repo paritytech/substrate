@@ -48,7 +48,7 @@ use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
 	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
 };
-use consensus_safety::TestPool;
+use consensus_accountable_safety::TestPool;
 use authorities::AuthoritySet;
 use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker

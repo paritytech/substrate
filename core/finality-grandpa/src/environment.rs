@@ -49,7 +49,7 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
-use consensus_safety::SubmitReport;
+use consensus_accountable_safety::SubmitReport;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;

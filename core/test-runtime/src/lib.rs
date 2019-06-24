@@ -677,7 +677,7 @@ cfg_if! {
 					unimplemented!()
 				}
 				
-				fn grandpa_forced_change(digest: &DigestFor<Block>)
+				fn grandpa_forced_change(_digest: &DigestFor<Block>)
 					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)> {
 					unimplemented!()
 				}

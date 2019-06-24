@@ -82,7 +82,7 @@ use futures::{Future, IntoFuture, future};
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 use safety_primitives::AuthorshipEquivocationProof;
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
 pub use babe_primitives::AuthorityId;
 
