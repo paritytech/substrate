@@ -17,7 +17,7 @@
 //! Implements a pool of pre-created runtime module instances.
 //!
 //! A background thread adds instances back to the pool and ensures
-//! a specified capacity is guaranteed.
+//! a specified capacity is maintained.
 
 use crate::error::{Error, Result};
 use crate::wasm_executor::WasmExecutor;
