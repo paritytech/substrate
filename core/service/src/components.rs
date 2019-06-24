@@ -33,7 +33,7 @@ use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
-use futures::{future::Executor, future::Future, sync::mpsc};
+use futures::{prelude::*, future::Executor, sync::mpsc};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -349,10 +349,10 @@ pub trait ServiceFactory: 'static + Sized {
 	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
-	fn new_full(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+	fn new_full(config: FactoryFullConfiguration<Self>)
 		-> Result<Self::FullService, error::Error>;
 	/// Build light service.
-	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+	fn new_light(config: FactoryFullConfiguration<Self>)
 		-> Result<Self::LightService, error::Error>;
 
 	/// ImportQueue for a full client
@@ -453,12 +453,11 @@ pub struct FullComponents<Factory: ServiceFactory> {
 impl<Factory: ServiceFactory> FullComponents<Factory> {
 	/// Create new `FullComponents`
 	pub fn new(
-		config: FactoryFullConfiguration<Factory>,
-		task_executor: TaskExecutor
+		config: FactoryFullConfiguration<Factory>
 	) -> Result<Self, error::Error> {
 		Ok(
 			Self {
-				service: Service::new(config, task_executor)?,
+				service: Service::new(config)?,
 			}
 		)
 	}
@@ -475,6 +474,15 @@ impl<Factory: ServiceFactory> Deref for FullComponents<Factory> {
 impl<Factory: ServiceFactory> DerefMut for FullComponents<Factory> {
 	fn deref_mut(&mut self) -> &mut Service<Self> {
 		&mut self.service
+	}
+}
+
+impl<Factory: ServiceFactory> Future for FullComponents<Factory> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		self.service.poll()
 	}
 }
 
@@ -553,11 +561,10 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 	/// Create new `LightComponents`
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
-		task_executor: TaskExecutor
 	) -> Result<Self, error::Error> {
 		Ok(
 			Self {
-				service: Service::new(config, task_executor)?,
+				service: Service::new(config)?,
 			}
 		)
 	}
@@ -568,6 +575,15 @@ impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.service
+	}
+}
+
+impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		self.service.poll()
 	}
 }
 
