@@ -87,6 +87,33 @@ impl RuntimesPool {
 
 	/// Fetch a runtime instance from the pool. If there is no instance yet in pool,
 	/// or no pool exists yet initialization happens automatically.
+	///
+	/// # Parameters
+	///
+	/// `wasm_executor`- Rust wasm executor. Executes the provided code in a
+	/// sandboxed Wasm runtime.
+	///
+	/// `ext` - Externalities to use for the runtime. This is used for setting
+	/// up an initial "template instance", which will be cloned when adding
+	/// new instances to the pool. The parameter is only needed to call into
+	/// the wasm module to find out the `Core_version`.
+	///
+	/// `default_heap_pages` - Default number of 64KB pages to allocate for
+	/// Wasm execution. Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `maybe_requested_version` - If `Some(RuntimeVersion)` is provided the
+	/// instances in the pool will be checked for compatibility. In case of
+	/// incompatibility the pool will be reset and new compatible instances
+	/// will be spawned.
+	///
+	/// # Return value
+	///
+	/// If no error occurred a `RuntimePreproc::ValidCode` is returned, containing
+	/// a wasmi `ModuleRef` with an optional `RuntimeVersion` (if the call
+	/// `Core_version` returned a version).
+	///
+	/// In case an error occurred `RuntimePreproc::InvalidCode` is returned with an
+	/// appropriate description.
 	pub fn fetch_runtime_from_pool<E: Externalities<Blake2Hasher>>(
 		&self,
 		wasm_executor: &WasmExecutor,
