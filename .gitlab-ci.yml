@@ -157,7 +157,6 @@ check-web-wasm:
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-finality-grandpa
     - time cargo web build -p substrate-keyring
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
