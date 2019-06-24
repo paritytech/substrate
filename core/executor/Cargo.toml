@@ -26,6 +26,8 @@ tiny-keccak = "1.4.2"
 assert_matches = "1.1"
 wabt = "~0.7.4"
 hex-literal = "0.2.0"
+substrate_test_runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
+sr_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
 
 [features]
 default = []
