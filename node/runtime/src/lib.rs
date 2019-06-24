@@ -33,9 +33,8 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::weights::{Weight, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions};
@@ -54,6 +53,10 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
+/// Runtime implementations
+mod impls;
+use impls::{CurrencyToVoteHandler, WeightToFeeHandler};
+
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
@@ -70,59 +73,6 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion {
 		runtime_version: VERSION,
 		can_author_with: Default::default(),
-	}
-}
-
-pub struct CurrencyToVoteHandler;
-
-impl CurrencyToVoteHandler {
-	fn factor() -> u128 { (Balances::total_issuance() / u64::max_value() as u128).max(1) }
-}
-
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 { (x / Self::factor()) as u64 }
-}
-
-impl Convert<u128, u128> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u128 { x * Self::factor() }
-}
-
-pub struct WeightToFeeHandler;
-
-impl Convert<Weight, Balance> for WeightToFeeHandler {
-	fn convert(weight: Weight) -> Balance {
-		let billion = 1_000_000_000_u128;
-		let from_max_to_per_bill = |x: u128| { x * billion /  MAX_TRANSACTIONS_WEIGHT as u128 };
-		// temporary: weight < ideal
-		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128; // aka IDEAL_TRANSACTION_WEIGHT/MAX_TRANSACTIONS_WEIGHT
-		// determines if the first_term is positive
-		let mut positive = false;
-		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
-		let diff = match ideal.checked_sub(all) {
-			Some(d) => d,
-			None => { positive = true; all - ideal }
-		};
-
-		// 0.00004 = 4/100_000 = 40_000/10^9
-		let v = 40_000;
-		// 0.00004^2 = 16/10^10 ~= 2/10^9
-		let v_squared = 2;
-
-		let mut first_term = v * from_max_to_per_bill(diff as u128);
-		first_term = first_term / billion;
-
-		let mut second_term = v_squared * from_max_to_per_bill(diff as u128) * from_max_to_per_bill(diff as u128) / 2;
-		second_term = second_term / billion;
-		second_term = second_term / billion;
-
-		//					   = 1		+ second_term
-		let mut fee_multiplier = billion + second_term;
-		fee_multiplier = if positive { fee_multiplier + first_term } else { fee_multiplier - first_term};
-
-		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
-		// transaction_fee = fee_multiplier * weight
-		let transaction_fee: u32 = p * weight;
-		transaction_fee.into()
 	}
 }
 

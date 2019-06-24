@@ -54,6 +54,10 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
+	const INITIAL_BALANCE: u128 = 1000;
+	// amount of fee for a simple transfer tx with default parameters.
+	const TRANSFER_FEE: u128 = 138;
+
 	fn alice() -> AccountId {
 		AccountKeyring::Alice.into()
 	}
@@ -250,7 +254,11 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
+	fn new_test_ext(
+		code: &[u8],
+		support_changes_trie: bool,
+		balance_factor: u128
+	) -> TestExternalities<Blake2Hasher> {
 		let three = AccountId::from_raw([3u8; 32]);
 		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
@@ -266,12 +274,12 @@ mod tests {
 			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
-					(alice(), 508),
-					(bob(), 400),
-					(charlie(), 100_000_000),
-					(dave(), 111),
-					(eve(), 101),
-					(ferdie(), 100),
+					(alice(), INITIAL_BALANCE * balance_factor),
+					(bob(), INITIAL_BALANCE * balance_factor),
+					(charlie(), INITIAL_BALANCE * balance_factor),
+					(dave(), 669),
+					(eve(), 669),
+					(ferdie(), 669),
 				],
 				existential_deposit: 0,
 				transfer_fee: 0,
@@ -379,7 +387,7 @@ mod tests {
 
 	fn changes_trie_block() -> (Vec<u8>, Hash) {
 		construct_block(
-			&mut new_test_ext(COMPACT_CODE, true),
+			&mut new_test_ext(COMPACT_CODE, true, 1),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -399,7 +407,7 @@ mod tests {
 	// are not guaranteed to be deterministic) and to ensure that the correct state is propagated
 	// from block1's execution to block2 to derive the correct storage_root.
 	fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 1);
 		let block1 = construct_block(
 			&mut t,
 			1,
@@ -445,7 +453,7 @@ mod tests {
 
 	fn big_block() -> (Vec<u8>, Hash) {
 		construct_block(
-			&mut new_test_ext(COMPACT_CODE, false),
+			&mut new_test_ext(COMPACT_CODE, false, 20),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -455,7 +463,7 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
-					function: Call::Consensus(consensus::Call::remark(vec![0; 403])),
+					function: Call::Consensus(consensus::Call::remark(vec![0; 12000])),
 				}
 			]
 		)
@@ -463,7 +471,7 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 1);
 
 		let (block1, block2) = blocks();
 
@@ -476,10 +484,10 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// block1 transfers from alice 69 to bob.
-			// -1 is the default fee
-			assert_eq!(Balances::total_balance(&alice()), 508 - 6 - 138);
-			assert_eq!(Balances::total_balance(&bob()), 400 + 6);
+			// block1 transfers from alice 6 to bob. 138 is the current fee of the system for this
+			// tx with default parameters.
+			assert_eq!(Balances::total_balance(&alice()), INITIAL_BALANCE - TRANSFER_FEE - 6);
+			assert_eq!(Balances::total_balance(&bob()), INITIAL_BALANCE + 6);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -518,7 +526,6 @@ mod tests {
 				},
 			]);
 		});
-		
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -528,11 +535,8 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
-			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 508 - 6 - 138 - 10 - 138);
-			// 100 + 69 + 10 - 1     = 178
-			assert_eq!(Balances::total_balance(&bob()), 400 + 69 + 10 - 1 - 200);
+			assert_eq!(Balances::total_balance(&alice()), INITIAL_BALANCE - TRANSFER_FEE - 6 - TRANSFER_FEE - 15 + 5);
+			assert_eq!(Balances::total_balance(&bob()), INITIAL_BALANCE + 6 - TRANSFER_FEE - 5 + 15);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -599,27 +603,22 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 1);
 
 		let (block1, block2) = blocks();
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// block1 transfers from alice 69 to bob.
-			// -1 is the default fee
-			assert_eq!(Balances::total_balance(&alice()), 508 - 6 - 138);
-			assert_eq!(Balances::total_balance(&bob()), 400 + 6);
+			assert_eq!(Balances::total_balance(&alice()), INITIAL_BALANCE - 6 - TRANSFER_FEE);
+			assert_eq!(Balances::total_balance(&bob()), INITIAL_BALANCE + 6);
 		});
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
-			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 508 - 6 - 138 - 10 - 138);
-			// 100 + 69 + 10 - 1     = 178
-			assert_eq!(Balances::total_balance(&bob()), 400 + 69 + 10 - 1 - 200);
+			assert_eq!(Balances::total_balance(&alice()), INITIAL_BALANCE - 6 - TRANSFER_FEE - 10 - TRANSFER_FEE);
+			assert_eq!(Balances::total_balance(&bob()), INITIAL_BALANCE + 6 - TRANSFER_FEE - 5 + 15);
 		});
 	}
 
@@ -709,7 +708,6 @@ mod tests {
 
 	#[test]
 	fn deploying_wasm_contract_should_work() {
-
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
 
@@ -720,7 +718,7 @@ mod tests {
 		);
 
 		let b = construct_block(
-			&mut new_test_ext(COMPACT_CODE, false),
+			&mut new_test_ext(COMPACT_CODE, false, 100),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -749,7 +747,7 @@ mod tests {
 			]
 		);
 
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 100);
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &b.0).unwrap();
 
@@ -767,7 +765,7 @@ mod tests {
 
 	#[test]
 	fn wasm_big_block_import_fails() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 1);
 
 		assert!(
 			WasmExecutor::new().call(
@@ -782,7 +780,8 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		// TODO: add a test for low balance. There seems to be sth wrong with it. Or at least the error is not really clear.
+		let mut t = new_test_ext(COMPACT_CODE, false, 20);
 
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -795,7 +794,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = new_test_ext(COMPACT_CODE, false, 1);
 
 		assert!(
 			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
@@ -859,7 +858,7 @@ mod tests {
 		let block_data = block1.0;
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
-		let mut t = new_test_ext(COMPACT_CODE, true);
+		let mut t = new_test_ext(COMPACT_CODE, true, 1);
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -875,7 +874,7 @@ mod tests {
 	fn full_wasm_block_import_works_with_changes_trie() {
 		let block1 = changes_trie_block();
 
-		let mut t = new_test_ext(COMPACT_CODE, true);
+		let mut t = new_test_ext(COMPACT_CODE, true, 1);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
@@ -906,7 +905,7 @@ mod tests {
 			let (block1, block2) = blocks();
 
 			b.iter(|| {
-				let mut t = new_test_ext(COMPACT_CODE, false);
+				let mut t = new_test_ext(COMPACT_CODE, false, 1);
 				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1.0).unwrap();
 				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2.0).unwrap();
 			});

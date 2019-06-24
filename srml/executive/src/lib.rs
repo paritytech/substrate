@@ -581,7 +581,6 @@ mod tests {
 
 	#[test]
 	fn block_weight_multiple_checks() {
-
 		let run_test = |overflow_tx: i8| {
 			let mut t = new_test_ext();
 			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
@@ -596,7 +595,7 @@ mod tests {
 					let encoded = xt.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT + 1) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
@@ -610,10 +609,10 @@ mod tests {
 					let encoded = xt1.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT - 27) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						
+
 						Executive::apply_extrinsic(xt).unwrap();
 						let res = Executive::apply_extrinsic_with_len(xt1, len, Some(encoded));
 						assert!(res.is_err());
@@ -625,10 +624,10 @@ mod tests {
 					let encoded = xt2.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT - 55) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						
+
 						Executive::apply_extrinsic(xt).unwrap();
 						Executive::apply_extrinsic(xt1).unwrap();
 						let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
@@ -641,10 +640,10 @@ mod tests {
 					let encoded = xt3.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT - 83) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						
+
 						Executive::apply_extrinsic(xt).unwrap();
 						Executive::apply_extrinsic(xt1).unwrap();
 						Executive::apply_extrinsic(xt2).unwrap();
@@ -658,10 +657,10 @@ mod tests {
 					let encoded = xt4.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT - 111) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						
+
 						Executive::apply_extrinsic(xt).unwrap();
 						Executive::apply_extrinsic(xt1).unwrap();
 						Executive::apply_extrinsic(xt2).unwrap();
@@ -676,10 +675,10 @@ mod tests {
 					let encoded = xt5.encode();
 					let len = (MAX_TRANSACTIONS_WEIGHT - 139) as usize;
 					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 													[69u8; 32].into(), Digest::default()));
 						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						
+
 						Executive::apply_extrinsic(xt).unwrap();
 						Executive::apply_extrinsic(xt1).unwrap();
 						Executive::apply_extrinsic(xt2).unwrap();

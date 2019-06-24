@@ -32,37 +32,6 @@ const ID_2: LockIdentifier = *b"2       ";
 const ID_3: LockIdentifier = *b"3       ";
 
 #[test]
-fn weight_fee_range() {
-	// rhs values checked in python model
-	// lhs values call mock/DummyFeeHandler
-	// empty 
-	assert_eq!(DummyFeeHandler::convert(0), 0);
-	// (1) lowest fee correct (one transfer transaction = 28)
-	assert_eq!(DummyFeeHandler::convert(28), 27);
-	// (2) half of the ideal
-	assert_eq!(DummyFeeHandler::convert(512 * 1024), 524285);
-	// (3) 5 below the ideal, between the half and the ideal
-	assert_eq!(DummyFeeHandler::convert((512 * 1024) + 87_381), 611666);
-	assert_eq!(DummyFeeHandler::convert((512 * 1024) + (87_381 * 2)), 699047);
-	assert_eq!(DummyFeeHandler::convert((512 * 1024) + (87_381 * 3)), 786429);
-	assert_eq!(DummyFeeHandler::convert((512 * 1024) + (87_381 * 4)), 873810);
-	assert_eq!(DummyFeeHandler::convert((512 * 1024) + (87_381 * 5)), 961192);
-	assert_eq!(DummyFeeHandler::convert(1024 * 1024), 1048576);
-	// (4) 5 above the ideal, between the half and the ideal
-	assert_eq!(DummyFeeHandler::convert((1024 * 1024) + 87_381), 1135957);
-	assert_eq!(DummyFeeHandler::convert((1024 * 1024) + (87_381 * 2)), 1223338);
-	assert_eq!(DummyFeeHandler::convert((1024 * 1024) + (87_381 * 3)), 1310719);
-	assert_eq!(DummyFeeHandler::convert((1024 * 1024) + (87_381 * 4)), 1398100);
-	assert_eq!(DummyFeeHandler::convert((1024 * 1024) + (87_381 * 5)), 1485481);
-	// (5) 1 below maximum
-	assert_eq!(DummyFeeHandler::convert((4 * 1024 * 1024) - 1), 4194303);
-	// (6) maximum weight
-	assert_eq!(DummyFeeHandler::convert(4 * 1024 * 1024), 4194304);
-	// (7) above maximum
-	assert_eq!(DummyFeeHandler::convert((4 * 1024 * 1024) + 1), 4194305);
-}
-
-#[test]
 fn basic_locking_should_work() {
 	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		assert_eq!(Balances::free_balance(&1), 10);
