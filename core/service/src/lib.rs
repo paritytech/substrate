@@ -399,9 +399,15 @@ impl<Components: components::Components> Service<Components> {
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		struct ExecutorWithTx(mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>);
 		impl futures::future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for ExecutorWithTx {
-			fn execute(&self, future: Box<dyn Future<Item = (), Error = ()> + Send>) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+			fn execute(
+				&self,
+				future: Box<dyn Future<Item = (), Error = ()> + Send>
+			) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
 				self.0.unbounded_send(future)
-					.map_err(|err| futures::future::ExecuteError::new(futures::future::ExecuteErrorKind::Shutdown, err.into_inner()))
+					.map_err(|err| {
+						let kind = futures::future::ExecuteErrorKind::Shutdown;
+						futures::future::ExecuteError::new(kind, err.into_inner())
+					})
 			}
 		}
 		let rpc = Components::RuntimeServices::start_rpc(
