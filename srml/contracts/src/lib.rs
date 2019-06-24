@@ -346,22 +346,27 @@ pub trait Trait: timestamp::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
-	/// The fee required to create a contract instance.
+	/// The fee required to create a contract instance. A reasonable default value
+	/// is 21.
 	type ContractFee: Get<BalanceOf<Self>>;
 
-	/// The base fee charged for calling into a contract.
+	/// The base fee charged for calling into a contract. A reasonable default
+	/// value is 135.
 	type CallBaseFee: Get<Self::Gas>;
 
-	/// The base fee charged for creating a contract.
+	/// The base fee charged for creating a contract. A reasonable default value
+	/// is 175.
 	type CreateBaseFee: Get<Self::Gas>;
 
-	/// The price of one unit of gas.
+	/// The price of one unit of gas. A reasonable default value is 1.
 	type GasPrice: Get<BalanceOf<Self>>;
 
-	/// The maximum nesting level of a call/create stack.
+	/// The maximum nesting level of a call/create stack. A reasonable default
+	/// value is 100.
 	type MaxDepth: Get<u32>;
 
-	/// The maximum amount of gas that could be expended per block.
+	/// The maximum amount of gas that could be expended per block. A reasonable
+	/// default value is 10_000_000.
 	type BlockGasLimit: Get<Self::Gas>;
 }
 

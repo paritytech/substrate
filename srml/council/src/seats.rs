@@ -148,25 +148,32 @@ pub trait Trait: democracy::Trait {
 	/// What to do when the members change.
 	type OnMembersChanged: OnMembersChanged<Self::AccountId>;
 
-	/// How much should be locked up in order to submit one's candidacy.
+	/// How much should be locked up in order to submit one's candidacy. A reasonable
+	/// default value is 9.
 	type CandidacyBond: Get<BalanceOf<Self>>;
 	/// How much should be locked up in order to be able to submit votes.
 	type VotingBond: Get<BalanceOf<Self>>;
-	/// The amount of fee paid upon each vote submission, unless if they submit a _hole_ index and replace it.
+	/// The amount of fee paid upon each vote submission, unless if they submit a
+	/// _hole_ index and replace it.
 	type VotingFee: Get<BalanceOf<Self>>;
-	/// The punishment, per voter, if you provide an invalid presentation.
+	/// The punishment, per voter, if you provide an invalid presentation. A
+	/// reasonable default value is 1.
 	type PresentSlashPerVoter: Get<BalanceOf<Self>>;
-	/// How many runners-up should have their approvals persist until the next vote.
+	/// How many runners-up should have their approvals persist until the next
+	/// vote. A reasonable default value is 2.
 	type CarryCount: Get<u32>;
-	/// How many vote indices need to go by after a target voter's last vote before they can be reaped if their
-	/// approvals are moot.
+	/// How many vote indices need to go by after a target voter's last vote before
+	/// they can be reaped if their approvals are moot. A reasonable default value
+	/// is 1.
 	type InactiveGracePeriod: Get<VoteIndex>;
-	/// How often (in blocks) to check for new votes.
+	/// How often (in blocks) to check for new votes. A reasonable default value
+	/// is 1000.
 	type CouncilVotingPeriod: Get<Self::BlockNumber>;
 	/// Decay factor of weight when being accumulated. It should typically be set to
 	/// __at least__ `council_size -1` to keep the council secure.
-	/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight increment step `t`.
-	/// 0 will result in no weight being added at all (normal approval voting).
+	/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
+	/// increment step `t`. 0 will result in no weight being added at all (normal
+	/// approval voting). A reasonable default value is 24.
 	type DecayRatio: Get<u32>;
 }
 

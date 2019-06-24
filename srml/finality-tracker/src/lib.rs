@@ -86,11 +86,12 @@ impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
 
 
 pub trait Trait: SystemTrait {
-	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
+	/// Something which can be notified when the timestamp is set. Set this to `()`
+	/// if not needed.
 	type OnFinalizationStalled: OnFinalizationStalled<Self::BlockNumber>;
-	/// The number of recent samples to keep from this chain. Default is n-100
+	/// The number of recent samples to keep from this chain. Default is 101.
 	type WindowSize: Get<Self::BlockNumber>;
-	/// The delay after which point things become suspicious.
+	/// The delay after which point things become suspicious. Default is 1000.
 	type ReportLatency: Get<Self::BlockNumber>;
 }
 
