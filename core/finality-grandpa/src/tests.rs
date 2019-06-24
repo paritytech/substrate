@@ -1489,3 +1489,111 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 		if FORCE_CHANGE { 0 } else { 10 },
 	);
 }
+
+#[test]
+fn voter_catches_up_to_latest_round_when_behind() {
+	let _ = env_logger::try_init();
+
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	net.peer(0).push_blocks(50, false);
+	net.sync();
+
+	let net = Arc::new(Mutex::new(net));
+	let mut finality_notifications = Vec::new();
+
+	let mut runtime = current_thread::Runtime::new().unwrap();
+
+	let voter = |local_key, peer_id, link, net| {
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				local_key,
+				name: Some(format!("peer#{}", peer_id)),
+			},
+			link: link,
+			network: MessageRouting::new(net, peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: Exit,
+			telemetry_on_connect: None,
+		};
+
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	};
+
+	// spawn authorities
+	for (peer_id, key) in peers.iter().enumerate() {
+		let (client, link) = {
+			let net = net.lock();
+			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[peer_id].client().clone(),
+				link,
+			)
+		};
+
+		finality_notifications.push(
+			client.finality_notification_stream()
+				.take_while(|n| Ok(n.header.number() < &50))
+				.for_each(move |_| Ok(()))
+		);
+
+		let voter = voter(Some(Arc::new((*key).into())), peer_id, link, net.clone());
+
+		runtime.spawn(voter);
+	}
+
+	// wait for them to finalize block 50. since they'll vote on 3/4 of the
+	// unfinalized chain it will take at least 4 rounds to do it.
+	let wait_for_finality = ::futures::future::join_all(finality_notifications)
+		.map(|_| ())
+		.map_err(|_| ());
+
+	// spawn a new voter, it should be behind by at least 4 rounds and should be
+	// able to catch up to the latest round
+	let test = {
+		let net = net.clone();
+		let runtime = runtime.handle();
+
+		wait_for_finality.and_then(move |_| {
+			let peer_id = 2;
+			let (client, link) = {
+				let net = net.lock();
+				let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+				(
+					net.peers[peer_id].client().clone(),
+					link,
+				)
+			};
+
+			let set_state = link.persistent_data.set_state.clone();
+
+			let wait = client.finality_notification_stream()
+				.take_while(|n| Ok(n.header.number() < &50))
+				.collect()
+				.map(|_| set_state);
+
+			let voter = voter(None, peer_id, link, net);
+
+			runtime.spawn(voter).unwrap();
+
+			wait
+		})
+			.and_then(|set_state| {
+				// the last completed round in the new voter is higher than 4
+				// which means it caught up to the voters
+				assert!(set_state.read().last_completed_round().number >= 4);
+				Ok(())
+			})
+	};
+
+	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		.for_each(move |_| { net.lock().sync_without_disconnects(); Ok(()) })
+		.map(|_| ())
+		.map_err(|_| ());
+
+	let _ = runtime.block_on(test.select(drive_to_completion).map_err(|_| ())).unwrap();
+}
