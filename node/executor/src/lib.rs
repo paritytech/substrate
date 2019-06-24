@@ -148,10 +148,6 @@ mod tests {
 		::substrate_executor::NativeExecutor::new(None)
 	}
 
-	fn u128_to_array(balance: u128) -> [u8; 16] {
-		unsafe { std::mem::transmute(balance.to_le()) }
-	}
-
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
@@ -228,10 +224,10 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -264,10 +260,10 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -857,10 +853,10 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				u128_to_array(111 * DOLLARS).to_vec()
+				(111 * DOLLARS).encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
