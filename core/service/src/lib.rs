@@ -586,7 +586,7 @@ impl<'a, Components> Future for &'a Service<Components> where Components: compon
 		}
 
 		// Polling all the `to_poll` futures.
-		while let Some(pos) = to_poll.iter_mut().position(|t| t.poll().map(|t| !t.is_ready()).unwrap_or(true)) {
+		while let Some(pos) = to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
 			to_poll.remove(pos);
 		}
 
