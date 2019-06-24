@@ -125,8 +125,8 @@ mod tests {
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
 
 		// when
-		let offchain = OffchainWorkers::new(client, Arc::new(runtime.executor()));
-		offchain.on_block_imported(&0u64, &pool);
+		let offchain = OffchainWorkers::new(client);
+		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();
