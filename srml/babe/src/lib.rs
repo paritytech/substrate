@@ -123,7 +123,11 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn on_initialize() {
+			Self::process_inherent_digests()
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -141,10 +145,12 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn deposit_vrf_output(vrf_output: [u8; VRF_OUTPUT_LENGTH]) {
-		let mut l = <VRFOutputs<T>>::get();
-		l.push(vrf_output);
-		<VRFOutputs<T>>::put(l);
+	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
+		let l = <Randomness<T>>::get();
+		let mut arr = [0u8; VRF_OUTPUT_LENGTH + 32];
+		arr[0..32].copy_from_slice(&l[..]);
+		arr[32..VRF_OUTPUT_LENGTH + 32].copy_from_slice(&vrf_output[..]);
+		<Randomness<T>>::put(runtime_io::blake2_256(&arr));
 	}
 
 	pub fn process_inherent_digests() {
@@ -158,7 +164,7 @@ impl<T: Trait> Module<T> {
 			} else { None }) {
 			assert!(is_first_babe_digest, "BABE only allows one BABE pre-digest; qed");
 			is_first_babe_digest = false;
-			let (vrf_output, _vrf_proof, _author, _slot_num): (
+			let (ref vrf_output, ref _vrf_proof, ref _author, _slot_num): (
 				[u8; VRF_OUTPUT_LENGTH],
 				[u8; VRF_PROOF_LENGTH],
 				[u8; PUBLIC_KEY_LENGTH],
