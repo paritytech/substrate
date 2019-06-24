@@ -284,7 +284,6 @@ parameter_types! {
 	pub const ContractFee: Balance = 1 * CENTS;
 	pub const CallBaseFee: Gas = 1000;
 	pub const CreateBaseFee: Gas = 1000;
-	pub const GasPrice: Balance = 1 * MILLICENTS;
 	pub const MaxDepth: u32 = 1024;
 	pub const BlockGasLimit: Gas = 10_000_000;
 }
@@ -311,7 +310,6 @@ impl contracts::Trait for Runtime {
 	type ContractFee = ContractFee;
 	type CallBaseFee = CallBaseFee;
 	type CreateBaseFee = CreateBaseFee;
-	type GasPrice = GasPrice;
 	type MaxDepth = MaxDepth;
 	type BlockGasLimit = BlockGasLimit;
 }

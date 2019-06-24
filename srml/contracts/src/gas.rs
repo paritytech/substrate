@@ -211,7 +211,7 @@ pub fn buy_gas<T: Trait>(
 	}
 
 	// Buy the specified amount of gas.
-	let gas_price = T::GasPrice::get();
+	let gas_price = <Module<T>>::gas_price();
 	let cost = gas_limit.clone().into()
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;

@@ -69,7 +69,6 @@ thread_local! {
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
-	static GAS_PRICE: RefCell<u64> = RefCell::new(0);
 	static BLOCK_GAS_LIMIT: RefCell<u64> = RefCell::new(0);
 }
 
@@ -86,11 +85,6 @@ impl Get<u64> for TransferFee {
 pub struct CreationFee;
 impl Get<u64> for CreationFee {
 	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct GasPrice;
-impl Get<u64> for GasPrice {
-	fn get() -> u64 { GAS_PRICE.with(|v| *v.borrow()) }
 }
 
 pub struct BlockGasLimit;
@@ -169,7 +163,6 @@ impl Trait for Test {
 	type ContractFee = ContractFee;
 	type CallBaseFee = CallBaseFee;
 	type CreateBaseFee = CreateBaseFee;
-	type GasPrice = GasPrice;
 	type MaxDepth = MaxDepth;
 	type BlockGasLimit = BlockGasLimit;
 }
@@ -260,7 +253,6 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
-		GAS_PRICE.with(|v| *v.borrow_mut() = self.gas_price);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -281,6 +273,7 @@ impl ExtBuilder {
 		t.extend(
 			GenesisConfig::<Test> {
 				current_schedule: Default::default(),
+				gas_price: self.gas_price,
 			}
 			.build_storage()
 			.unwrap()

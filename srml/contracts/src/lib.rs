@@ -358,9 +358,6 @@ pub trait Trait: timestamp::Trait {
 	/// is 175.
 	type CreateBaseFee: Get<Self::Gas>;
 
-	/// The price of one unit of gas. A reasonable default value is 1.
-	type GasPrice: Get<BalanceOf<Self>>;
-
 	/// The maximum nesting level of a call/create stack. A reasonable default
 	/// value is 100.
 	type MaxDepth: Get<u32>;
@@ -722,6 +719,8 @@ decl_storage! {
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
+		/// The price of one unit of gas.
+		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 

@@ -23,7 +23,7 @@ use node_runtime::{
 	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
 	SystemConfig, TimestampConfig,
 	Perbill, SessionKeys, StakerStatus,
-	DAYS, DOLLARS, SECS_PER_BLOCK,
+	DAYS, DOLLARS, MILLICENTS, SECS_PER_BLOCK,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -140,6 +140,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
+			gas_price: 1 * MILLICENTS,
 		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
@@ -230,6 +231,7 @@ pub fn testnet_genesis(
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 	let mut contracts_config = ContractsConfig {
 		current_schedule: Default::default(),
+		gas_price: 1 * MILLICENTS,
 	};
 	// this should only be enabled on development chains
 	contracts_config.current_schedule.enable_println = enable_println;
