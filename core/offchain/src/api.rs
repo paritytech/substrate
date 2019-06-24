@@ -49,7 +49,6 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 	Default::default()
 }
 
-const KEYS_PREFIX: &[u8] = b"keys";
 const STORAGE_PREFIX: &[u8] = b"storage";
 
 impl<S: OffchainStorage> OffchainExt for Api<S> {
