@@ -65,7 +65,7 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config, executor)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<Pair>>| {
+			|service: Self::FullService, key: Option<Arc<Pair>>| {
 				if let Some(key) = key {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
@@ -86,8 +86,7 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.execute(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))))
-						.expect("failed to spawn task");
+					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
 
 				Ok(service)

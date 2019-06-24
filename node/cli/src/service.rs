@@ -79,7 +79,7 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
+			|mut service: Self::FullService, local_key: Option<Arc<ed25519::Pair>>| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
@@ -104,8 +104,7 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.execute(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))))
-						.expect("failed to spawn task");
+					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -126,12 +125,12 @@ construct_service_factory! {
 
 				match config.local_key {
 					None => {
-						executor.execute(Box::new(grandpa::run_grandpa_observer(
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
 							service.network(),
 							service.on_exit(),
-						)?)).expect("failed to spawn task");
+						)?));
 					},
 					Some(_) => {
 						let telemetry_on_connect = TelemetryOnConnect {
@@ -145,8 +144,7 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						executor.execute(Box::new(grandpa::run_grandpa_voter(grandpa_config)?))
-							.expect("failed to spawn task");
+						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 					},
 				}
 

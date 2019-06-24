@@ -82,6 +82,7 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	task_executor: TaskExecutor,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
@@ -466,6 +467,7 @@ impl<Components: components::Components> Service<Components> {
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
+			task_executor,
 			keystore,
 			config,
 			exit,
@@ -493,9 +495,14 @@ impl<Components: components::Components> Service<Components> {
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
-}
 
-impl<Components> Service<Components> where Components: components::Components {
+	/// Spawns a task in the background that runs the future passed as parameter.
+	pub fn spawn_task(&self, task: Box<dyn Future<Item = (), Error = ()> + Send>) {
+		if let Err(err) = self.task_executor.execute(task) {
+			error!(target: "service", "Failed to spawn background task: {:?}", err);
+		}
+	}
+
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -787,7 +794,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 			|service: Self::FullService, key: Option<Arc<ed25519::Pair>>| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
@@ -916,7 +923,7 @@ macro_rules! construct_service_factory {
 			{
 				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
 					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, executor, key)
+					($( $authority_setup )*)(service, key)
 				})
 			}
 		}
