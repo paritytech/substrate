@@ -48,7 +48,6 @@ use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
 	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
 };
-use consensus_accountable_safety::TestPool;
 use authorities::AuthoritySet;
 use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker
@@ -476,6 +475,15 @@ fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Pu
 		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
+}
+
+#[derive(Debug, Encode, Decode, Clone)]
+pub struct TestPool;
+
+impl<C, Block> SubmitReport<C, Block> for TestPool
+{
+	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
+	}
 }
 
 // run the voters to completion. provide a closure to be invoked after

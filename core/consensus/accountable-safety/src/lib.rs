@@ -40,7 +40,6 @@ where
 {
 	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
-		// let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 		if let Some(uxt) = Decode::decode(&mut extrinsic) {
 			let block_id = BlockId::<Block>::number(client.info().best_number);
 			if let Err(e) = self.submit_one(&block_id, uxt) {
@@ -52,12 +51,12 @@ where
 	}
 }
 
-/// Testing transaction pool for accountable safety operations.
-#[derive(Debug, Encode, Decode, Clone)]
-pub struct TestPool;
+// / Testing transaction pool for accountable safety operations.
+// #[derive(Debug, Encode, Decode, Clone)]
+// pub struct TestPool;
 
-impl<C, Block> SubmitReport<C, Block> for TestPool
-{
-	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
-	}
-}
+// impl<C, Block> SubmitReport<C, Block> for TestPool
+// {
+// 	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
+// 	}
+// }
