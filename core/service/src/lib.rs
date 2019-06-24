@@ -36,7 +36,7 @@ use client::{BlockchainEvents, backend::Backend};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
@@ -130,6 +130,9 @@ impl<Components: components::Components> Service<Components> {
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
+		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
+		let mut tasks_to_spawn = Vec::<Box<dyn Future<Item = (), Error = ()> + Send>>::new();
+
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
@@ -209,11 +212,10 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		task_executor.execute(Box::new(build_network_future(network_mut, network_status_sinks.clone())
+		tasks_to_spawn.push(Box::new(build_network_future(network_mut, network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
-			.then(|_| Ok(()))))
-			.expect("failed to spawn task");
+			.then(|_| Ok(()))));
 
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
@@ -259,7 +261,7 @@ impl<Components: components::Components> Service<Components> {
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			task_executor.execute(Box::new(events)).expect("failed to spawn task");
+			tasks_to_spawn.push(Box::new(events));
 		}
 
 		{
@@ -305,7 +307,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.execute(Box::new(events)).expect("failed to spawn task");
+			tasks_to_spawn.push(Box::new(events));
 		}
 
 		{
@@ -327,7 +329,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.execute(Box::new(events)).expect("failed to spawn task");
+			tasks_to_spawn.push(Box::new(events));
 		}
 
 		// Periodically notify the telemetry.
@@ -382,7 +384,7 @@ impl<Components: components::Components> Service<Components> {
 
 			Ok(())
 		}).select(exit.clone()).then(|_| Ok(()));
-		task_executor.execute(Box::new(tel_task)).expect("failed to spawn task");
+		tasks_to_spawn.push(Box::new(tel_task));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -403,11 +405,11 @@ impl<Components: components::Components> Service<Components> {
 			task_executor.clone(),
 			transaction_pool.clone(),
 		)?;
-		task_executor.execute(Box::new(build_system_rpc_handler::<Components>(
+		tasks_to_spawn.push(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		))).expect("failed to spawn task");
+		)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -446,11 +448,18 @@ impl<Components: components::Components> Service<Components> {
 					});
 					Ok(())
 				});
-			task_executor.execute(Box::new(future
+			tasks_to_spawn.push(Box::new(future
 				.select(exit.clone())
-				.then(|_| Ok(())))).expect("failed to spawn task");
+				.then(|_| Ok(()))));
 			telemetry
 		});
+
+		for task_to_spawn in tasks_to_spawn {
+			if let Err(err) = task_executor.execute(task_to_spawn) {
+				error!(target: "service", "Failed to spawn background task: {:?}", err);
+				return Err(error::Error::Other("Failed to spawn background task".to_string()))
+			}
+		}
 
 		Ok(Service {
 			client,
