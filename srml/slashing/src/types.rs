@@ -21,6 +21,12 @@ pub struct Fraction<N> {
 }
 
 
+impl<N: SimpleArithmetic + Copy> Default for Fraction<N> {
+	fn default() -> Self {
+		Self { denominator: Zero::zero(), numerator: Zero::zero() }
+	}
+}
+
 impl<N: SimpleArithmetic + Copy> Fraction<N> {
 
 	/// Create a new `Fraction` which uses `gcd` to create as small numerator as possible.

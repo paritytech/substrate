@@ -143,7 +143,7 @@ pub trait Misconduct {
 pub trait EraMisconduct: Misconduct {
 
 	/// Estimate severity based `number of misbehaved validators` and `number of validators`
-	// TODO(niklasad1): shall this be generic?
+	// TODO(niklasad1): shall `num_misbehaved` & `num_validators` be generic?!
 	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity>;
 }
 
@@ -177,7 +177,7 @@ pub trait Slashing<AccountId> {
 
 	/// Attempt to slash a list of `misbehaved` validators in the end of a time slot/era
 	/// Returns the misconduct level for all misbehaved validators
-	// TODO(niklasad1): shall this be generic?
+	// TODO(niklasad1): shall `total_validators` be generic?!
 	fn slash_on_checkpoint<EM: EraMisconduct>(
 		misbehaved: &[AccountId],
 		total_validators: u64,
