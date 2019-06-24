@@ -4427,7 +4427,6 @@ dependencies = [
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
- "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
