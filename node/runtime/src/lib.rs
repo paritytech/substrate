@@ -221,7 +221,6 @@ impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Call = Call;
 	type Event = Event;
-	type Gas = u64;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
