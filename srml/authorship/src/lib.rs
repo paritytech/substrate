@@ -19,6 +19,7 @@
 //! This tracks the current author of the block and recent uncles.
 
 use rstd::prelude::*;
+use rstd::collections::btree_set::BTreeSet;
 use srml_support::{decl_module, decl_storage, StorageValue};
 use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
@@ -100,16 +101,19 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 
 /// A filter on uncles which verifies seals and ensures that there is only
 /// one uncle included per author per height.
+///
+/// This does O(n^2) work in the number of uncles included.
 pub struct OnePerAuthorPerHeight<T, N>(rstd::marker::PhantomData<(T, N)>);
 
 impl<Header, Author, T> FilterUncle<Header, Author>
 	for OnePerAuthorPerHeight<T, Header::Number>
 where
 	Header: HeaderT + PartialEq,
-	Author: Clone + PartialEq,
+	Header::Number: Ord,
+	Author: Clone + PartialEq + Ord,
 	T: VerifySeal<Header, Author>,
 {
-	type Accumulator = Vec<(Header::Number, Option<Author>)>;
+	type Accumulator = BTreeSet<(Header::Number, Author)>;
 
 	fn filter_uncle(header: &Header, mut acc: Self::Accumulator)
 		-> Result<(Option<Author>, Self::Accumulator), &'static str>
@@ -118,14 +122,11 @@ where
 		let number = header.number();
 
 		if let Some(ref author) = author {
-			for &(ref n, ref auth) in &acc {
-				if (n, auth.as_ref()) == (number, Some(author)) {
-					return Err("more than one uncle per number per author included");
-				}
+			if !acc.insert((number.clone(), author.clone())) {
+				return Err("more than one uncle per number per author included");
 			}
 		}
 
-		acc.push((number.clone(), author.clone()));
 		Ok((author, acc))
 	}
 }
@@ -549,5 +550,52 @@ mod tests {
 
 			assert_eq!(Authorship::author(), author);
 		});
+	}
+
+	#[test]
+	fn one_uncle_per_author_per_number() {
+		type Filter = OnePerAuthorPerHeight<VerifyBlock, u64>;
+
+		let author_a = 42;
+		let author_b = 43;
+
+		let mut acc: Option<<Filter as FilterUncle<Header, u64>>::Accumulator> = Some(Default::default());
+		let header_a1 = seal_header(
+			create_header(1, Default::default(), [1; 32].into()),
+			author_a,
+		);
+		let header_b1 = seal_header(
+			create_header(1, Default::default(), [1; 32].into()),
+			author_b,
+		);
+
+		let header_a2_1 = seal_header(
+			create_header(2, Default::default(), [1; 32].into()),
+			author_a,
+		);
+		let header_a2_2 = seal_header(
+			create_header(2, Default::default(), [2; 32].into()),
+			author_a,
+		);
+
+		let mut check_filter = move |uncle| {
+			match Filter::filter_uncle(uncle, acc.take().unwrap()) {
+				Ok((author, a)) => {
+					acc = Some(a);
+					Ok(author)
+				}
+				Err(e) => Err(e),
+			}
+		};
+
+		// same height, different author is OK.
+		assert_eq!(check_filter(&header_a1), Ok(Some(author_a)));
+		assert_eq!(check_filter(&header_b1), Ok(Some(author_b)));
+
+		// same author, different height.
+		assert_eq!(check_filter(&header_a2_1), Ok(Some(author_a)));
+
+		// same author, same height (author a, height 2)
+		assert!(check_filter(&header_a2_2).is_err());
 	}
 }
