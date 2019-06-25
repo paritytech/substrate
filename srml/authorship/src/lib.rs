@@ -52,13 +52,14 @@ pub trait Trait: system::Trait {
 	type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
 }
 
-/// An event handler for the authorship module.
+/// An event handler for the authorship module. There is a dummy implementation
+/// for `()`, which does nothing.
 pub trait EventHandler<Author, BlockNumber> {
 	/// Note that the given account ID is the author of the current block.
 	fn note_author(author: Author);
 
 	/// Note that the given account ID authored the given uncle, and how many
-	/// blocks older than the current block it is (>= 0 -- siblings are allowed)
+	/// blocks older than the current block it is (age >= 0, so siblings are allowed)
 	fn note_uncle(author: Author, age: BlockNumber);
 }
 
@@ -102,7 +103,7 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 /// A filter on uncles which verifies seals and ensures that there is only
 /// one uncle included per author per height.
 ///
-/// This does O(n^2) work in the number of uncles included.
+/// This does O(n log n) work in the number of uncles included.
 pub struct OnePerAuthorPerHeight<T, N>(rstd::marker::PhantomData<(T, N)>);
 
 impl<Header, Author, T> FilterUncle<Header, Author>
@@ -202,7 +203,8 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Fetch the author of the block.
 	///
-	/// This is safe to invoke `on_initialize` implementations as well as afterwards.
+	/// This is safe to invoke in `on_initialize` implementations, as well
+	/// as afterwards.
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
 		if let Some(author) = <Self as Store>::Author::get() {
