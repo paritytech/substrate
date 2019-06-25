@@ -26,6 +26,7 @@ use parity_codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
+use zeroize::Zeroize;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -61,6 +62,43 @@ pub trait UncheckedInto<T> {
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	fn unchecked_into(self) -> T {
 		T::unchecked_from(self)
+	}
+}
+
+/// A store for sensitive data.
+///
+/// Calls `Zeroize::zeroize` upon `Drop`.
+#[derive(Clone)]
+pub struct Protected<T: Zeroize>(T);
+
+impl<T: Zeroize> AsRef<T> for Protected<T> {
+	fn as_ref(&self) -> &T {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Zeroize> std::fmt::Debug for Protected<T> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "<protected>")
+	}
+}
+
+impl<T: Zeroize> From<T> for Protected<T> {
+	fn from(t: T) -> Self {
+		Protected(t)
+	}
+}
+
+impl<T: Zeroize> Zeroize for Protected<T> {
+	fn zeroize(&mut self) {
+		self.0.zeroize()
+	}
+}
+
+impl<T: Zeroize> Drop for Protected<T> {
+	fn drop(&mut self) {
+		self.zeroize()
 	}
 }
 

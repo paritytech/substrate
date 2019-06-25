@@ -41,7 +41,10 @@ use std::{
 
 use client::runtime_api::ApiExt;
 use log::{debug, warn};
-use primitives::ExecutionContext;
+use primitives::{
+	ExecutionContext,
+	crypto::Protected,
+};
 use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
@@ -59,6 +62,7 @@ pub use offchain_primitives::OffchainWorkerApi;
 pub struct OffchainWorkers<C, S, Block: traits::Block> {
 	client: Arc<C>,
 	db: S,
+	keys_password: Protected<String>,
 	_block: PhantomData<Block>,
 }
 
@@ -67,10 +71,12 @@ impl<C, S, Block: traits::Block> OffchainWorkers<C, S, Block> {
 	pub fn new(
 		client: Arc<C>,
 		db: S,
+		keys_password: Protected<String>,
 	) -> Self {
 		Self {
 			client,
 			db,
+			keys_password,
 			_block: PhantomData,
 		}
 	}
@@ -106,6 +112,7 @@ impl<C, S, Block> OffchainWorkers<C, S, Block> where
 			let (api, runner) = api::AsyncApi::new(
 				pool.clone(),
 				self.db.clone(),
+				self.keys_password.clone(),
 				at.clone(),
 			);
 			debug!("Running offchain workers at {:?}", at);
@@ -133,7 +140,7 @@ mod tests {
 		let db = client_db::offchain::LocalStorage::new_test();
 
 		// when
-		let offchain = OffchainWorkers::new(client, db);
+		let offchain = OffchainWorkers::new(client, db, "".to_owned().into());
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then

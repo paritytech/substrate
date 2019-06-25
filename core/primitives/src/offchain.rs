@@ -16,11 +16,12 @@
 
 //! Offchain workers types
 
+use parity_codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
 /// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(C)]
 pub enum StorageKind {
@@ -51,7 +52,7 @@ impl TryFrom<u32> for StorageKind {
 }
 
 /// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(C)]
 pub enum CryptoKind {
