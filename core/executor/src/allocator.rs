@@ -17,9 +17,8 @@
 //! This module implements a freeing-bump allocator.
 //! See more details at https://github.com/paritytech/substrate/issues/1615.
 
-use crate::wasm_utils::UserError;
+use crate::error::{Error, Result};
 use log::trace;
-use wasmi::Error;
 use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
 
@@ -34,9 +33,6 @@ const ALIGNMENT: u32 = 8;
 const N: usize = 22;
 const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
 
-pub const OUT_OF_SPACE: &str = "Requested allocation size does not fit into remaining heap space";
-pub const REQUESTED_SIZE_TOO_LARGE: &str = "Requested size to allocate is too large";
-
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],
@@ -46,8 +42,12 @@ pub struct FreeingBumpHeapAllocator {
 	total_size: u32,
 }
 
-impl FreeingBumpHeapAllocator {
+/// Create an allocator error.
+fn error(msg: &'static str) -> Error {
+	Error::Allocator(msg)
+}
 
+impl FreeingBumpHeapAllocator {
 	/// Creates a new allocation heap which follows a freeing-bump strategy.
 	/// The maximum size which can be allocated at once is 16 MiB.
 	///
@@ -87,23 +87,22 @@ impl FreeingBumpHeapAllocator {
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
 	/// The maximum size which can be allocated at once is 16 MiB.
-	pub fn allocate(&mut self, size: u32) -> Result<u32, UserError> {
+	pub fn allocate(&mut self, size: u32) -> Result<u32> {
 		if size > MAX_POSSIBLE_ALLOCATION {
-			return Err(UserError(REQUESTED_SIZE_TOO_LARGE));
+			return Err(Error::RequestedAllocationTooLarge);
 		}
 
 		let size = size.max(8);
 		let item_size = size.next_power_of_two();
 		if item_size + 8 + self.total_size > self.max_heap_size {
-			return Err(UserError(OUT_OF_SPACE));
+			return Err(Error::AllocatorOutOfSpace);
 		}
 
 		let list_index = (item_size.trailing_zeros() - 3) as usize;
 		let ptr: u32 = if self.heads[list_index] != 0 {
 			// Something from the free list
 			let item = self.heads[list_index];
-			let four_bytes = self.get_heap_4bytes(item)
-				.map_err(|_| UserError("Unable to get bytes at pointer taken from list of free items"))?;
+			let four_bytes = self.get_heap_4bytes(item)?;
 			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(four_bytes);
 			item + 8
 		} else {
@@ -111,13 +110,9 @@ impl FreeingBumpHeapAllocator {
 			self.bump(item_size + 8) + 8
 		};
 
-		for i in 1..8 {
-			self.set_heap(ptr - i, 255)
-				.map_err(|_| UserError("Unable to successively write bytes into heap at pointer prefix"))?;
-		}
+		(1..8).try_for_each(|i| self.set_heap(ptr - i, 255))?;
 
-		self.set_heap(ptr - 8, list_index as u8)
-			.map_err(|_| UserError("Unable to write byte into heap at pointer prefix"))?;
+		self.set_heap(ptr - 8, list_index as u8)?;
 
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
@@ -126,31 +121,24 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
-	pub fn deallocate(&mut self, ptr: u32) -> Result<(), UserError> {
+	pub fn deallocate(&mut self, ptr: u32) -> Result<()> {
 		let ptr = ptr - self.ptr_offset;
 		if ptr < 8 {
-			return Err(UserError("Invalid pointer for deallocation"));
+			return Err(error("Invalid pointer for deallocation"));
 		}
 
-		let list_index = self.get_heap_byte(ptr - 8)
-			.map_err(|_| UserError("Unable to access pointer prefix"))? as usize;
-		for i in 1..8 {
-			let heap_byte = self.get_heap_byte(ptr - i)
-				.map_err(|_| UserError("Unable to write single bytes into heap at pointer"))?;
-			debug_assert!(heap_byte == 255)
-		}
+		let list_index = usize::from(self.get_heap_byte(ptr - 8)?);
+		(1..8).try_for_each(|i| self.get_heap_byte(ptr - i).map(|byte| assert!(byte == 255)))?;
 		let tail = self.heads[list_index];
 		self.heads[list_index] = ptr - 8;
 
-		let mut slice = self.get_heap_4bytes(ptr - 8)
-			.map_err(|_| UserError("Unable to get 4 bytes from heap at pointer prefix"))?;
+		let mut slice = self.get_heap_4bytes(ptr - 8)?;
 		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, &mut slice);
-		self.set_heap_4bytes(ptr - 8, slice)
-			.map_err(|_| UserError("Unable to write 4 bytes into heap at pointer prefix"))?;
+		self.set_heap_4bytes(ptr - 8, slice)?;
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + 8)
-			.ok_or_else(|| UserError("Unable to subtract from total heap size without overflow"))?;
+			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after deallocation", self.total_size);
 
 		Ok(())
@@ -176,24 +164,24 @@ impl FreeingBumpHeapAllocator {
 		1 << 3 << index
 	}
 
-	fn get_heap_4bytes(&mut self, ptr: u32) -> Result<[u8; 4], Error> {
+	fn get_heap_4bytes(&mut self, ptr: u32) -> Result<[u8; 4]> {
 		let mut arr = [0u8; 4];
 		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
 		Ok(arr)
 	}
 
-	fn get_heap_byte(&mut self, ptr: u32) -> Result<u8, Error> {
+	fn get_heap_byte(&mut self, ptr: u32) -> Result<u8> {
 		let mut arr = [0u8; 1];
 		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
 		Ok(arr[0])
 	}
 
-	fn set_heap(&mut self, ptr: u32, value: u8) -> Result<(), Error> {
-		self.heap.set(self.ptr_offset + ptr, &[value])
+	fn set_heap(&mut self, ptr: u32, value: u8) -> Result<()> {
+		self.heap.set(self.ptr_offset + ptr, &[value]).map_err(Into::into)
 	}
 
-	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) -> Result<(), Error> {
-		self.heap.set(self.ptr_offset + ptr, &value)
+	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) -> Result<()> {
+		self.heap.set(self.ptr_offset + ptr, &value).map_err(Into::into)
 	}
 
 }
@@ -353,7 +341,10 @@ mod tests {
 		// then
 		assert_eq!(ptr.is_err(), true);
 		if let Err(err) = ptr {
-			assert_eq!(err, UserError(OUT_OF_SPACE));
+			match err {
+				Error::AllocatorOutOfSpace => {},
+				_ => panic!("Expected out of space error"),
+			}
 		}
 	}
 
@@ -372,7 +363,10 @@ mod tests {
 		// there is no room for another half page incl. its 8 byte prefix
 		assert_eq!(ptr2.is_err(), true);
 		if let Err(err) = ptr2 {
-			assert_eq!(err, UserError(OUT_OF_SPACE));
+			match err {
+				Error::AllocatorOutOfSpace => {},
+				_ => panic!("Expected out of space error"),
+			}
 		}
 	}
 
@@ -402,7 +396,10 @@ mod tests {
 		// then
 		assert_eq!(ptr.is_err(), true);
 		if let Err(err) = ptr {
-			assert_eq!(err, UserError(REQUESTED_SIZE_TOO_LARGE));
+			match err {
+				Error::RequestedAllocationTooLarge => {},
+				e => panic!("Expected out of space error, got: {:?}", e),
+			}
 		}
 	}
 

@@ -125,9 +125,10 @@ pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
+impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	B: BlockT,
 	S: network::specialization::NetworkSpecialization<B>,
+	H: network::ExHashT,
 {
 	type In = NetworkStream;
 
