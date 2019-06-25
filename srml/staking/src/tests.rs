@@ -727,7 +727,6 @@ fn nominating_and_rewards_should_work() {
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
-		// NOTE: +-1 due to rounding error. Not a big deal.
 		if cfg!(feature = "equalise") {
 			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
 			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - 1);
