@@ -190,7 +190,7 @@ impl offchain::Externalities for TestOffchainExt {
 		match kind {
 			StorageKind::LOCAL => &mut state.local_storage,
 			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.compare_and_set(b"", key, old_value, new_value)
+		}.compare_and_set(b"", key, Some(old_value), new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
