@@ -35,9 +35,9 @@ use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
 };
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, AuthorityId};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{H256, Blake2Hasher, ed25519::Public as AuthorityId};
+use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
@@ -144,7 +144,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
@@ -572,7 +572,7 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 			self.0.on_start(link)
 		}
 
@@ -610,7 +610,7 @@ pub mod tests {
 		let client = test_client::new_light();
 		let mut import_data = LightImportData {
 			last_finalized: Default::default(),
-			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId([1; 32]), 1)]),
+			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId::from_raw([1; 32]), 1)]),
 			consensus_changes: ConsensusChanges::empty(),
 		};
 		let block = ImportBlock {
@@ -661,7 +661,7 @@ pub mod tests {
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_no_justification_provided() {
 		let mut cache = HashMap::new();
-		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId([2; 32])].encode());
+		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId::from_raw([2; 32])].encode());
 		assert_eq!(import_block(cache, None), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
@@ -674,7 +674,7 @@ pub mod tests {
 	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
 		let justification = TestJustification(false, Vec::new()).encode();
 		let mut cache = HashMap::new();
-		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId([2; 32])].encode());
+		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId::from_raw([2; 32])].encode());
 		assert_eq!(
 			import_block(cache, Some(justification)),
 			ImportResult::Imported(ImportedAux {
@@ -690,7 +690,7 @@ pub mod tests {
 	#[test]
 	fn aux_data_updated_on_start() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(AuthorityId([1; 32]), 1)]));
+		let api = Arc::new(TestApi::new(vec![(AuthorityId::from_raw([1; 32]), 1)]));
 
 		// when aux store is empty initially
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_none());
@@ -705,7 +705,7 @@ pub mod tests {
 	#[test]
 	fn aux_data_loaded_on_restart() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(AuthorityId([1; 32]), 1)]));
+		let api = Arc::new(TestApi::new(vec![(AuthorityId::from_raw([1; 32]), 1)]));
 
 		// when aux store is non-empty initially
 		let mut consensus_changes = ConsensusChanges::<H256, u64>::empty();
@@ -714,7 +714,7 @@ pub mod tests {
 			&[
 				(
 					LIGHT_AUTHORITY_SET_KEY,
-					LightAuthoritySet::genesis(vec![(AuthorityId([42; 32]), 2)]).encode().as_slice(),
+					LightAuthoritySet::genesis(vec![(AuthorityId::from_raw([42; 32]), 2)]).encode().as_slice(),
 				),
 				(
 					LIGHT_CONSENSUS_CHANGES_KEY,
@@ -726,7 +726,7 @@ pub mod tests {
 
 		// importer uses it on start
 		let data = load_aux_import_data(Default::default(), &aux_store, api).unwrap();
-		assert_eq!(data.authority_set.authorities(), vec![(AuthorityId([42; 32]), 2)]);
+		assert_eq!(data.authority_set.authorities(), vec![(AuthorityId::from_raw([42; 32]), 2)]);
 		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
 	}
 }

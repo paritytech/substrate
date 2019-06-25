@@ -34,12 +34,17 @@ use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
+use futures::sync::mpsc;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
-/// Network service type for a factory.
-pub type NetworkService<F> =
-	network::NetworkService<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
+
+/// Network service type for `Components`.
+pub type NetworkService<C> = network::NetworkService<
+	ComponentBlock<C>,
+	<<C as Components>::Factory as ServiceFactory>::NetworkProtocol,
+	ComponentExHash<C>
+>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -139,8 +144,7 @@ pub trait StartRPC<C: Components> {
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
-		should_have_peers: bool,
+		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
@@ -159,8 +163,7 @@ impl<C: Components> StartRPC<Self> for C where
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		network: Arc<dyn network::SyncProvider<ComponentBlock<C>>>,
-		should_have_peers: bool,
+		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
@@ -178,7 +181,7 @@ impl<C: Components> StartRPC<Self> for C where
 				client.clone(), transaction_pool.clone(), subscriptions
 			);
 			let system = rpc::apis::system::System::new(
-				rpc_system_info.clone(), network.clone(), should_have_peers
+				rpc_system_info.clone(), system_send_back.clone()
 			);
 			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 				state,
@@ -499,6 +502,8 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: config.database_cache_size.map(|u| u as usize),
 			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+				config.state_cache_child_ratio.map(|v| (v, 100)),
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -591,6 +596,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
 			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+				config.state_cache_child_ratio.map(|v| (v, 100)),
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -634,7 +641,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
-	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer, TestClientBuilder};
+	use substrate_test_runtime_client::{prelude::*, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {

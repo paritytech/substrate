@@ -17,7 +17,7 @@
 //! Chain utilities.
 
 use std::{self, io::{Read, Write}};
-use futures::Future;
+use futures::prelude::*;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
@@ -99,21 +99,20 @@ pub fn export_blocks<F, E, W>(
 }
 
 struct WaitLink {
-	wait_send: std::sync::mpsc::Sender<()>,
+	imported_blocks: u64,
 }
 
 impl WaitLink {
-	fn new(wait_send: std::sync::mpsc::Sender<()>) -> WaitLink {
+	fn new() -> WaitLink {
 		WaitLink {
-			wait_send,
+			imported_blocks: 0,
 		}
 	}
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
-		self.wait_send.send(())
-			.expect("Unable to notify main process; if the main process panicked then this thread would already be dead as well. qed.");
+	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {
+		self.imported_blocks += 1;
 	}
 }
 
@@ -128,11 +127,7 @@ pub fn import_blocks<F, E, R>(
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
 	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
-
-	let (wait_send, wait_recv) = std::sync::mpsc::channel();
-	let wait_link = WaitLink::new(wait_send);
-	queue.start(Box::new(wait_link))?;
+	let mut queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -175,16 +170,27 @@ pub fn import_blocks<F, E, R>(
 
 		block_count = b;
 		if b % 1000 == 0 {
-			info!("#{}", b);
+			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
-	let mut blocks_imported = 0;
-	while blocks_imported < count {
-		wait_recv.recv()
-			.expect("Importing thread has panicked. Then the main process will die before this can be reached. qed.");
-		blocks_imported += 1;
-	}
+	let mut link = WaitLink::new();
+	tokio::run(futures::future::poll_fn(move || {
+		let blocks_before = link.imported_blocks;
+		queue.poll_actions(&mut link);
+		if link.imported_blocks / 1000 != blocks_before / 1000 {
+			info!(
+				"#{} blocks were imported (#{} left)",
+				link.imported_blocks,
+				count - link.imported_blocks
+			);
+		}
+		if link.imported_blocks >= count {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	}));
 
 	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
 

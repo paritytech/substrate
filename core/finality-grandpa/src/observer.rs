@@ -27,7 +27,7 @@ use log::{debug, info, warn};
 use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
-use substrate_primitives::{ed25519::Public as AuthorityId, H256, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::{
 	AuthoritySignature, global_communication, CommandOrError, Config, environment,
@@ -37,6 +37,7 @@ use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
+use fg_primitives::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
@@ -225,12 +226,16 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 					let set_state = VoterSetState::Live::<Block> {
 						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(CompletedRound {
-							number: 0,
-							state: genesis_state,
-							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
-						}),
+						completed_rounds: CompletedRounds::new(
+							CompletedRound {
+								number: 0,
+								state: genesis_state,
+								base: (new.canon_hash, new.canon_number),
+								votes: Vec::new(),
+							},
+							new.set_id,
+							&*authority_set.inner().read(),
+						),
 						current_round: HasVoted::No,
 					};
 

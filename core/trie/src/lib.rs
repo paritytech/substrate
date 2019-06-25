@@ -421,7 +421,9 @@ mod tests {
 		let mut empty = TrieDBMut::<T>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = T::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().iter().cloned().collect();
+		let root2: Vec<u8> = T::trie_root::<_, Vec<u8>, Vec<u8>>(
+			std::iter::empty(),
+		).as_ref().iter().cloned().collect();
 
 		assert_eq!(root1, root2);
 	}
@@ -553,7 +555,10 @@ mod tests {
 		single_long_leaf_is_equivalent_inner::<LayoutLegagacy>()
 	}
 	fn single_long_leaf_is_equivalent_inner<T: TrieOps>() {
-		let input: Vec<(&[u8], &[u8])> = vec![(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]), (&[0xba][..], &[0x11][..])];
+		let input: Vec<(&[u8], &[u8])> = vec![
+			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
+			(&[0xba][..], &[0x11][..]),
+		];
 		check_equivalent::<T>(&input);
 		check_iteration::<T>(&input);
 	}
@@ -576,7 +581,7 @@ mod tests {
 	}
 
 	fn populate_trie<'db, T: TrieOps>(
-		db: &'db mut HashDB<T::H, DBValue>,
+		db: &'db mut dyn HashDB<T::H, DBValue>,
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)]
 	) -> TrieDBMut<'db, T> {

@@ -97,7 +97,7 @@ impl trie_root::TrieStream for TrieStream {
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
 		let data = other.out();
 		match data.len() {
-			0...31 => data.encode_to(&mut self.buffer),
+			0..=31 => data.encode_to(&mut self.buffer),
 			_ => H::hash(&data).as_ref().encode_to(&mut self.buffer),
 		}
 	}

@@ -17,7 +17,7 @@ state-machine = { package = "substrate-state-machine", path = "../state-machine"
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 substrate-telemetry = { path = "../telemetry", optional = true }
-hash-db = { version = "0.12.2", default-features = false }
+hash-db = { version = "0.12.4", default-features = false }
 kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
@@ -28,7 +28,7 @@ inherents = { package = "substrate-inherents", path = "../inherents", default-fe
 sr-api-macros = { path = "../sr-api-macros" }
 
 [dev-dependencies]
-test-client = { package = "substrate-test-client", path = "../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 
 [features]
