@@ -34,7 +34,10 @@ impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T> {
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
 		let balance = to_u128(<Module<T>>::slashable_balance(&who));
-		let slash = to_balance((balance / severity.numerator().into()) * severity.denominator().into());
+		// (balance * denominator) / numerator
+		let d = balance.saturating_mul(severity.denominator().into());
+		let n = severity.numerator().into();
+		let slash = to_balance(d.checked_div(n).unwrap_or(0));
 		<Module<T>>::slash_validator(who, slash);
 	}
 }
@@ -64,12 +67,12 @@ mod tests {
 			// Slashable balance: 1125
 			//
 			// 0.015 -> Fraction { denominator: 3 / numerator: 200)
-			// (1125 / 200) * 3 = 15
+			// (1125 * 3) / 200  = 16
 			// (1125 * 0.015) = 16.875
 			//
-			// Illustration that we loose  accurancy representing it as a `Fraction`
+			// Illustration that we loose accurancy representing it as a `Fraction`
 			assert_eq!(Staking::slash_on_checkpoint(&[11, 21, 31, 41], 30, &misconduct::Unresponsive), 3);
-			assert_eq!(985, Balances::free_balance(&11));
+			assert_eq!(984, Balances::free_balance(&11));
 		});
 	}
 }
