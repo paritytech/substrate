@@ -46,6 +46,8 @@ zeroize = "0.6.0"
 [dev-dependencies]
 env_logger = { version = "0.6" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+quickcheck = "0.8.5"
+rand = "0.6.5"
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common", features = ["test-helpers"] }

@@ -76,7 +76,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 		let chain_info = self.inner.info().chain;
 
 		// request justifications for all pending changes for which change blocks have already been imported
