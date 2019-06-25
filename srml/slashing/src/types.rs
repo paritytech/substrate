@@ -14,9 +14,7 @@ use primitives::traits::{SimpleArithmetic, Zero, One};
 // remove later or make generic
 #[derive(Debug, Copy, Clone)]
 pub struct Fraction<N> {
-	/// remove later or make generic
 	denominator: N,
-	/// remove later or make generic
 	numerator: N,
 }
 
@@ -29,15 +27,7 @@ impl<N: SimpleArithmetic + Copy> Default for Fraction<N> {
 
 impl<N: SimpleArithmetic + Copy> Fraction<N> {
 
-	/// Create a new `Fraction` which uses `gcd` to create as small numerator as possible.
-	/// Because of `integer semantics` i.e, a large numerator will likely be zero.
-	///
-	/// For example (999_usize / 1000_usize) * 500 = 0
-	///
-	/// gcd(1000, 500) -> 2
-	///
-	/// (999_usize / 2_usize) * 1 = 499
-	///
+	/// Create a new `Fraction` which uses `gcd` to create as small denominator and numerator as possible.
 	pub fn new(denominator: N, numerator: N) -> Self {
 		let gcd = naive_gcd(denominator, numerator);
 
