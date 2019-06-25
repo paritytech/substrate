@@ -335,7 +335,7 @@ ProtocolBehaviour<B, S, H> {
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters,
+		params: &mut impl PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
