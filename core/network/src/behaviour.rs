@@ -180,8 +180,8 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<Discover
 			DiscoveryOut::ValueFound(results) => {
 				self.events.push(BehaviourOut::Dht(DhtEvent::ValueFound(results)));
 			}
-			DiscoveryOut::ValueNotFound => {
-				self.events.push(BehaviourOut::Dht(DhtEvent::ValueNotFound));
+			DiscoveryOut::ValueNotFound(key) => {
+				self.events.push(BehaviourOut::Dht(DhtEvent::ValueNotFound(key)));
 			}
 			DiscoveryOut::ValuePut(key) => {
 				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePut(key)));

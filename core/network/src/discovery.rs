@@ -104,7 +104,7 @@ pub enum DiscoveryOut {
 	ValueFound(Vec<(Multihash, Vec<u8>)>),
 
 	/// The record requested was not found in the DHT.
-	ValueNotFound, // TODO: key of the value requested
+	ValueNotFound(Multihash),
 
 	/// The record with a given key was successfully inserted into the DHT.
 	ValuePut(Multihash),
@@ -209,8 +209,8 @@ where
 
 								DiscoveryOut::ValueFound(results)
 							}
-							GetValueResult::NotFound { .. } => {
-								DiscoveryOut::ValueNotFound
+							GetValueResult::NotFound { key, .. } => {
+								DiscoveryOut::ValueNotFound(key)
 							}
 						};
 						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));

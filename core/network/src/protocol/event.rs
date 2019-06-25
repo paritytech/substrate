@@ -25,7 +25,7 @@ pub enum DhtEvent {
 	ValueFound(Vec<(Multihash, Vec<u8>)>),
 
 	/// The requested record has not been found in the DHT.
-	ValueNotFound,
+	ValueNotFound(Multihash),
 
 	/// The record has been successfully inserted into the DHT.
 	ValuePut(Multihash),
