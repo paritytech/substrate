@@ -486,13 +486,15 @@ define_env!(Env, <E: Ext>,
 	// will be returned. Otherwise, if this call is initiated by another contract then the address
 	// of the contract will be returned.
 	ext_caller(ctx) => {
-		ctx.scratch_buf = ctx.ext.caller().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.caller().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
 	// Stores the address of the current contract into the scratch buffer.
 	ext_address(ctx) => {
-		ctx.scratch_buf = ctx.ext.address().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.address().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -500,7 +502,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_price(ctx) => {
-		ctx.scratch_buf = ctx.gas_meter.gas_price().encode();
+		ctx.scratch_buf.clear();
+		ctx.gas_meter.gas_price().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -508,7 +511,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_left(ctx) => {
-		ctx.scratch_buf = ctx.gas_meter.gas_left().encode();
+		ctx.scratch_buf.clear();
+		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -516,7 +520,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_balance(ctx) => {
-		ctx.scratch_buf = ctx.ext.balance().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.balance().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -524,7 +529,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_value_transferred(ctx) => {
-		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.value_transferred().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -540,13 +546,15 @@ define_env!(Env, <E: Ext>,
 		}
 
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.random(&subject_buf).encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
 	// Load the latest block timestamp into the scratch buffer
 	ext_now(ctx) => {
-		ctx.scratch_buf = ctx.ext.now().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -677,7 +685,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_rent_allowance(ctx) => {
-		ctx.scratch_buf = ctx.ext.rent_allowance().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.rent_allowance().encode_to(&mut ctx.scratch_buf);
 
 		Ok(())
 	},

@@ -33,7 +33,7 @@ use message::generic::{Message as GenericMessage, ConsensusMessage};
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use specialization::NetworkSpecialization;
-use sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
+use sync::{ChainSync, Context as SyncContext, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
 use rustc_hex::ToHex;
@@ -113,17 +113,6 @@ pub struct ConnectedPeer<B: BlockT> {
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
 	timestamp: time::Instant,
-}
-
-/// Syncing status and statistics
-#[derive(Clone)]
-pub struct ProtocolStatus<B: BlockT> {
-	/// Sync status.
-	pub sync: SyncStatus<B>,
-	/// Total number of connected peers
-	pub num_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 }
 
 /// Peer information
@@ -415,26 +404,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		})
 	}
 
-	/// Returns an object representing the status of the protocol.
-	pub fn status(&self) -> ProtocolStatus<B> {
-		ProtocolStatus {
-			sync: self.sync.status(),
-			num_peers: self.context_data.peers.values().count(),
-			num_active_peers: self
-				.context_data
-				.peers
-				.values()
-				.filter(|p| p.block_request.is_some())
-				.count(),
-		}
+	/// Returns the number of peers we're connected to.
+	pub fn num_connected_peers(&self) -> usize {
+		self.context_data.peers.values().count()
 	}
 
-	pub fn is_major_syncing(&self) -> bool {
-		self.sync.status().is_major_syncing()
+	/// Returns the number of peers we're connected to and that are being queried.
+	pub fn num_active_peers(&self) -> usize {
+		self.context_data
+			.peers
+			.values()
+			.filter(|p| p.block_request.is_some())
+			.count()
 	}
 
-	pub fn is_offline(&self) -> bool {
-		self.sync.status().is_offline()
+	/// Current global sync state.
+	pub fn sync_state(&self) -> SyncState {
+		self.sync.status().state
+	}
+
+	/// Target sync block number.
+	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+		self.sync.status().best_seen_block
+	}
+
+	/// Number of peers participating in syncing.
+	pub fn num_sync_peers(&self) -> u32 {
+		self.sync.status().num_peers
 	}
 
 	/// Starts a new data demand request.

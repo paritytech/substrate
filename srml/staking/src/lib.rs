@@ -940,11 +940,10 @@ impl<T: Trait> Module<T> {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				// FIXME #1572 avoid overflow
-				let safe_mul_rational = |b| b * rest_slash / total;
 				for i in exposure.others.iter() {
+					let per_u64 = Perbill::from_rational_approximation(i.value, total);
 					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
+					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
 				}
 			}
 		}
@@ -986,13 +985,14 @@ impl<T: Trait> Module<T> {
 		} else {
 			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
-			// FIXME #1572:  avoid overflow
-			let safe_mul_rational = |b| b * reward / total;
+
 			for i in &exposure.others {
-				let nom_payout = safe_mul_rational(i.value);
-				imbalance.maybe_subsume(Self::make_payout(&i.who, nom_payout));
+				let per_u64 = Perbill::from_rational_approximation(i.value, total);
+				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
 			}
-			safe_mul_rational(exposure.own)
+
+			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
+			per_u64 * reward
 		};
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);

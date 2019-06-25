@@ -127,7 +127,6 @@ impl<T: Trait> GasMeter<T> {
 		let amount = token.calculate_amount(metadata);
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
-			Some(val) if val.is_zero() => None,
 			Some(val) => Some(val),
 		};
 
@@ -304,25 +303,25 @@ mod tests {
 	use super::{GasMeter, Token};
 	use crate::tests::Test;
 
-	/// A trivial token that charges 1 unit of gas.
+	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-	struct UnitToken;
-	impl Token<Test> for UnitToken {
+	struct SimpleToken(u64);
+	impl Token<Test> for SimpleToken {
 		type Metadata = ();
-		fn calculate_amount(&self, _metadata: &()) -> u64 { 1 }
+		fn calculate_amount(&self, _metadata: &()) -> u64 { self.0 }
 	}
 
-	struct DoubleTokenMetadata {
+	struct MultiplierTokenMetadata {
 		multiplier: u64,
 	}
 	/// A simple token that charges for the given amount multiplied to
 	/// a multiplier taken from a given metadata.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-	struct DoubleToken(u64);
+	struct MultiplierToken(u64);
 
-	impl Token<Test> for DoubleToken {
-		type Metadata = DoubleTokenMetadata;
-		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
+	impl Token<Test> for MultiplierToken {
+		type Metadata = MultiplierTokenMetadata;
+		fn calculate_amount(&self, metadata: &MultiplierTokenMetadata) -> u64 {
 			// Probably you want to use saturating mul in production code.
 			self.0 * metadata.multiplier
 		}
@@ -338,7 +337,8 @@ mod tests {
 	fn simple() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
-		let result = gas_meter.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10));
+		let result = gas_meter
+			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
 		assert!(!result.is_out_of_gas());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
@@ -349,12 +349,44 @@ mod tests {
 	#[test]
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
-		assert!(!gas_meter.charge(&(), UnitToken).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 		assert!(!gas_meter
-			.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10))
+			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
 			.is_out_of_gas());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
-		match_tokens!(tokens, UnitToken, DoubleToken(10),);
+		match_tokens!(tokens, SimpleToken(1), MultiplierToken(10),);
+	}
+
+	// This test makes sure that nothing can be executed if there is no gas.
+	#[test]
+	fn refuse_to_execute_anything_if_zero() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(0, 10);
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+	}
+
+	// Make sure that if the gas meter is charged by exceeding amount then not only an error
+	// returned for that charge, but also for all consequent charges.
+	//
+	// This is not striclty necessary, because the execution should be interrupred immediatelly
+	// if the gas meter runs out of gas. However, this is just a nice property to have.
+	#[test]
+	fn overcharge_is_unrecoverable() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(200, 10);
+
+		// The first charge is should lead to OOG.
+		assert!(gas_meter.charge(&(), SimpleToken(300)).is_out_of_gas());
+
+		// The gas meter is emptied at this moment, so this should also fail.
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+	}
+
+
+	// Charging the exact amount that the user paid for should be
+	// possible.
+	#[test]
+	fn charge_exact_amount() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(25, 10);
+		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
 	}
 }
