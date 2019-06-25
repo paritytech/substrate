@@ -293,9 +293,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			// to tokio globals, which aren't available outside.
 			let mut executor = tokio_executor::DefaultExecutor::current();
 			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
-				.expect("failed to spawn task");
+				.expect("failed to spawn grandpa rebroadcast job task");
 			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
-				.expect("failed to spawn task");
+				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});
 

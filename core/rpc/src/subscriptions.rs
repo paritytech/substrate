@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, atomic::{self, AtomicUsize}};
 
-use log::warn;
+use log::{error, warn};
 use jsonrpc_pubsub::{SubscriptionId, typed::{Sink, Subscriber}};
 use parking_lot::Mutex;
 use crate::rpc::futures::sync::oneshot;
@@ -85,8 +85,9 @@ impl Subscriptions {
 				.then(|_| Ok(()));
 
 			self.active_subscriptions.lock().insert(id, tx);
-			self.executor.execute(Box::new(future))
-				.expect("failed to spawn task");
+			if self.executor.execute(Box::new(future)).is_err() {
+				error!("Failed to spawn RPC subscription task");
+			}
 		}
 	}
 
