@@ -260,7 +260,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// This actually does compmutation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
-	fn account_id() -> T::AccountId {
+	pub fn account_id() -> T::AccountId {
 		MODULE_ID.into_account()
 	}
 
