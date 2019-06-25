@@ -421,7 +421,7 @@ impl<Components: components::Components> Service<Components> {
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
-				wasm_external_transport: None,
+				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
 				.for_each(move |event| {
