@@ -230,14 +230,17 @@ impl ExtBuilder {
 	}
 }
 
+// Perform a simple transfer to a non-existent account supplying way more gas than needed.
+// Then we check that the all unused gas is refunded.
 #[test]
 fn refunds_unused_gas() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::deposit_creating(&0, 100_000_000);
+	with_externalities(&mut ExtBuilder::default().gas_price(2).build(), || {
+		Balances::deposit_creating(&ALICE, 100_000_000);
 
-		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 
-		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
+		// 2 * 135 - gas price multiplied by the call base fee.
+		assert_eq!(Balances::free_balance(&ALICE), 100_000_000 - (2 * 135));
 	});
 }
 

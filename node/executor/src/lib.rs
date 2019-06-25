@@ -583,6 +583,20 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::indices(
+						indices::RawEvent::NewAccountIndex(Default::default(), 7)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::NewAccount(Default::default(), 1)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
 						alice().into(),
 						bob().into(),
