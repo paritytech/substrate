@@ -24,7 +24,10 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use parity_codec::{Encode, Decode};
-use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT}};
+use sr_primitives::{
+	ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT, Hash},
+	generic::Block,
+};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
@@ -147,4 +150,27 @@ pub struct GrandpaEquivocationProof<E> {
 
 pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
+}
+
+/// A challenge is a transaction T containing
+/// a) the set of votes S being challenged, that were cast in round r_S,
+/// b) a reference to a finalized block B, with respect to which the set of votes S is incompatible,
+/// c) a set C_B of pre-commit votes in round r_B (where r_B <= r_S) having supermajority for B,
+///    and thus proving that B was indeed finalized in round r_B, and
+/// d) a reference to a previous challenge, if the current tx is an answer to it.
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct PrevoteChallenge<H, N> {
+	challenged_votes: Vec<Prevote<H, N>>,
+	finalized_block: H,
+block_proof: Vec<Precommit<H, N>>,
+	previous_challenge: Option<H>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct PrecommitChallenge<H, N> {
+	challenged_votes: Vec<Precommit<H, N>>,
+	finalized_block: H,
+	block_proof: Vec<Precommit<H, N>>,
+	previous_challenge: Option<H>,
 }

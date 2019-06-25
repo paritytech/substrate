@@ -39,16 +39,3 @@ pub trait AuthorshipEquivocationProof<H, S> {
 	/// Get signature for the second header involved in the equivocation.
 	fn second_signature(&self) -> &S;
 }
-
-/// A challenge is a transaction T containing
-/// a) the set of votes S being challenged, that were cast in round r_S,
-/// b) a reference to a finalized block B, with respect to which the set of votes S is incompatible,
-/// c) a set C_B of pre-commit votes in round r_B (where r_B <= r_S) having supermajority for B,
-///    and thus proving that B was indeed finalized in round r_B, and
-/// d) a reference to a previous challenge, if the current tx is an answer to it.
-pub struct GrandpaChallenge<Vote, Block, Precommit, Hash> {
-	challenged_votes: Vec<Vote>,
-	finalized_block: Block,
-	block_proof: Vec<Precommit>,
-	previous_challenge: Option<Hash>,
-}

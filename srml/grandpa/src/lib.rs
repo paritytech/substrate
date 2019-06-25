@@ -38,12 +38,13 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use primitives::{
-	generic::{DigestItem, OpaqueDigestItemId},
+	generic::{DigestItem, OpaqueDigestItemId, Block},
 	traits::{CurrentHeight, MaybeSerializeDebug, ValidateUnsigned, Verify},
 	transaction_validity::TransactionValidity
 };
 use fg_primitives::{
-	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof,
+	ScheduledChange, GRANDPA_ENGINE_ID,
+	GrandpaEquivocationProof, PrevoteChallenge, PrecommitChallenge, Prevote, Precommit,
 	Message, PrevoteEquivocation, PrecommitEquivocation, localized_payload
 };
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
@@ -55,7 +56,7 @@ mod tests;
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum Signal<N> {
+pub enum Signal<H, N> {
 	/// Authorities set change has been signaled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChange(ScheduledChange<N>),
@@ -63,14 +64,18 @@ pub enum Signal<N> {
 	/// finalized block when the change was signaled, the delay in blocks _to import_
 	/// before applying and the new set of authorities.
 	ForcedAuthoritiesChange(N, ScheduledChange<N>),
+
+	PrevoteChallenge(PrevoteChallenge<H, N>),
+	PrecommitChallenge(PrecommitChallenge<H, N>),
 }
 
-impl<N> Signal<N> {
+impl<H, N> Signal<H, N> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
 			Signal::AuthoritiesChange(change) => Some(change),
 			Signal::ForcedAuthoritiesChange(_, _) => None,
+			_ => None,
 		}
 	}
 
@@ -79,6 +84,7 @@ impl<N> Signal<N> {
 		match self {
 			Signal::ForcedAuthoritiesChange(median, change) => Some((median, change)),
 			Signal::AuthoritiesChange(_) => None,
+			_ => None,
 		}
 	}
 }
@@ -159,7 +165,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// Report prevote equivocation in Grandpa.
+		/// Report prevote equivocation.
 		fn report_prevote_equivocation(
 			_origin,
 			_equivocation_proof: GrandpaEquivocationProof<PrevoteEquivocation<T::Hash, T::BlockNumber>>
@@ -167,12 +173,28 @@ decl_module! {
 			// Slash
 		}
 
-		/// Report precommit equivocation in Grandpa.
+		/// Report precommit equivocation.
 		fn report_precommit_equivocation(
 			_origin,
 			_equivocation_proof: GrandpaEquivocationProof<PrecommitEquivocation<T::Hash, T::BlockNumber>>
 		) {
 			// Slash
+		}
+
+		/// Report unjustified precommit votes.
+		fn report_unjustified_prevotes(
+			_origin,
+			_proof: PrevoteChallenge<T::Hash, T::BlockNumber>
+		) {
+			// Slash?
+		}
+
+		/// Report unjustified precommit votes.
+		fn report_unjustified_precommits(
+			_origin,
+			_proof: PrecommitChallenge<T::Hash, T::BlockNumber>
+		) {
+			// Slash?
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -260,16 +282,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Signal<T::BlockNumber>) {
+	fn deposit_log(log: Signal<T::Hash, T::BlockNumber>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::BlockNumber>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::Hash, T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<Signal<T::BlockNumber>>(id))
+		digest.convert_first(|l| l.try_to::<Signal<T::Hash, T::BlockNumber>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>)
@@ -332,6 +354,10 @@ where
 				handle_prevote_equivocation_proof::<T>(proof),
 			Call::report_precommit_equivocation(proof) =>
 				handle_precommit_equivocation_proof::<T>(proof),
+			// Call::report_unjustified_prevotes(proof) =>
+			// 	handle_prevotes_challenge::<T>(proof),
+			// Call::report_unjustified_precommits(proof) =>
+			// 	handle_precommit_challenge::<T>(proof),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}
