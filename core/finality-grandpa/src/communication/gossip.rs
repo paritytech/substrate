@@ -475,9 +475,6 @@ impl<Block: BlockT> Inner<Block> {
 
 	/// Note a round in the current set has started.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
-		if let Some(ref v) = self.local_view {
-			println!("Local view {:?} {:?} {:?}", v.round, round, v.round == round);
-		}
 		let local_view = match self.local_view {
 			None => return None,
 			Some(ref mut v) => if v.round == round {
@@ -486,7 +483,6 @@ impl<Block: BlockT> Inner<Block> {
 				v
 			},
 		};
-		println!("Local view 2 {:?}", local_view);
 
 		let set_id = local_view.set_id;
 
@@ -528,10 +524,9 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
-			self.live_topics.push(Round(0), set_id);
 			self.authorities = authorities;
 		}
-		self.multicast_neighbor_packet()
+        self.note_round(Round(0))
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
@@ -555,7 +550,6 @@ impl<Block: BlockT> Inner<Block> {
 		let peer_tally_for_round = match self.incoming_msg_tally.get_mut(&(round, set_id)) {
 			Some(tally_for_round) =>  tally_for_round,
 			None => {
-				println!("Unknown round {:?}", round);
 				// We don't know about this round,
 				// let the local-view handle it and likely treat it as past or future.
 				return self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
@@ -600,14 +594,11 @@ impl<Block: BlockT> Inner<Block> {
 		// When a peer sends us a redundant message, and should have known better,
 		// ignore the message and report the peer.
 		if should_report {
-			println!("Report");
 			return Consider::RejectWillfulRedundant
 		}
 
-		let res = self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-			.unwrap_or(Consider::RejectOutOfScope);
-		println!("Res: {:?}", res);
-		res
+		self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
+			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	fn consider_global(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
@@ -623,11 +614,9 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_round_message(&mut self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		println!("Validate round message");
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			println!("Unknown voter");
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
@@ -649,7 +638,6 @@ impl<Block: BlockT> Inner<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			println!("Bad sig");
 			return Action::Discard(cost::BAD_SIGNATURE);
 		}
 
