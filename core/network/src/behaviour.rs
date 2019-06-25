@@ -122,12 +122,12 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 		&mut self.user_protocol.0
 	}
 
-	/// Get a record from the DHT.
+	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a `ValueNotFound` event.
 	pub fn get_value(&mut self, key: &Multihash) {
 		self.discovery.get_value(key);
 	}
 
-	/// Put a record into DHT.
+	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
