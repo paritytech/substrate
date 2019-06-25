@@ -276,8 +276,6 @@ impl<
 > OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
 {
 	fn on_unbalanced(amount: I) {
-		// Commented out for now, but instructive in expectations.
-//		assert!(Nominator1::VALUE <= Denominator::VALUE);
 		let total: u32 = Part1::VALUE + Part2::VALUE;
 		let amount1 = amount.peek().saturating_mul(Part1::VALUE.into()) / total.into();
 		let (imb1, imb2) = amount.split(amount1);

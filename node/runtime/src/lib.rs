@@ -80,13 +80,9 @@ pub struct Author;
 
 impl OnUnbalanced<NegativeImbalance> for Author {
 	fn on_unbalanced(amount: NegativeImbalance) {
-		// TODO: figure out who the author is and correct the account id.
+		// TODO: figure out who the author is and correct the account id. #2918
 		let author = AccountId::default();
-		if let Err(amount) = Balances::resolve_into_existing(&author, amount) {
-			// Author account doesn't exist. That shouldn't be possible, but whatever. We'll just
-			// drop the imbalance safely.
-			drop(amount);
-		}
+		Balances::resolve_creating(&author, amount);
 	}
 }
 
