@@ -182,60 +182,66 @@ decl_module! {
 			}
 			<Self as Store>::DidSetUncles::put(true);
 
-			let now = <system::Module<T>>::block_number();
+			Self::verify_and_import_uncles(new_uncles)
+		}
+	}
+}
 
-			let minimum_height = {
-				let uncle_generations = T::UncleGenerations::get();
-				if now >= uncle_generations {
-					now - uncle_generations
-				} else {
-					Zero::zero()
-				}
-			};
-			let mut uncles = <Self as Store>::Uncles::get();
-			uncles.push(UncleEntryItem::InclusionHeight(now));
+impl<T: Trait> Module<T> {
+	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> DispatchResult {
+		let now = <system::Module<T>>::block_number();
 
-			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
+		let minimum_height = {
+			let uncle_generations = T::UncleGenerations::get();
+			if now >= uncle_generations {
+				now - uncle_generations
+			} else {
+				Zero::zero()
+			}
+		};
+		let mut uncles = <Self as Store>::Uncles::get();
+		uncles.push(UncleEntryItem::InclusionHeight(now));
 
-			for uncle in new_uncles {
-				let hash = uncle.hash();
+		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
-				if uncle.number() < &One::one() {
-					return Err("uncle is genesis");
-				}
+		for uncle in new_uncles {
+			let hash = uncle.hash();
 
-				{
-					let parent_number = uncle.number().clone() - One::one();
-					let parent_hash = <system::Module<T>>::block_hash(&parent_number);
-					if &parent_hash != uncle.parent_hash() {
-						return Err("uncle parent not in chain");
-					}
-				}
-
-				if uncle.number() < &minimum_height {
-					return Err("uncle not recent enough to be included");
-				}
-
-				let duplicate = uncles.iter().find(|entry| match entry {
-					UncleEntryItem::InclusionHeight(_) => false,
-					UncleEntryItem::Uncle(h, _) => h == &hash,
-				}).is_some();
-
-				let in_chain = <system::Module<T>>::block_hash(uncle.number()) == hash;
-
-				if duplicate || in_chain { return Err("uncle already included") }
-
-				// check uncle validity.
-				let (author, temp_acc) = T::FilterUncle::filter_uncle(&uncle, acc)?;
-				acc = temp_acc;
-
-				// TODO [now]: poke something to note uncle included.
-				uncles.push(UncleEntryItem::Uncle(hash, author));
+			if uncle.number() < &One::one() {
+				return Err("uncle is genesis");
 			}
 
-			<Self as Store>::Uncles::put(&uncles);
-			Ok(())
+			{
+				let parent_number = uncle.number().clone() - One::one();
+				let parent_hash = <system::Module<T>>::block_hash(&parent_number);
+				if &parent_hash != uncle.parent_hash() {
+					return Err("uncle parent not in chain");
+				}
+			}
+
+			if uncle.number() < &minimum_height {
+				return Err("uncle not recent enough to be included");
+			}
+
+			let duplicate = uncles.iter().find(|entry| match entry {
+				UncleEntryItem::InclusionHeight(_) => false,
+				UncleEntryItem::Uncle(h, _) => h == &hash,
+			}).is_some();
+
+			let in_chain = <system::Module<T>>::block_hash(uncle.number()) == hash;
+
+			if duplicate || in_chain { return Err("uncle already included") }
+
+			// check uncle validity.
+			let (author, temp_acc) = T::FilterUncle::filter_uncle(&uncle, acc)?;
+			acc = temp_acc;
+
+			// TODO [now]: poke something to note uncle included.
+			uncles.push(UncleEntryItem::Uncle(hash, author));
 		}
+
+		<Self as Store>::Uncles::put(&uncles);
+		Ok(())
 	}
 }
 
@@ -243,7 +249,7 @@ decl_module! {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
@@ -269,6 +275,15 @@ mod tests {
 		type Event = ();
 	}
 
+	impl Trait for Test {
+		type FindAuthor = AuthorGiven;
+		type UncleGenerations = UncleGenerations;
+		type FilterUncle = SealVerify<VerifyBlock>;
+	}
+
+	type System = system::Module<Test>;
+	type Authorship = Module<Test>;
+
 	const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
 
 	pub struct AuthorGiven;
@@ -293,38 +308,32 @@ mod tests {
 
 	pub struct VerifyBlock;
 
-	// impl VerifySeal<Header, u64> for VerifyBlock {
-	// 	fn verify_seal(header: &Header) -> Result<Option<u64>, &'static str> {
-	// 		let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-	// 		let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
+	impl VerifySeal<Header, u64> for VerifyBlock {
+		fn verify_seal(header: &Header) -> Result<Option<u64>, &'static str> {
+			let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+			let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
 
-	// 		let author = match AuthorGiven::find_author(pre_runtime_digests) {
-	// 			None => return Err("no author"),
-	// 			Some(author) => author,
-	// 		};
+			let author = match AuthorGiven::find_author(pre_runtime_digests) {
+				None => return Err("no author"),
+				Some(author) => author,
+			};
 
-	// 		for (id, seal) in seals {
-	// 			if id == TEST_ID {
-	// 				match u64::decode(&mut &seal[..]) {
-	// 					None => return Err("wrong seal"),
-	// 					Some(a) => {
-	// 						if a != author {
-	// 							return Err("wrong author in seal");
-	// 						}
-	// 						break
-	// 					}
-	// 				}
-	// 			}
-	// 		}
+			for (id, seal) in seals {
+				if id == TEST_ID {
+					match u64::decode(&mut &seal[..]) {
+						None => return Err("wrong seal"),
+						Some(a) => {
+							if a != author {
+								return Err("wrong author in seal");
+							}
+							break
+						}
+					}
+				}
+			}
 
-	// 		Ok(Some(author))
-	// 	}
-	// }
-
-	impl Trait for Test {
-		type FindAuthor = AuthorGiven;
-		//type VerifySeal = VerifyBlock;
-		type UncleGenerations = UncleGenerations;
+			Ok(Some(author))
+		}
 	}
 
 	fn seal_header(mut header: Header, author: u64) -> Header {
@@ -348,6 +357,11 @@ mod tests {
 		)
 	}
 
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.into()
+	}
+
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
@@ -360,5 +374,111 @@ mod tests {
 		prune_old_uncles(3, &mut uncles);
 
 		assert_eq!(uncles, vec![InclusionHeight(3), Uncle((), None)]);
+	}
+
+	#[test]
+	fn rejects_bad_uncles() {
+		with_externalities(&mut new_test_ext(), || {
+			let author_a = 69;
+
+			struct CanonChain {
+				inner: Vec<Header>,
+			}
+
+			impl CanonChain {
+				fn best_hash(&self) -> H256 {
+					self.inner.last().unwrap().hash()
+				}
+
+				fn canon_hash(&self, index: usize) -> H256 {
+					self.inner[index].hash()
+				}
+
+				fn header(&self, index: usize) -> &Header {
+					&self.inner[index]
+				}
+
+				fn push(&mut self, header: Header) {
+					self.inner.push(header)
+				}
+			}
+
+			let mut canon_chain = CanonChain {
+				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
+			};
+
+			for number in 1..7 {
+				System::initialize(&number, &canon_chain.best_hash(), &Default::default(), &Default::default());
+				let header = seal_header(System::finalize(), author_a);
+				canon_chain.push(header);
+			}
+
+			// initialize so system context is set up correctly.
+			System::initialize(&8, &canon_chain.best_hash(), &Default::default(), &Default::default());
+
+			// 2 of the same uncle at once
+			{
+				let uncle_a = seal_header(
+					create_header(3, canon_chain.canon_hash(2), [1; 32].into()),
+					author_a,
+				);
+				assert_eq!(
+					Authorship::verify_and_import_uncles(vec![uncle_a.clone(), uncle_a.clone()]),
+					Err("uncle already included"),
+				);
+			}
+
+			// 2 of the same uncle at different times.
+			{
+				let uncle_a = seal_header(
+					create_header(3, canon_chain.canon_hash(2), [1; 32].into()),
+					author_a,
+				);
+
+				assert!(
+					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok();
+				);
+
+				assert_eq!(
+					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]),
+					Err("uncle already included"),
+				);
+			}
+
+			// same uncle as ancestor.
+			{
+				let uncle_clone = canon_chain.header(5).clone();
+
+				assert_eq!(
+					Authorship::verify_and_import_uncles(vec![uncle_clone]),
+					Err("uncle already included"),
+				);
+			}
+
+			// uncle without valid seal.
+			{
+				let unsealed = create_header(3, canon_chain.canon_hash(2), [2; 32].into());
+				assert_eq!(
+					Authorship::verify_and_import_uncles(vec![unsealed]),
+					Err("no author"),
+				);
+			}
+
+			// old uncles can't get in.
+			{
+				assert_eq!(System::block_number(), 8);
+				assert_eq!(<Test as Trait>::UncleGenerations::get(), 5);
+
+				let gen_2 = seal_header(
+					create_header(2, canon_chain.canon_hash(1), [3; 32].into()),
+					author_a,
+				);
+
+				assert_eq!(
+					Authorship::verify_and_import_uncles(vec![gen_2]),
+					Err("uncle not recent enough to be included"),
+				);
+			}
+		});
 	}
 }
