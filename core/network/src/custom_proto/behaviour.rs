@@ -932,7 +932,7 @@ where
 
 	fn poll(
 		&mut self,
-		_params: &mut PollParameters,
+		_params: &mut impl PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			CustomProtoHandlerIn<TMessage>,
