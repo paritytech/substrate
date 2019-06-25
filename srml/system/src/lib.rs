@@ -82,7 +82,7 @@ use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
 }};
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
-use substrate_primitives::storage::well_known_keys;
+use substrate_primitives::{storage::well_known_keys, ChangesTrieConfiguration};
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
 	StorageMap, Parameter, for_each_tuple, traits::Contains
@@ -93,9 +93,6 @@ use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
-
-#[cfg(any(feature = "std", test))]
-use substrate_primitives::ChangesTrieConfiguration;
 
 /// Handler for when a new account has been created.
 pub trait OnNewAccount<AccountId> {
@@ -212,6 +209,22 @@ decl_module! {
 		/// Set the new code.
 		pub fn set_code(new: Vec<u8>) {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+		}
+
+		/// Set the new changes trie configuration.
+		pub fn set_changes_trie_onfig(changes_trie_config: Option<ChangesTrieConfiguration>) {
+			match changes_trie_config.clone() {
+				Some(changes_trie_config) => storage::unhashed::put_raw(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				),
+				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+			}
+
+			let log = generic::DigestItem::ChangesTrieSignal(
+				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
+			);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set some items of storage.
