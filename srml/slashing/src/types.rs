@@ -1,7 +1,7 @@
-use primitives::traits::{SimpleArithmetic, Zero};
+use primitives::traits::{SimpleArithmetic, Zero, One};
 
 /// Type to keep a fraction represented as integers `until the result is computed`
-/// The use case might be to calculate `0.05 * min( 3(k-1) / n, 1)`
+/// The use case might be to calculate `0.05 * min(3(k-1) / n, 1)`
 ///
 /// Because `3 / 10 = 0` then keep it as a fraction instead
 ///
@@ -23,7 +23,7 @@ pub struct Fraction<N> {
 
 impl<N: SimpleArithmetic + Copy> Default for Fraction<N> {
 	fn default() -> Self {
-		Self { denominator: Zero::zero(), numerator: Zero::zero() }
+		Self { denominator: Zero::zero(), numerator: One::one() }
 	}
 }
 

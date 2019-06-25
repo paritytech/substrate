@@ -177,7 +177,6 @@ mod tests {
 	#[test]
 	fn grandpa_invalid_vote_no_slash() {
 		let s = ContinuousMisconduct::severity(&grandpa::InvalidVote);
-		assert_eq!(0, s.denominator());
-		assert_eq!(0, s.numerator());
+		assert_eq!(0, s.denominator() / s.numerator());
 	}
 }
