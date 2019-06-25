@@ -1539,15 +1539,39 @@ fn phragmen_poc_works() {
 		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 
 		if cfg!(feature = "equalise") {
-			assert_eq_uvec!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 166]);
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 499);
-			assert_eq_uvec!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 166]);
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 499);
+			assert_eq_uvec!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 166]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				499
+			);
+			assert_eq_uvec!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 166]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				499
+			);
 		} else {
-			assert_eq_uvec!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![166, 166]);
-			assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 332);
-			assert_eq_uvec!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 333]);
-			assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 666);
+			assert_eq_uvec!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![166, 166]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				332
+			);
+			assert_eq_uvec!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 333]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				666
+			);
 		}
 		check_exposure_all();
 		check_nominator_all();
