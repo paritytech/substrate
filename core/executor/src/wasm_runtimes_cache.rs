@@ -24,6 +24,7 @@ use primitives::Blake2Hasher;
 use primitives::storage::well_known_keys;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
+use std::ops::Deref;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 
 #[derive(Clone)]
@@ -34,30 +35,41 @@ enum RuntimePreproc {
 
 #[derive(Debug)]
 enum Action {
-	Clone,
-	Invalid,
-	Reset,
+	ReuseInstance,
+	InvalidCode,
+	CreateNewInstance,
 }
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
-/// Cache a runtime instances. When an instance is requested,
-/// the template instance is cloned synchronously.
+/// When an instance is requested for the first time it is added to this
+/// cache. Furthermore its initial memory is preserved here. Follow-up
+/// requests to fetch a runtime return this one instance with the memory
+/// reset to the initial memory. So, one runtime instance is reused for
+/// every fetch request.
 pub struct RuntimesCache {
-	template_instance: Option<RuntimePreproc>,
+	runtime_instance: Option<RuntimePreproc>,
+	initial_memory: Option<Vec<u8>>,
 }
 
 impl RuntimesCache {
 	/// Creates a new instance of a runtimes cache.
 	pub fn new() -> RuntimesCache {
 		RuntimesCache {
-			template_instance: None,
+			runtime_instance: None,
+			initial_memory: None,
 		}
 	}
 
-	/// Fetch a runtime instance from a template instance. If there is no template
-	/// instance yet, initialization happens automatically.
+	/// Fetches an instance of the runtime.
+	///
+	/// On first use we create a new runtime instance, save it to the cache
+	/// and persist its initial memory.
+	///
+	/// Each subsequent request will return this instance, with its memory restored
+	/// to the persisted initial memory. Thus, we reuse one single runtime instance
+	/// for every `fetch_runtime` invocation.
 	///
 	/// # Parameters
 	///
@@ -65,16 +77,15 @@ impl RuntimesCache {
 	/// sandboxed Wasm runtime.
 	///
 	/// `ext` - Externalities to use for the runtime. This is used for setting
-	/// up an initial "template instance", which will be cloned when this method
-	/// is called. The parameter is only needed to call into he Wasm module to
-	/// find out the `Core_version`.
+	/// up an initial runtime instance. The parameter is only needed for calling
+	/// into the Wasm module to find out the `Core_version`.
 	///
 	/// `default_heap_pages` - Default number of 64KB pages to allocate for
 	/// Wasm execution. Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
 	/// `maybe_requested_version` - If `Some(RuntimeVersion)` is provided the
-	/// template instance will be checked for compatibility. In case of
-	/// incompatibility the template instance will be reset.
+	/// cached instance will be checked for compatibility. In case of incompatibility
+	/// the instance will be reset and a new one will be created synchronously.
 	///
 	/// # Return value
 	///
@@ -91,50 +102,51 @@ impl RuntimesCache {
 		default_heap_pages: Option<u64>,
 		maybe_requested_version: Option<&RuntimeVersion>,
 	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>)> {
-		if let None = self.template_instance {
+		if let None = self.runtime_instance {
 			trace!(target: "runtimes_cache",
-				   "no template instance found, creating now.");
-			let template =
-				self.create_wasm_instance(wasm_executor, ext, default_heap_pages);
-			self.template_instance = Some(template);
+				   "no instance found in cache, creating now.");
+			self.create_instance(wasm_executor, ext, default_heap_pages);
 		}
 
 		let action = match maybe_requested_version {
-			None => Action::Clone,
-			Some(ref version) => {
-				match self.template_instance {
-					None => Action::Clone,
-					Some(RuntimePreproc::InvalidCode) => Action::Invalid,
-					Some(RuntimePreproc::ValidCode(_, None)) => Action::Reset,
-					Some(RuntimePreproc::ValidCode(_, Some(ref template_version))) => {
-						if template_version.can_call_with(&version) {
-							Action::Clone
+			None => Action::ReuseInstance,
+			Some(ref requested_version) => {
+				match self.runtime_instance {
+					Some(RuntimePreproc::InvalidCode) => Action::InvalidCode,
+					Some(RuntimePreproc::ValidCode(_, None)) => {
+						// In case of a certain version being requested, but
+						// the runtime in the cache not having one, we create
+						// a new instance.
+						Action::CreateNewInstance
+					},
+					Some(RuntimePreproc::ValidCode(_, Some(ref runtime_version))) => {
+						if runtime_version.can_call_with(&requested_version) {
+							Action::ReuseInstance
 						} else {
 							trace!(target: "runtimes_cache",
 								   "resetting cache because new version received");
-							Action::Reset
+							Action::CreateNewInstance
 						}
 					},
+					None => unreachable!("instance is created at beginning of function if non-existent; qed"),
 				}
 			},
 		};
 
 		let runtime_preproc = match action {
-			Action::Clone => {
-				self.template_instance
-					.clone()
-					.expect("if non-existent, template was created at beginning of function; qed")
+			Action::ReuseInstance => {
+				self.reset_instance();
+				self.runtime_instance.clone()
+					.expect("this path will only be invoked if instance exists; qed")
 			},
-			Action::Reset => {
-				let new_template = self.create_wasm_instance(wasm_executor, ext, default_heap_pages);
-				self.template_instance = Some(new_template);
-				self.template_instance
-					.clone()
-					.expect("template was created right before; qed")
+			Action::CreateNewInstance => {
+				self.create_instance(wasm_executor, ext, default_heap_pages);
+				self.runtime_instance.clone()
+					.expect("was created right beforehand; qed")
 			},
-			Action::Invalid => {
+			Action::InvalidCode => {
 				RuntimePreproc::InvalidCode
-			}
+			},
 		};
 
 		match runtime_preproc {
@@ -145,6 +157,66 @@ impl RuntimesCache {
 			RuntimePreproc::ValidCode(r, v) => {
 				Ok((r, v))
 			}
+		}
+	}
+
+	fn create_instance<E: Externalities<Blake2Hasher>>(
+		&mut self,
+		wasm_executor: &WasmExecutor,
+		ext: &mut E,
+		default_heap_pages: Option<u64>,
+	) {
+		let instance =
+			self.create_wasm_instance(wasm_executor, ext, default_heap_pages);
+		if let RuntimePreproc::ValidCode(ref module, _) = instance {
+			self.preserve_initial_memory(module);
+		}
+		self.runtime_instance = Some(instance);
+	}
+
+	fn preserve_initial_memory(&mut self, module: &WasmModuleInstanceRef) {
+		let module_instance = module.deref();
+		let mem = module_instance.export_by_name("memory")
+			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
+		match mem {
+			wasmi::ExternVal::Memory(memory_ref) => {
+				let used_size = memory_ref.used_size().0;
+
+				let mut data = Vec::new();
+				data.resize(used_size, 0);
+
+				memory_ref.get_into(0, &mut data[..])
+					.expect("extracting data will always succeed since target capacity is same as data; qed");
+
+				self.initial_memory = Some(data);
+			},
+			_ => unreachable!("memory export always exists wasm module; qed"),
+		}
+	}
+
+	/// Resets the runtime instance to the initial version by restoring
+	/// the preserved memory.
+	fn reset_instance(&self) -> RuntimePreproc {
+		match &self.runtime_instance {
+			Some(runtime) => {
+				if let RuntimePreproc::ValidCode(module_ref, _) = runtime {
+					if let Some(vec) = &self.initial_memory {
+						let instance: &wasmi::ModuleInstance = module_ref.deref();
+						let mem = instance.export_by_name("memory")
+							.expect("export identifier 'memory' is hardcoded and will always exist; qed");
+						match mem {
+							wasmi::ExternVal::Memory(memory_ref) => {
+								let mem = memory_ref;
+								mem.set(0, vec)
+									.expect("only putting data back in which was already in; qed");
+							},
+							_ => unreachable!("memory export always exists wasm module; qed"),
+						}
+					}
+				}
+				runtime.clone()
+			},
+			None => unreachable!("runtime instance is always existent at this point; qed"),
 		}
 	}
 
@@ -175,11 +247,11 @@ impl RuntimesCache {
 							RuntimeVersion::decode(&mut v.as_slice())
 						});
 					RuntimePreproc::ValidCode(module, version)
-				}
+				},
 				Err(e) => {
 					trace!(target: "runtimes_cache", "Invalid code presented to executor ({:?})", e);
 					RuntimePreproc::InvalidCode
-				}
+				},
 			}
 	}
 }
