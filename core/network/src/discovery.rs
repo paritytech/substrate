@@ -174,7 +174,7 @@ where
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters,
+		params: &mut impl PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
