@@ -47,6 +47,23 @@ pub trait Trait: system::Trait {
 	/// The `OnePerAuthorPerHeight` filter is good for many slot-based PoS
 	/// engines.
 	type FilterUncle: FilterUncle<Self::Header, Self::AccountId>;
+	/// An event handler for authored blocks.
+	type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
+}
+
+/// An event handler for the authorship module.
+pub trait EventHandler<Author, BlockNumber> {
+	/// Note that the given account ID is the author of the current block.
+	fn note_author(author: Author);
+
+	/// Note that the given account ID authored the given uncle, and how many
+	/// blocks older than the current block it is (>= 0 -- siblings are allowed)
+	fn note_uncle(author: Author, age: BlockNumber);
+}
+
+impl<A, B> EventHandler<A, B> for () {
+	fn note_author(_author: A) { }
+	fn note_uncle(_author: A, _age: B) { }
 }
 
 /// Additional filtering on uncles that pass preliminary ancestry checks.
@@ -125,7 +142,7 @@ decl_storage! {
 		/// Uncles
 		Uncles: Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>;
 		/// Author of current block.
-		Author: T::AccountId;
+		Author: Option<T::AccountId>;
 		/// Whether uncles were already set in this block.
 		DidSetUncles: bool;
 	}
@@ -156,25 +173,19 @@ decl_module! {
 				prune_old_uncles(minimum_height, &mut uncles)
 			}
 
-			let digest = <system::Module<T>>::digest();
-
-			let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-			if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-				<Self as Store>::Author::put(&author);
-			}
-
 			<Self as Store>::DidSetUncles::put(false);
+
+			T::EventHandler::note_author(Self::author());
 		}
 
 		fn on_finalize() {
-			// ensure we never go to trie with this value.
+			// ensure we never go to trie with these values.
+			let _ = <Self as Store>::Author::take();
 			let _ = <Self as Store>::DidSetUncles::take();
 		}
 
 		/// Provide a set of uncles.
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
-			use primitives::traits::Header as HeaderT;
-
 			ensure_none(origin)?;
 
 			if <Self as Store>::DidSetUncles::get() {
@@ -188,17 +199,39 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Fetch the author of the block.
+	///
+	/// This is safe to invoke `on_initialize` implementations as well as afterwards.
+	pub fn author() -> T::AccountId {
+		// Check the memoized storage value.
+		if let Some(author) = <Self as Store>::Author::get() {
+			return author;
+		}
+
+		let digest = <system::Module<T>>::digest();
+		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
+			<Self as Store>::Author::put(&author);
+			author
+		} else {
+			Default::default()
+		}
+	}
+
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> DispatchResult {
 		let now = <system::Module<T>>::block_number();
 
-		let minimum_height = {
+		let (minimum_height, maximum_height) = {
 			let uncle_generations = T::UncleGenerations::get();
-			if now >= uncle_generations {
+			let min = if now >= uncle_generations {
 				now - uncle_generations
 			} else {
 				Zero::zero()
-			}
+			};
+
+			(min, now)
 		};
+
 		let mut uncles = <Self as Store>::Uncles::get();
 		uncles.push(UncleEntryItem::InclusionHeight(now));
 
@@ -209,6 +242,10 @@ impl<T: Trait> Module<T> {
 
 			if uncle.number() < &One::one() {
 				return Err("uncle is genesis");
+			}
+
+			if uncle.number() > &maximum_height {
+				return Err("uncles too high in chain");
 			}
 
 			{
@@ -236,7 +273,10 @@ impl<T: Trait> Module<T> {
 			let (author, temp_acc) = T::FilterUncle::filter_uncle(&uncle, acc)?;
 			acc = temp_acc;
 
-			// TODO [now]: poke something to note uncle included.
+			T::EventHandler::note_uncle(
+				author.clone().unwrap_or_default(),
+				now - uncle.number().clone(),
+			);
 			uncles.push(UncleEntryItem::Uncle(hash, author));
 		}
 
@@ -279,6 +319,7 @@ mod tests {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
 		type FilterUncle = SealVerify<VerifyBlock>;
+		type EventHandler = ();
 	}
 
 	type System = system::Module<Test>;
@@ -358,7 +399,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.into()
 	}
 
@@ -407,7 +448,7 @@ mod tests {
 				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
 			};
 
-			for number in 1..7 {
+			for number in 1..8 {
 				System::initialize(&number, &canon_chain.best_hash(), &Default::default(), &Default::default());
 				let header = seal_header(System::finalize(), author_a);
 				canon_chain.push(header);
@@ -479,6 +520,34 @@ mod tests {
 					Err("uncle not recent enough to be included"),
 				);
 			}
+
+			// siblings are also allowed
+			{
+				let other_8 = seal_header(
+					create_header(8, canon_chain.canon_hash(7), [1; 32].into()),
+					author_a,
+				);
+
+				assert!(
+					Authorship::verify_and_import_uncles(vec![other_8]).is_ok();
+				);
+			}
+		});
+	}
+
+	#[test]
+	fn sets_author_lazily() {
+		with_externalities(&mut new_test_ext(), || {
+			let author = 42;
+			let mut header = seal_header(
+				create_header(1, Default::default(), [1; 32].into()),
+				author,
+			);
+
+			header.digest_mut().pop(); // pop the seal off.
+			System::initialize(&1, &Default::default(), &Default::default(), header.digest());
+
+			assert_eq!(Authorship::author(), author);
 		});
 	}
 }
