@@ -74,4 +74,5 @@ pub use core::str;
 pub mod collections {
 	pub use alloc::collections::btree_map;
 	pub use alloc::collections::btree_set;
+	pub use alloc::collections::vec_deque;
 }
