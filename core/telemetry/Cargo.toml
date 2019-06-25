@@ -9,7 +9,7 @@ edition = "2018"
 bytes = "0.4"
 parking_lot = "0.8.0"
 futures = "0.1"
-libp2p = { version = "0.9.1", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.10.0", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4"
 rand = "0.6"
 serde = { version = "1.0.81", features = ["derive"] }
