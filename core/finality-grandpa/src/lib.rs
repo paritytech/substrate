@@ -179,7 +179,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(::tokio_timer::Error),
+	Timer(tokio_timer::Error),
 }
 
 impl From<GrandpaError> for Error {

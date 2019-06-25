@@ -104,9 +104,8 @@ impl<C, Block> OffchainWorkers<C, Block> where
 			let api = Box::new(api);
 			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
 			futures::future::Either::A(runner.process())
-
 		} else {
-			futures::future::Either::B(futures::future::empty())
+			futures::future::Either::B(futures::future::ok(()))
 		}
 	}
 }
