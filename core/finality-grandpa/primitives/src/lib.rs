@@ -163,7 +163,7 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 pub struct PrevoteChallenge<H, N> {
 	challenged_votes: Vec<Prevote<H, N>>,
 	finalized_block: H,
-block_proof: Vec<Precommit<H, N>>,
+	block_proof: Vec<Precommit<H, N>>,
 	previous_challenge: Option<H>,
 }
 

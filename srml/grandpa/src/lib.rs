@@ -53,6 +53,13 @@ use system::DigestOf;
 mod mock;
 mod tests;
 
+/// A scheduled change of authority set.
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+pub struct Challenge<H, N> {
+	challenge: StoredPendingChallenge<H, N>,
+}
+
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
@@ -65,8 +72,7 @@ pub enum Signal<H, N> {
 	/// before applying and the new set of authorities.
 	ForcedAuthoritiesChange(N, ScheduledChange<N>),
 
-	PrevoteChallenge(PrevoteChallenge<H, N>),
-	PrecommitChallenge(PrecommitChallenge<H, N>),
+	Challenge(Challenge<H, N>),
 }
 
 impl<H, N> Signal<H, N> {
@@ -138,10 +144,39 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 	}
 }
 
+/// A stored pending change.
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct StoredPendingChallenge<H, N> {
+	/// The block number this was scheduled at.
+	pub scheduled_at: N,
+	/// The delay in blocks until it will expire.
+	pub delay: N,
+	
+	pub prevote_challenge: PrevoteChallenge<H, N>,
+
+	pub precommit_challenge: PrecommitChallenge<H, N>,
+}
+
+
+/// A stored pending change.
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct StoredChallengeSession<H, N> {
+	/// The block number this was scheduled at.
+	pub scheduled_at: N,
+	/// The delay in blocks until it will expire.
+	pub delay: N,
+	
+	pub prevote_challenge: PrevoteChallenge<H, N>,
+
+	pub precommit_challenge: PrecommitChallenge<H, N>,
+}
+
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
 		NewAuthorities(Vec<(AuthorityId, u64)>),
+		NewChallenge(Vec<AuthorityId>),
+		ChallengeResponded(Vec<AuthorityId>),
 	}
 );
 
@@ -152,6 +187,11 @@ decl_storage! {
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
+
+		ChallengeSessions get(challenge_sessions): Vec<StoredChallengeSession<T::Hash, T::BlockNumber>>;
+
+		/// Pending challenge.
+		PendingChallenge: Option<StoredPendingChallenge<T::Hash, T::BlockNumber>>;
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -225,6 +265,10 @@ decl_module! {
 					);
 					<PendingChange<T>>::kill();
 				}
+			}
+
+			if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
+				Self::deposit_log(Signal::Challenge(Challenge { challenge: pending_challenge }))
 			}
 		}
 	}
@@ -354,10 +398,10 @@ where
 				handle_prevote_equivocation_proof::<T>(proof),
 			Call::report_precommit_equivocation(proof) =>
 				handle_precommit_equivocation_proof::<T>(proof),
-			// Call::report_unjustified_prevotes(proof) =>
-			// 	handle_prevotes_challenge::<T>(proof),
-			// Call::report_unjustified_precommits(proof) =>
-			// 	handle_precommit_challenge::<T>(proof),
+			Call::report_unjustified_prevotes(proof) =>
+				handle_unjustified_prevotes::<T>(proof),
+			Call::report_unjustified_precommits(proof) =>
+				handle_unjustified_precommits::<T>(proof),
 			_ => TransactionValidity::Invalid(0),
 		}
 	}
@@ -450,5 +494,28 @@ where
 			propagate: true,
 		}
 	}
+	TransactionValidity::Invalid(0)
+}
+
+fn handle_unjustified_prevotes<T: Trait>(
+	proof: &PrevoteChallenge<T::Hash, T::BlockNumber>
+) -> TransactionValidity
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
+	
+	TransactionValidity::Invalid(0)
+}
+
+fn handle_unjustified_precommits<T: Trait>(
+	proof: &PrecommitChallenge<T::Hash, T::BlockNumber>
+) -> TransactionValidity
+where
+	T: Trait,
+	<<T as Trait>::Signature as Verify>::Signer:
+		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+{
 	TransactionValidity::Invalid(0)
 }
