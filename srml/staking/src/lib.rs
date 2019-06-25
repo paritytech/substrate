@@ -1111,11 +1111,7 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			// This optimization will most likely be only applied off-chain.
-			let do_equalise;
-			if cfg!(feature = "equalise") { do_equalise = true; }
-			else { do_equalise = false; }
-			if do_equalise {
+			if cfg!(feature = "equalise") {
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
 				let mut assignments_with_votes = assignments_with_stakes.iter()

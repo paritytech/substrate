@@ -30,6 +30,7 @@ use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
 pub type BlockNumber = u64;
+pub type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
