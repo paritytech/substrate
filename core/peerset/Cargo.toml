@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 futures = "0.1"
-libp2p = { version = "0.9.0", default-features = false }
+libp2p = { version = "0.10.0", default-features = false }
 linked-hash-map = "0.5"
 log = "0.4"
 lru-cache = "0.1.2"
