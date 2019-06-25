@@ -202,6 +202,9 @@ fn returns_mutable_static() {
 	let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
 	assert_eq!(ret, 33);
 
+	// We expect that every invocation will need to return the initial
+	// value plus one. If the value increases more than that then it is
+	// a sign that the wasm runtime preserves the memory content.
 	let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
-	assert_eq!(ret, 34);
+	assert_eq!(ret, 33);
 }
