@@ -35,4 +35,5 @@ std = [
 	"timestamp/std",
 	"inherents/std",
 	"babe-primitives/std",
+	"session/std",
 ]

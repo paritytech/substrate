@@ -727,11 +727,11 @@ fn nominating_and_rewards_should_work() {
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
-		// NOTE: +-1 due to rounding error. Not a big deal.
+		let approximation = 1;
 		if cfg!(feature = "equalise") {
 			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
-			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - 1);
-			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - 1);
+			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - approximation);
+			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - approximation);
 			// Rest for validators.
 			assert_eq!(Balances::total_balance(&10), initial_balance + new_session_reward/2 + 2);
 			assert_eq!(Balances::total_balance(&20), initial_balance + new_session_reward/2 + 2);
@@ -739,12 +739,12 @@ fn nominating_and_rewards_should_work() {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&2),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
 			);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&4),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
 			);
 
 			// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
@@ -1757,11 +1757,13 @@ fn bond_with_no_staked_value() {
 
 		start_era(3);
 
+		// Approximation resulting from Perbill conversion
+		let approximation = 1;
 		let reward = Staking::current_session_reward() * 3;
 		// 2 will not get a reward of only 1
 		// 4 will get the rest
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3 - approximation);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3 - approximation);
 	});
 }
 
@@ -2049,5 +2051,38 @@ fn phragmen_large_scale_test_2() {
 
 		assert_total_expo(3, nom_budget / 2 + c_budget);
 		assert_total_expo(5, nom_budget / 2 + c_budget);
+	})
+}
+
+#[test]
+fn reward_validator_slashing_validator_doesnt_overflow() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+		let stake = u32::max_value() as u64 * 2;
+		let reward_slash = u32::max_value() as u64 * 2;
+
+		// Assert multiplication overflows in balance arithmetic.
+		assert!(stake.checked_mul(reward_slash).is_none());
+
+		// Set staker
+		let _ = Balances::make_free_balance_be(&11, stake);
+		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: stake, others: vec![] });
+
+		// Check reward
+		Staking::reward_validator(&11, reward_slash);
+		assert_eq!(Balances::total_balance(&11), stake * 2);
+
+		// Set staker
+		let _ = Balances::make_free_balance_be(&11, stake);
+		let _ = Balances::make_free_balance_be(&2, stake);
+		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: 1, others: vec![
+			IndividualExposure { who: 2, value: stake - 1 }
+		]});
+
+		// Check slashing
+		Staking::slash_validator(&11, reward_slash);
+		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
