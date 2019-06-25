@@ -48,6 +48,7 @@ std = [
 	"wasmi",
 	"primitive-types/std",
 	"primitive-types/serde",
+	"primitive-types/heapsize",
 	"primitive-types/byteorder",
 	"primitive-types/rustc-hex",
 	"primitive-types/libc",
