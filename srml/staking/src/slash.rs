@@ -41,18 +41,35 @@ impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use crate::mock::*;
-	use srml_slashing::{Slashing, misconduct::Unresponsive};
+	use srml_slashing::{Slashing, misconduct};
 	use runtime_io::with_externalities;
 
 	#[test]
 	fn it_works() {
-		with_externalities(&mut ExtBuilder::default().build(),
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
 		|| {
-			let mut ur = Unresponsive;
-			let misbehaved = vec![0, 1, 2, 3, 4];
-			Module::<Test>::slash_on_checkpoint(&misbehaved, 100, &ur);
+			// ensure 11, 21, 31 and 41 are `stakers`
+			assert_eq!(Staking::bonded(&11), Some(10));
+			assert_eq!(Staking::bonded(&21), Some(20));
+			assert_eq!(Staking::bonded(&31), Some(30));
+			assert_eq!(Staking::bonded(&41), Some(40));
+
+			assert_eq!(1125, Staking::slashable_balance(&11));
+			assert_eq!(1000, Balances::free_balance(&11));
+
+			// Slash 1.5%
+			//
+			// Slashable balance: 1125
+			//
+			// 0.015 -> Fraction { denominator: 3 / numerator: 200)
+			// (1125 / 200) * 3 = 15
+			// (1125 * 0.015) = 16.875
+			//
+			// Illustration that we loose  accurancy representing it as a `Fraction`
+			assert_eq!(Staking::slash_on_checkpoint(&[11, 21, 31, 41], 30, &misconduct::Unresponsive), 3);
+			assert_eq!(985, Balances::free_balance(&11));
 		});
 	}
 }
