@@ -55,8 +55,8 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig,
-		System, SystemConfig, GrandpaConfig, IndicesConfig, Event, SessionKeys,
-		CENTS, DOLLARS, MILLICENTS
+		System, SystemConfig, GrandpaConfig, IndicesConfig, ContractsConfig, Event,
+		SessionKeys, CENTS, DOLLARS, MILLICENTS
 	};
 	use wabt;
 	use primitives::map;
@@ -347,7 +347,10 @@ mod tests {
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
 			timestamp: Some(Default::default()),
-			contracts: Some(Default::default()),
+			contracts: Some(ContractsConfig {
+				current_schedule: Default::default(),
+				gas_price: 1 * MILLICENTS,
+			}),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				_genesis_phantom_data: Default::default(),
