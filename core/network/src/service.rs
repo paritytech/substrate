@@ -23,10 +23,11 @@ use std::time::Duration;
 use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::multihash::Multihash;
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use crate::protocol_behaviour::ProtocolBehaviour;
-use crate::{behaviour::Behaviour, parse_str_addr};
+use crate::{behaviour::{Behaviour, BehaviourOut}, parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use peerset::PeersetHandle;
@@ -35,7 +36,7 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::AlwaysBadChecker;
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::message::Message;
+use crate::protocol::{event::Event, message::Message};
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
@@ -369,6 +370,16 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// Are we in the process of downloading the chain?
 	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
+	}
+
+	/// Get a value.
+	pub fn get_value(&mut self, key: &Multihash) {
+		self.network.lock().get_value(key);
+	}
+
+	/// Put a value.
+	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+		self.network.lock().put_value(key, value);
 	}
 }
 
@@ -744,7 +755,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(outcome))) => outcome,
+				Ok(Async::Ready(Some(BehaviourOut::Behaviour(outcome)))) => outcome,
+				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
+					network_service.user_protocol_mut()
+						.on_event(Event::Dht(ev));
+					CustomMessageOutcome::None
+				},
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);

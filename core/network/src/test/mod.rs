@@ -196,6 +196,11 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
 	) {}
+
+	fn on_event(
+		&mut self,
+		_event: crate::event::Event
+	) {}
 }
 
 pub type PeersFullClient =

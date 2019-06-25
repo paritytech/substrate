@@ -39,6 +39,12 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 		message: &mut Option<crate::message::Message<B>>
 	);
 
+	/// Called when a network-specific event arrives.
+	fn on_event(
+		&mut self,
+		event: crate::protocol::event::Event
+	);
+
 	/// Called on abort.
 	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
 	fn on_abort(&mut self) { }
@@ -128,6 +134,13 @@ macro_rules! construct_simple_protocol {
 				_message: &mut Option<$crate::message::Message<$block>>
 			) {
 				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
+			}
+
+			fn on_event(
+				&mut self,
+				_event: $crate::event::Event
+			) {
+				$( self.$sub_protocol_name.on_event(_event); )*
 			}
 
 			fn on_abort(&mut self) {
