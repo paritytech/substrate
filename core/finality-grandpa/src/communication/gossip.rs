@@ -526,7 +526,7 @@ impl<Block: BlockT> Inner<Block> {
 			local_view.update_set(set_id);
 			self.authorities = authorities;
 		}
-        self.note_round(Round(0))
+		self.note_round(Round(0))
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
