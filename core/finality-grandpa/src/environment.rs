@@ -30,7 +30,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet, HistoricalVotes,
+	voter, voter_set::VoterSet,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -636,7 +636,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: &HistoricalVotes<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		votes: Vec<SignedMessage<Block>>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -655,7 +655,7 @@ where
 				number: round,
 				state: state.clone(),
 				base,
-				votes: votes.seen().to_owned(),
+				votes,
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));
