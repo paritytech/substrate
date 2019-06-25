@@ -34,7 +34,7 @@
 //! - **Session key:** A session key is actually several keys kept together that provide the various signing
 //! functions required by network authorities/validators in pursuit of their duties.
 //! - **Session key configuration process:** A session key is set using `set_key` for use in the
-//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountID` and the session
+//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountId` and the session
 //! key provided. `set_key` allows users to set their session key prior to becoming a validator.
 //! It is a public call since it uses `ensure_signed`, which checks that the origin is a signed account.
 //! As such, the account ID of the origin stored in in `NextKeyFor` may not necessarily be associated with
@@ -120,8 +120,11 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
 use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
-use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter, print};
+use srml_support::{
+	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
+	decl_event, decl_storage,
+};
+use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
 
 /// Simple index type with which we can count sessions.
@@ -374,6 +377,24 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<NextKeyFor<T>>::remove(who);
+	}
+}
+
+/// Wraps the author-scraping logic for consensus engines that can recover
+/// the canonical index of an author. This then transforms it into the
+/// registering account-ID of that session key index.
+pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
+
+impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AccountId>
+	for FindAccountFromAuthorIndex<T, Inner>
+{
+	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		let i = Inner::find_author(digests)?;
+
+		let validators = <Module<T>>::validators();
+		validators.get(i as usize).map(|k| k.clone())
 	}
 }
 
