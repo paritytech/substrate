@@ -45,7 +45,7 @@ fn sync_peers_works() {
 	net.sync();
 	for peer in 0..3 {
 		// Assert peers is up to date.
-		assert_eq!(net.peer(peer).protocol_status.read().num_peers, 2);
+		assert_eq!(net.peer(peer).num_peers(), 2);
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
@@ -56,8 +56,7 @@ fn sync_peers_works() {
 	net.sync();
 	// Now peers are disconnected.
 	for peer in 0..3 {
-		let status = net.peer(peer).protocol_status.read();
-		assert_eq!(status.num_peers, 0);
+		assert_eq!(net.peer(peer).num_peers(), 0);
 	}
 }
 
@@ -433,7 +432,7 @@ fn can_not_sync_from_light_peer() {
 	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
 	// and that the #1 is still connected to #2
 	// (because #2 has not tried to fetch block data from the #1 light node)
-	assert_eq!(net.peer(1).protocol_status().num_peers, 2);
+	assert_eq!(net.peer(1).num_peers(), 2);
 
 	// and now try to fetch block data from light peer #1
 	// (this should result in disconnect)
@@ -450,7 +449,7 @@ fn can_not_sync_from_light_peer() {
 	);
 	net.sync();
 	// check that light #1 has disconnected from #2
-	assert_eq!(net.peer(1).protocol_status().num_peers, 1);
+	assert_eq!(net.peer(1).num_peers(), 1);
 }
 
 #[test]
