@@ -33,7 +33,7 @@ use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
-	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
+	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
 	traits::Currency, StorageMap, StorageValue
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -517,6 +517,110 @@ fn dispatch_call() {
 					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true)),
 					topics: vec![],
 				}
+			]);
+		},
+	);
+}
+
+const CODE_DISPATCH_CALL_THEN_TRAP: &str = r#"
+(module
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_dispatch_call
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 11) ;; Length of the buffer
+		)
+		(unreachable) ;; trap so that the top level transaction fails
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
+)
+"#;
+const HASH_DISPATCH_CALL_THEN_TRAP: [u8; 32] = hex!("55fe5c142dfe2519ca76c7c9b9f05012bd2624b7dcc128d2ce5a7af9d2da1846");
+
+#[test]
+fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
+	// This test can fail due to the encoding changes. In case it becomes too annoying
+	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
+
+	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+			// Let's keep this assert even though it's redundant. If you ever need to update the
+			// wasm source this test will fail and will show you the actual hash.
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					topics: vec![],
+				},
+			]);
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000,
+				HASH_DISPATCH_CALL_THEN_TRAP.into(),
+				vec![],
+			));
+
+			// Call the newly created contract. The contract is expected to dispatch a call
+			// and then trap.
+			assert_err!(
+				Contract::call(
+					Origin::signed(ALICE),
+					BOB, // newly created account
+					0,
+					100_000,
+					vec![],
+				),
+				"during execution"
+			);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(BOB, 100)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
+				},
+				// ABSENCE of events which would be caused by dispatched Balances::transfer call
 			]);
 		},
 	);
