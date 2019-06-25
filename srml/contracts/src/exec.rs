@@ -241,8 +241,8 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	#[inline]
 	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
 		match *self {
-			ExecFeeToken::Call => metadata.call_base_fee,
-			ExecFeeToken::Instantiate => metadata.instantiate_base_fee,
+			ExecFeeToken::Call => metadata.schedule.call_base_cost,
+			ExecFeeToken::Instantiate => metadata.schedule.instantiate_base_cost,
 		}
 	}
 }

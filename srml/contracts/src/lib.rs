@@ -679,10 +679,6 @@ decl_storage! {
 		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
 		/// The fee required to create a contract instance.
 		ContractFee get(contract_fee) config(): BalanceOf<T> = 21.into();
-		/// The base fee charged for calling into a contract.
-		CallBaseFee get(call_base_fee) config(): T::Gas = 135.into();
-		/// The base fee charged for creating a contract.
-		CreateBaseFee get(create_base_fee) config(): T::Gas = 175.into();
 		/// The price of one unit of gas.
 		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
 		/// The maximum nesting level of a call/create stack.
@@ -724,8 +720,6 @@ pub struct Config<T: Trait> {
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
 	pub transfer_fee: BalanceOf<T>,
-	pub call_base_fee: T::Gas,
-	pub instantiate_base_fee: T::Gas,
 }
 
 impl<T: Trait> Config<T> {
@@ -737,8 +731,6 @@ impl<T: Trait> Config<T> {
 			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
 			account_create_fee: <Module<T>>::creation_fee(),
 			transfer_fee: <Module<T>>::transfer_fee(),
-			call_base_fee: <Module<T>>::call_base_fee(),
-			instantiate_base_fee: <Module<T>>::create_base_fee(),
 		}
 	}
 }
@@ -770,6 +762,12 @@ pub struct Schedule<Gas> {
 
 	/// Gas cost to deposit an event; the base.
 	pub event_base_cost: Gas,
+
+	/// Base gas cost to call into a contract.
+	pub call_base_cost: Gas,
+
+ 	/// Base gas cost to instantiate a contract.
+	pub instantiate_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
@@ -808,6 +806,8 @@ impl<Gas: From<u32>> Default for Schedule<Gas> {
 			event_data_per_byte_cost: 1.into(),
 			event_per_topic_cost: 1.into(),
 			event_base_cost: 1.into(),
+			call_base_cost: 135.into(),
+			instantiate_base_cost: 175.into(),
 			sandbox_data_read_cost: 1.into(),
 			sandbox_data_write_cost: 1.into(),
 			max_event_topics: 4,
