@@ -200,7 +200,7 @@ mod tests {
 	use crate::wasm::tests::MockExt;
 	use crate::wasm::Runtime;
 	use crate::exec::Ext;
-	use crate::Trait;
+	use crate::gas::Gas;
 
 	#[test]
 	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
@@ -256,7 +256,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( <E: Ext> ext_gas (_ctx, amount: u32) => {
-			let amount = <E::T as Trait>::Gas::from(amount);
+			let amount = Gas::from(amount);
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -308,7 +308,7 @@ mod tests {
 
 		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
-				let amount = <E::T as Trait>::Gas::from(amount);
+				let amount = Gas::from(amount);
 				if !amount.is_zero() {
 					Ok(())
 				} else {

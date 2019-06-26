@@ -15,12 +15,17 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
+use rstd::convert::TryFrom;
 use runtime_primitives::BLOCK_FULL;
-use runtime_primitives::traits::{CheckedMul, CheckedSub, Zero, SaturatedConversion};
+use runtime_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
 use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
+
+// Gas units are chosen to be represented by u64 so that gas metering instructions can operate on
+// them efficiently.
+pub type Gas = u64;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -68,7 +73,7 @@ pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 	/// That said, implementors of this function still can run into overflows
 	/// while calculating the amount. In this case it is ok to use saturating operations
 	/// since on overflow they will return `max_value` which should consume all gas.
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> Gas;
 }
 
 /// A wrapper around a type-erased trait object of what used to be a `Token`.
@@ -79,9 +84,9 @@ pub struct ErasedToken {
 }
 
 pub struct GasMeter<T: Trait> {
-	limit: T::Gas,
+	limit: Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
-	gas_left: T::Gas,
+	gas_left: Gas,
 	gas_price: BalanceOf<T>,
 
 	#[cfg(test)]
@@ -89,7 +94,7 @@ pub struct GasMeter<T: Trait> {
 }
 impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
-	pub fn with_limit(gas_limit: T::Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
+	pub fn with_limit(gas_limit: Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
 		GasMeter {
 			limit: gas_limit,
 			gas_left: gas_limit,
@@ -125,7 +130,7 @@ impl<T: Trait> GasMeter<T> {
 		}
 
 		let amount = token.calculate_amount(metadata);
-		let new_value = match self.gas_left.checked_sub(&amount) {
+		let new_value = match self.gas_left.checked_sub(amount) {
 			None => None,
 			Some(val) => Some(val),
 		};
@@ -148,7 +153,7 @@ impl<T: Trait> GasMeter<T> {
 	/// All unused gas in the nested gas meter is returned to this gas meter.
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
-		amount: T::Gas,
+		amount: Gas,
 		f: F,
 	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
@@ -178,12 +183,12 @@ impl<T: Trait> GasMeter<T> {
 	}
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> T::Gas {
+	pub fn gas_left(&self) -> Gas {
 		self.gas_left
 	}
 
 	/// Returns how much gas was spent.
-	fn spent(&self) -> T::Gas {
+	fn spent(&self) -> Gas {
 		self.limit - self.gas_left
 	}
 
@@ -199,7 +204,7 @@ impl<T: Trait> GasMeter<T> {
 /// The funds are deducted from `transactor`.
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
-	gas_limit: T::Gas,
+	gas_limit: Gas,
 ) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
 	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
@@ -211,9 +216,13 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let cost = gas_limit.clone().into()
-		.checked_mul(&gas_price)
-		.ok_or("overflow multiplying gas limit by price")?;
+	let cost = if gas_price.is_zero() {
+		<BalanceOf<T>>::zero()
+	} else {
+		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit).ok()
+			.and_then(|gas_limit| gas_price.checked_mul(&gas_limit))
+			.ok_or("overflow multiplying gas limit by price")?
+	};
 
 	let imbalance = T::Currency::withdraw(
 		transactor,
@@ -243,11 +252,11 @@ pub fn refund_unused_gas<T: Trait>(
 
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
-	// also has T::Gas type.
+	// also has Gas type.
 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought at.
-	let refund = gas_left.into() * gas_meter.gas_price;
+	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();
 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
 		T::GasPayment::on_unbalanced(imbalance);
@@ -256,8 +265,10 @@ pub fn refund_unused_gas<T: Trait>(
 
 /// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
-pub fn approx_gas_for_balance<T: Trait>(gas_price: BalanceOf<T>, balance: BalanceOf<T>) -> T::Gas {
-	(balance / gas_price).saturated_into::<T::Gas>()
+pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
+	where Balance: SimpleArithmetic
+{
+	(balance / gas_price).saturated_into::<Gas>()
 }
 
 /// A simple utility macro that helps to match against a
