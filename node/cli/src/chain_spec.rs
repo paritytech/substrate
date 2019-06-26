@@ -174,12 +174,14 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
 			contract_fee: 1 * CENTS,
-			call_base_fee: 1000,
-			create_base_fee: 1000,
 			gas_price: 1 * MILLICENTS,
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
-			current_schedule: Default::default(),
+			current_schedule: contracts::Schedule {
+				call_base_cost: 1000,
+				instantiate_base_cost: 1000,
+				..Default::default()
+			},
 		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
@@ -268,27 +270,6 @@ pub fn testnet_genesis(
 	const ENDOWMENT: u128 = 1 << 20;
 
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
-	let mut contracts_config = ContractsConfig {
-		signed_claim_handicap: 2,
-		rent_byte_price: 4,
-		rent_deposit_offset: 1000,
-		storage_size_offset: 8,
-		surcharge_reward: 150,
-		tombstone_deposit: 16,
-		transaction_base_fee: 1,
-		transaction_byte_fee: 0,
-		transfer_fee: 0,
-		creation_fee: 0,
-		contract_fee: 21,
-		call_base_fee: 135,
-		create_base_fee: 175,
-		gas_price: 1,
-		max_depth: 1024,
-		block_gas_limit: 10_000_000,
-		current_schedule: Default::default(),
-	};
-	// this should only be enabled on development chains
-	contracts_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -349,7 +330,26 @@ pub fn testnet_genesis(
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
 		}),
-		contracts: Some(contracts_config),
+		contracts: Some(ContractsConfig {
+			signed_claim_handicap: 2,
+			rent_byte_price: 4,
+			rent_deposit_offset: 1000,
+			storage_size_offset: 8,
+			surcharge_reward: 150,
+			tombstone_deposit: 16,
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			contract_fee: 21,
+			gas_price: 1,
+			max_depth: 1024,
+			block_gas_limit: 10_000_000,
+			current_schedule: contracts::Schedule {
+				enable_println, // this should only be enabled on development chains
+				..Default::default()
+			},
+		}),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
