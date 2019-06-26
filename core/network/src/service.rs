@@ -694,13 +694,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ProtocolMsg::BlockFinalized(hash, header) =>
 					network_service.user_protocol_mut().on_block_finalized(hash, &header),
 				ProtocolMsg::ExecuteWithSpec(task) => {
-					let (protocol, mut net_out) = network_service.user_protocol_mut().protocol_context_lock();
-					let (mut context, spec) = protocol.specialization_lock(&mut net_out);
+					let (protocol, net_out) = network_service.user_protocol_mut().protocol_context_lock();
+					let (mut context, spec) = protocol.specialization_lock(net_out);
 					task.call_box(spec, &mut context);
 				},
 				ProtocolMsg::ExecuteWithGossip(task) => {
-					let (protocol, mut net_out) = network_service.user_protocol_mut().protocol_context_lock();
-					let (mut context, gossip) = protocol.consensus_gossip_lock(&mut net_out);
+					let (protocol, net_out) = network_service.user_protocol_mut().protocol_context_lock();
+					let (mut context, gossip) = protocol.consensus_gossip_lock(net_out);
 					task.call_box(gossip, &mut context);
 				}
 				ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>

@@ -148,7 +148,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
 	pub(crate) fn add_on_demand_request(&mut self, rq: RequestData<B>) {
 		self.protocol.add_on_demand_request(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			rq
 		);
 	}
@@ -165,9 +165,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// This function is a very bad API.
 	pub fn protocol_context_lock<'a>(
 		&'a mut self,
-	) -> (&'a mut Protocol<B, S, H>, LocalNetworkOut<'a, B>) {
-		let net_out = LocalNetworkOut { inner: &mut self.behaviour };
-		(&mut self.protocol, net_out)
+	) -> (&'a mut Protocol<B, S, H>, &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>) {
+		(&mut self.protocol, &mut self.behaviour)
 	}
 
 	/// Gossip a consensus message to the network.
@@ -179,7 +178,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		recipient: GossipMessageRecipient,
 	) {
 		self.protocol.gossip_consensus_message(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			topic,
 			engine_id,
 			message,
@@ -190,7 +189,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// Call when we must propagate ready extrinsics to peers.
 	pub fn propagate_extrinsics(&mut self) {
 		self.protocol.propagate_extrinsics(
-			&mut LocalNetworkOut { inner: &mut self.behaviour }
+			&mut self.behaviour
 		)
 	}
 
@@ -200,7 +199,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash) {
 		self.protocol.announce_block(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			hash
 		)
 	}
@@ -209,7 +208,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// the network.
 	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_imported(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			hash,
 			header
 		)
@@ -219,7 +218,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_finalized(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			hash,
 			header
 		)
@@ -231,7 +230,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.request_justification(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			hash,
 			number
 		)
@@ -251,7 +250,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		has_error: bool,
 	) {
 		self.protocol.blocks_processed(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			processed_blocks,
 			has_error,
 		)
@@ -259,8 +258,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Restart the sync process.
 	pub fn restart(&mut self) {
-		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour };
-		self.protocol.restart(&mut net_out);
+		self.protocol.restart(&mut self.behaviour);
 	}
 
 	/// Notify about successful import of the given block.
@@ -287,7 +285,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		number: NumberFor<B>,
 	) {
 		self.protocol.request_finality_proof(
-			&mut LocalNetworkOut { inner: &mut self.behaviour },
+			&mut self.behaviour,
 			&hash,
 			number,
 		);
@@ -302,7 +300,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	}
 
 	pub fn tick(&mut self) {
-		self.protocol.tick(&mut LocalNetworkOut { inner: &mut self.behaviour });
+		self.protocol.tick(&mut self.behaviour);
 	}
 }
 
@@ -344,8 +342,7 @@ ProtocolBehaviour<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour };
-		match self.protocol.poll(&mut net_out) {
+		match self.protocol.poll(&mut self.behaviour) {
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
@@ -364,26 +361,22 @@ ProtocolBehaviour<B, S, H> {
 				return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		};
 
-		let mut network_out = LocalNetworkOut {
-			inner: &mut self.behaviour,
-		};
-
 		let outcome = match event {
 			CustomProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
 				debug_assert!(
 					version <= protocol::CURRENT_VERSION as u8
 					&& version >= protocol::MIN_VERSION as u8
 				);
-				self.protocol.on_peer_connected(&mut network_out, peer_id);
+				self.protocol.on_peer_connected(&mut self.behaviour, peer_id);
 				CustomMessageOutcome::None
 			}
 			CustomProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.protocol.on_peer_disconnected(&mut network_out, peer_id);
+				self.protocol.on_peer_disconnected(&mut self.behaviour, peer_id);
 				CustomMessageOutcome::None
 			},
 			CustomProtoOut::CustomMessage { peer_id, message } =>
 				self.protocol.on_custom_message(
-					&mut network_out,
+					&mut self.behaviour,
 					peer_id,
 					message,
 				),
@@ -391,7 +384,7 @@ ProtocolBehaviour<B, S, H> {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
 				for msg in messages.into_iter().take(5) {
 					debug!(target: "sync", "{:?}", msg);
-					self.protocol.on_clogged_peer(&mut network_out, peer_id.clone(), Some(msg));
+					self.protocol.on_clogged_peer(&mut self.behaviour, peer_id.clone(), Some(msg));
 				}
 				CustomMessageOutcome::None
 			}
@@ -441,17 +434,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour
 	}
 }
 
-/// Has to be public for stupid API reasons. This should be made private again ASAP.
-pub struct LocalNetworkOut<'a, B: BlockT> {
-	inner: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
-}
-
-impl<'a, B: BlockT> NetworkOut<B> for LocalNetworkOut<'a, B> {
+impl<'a, B: BlockT> NetworkOut<B> for CustomProto<Message<B>, Substream<StreamMuxerBox>> {
 	fn disconnect_peer(&mut self, who: PeerId) {
-		self.inner.disconnect_peer(&who)
+		CustomProto::disconnect_peer(self, &who)
 	}
 
 	fn send_message(&mut self, who: PeerId, message: Message<B>) {
-		self.inner.send_packet(&who, message)
+		CustomProto::send_packet(self, &who, message)
 	}
 }
