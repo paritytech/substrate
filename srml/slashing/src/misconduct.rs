@@ -23,39 +23,16 @@ impl Misconduct for Unresponsive {
 	fn on_signal(&mut self) {}
 }
 
-impl Misconduct for () {
-	type Severity = u32;
-
-	fn severity(&self, _num_misbehaved: u64, _num_validators: u64, _era_len: u64) -> Fraction<Self::Severity> {
-		Fraction::default()
-	}
-
-	fn on_misconduct(&mut self) {}
-
-	fn on_signal(&mut self) {}
-}
-
 /// Grandpa misconducts
 // TODO(niklasad1): move these to the grandpa module or remove?!
 pub mod grandpa {
-	use crate::{Misconduct, Fraction};
+	use crate::{Misconduct, Fraction, impl_misconduct_static_severity};
 
 	/// Unjustified vote from only one validator in the same era then slash 10%
 	// assumption: this is called in the end of the era otherwise it would be impossible to know
 	// that only one validator had performed a culprit in the era.
 	pub struct UnjustifiedVote;
-
-	impl Misconduct for UnjustifiedVote {
-		type Severity = u64;
-
-		fn severity(&self, _num_misbehaved: u64, _num_validators: u64, _era_len: u64) -> Fraction<Self::Severity> {
-			Fraction::new(1, 10)
-		}
-
-		fn on_misconduct(&mut self) {}
-
-		fn on_signal(&mut self) {}
-	}
+	impl_misconduct_static_severity!(UnjustifiedVote, u64 => Fraction::new(1, 10));
 
 	/// An equivocation is defined as a validator signing two or more votes
 	/// in the same round, for the same vote type
@@ -83,35 +60,14 @@ pub mod grandpa {
 	/// Collusion of > 1/3 of validators which may lead to finalizing blocks in different chains
 	/// Slash 100%
 	pub struct CollusionSetVotes;
-
-	impl Misconduct for CollusionSetVotes {
-		type Severity = u64;
-
-		fn severity(&self, _num_misbehaved: u64, _num_validators: u64, _era_len: u64) -> Fraction<Self::Severity> {
-			Fraction::new(1, 1)
-		}
-
-		fn on_misconduct(&mut self) {}
-
-		fn on_signal(&mut self) {}
-	}
+	impl_misconduct_static_severity!(CollusionSetVotes, u64 => Fraction::new(1, 1));
 
 	/// Invalid vote, no slashing
 	/// Voter A ignores any votes from its own point-of-view which contains `non-validated` blocks
 	// TODO(niklasad1): this could be removed and replaced with the `unit type impl`
 	pub struct InvalidVote;
+	impl_misconduct_static_severity!(InvalidVote, u64 => Fraction::default());
 
-	impl Misconduct for InvalidVote {
-		type Severity = u64;
-
-		fn severity(&self, _num_misbehaved: u64, _num_validators: u64, _era_len: u64) -> Fraction<Self::Severity> {
-			Fraction::default()
-		}
-
-		fn on_misconduct(&mut self) {}
-
-		fn on_signal(&mut self) {}
-	}
 }
 
 #[cfg(test)]

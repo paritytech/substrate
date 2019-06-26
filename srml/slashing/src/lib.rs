@@ -168,3 +168,27 @@ pub trait Slashing<AccountId> {
 		misconduct: &M
 	) -> MisconductLevel;
 }
+
+/// Implementation of the `Misconduct` traits for a type `T` with associated type `A
+/// which has a predefined severity level such as slash always 10%
+#[macro_export]
+macro_rules! impl_misconduct_static_severity {
+	($t:ty, $a:ty => $fr:expr) => {
+		impl Misconduct for $t {
+			type Severity = $a;
+
+			fn severity(
+				&self,
+				_num_misbehaved: u64,
+				_num_validators: u64,
+				_era_length: u64
+			) -> Fraction<Self::Severity> {
+				$fr
+			}
+
+			fn on_misconduct(&mut self) {}
+
+			fn on_signal(&mut self) {}
+		}
+	}
+}
