@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 log = { version = "0.4", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+parity-codec = { version = "3.5.4", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
