@@ -31,7 +31,6 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::BABE_ENGINE_ID;
-
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -178,17 +177,6 @@ impl<T: Trait> Module<T> {
 	fn get_inherent_digests() -> system::DigestOf<T> {
 		<system::Module<T>>::get_inherent_digests()
 	}
-
-	#[allow(unsafe_code)]
-	fn hash_randomness(vrf_outputs: Vec<[u8; VRF_OUTPUT_LENGTH]>) -> [u8; VRF_OUTPUT_LENGTH] {
-		// yucky unsafe code, but at least I don’t need to write 32 XORs!
-		vrf_outputs.iter().fold([0; VRF_OUTPUT_LENGTH], |x, &y| unsafe {
-			use rstd::mem::transmute;
-			let i: [u64; 4] = transmute(x);
-			let j: [u64; 4] = transmute(y);
-			transmute([i[0]^j[0], i[1]^j[1], i[2]^j[2], i[3]^j[3]])
-		})
-	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -207,7 +195,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
 			}
-			<Randomness<T>>::put(Self::hash_randomness(<VRFOutputs<T>>::take()))
 		}
 	}
 	fn on_disabled(_i: usize) {
