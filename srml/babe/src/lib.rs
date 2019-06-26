@@ -116,7 +116,16 @@ decl_storage! {
 		/// The VRF output
 		VRFOutputs get(vrf_output): Vec<[u8; VRF_OUTPUT_LENGTH]>;
 
-		/// The randomness we have right now
+		/// The randomness we have right now.
+		///
+		/// # Security
+		///
+		/// This MUST NOT be used for gambling, as it can be influenced by a
+		/// malicious validator in the short term.  It MAY be used in many
+		/// cryptographic protocols, however, so long as one remembers that this
+		/// (like everything else on-chain) is public.  For example, it can be
+		/// used where a number is needed that cannot have been chosen by an
+		/// adversary, for purposes such as public-coin zero-knowledge proofs.
 		pub Randomness: [u8; 32];
 	}
 }
