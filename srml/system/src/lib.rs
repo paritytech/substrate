@@ -178,7 +178,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Used to define the type and conversion mechanism for referencing accounts in transactions. It's perfectly
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
-	// TODO: avoid &'static str error type
+	// TODO: avoid &'static str error type #2953
 	type Lookup: StaticLookup<Target = Self::AccountId, Error = &'static str>;
 
 	/// The block header.

@@ -272,7 +272,7 @@ where
 				}
 			}
 			// pay any fees
-			// TODO: propagate why can't pay
+			// TODO: propagate why can't pay #2952
 			Payment::make_payment(sender, encoded_len).map_err(|_| ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
@@ -338,7 +338,7 @@ where
 			Ok(xt) => xt,
 			Err(err) => return match err.into() {
 				// An unknown account index implies that the transaction may yet become valid.
-				// TODO: avoid hardcoded error string here
+				// TODO: avoid hardcoded error string here #2953
 				PrimitiveError::Unknown("invalid account index") =>
 					TransactionValidity::Unknown(INVALID_INDEX),
 				// Technically a bad signature could also imply an out-of-date account index, but
