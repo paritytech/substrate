@@ -38,6 +38,7 @@ indices = { package = "srml-indices", path = "../../srml/indices" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 rand = "0.6"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
+contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 
 [dev-dependencies]
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
