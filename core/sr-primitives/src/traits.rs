@@ -90,7 +90,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 }
 
 impl EnsureOriginError for () {
-	fn invalid_origin() -> () { }
+	fn invalid_origin() -> () {}
 }
 
 impl EnsureOriginError for &'static str {

@@ -64,11 +64,11 @@ pub enum Error {
 	/// cause the fees are not being paid if this error is returned.
 	///
 	/// Example: block gas limit is reached (the transaction can be retried in the next block though).
-	BlockFull
+	BlockFull,
 }
 
 // Exists for for backward compatibility purpose.
-impl Into<&'static str> for Error{
+impl Into<&'static str> for Error {
 	fn into(self) -> &'static str {
 		match self {
 			Error::Unknown(val) => val,
