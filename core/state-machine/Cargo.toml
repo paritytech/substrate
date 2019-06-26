@@ -14,7 +14,7 @@ trie-root = "0.12"
 trie = { package = "substrate-trie", path = "../trie" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
-parity-codec = "3.5.4"
+parity-codec = "4.1.1"
 num-traits = "0.2"
 
 [dev-dependencies]

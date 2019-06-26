@@ -12,7 +12,7 @@ consensus = { package = "substrate-consensus-common", path = "../../core/consens
 futures = "0.1.25"
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
-parity-codec = { version = "3.5.4", features = ["derive"] }
+parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
