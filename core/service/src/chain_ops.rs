@@ -46,7 +46,7 @@ pub fn export_blocks<F, E, W>(
 	E: Future<Item=(),Error=()> + Send + 'static,
 	W: Write,
 {
-	let client = new_client::<F>(&config)?;
+	let (client, _) = new_client::<F>(config)?;
 	let mut block = from;
 
 	let last = match to {
@@ -118,16 +118,15 @@ impl<B: Block> Link<B> for WaitLink {
 
 /// Import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
-	mut config: FactoryFullConfiguration<F>,
+	config: FactoryFullConfiguration<F>,
 	exit: E,
 	mut input: R
 ) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
-	let client = new_client::<F>(&config)?;
-	// FIXME #1134 this shouldn't need a mutable config.
-	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let mut queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
+	let (client, mut state) = new_client::<F>(config)?;
+	let select_chain = components::FullComponents::<F>::build_select_chain(&mut state, client.clone())?;
+	let mut queue = components::FullComponents::<F>::build_import_queue(&mut state, client.clone(), select_chain)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -204,7 +203,7 @@ pub fn revert_chain<F>(
 ) -> error::Result<()>
 	where F: ServiceFactory,
 {
-	let client = new_client::<F>(&config)?;
+	let (client, _) = new_client::<F>(config)?;
 	let reverted = client.revert(blocks)?;
 	let info = client.info().chain;
 

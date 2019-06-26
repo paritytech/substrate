@@ -32,7 +32,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	error::{Error as ServiceError},
+	FullComponentsSetupState, LightComponentsSetupState, error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -47,16 +47,16 @@ construct_simple_protocol! {
 }
 
 /// Node specific configuration
-pub struct NodeConfig<F: substrate_service::ServiceFactory> {
+pub struct NodeSetupState<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
 	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
 
-impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
-	fn default() -> NodeConfig<F> {
-		NodeConfig {
+impl<F> Default for NodeSetupState<F> where F: substrate_service::ServiceFactory {
+	fn default() -> NodeSetupState<F> {
+		NodeSetupState {
 			grandpa_import_setup: None,
 			inherent_data_providers: InherentDataProviders::new(),
 		}
@@ -74,13 +74,14 @@ construct_service_factory! {
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
-		Configuration = NodeConfig<Self>,
+		SetupState = NodeSetupState<Self>,
+		Configuration = (),
 		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
-				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
+			|service: Self::FullService, mut state: FullComponentsSetupState<Self>, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
+				let (block_import, link_half) = state.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				if let Some(ref key) = local_key {
@@ -101,15 +102,15 @@ construct_service_factory! {
 						block_import.clone(),
 						proposer,
 						service.network(),
-						service.config.custom.inherent_data_providers.clone(),
-						service.config.force_authoring,
+						state.custom.inherent_data_providers.clone(),
+						state.config.force_authoring,
 					)?;
 					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
 
-				let local_key = if service.config.disable_grandpa {
+				let local_key = if state.config.disable_grandpa {
 					None
 				} else {
 					local_key
@@ -120,7 +121,7 @@ construct_service_factory! {
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
-					name: Some(service.config.name.clone())
+					name: Some(state.config.name.clone())
 				};
 
 				match config.local_key {
@@ -142,7 +143,7 @@ construct_service_factory! {
 							config: config,
 							link: link_half,
 							network: service.network(),
-							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+							inherent_data_providers: state.custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
@@ -156,7 +157,7 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{ |state: &mut FullComponentsSetupState<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
@@ -165,7 +166,7 @@ construct_service_factory! {
 				let block_import = Arc::new(block_import);
 				let justification_import = block_import.clone();
 
-				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
+				state.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				import_queue::<_, _, ed25519::Pair>(
 					slot_duration,
@@ -174,13 +175,12 @@ construct_service_factory! {
 					None,
 					None,
 					client,
-					config.custom.inherent_data_providers.clone(),
+					state.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
-			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-				#[allow(deprecated)]
-				let fetch_checker = client.backend().blockchain().fetcher()
+			{ |state: &LightComponentsSetupState<Self>, client: Arc<LightClient<Self>>| {
+				let fetch_checker = state.backend.blockchain().fetcher()
 					.upgrade()
 					.map(|fetcher| fetcher.checker().clone())
 					.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -198,13 +198,12 @@ construct_service_factory! {
 					Some(finality_proof_import),
 					Some(finality_proof_request_builder),
 					client,
-					config.custom.inherent_data_providers.clone(),
+					state.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
-			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-				#[allow(deprecated)]
-				Ok(LongestChain::new(client.backend().clone()))
+			{ |state: &FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
+				Ok(LongestChain::new(state.backend.clone()))
 			}
 		},
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
@@ -288,7 +287,7 @@ mod tests {
 		let alice = Arc::new(AuthorityKeyring::Alice.pair());
 		let mut slot_num = 1u64;
 		let block_factory = |service: &<Factory as ServiceFactory>::FullService| {
-			let mut inherent_data = service.config.custom.inherent_data_providers
+			let mut inherent_data = state.custom.inherent_data_providers
 				.create_inherent_data().unwrap();
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));

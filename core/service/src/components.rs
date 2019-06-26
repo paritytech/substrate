@@ -37,7 +37,7 @@ use parking_lot::Mutex;
 use futures::sync::mpsc;
 
 // Type aliases.
-// These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
+// These exist mainly to avoid typing `<F as ServiceFactory>::Foo` all over the code.
 /// Network service type for a factory.
 pub type NetworkService<F> =
 	network::NetworkService<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
@@ -134,6 +134,49 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// Internally hold intermediate
+pub struct IntermediateSetupState<B, C, S> {
+	/// Holding the Backend Instance
+	pub backend: Arc<B>,
+	pub config: C,
+	/// Holding the internal customized setup config
+	pub custom: S,
+}
+
+impl<B, C, S: Default> IntermediateSetupState<B, C, S> {
+	pub fn new(backend: Arc<B>, config: C) -> Self {
+		Self {
+			backend,
+			config,
+			custom: S::default()
+		}
+	}
+
+	pub fn unpack(self) -> (Arc<B>, C, S) {
+		(self.backend, self.config, self.custom)
+	}
+}
+
+/// A SetupState for this component
+pub type ComponentsSetupState<C> = IntermediateSetupState<
+	<C as Components>::Backend,
+	FactoryFullConfiguration<<C as Components>::Factory>,
+	<<C as Components>::Factory as ServiceFactory>::SetupState,
+>;
+
+/// Setup State for the FullComponents of the Factory
+pub type FullComponentsSetupState<F> = IntermediateSetupState<
+	FullBackend<F>,
+	FactoryFullConfiguration<F>,
+	<F as ServiceFactory>::SetupState,
+>;
+
+/// Setup State for the Light Components of the Factory
+pub type LightComponentsSetupState<F> = IntermediateSetupState<
+	LightBackend<F>,
+	FactoryFullConfiguration<F>,
+	<F as ServiceFactory>::SetupState,
+>;
 /// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
 	type ServersHandle: Send + Sync;
@@ -310,6 +353,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type LightTransactionPoolApi: txpool::ChainApi<Hash = <Self::Block as BlockT>::Hash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
+	/// Custom state during setup of this service members.
+	type SetupState: Default;
 	/// Other configuration for service members.
 	type Configuration: Default;
 	/// Extended full service type.
@@ -322,6 +367,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type LightImportQueue: ImportQueue<Self::Block> + 'static;
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
+	/// Customizable setup state
+	// type SetupState: ();
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -332,7 +379,7 @@ pub trait ServiceFactory: 'static + Sized {
 		-> Result<TransactionPool<Self::LightTransactionPoolApi>, error::Error>;
 
 	/// Build network protocol.
-	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
+	fn build_network_protocol(state: &FactoryFullConfiguration<Self>,)
 		-> Result<Self::NetworkProtocol, error::Error>;
 
 	/// Build finality proof provider for serving network requests on full node.
@@ -342,7 +389,7 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
-		config: &mut FactoryFullConfiguration<Self>,
+		state: &mut FullComponentsSetupState<Self>,
 		client: Arc<FullClient<Self>>,
 	) -> Result<Self::SelectChain, error::Error>;
 
@@ -355,11 +402,11 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a full client
 	fn build_full_import_queue(
-		config: &mut FactoryFullConfiguration<Self>,
+		state: &mut FullComponentsSetupState<Self>,
 		_client: Arc<FullClient<Self>>,
 		_select_chain: Self::SelectChain,
 	) -> Result<Self::FullImportQueue, error::Error> {
-		if let Some(name) = config.chain_spec.consensus_engine() {
+		if let Some(name) = state.config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
 			}
@@ -371,10 +418,10 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a light client
 	fn build_light_import_queue(
-		config: &mut FactoryFullConfiguration<Self>,
+		state: &mut LightComponentsSetupState<Self>,
 		_client: Arc<LightClient<Self>>
 	) -> Result<Self::LightImportQueue, error::Error> {
-		if let Some(name) = config.chain_spec.consensus_engine() {
+		if let Some(name) = state.config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
 			}
@@ -410,11 +457,12 @@ pub trait Components: Sized + 'static {
 
 	/// Create client.
 	fn build_client(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: FactoryFullConfiguration<Self::Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
+			ComponentsSetupState<Self>,
 			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		),
 		error::Error
@@ -426,7 +474,7 @@ pub trait Components: Sized + 'static {
 
 	/// instance of import queue for clients
 	fn build_import_queue(
-		config: &mut FactoryFullConfiguration<Self::Factory>,
+		setup: &mut ComponentsSetupState<Self>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error>;
@@ -438,7 +486,7 @@ pub trait Components: Sized + 'static {
 
 	/// Build fork choice selector
 	fn build_select_chain(
-		config: &mut FactoryFullConfiguration<Self::Factory>,
+		setup: &mut ComponentsSetupState<Self>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error>;
 }
@@ -453,12 +501,9 @@ impl<Factory: ServiceFactory> FullComponents<Factory> {
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
-	) -> Result<Self, error::Error> {
-		Ok(
-			Self {
-				service: Service::new(config, task_executor)?,
-			}
-		)
+	) -> Result<(Self, FullComponentsSetupState<Factory>), error::Error> {
+		let (service, state) = Service::new(config, task_executor)?;
+		Ok((Self { service }, state))
 	}
 }
 
@@ -487,11 +532,12 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
-		config: &FactoryFullConfiguration<Factory>,
+		config: FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
+			ComponentsSetupState<Self>,
 			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		), error::Error>
 	{
@@ -503,12 +549,14 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
-		Ok((Arc::new(client_db::new_client(
+		let (client, backend) = client_db::new_client(
 			db_settings,
 			executor,
 			&config.chain_spec,
 			config.execution_strategies.clone(),
-		)?), None))
+		)?;
+		let setup = ComponentsSetupState::<Self>::new(backend, config);
+		Ok((Arc::new(client), setup, None))
 	}
 
 	fn build_transaction_pool(
@@ -519,20 +567,20 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &mut FactoryFullConfiguration<Self::Factory>,
+		setup: &mut ComponentsSetupState<Self>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
-		Factory::build_full_import_queue(config, client, select_chain)
+		Factory::build_full_import_queue(setup, client, select_chain)
 	}
 
 	fn build_select_chain(
-		config: &mut FactoryFullConfiguration<Self::Factory>,
-		client: Arc<ComponentClient<Self>>
+		state: &mut ComponentsSetupState<Self>,
+		client: Arc<ComponentClient<Self>>,
 	) -> Result<Option<Self::SelectChain>, error::Error> {
-		Self::Factory::build_select_chain(config, client).map(Some)
+		Self::Factory::build_select_chain(state, client).map(Some)
 	}
 
 	fn build_finality_proof_provider(
@@ -553,11 +601,8 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
 	) -> Result<Self, error::Error> {
-		Ok(
-			Self {
-				service: Service::new(config, task_executor)?,
-			}
-		)
+		let (service, _state) = Service::new(config, task_executor)?;
+		Ok(Self { service } )
 	}
 }
 
@@ -580,12 +625,13 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
-		config: &FactoryFullConfiguration<Factory>,
+		config: FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
 		-> Result<
 			(
 				Arc<ComponentClient<Self>>,
+				ComponentsSetupState<Self>,
 				Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 			), error::Error>
 	{
@@ -601,9 +647,10 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;
-		Ok((Arc::new(client), Some(fetcher)))
+		let backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
+		let client = client::light::new_light(backend.clone(), fetcher.clone(), &config.chain_spec, executor)?;
+		let setup = ComponentsSetupState::<Self>::new(backend, config);
+		Ok((Arc::new(client), setup, Some(fetcher)))
 	}
 
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
@@ -613,11 +660,11 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &mut FactoryFullConfiguration<Self::Factory>,
+		state: &mut ComponentsSetupState<Self>,
 		client: Arc<ComponentClient<Self>>,
 		_select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
-		Factory::build_light_import_queue(config, client)
+		Factory::build_light_import_queue(state, client)
 	}
 
 	fn build_finality_proof_provider(
@@ -626,7 +673,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		Ok(None)
 	}
 	fn build_select_chain(
-		_config: &mut FactoryFullConfiguration<Self::Factory>,
+		_setup: &mut ComponentsSetupState<Self>,
 		_client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error> {
 		Ok(None)

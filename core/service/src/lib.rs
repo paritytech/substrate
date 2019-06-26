@@ -56,9 +56,10 @@ pub use client::FinalityNotifications;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
+	ComponentsSetupState, FullComponentsSetupState, LightComponentsSetupState,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -79,8 +80,6 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
-	/// Configuration of this Service
-	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
@@ -88,15 +87,18 @@ pub struct Service<Components: components::Components> {
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
-	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
+pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
+	-> Result<(
+		Arc<ComponentClient<components::FullComponents<Factory>>>,
+		FullComponentsSetupState<Factory>,
+	), error::Error>
 {
 	let executor = NativeExecutor::new(config.default_heap_pages);
-	let (client, _) = components::FullComponents::<Factory>::build_client(
+	let (client, state, _) = components::FullComponents::<Factory>::build_client(
 		config,
 		executor,
 	)?;
-	Ok(client)
+	Ok((client, state))
 }
 
 /// Stream of events for connection established to a telemetry server.
@@ -122,9 +124,9 @@ impl<Components: components::Components> Service<Components> {
 
 	/// Creates a new service.
 	pub fn new(
-		mut config: FactoryFullConfiguration<Components::Factory>,
+		config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
-	) -> Result<Self, error::Error> {
+	) -> Result<(Self, ComponentsSetupState<Components>), error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
@@ -149,35 +151,35 @@ impl<Components: components::Components> Service<Components> {
 			}
 		};
 
-		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let (client, mut state, on_demand) = Components::build_client(config, executor)?;
+		let select_chain = Components::build_select_chain(&mut state, client.clone())?;
 		let import_queue = Box::new(Components::build_import_queue(
-			&mut config,
+			&mut state,
 			client.clone(),
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		let version = config.full_version();
+		let version = state.config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
 		telemetry!(SUBSTRATE_INFO; "node.start";
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);
 
-		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+		let network_protocol = <Components::Factory>::build_network_protocol(&state.config)?;
 		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+			Components::build_transaction_pool(state.config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !config.roles.is_light(),
+			imports_external_transactions: !state.config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 });
 
 		let protocol_id = {
-			let protocol_id_full = match config.chain_spec.protocol_id() {
+			let protocol_id_full = match state.config.chain_spec.protocol_id() {
 				Some(pid) => pid,
 				None => {
 					warn!("Using default protocol ID {:?} because none is configured in the \
@@ -190,8 +192,8 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let network_params = network::config::Params {
-			roles: config.roles,
-			network_config: config.network.clone(),
+			roles: state.config.roles,
+			network_config: state.config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
 			on_demand,
@@ -210,7 +212,7 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(())));
 
-		let offchain_workers =  if config.offchain_worker {
+		let offchain_workers =  if state.config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
 				task_executor.clone(),
@@ -376,20 +378,20 @@ impl<Components: components::Components> Service<Components> {
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
-			chain_name: config.chain_spec.name().into(),
-			impl_name: config.impl_name.into(),
-			impl_version: config.impl_version.into(),
-			properties: config.chain_spec.properties(),
+			chain_name: state.config.chain_spec.name().into(),
+			impl_name: state.config.impl_name.into(),
+			impl_version: state.config.impl_version.into(),
+			properties: state.config.chain_spec.properties(),
 		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(),
 			system_rpc_tx,
 			system_info,
-			config.rpc_http,
-			config.rpc_ws,
-			config.rpc_ws_max_connections,
-			config.rpc_cors.clone(),
+			state.config.rpc_http,
+			state.config.rpc_ws,
+			state.config.rpc_ws_max_connections,
+			state.config.rpc_cors.clone(),
 			task_executor.clone(),
 			transaction_pool.clone(),
 		)?;
@@ -402,14 +404,14 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
+		let telemetry = state.config.telemetry_endpoints.clone().map(|endpoints| {
+			let is_authority = state.config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
 			let pubkey = format!("{}", public_key);
-			let name = config.name.clone();
-			let impl_name = config.impl_name.to_owned();
+			let name = state.config.name.clone();
+			let impl_name = state.config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.chain_spec.name().to_owned();
+			let chain_name = state.config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
@@ -442,28 +444,27 @@ impl<Components: components::Components> Service<Components> {
 			telemetry
 		});
 
-		Ok(Service {
+		Ok((Service {
 			client,
 			network: Some(network),
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
 			keystore,
-			config,
 			exit,
 			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
-		})
+		}, state))
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
-		if self.config.roles != Roles::AUTHORITY { return None }
+	pub fn authority_key(&self, config: &FactoryFullConfiguration<Components::Factory>) -> Option<primitives::ed25519::Pair> {
+		if config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, &self.config.password)))
+				.map(|k| keystore.load(k, &config.password)))
 		{
 			Some(key)
 		} else {
@@ -709,6 +710,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 		LightTransactionPoolApi = LightChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 /// 		Genesis = GenesisConfig,
+/// 		SetupState = (),
 /// 		Configuration = (),
 /// 		FullService = FullComponents<Self>
 /// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
@@ -746,6 +748,7 @@ macro_rules! construct_service_factory {
 			FullTransactionPoolApi = $full_transaction:ty { $( $full_transaction_init:tt )* },
 			LightTransactionPoolApi = $light_transaction:ty { $( $light_transaction_init:tt )* },
 			Genesis = $genesis:ty,
+			SetupState = $state:ty,
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
 			AuthoritySetup = { $( $authority_setup:tt )* },
@@ -771,6 +774,7 @@ macro_rules! construct_service_factory {
 			type FullTransactionPoolApi = $full_transaction;
 			type LightTransactionPoolApi = $light_transaction;
 			type Genesis = $genesis;
+			type SetupState = $state;
 			type Configuration = $config;
 			type FullService = $full_service;
 			type LightService = $light_service;
@@ -801,25 +805,25 @@ macro_rules! construct_service_factory {
 			}
 
 			fn build_select_chain(
-				config: &mut $crate::FactoryFullConfiguration<Self>,
+				state: &mut $crate::FullComponentsSetupState<Self>,
 				client: Arc<$crate::FullClient<Self>>
 			) -> $crate::Result<Self::SelectChain, $crate::Error> {
-				( $( $select_chain_init )* ) (config, client)
+				( $( $select_chain_init )* ) (state, client)
 			}
 
 			fn build_full_import_queue(
-				config: &mut $crate::FactoryFullConfiguration<Self>,
+				state: &mut $crate::FullComponentsSetupState<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
 				select_chain: Self::SelectChain
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain)
+				( $( $full_import_queue_init )* ) (state, client, select_chain)
 			}
 
 			fn build_light_import_queue(
-				config: &mut FactoryFullConfiguration<Self>,
+				state: &mut $crate::LightComponentsSetupState<Self>,
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
-				( $( $light_import_queue_init )* ) (config, client)
+				( $( $light_import_queue_init )* ) (state, client)
 			}
 
 			fn build_finality_proof_provider(
@@ -841,9 +845,9 @@ macro_rules! construct_service_factory {
 				executor: $crate::TaskExecutor,
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
-					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, executor, key)
+				( $( $full_service_init )* ) (config, executor.clone()).and_then(|(service, state)| {
+					let key = (&service).authority_key(&state.config).map(Arc::new);
+					($( $authority_setup )*)(service, state, executor, key)
 				})
 			}
 		}

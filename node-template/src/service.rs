@@ -32,7 +32,7 @@ native_executor_instance!(
 );
 
 #[derive(Default)]
-pub struct NodeConfig {
+pub struct SetupState {
 	inherent_data_providers: InherentDataProviders,
 }
 
@@ -60,7 +60,8 @@ construct_service_factory! {
 			|config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 		},
 		Genesis = GenesisConfig,
-		Configuration = NodeConfig,
+		SetupState = SetupState,
+		Configuration = (),
 		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor)

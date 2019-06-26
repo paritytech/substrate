@@ -188,9 +188,15 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
-) -> Result<
-	client::Client<Backend<Block>,
-	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
+) -> Result<(client::Client<
+			Backend<Block>,
+			client::LocalCallExecutor<Backend<Block>, E>,
+			Block,
+			RA
+		>,
+		Arc<Backend<Block>>
+	),
+	client::error::Error
 >
 	where
 		Block: BlockT<Hash=H256>,
@@ -199,7 +205,10 @@ pub fn new_client<E, S, Block, RA>(
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
+	Ok((
+		client::Client::new(backend.clone(), executor, genesis_storage, execution_strategies)?,
+		backend,
+	))
 }
 
 mod columns {
@@ -1759,7 +1768,7 @@ mod tests {
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
 			let anchor = state_machine::ChangesTrieAnchorBlockId {
-				hash: backend.blockchain().header(&BlockId::Number(block)).unwrap().unwrap().hash(),
+				hash: backend.blockchain().header(BlockId::Number(block)).unwrap().unwrap().hash(),
 				number: block
 			};
 			assert_eq!(backend.changes_tries_storage.root(&anchor, block), Ok(Some(changes_root)));

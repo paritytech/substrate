@@ -96,7 +96,7 @@ pub trait RuntimeAdapter {
 /// `mode`, `num` and `rounds`.
 pub fn factory<F, RA>(
 	mut factory_state: RA,
-	mut config: FactoryFullConfiguration<F>,
+	config: FactoryFullConfiguration<F>,
 ) -> cli::error::Result<()>
 where
 	F: ServiceFactory,
@@ -111,9 +111,9 @@ where
 		return Err(cli::error::Error::Input(msg));
 	}
 
-	let client = new_client::<F>(&config)?;
+	let (client, mut state) = new_client::<F>(config)?;
 
-	let select_chain = F::build_select_chain(&mut config, client.clone())?;
+	let select_chain = F::build_select_chain(&mut state, client.clone())?;
 
 	let best_header: Result<<F::Block as BlockT>::Header, cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
