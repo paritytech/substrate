@@ -262,7 +262,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 			network.runtime
 		};
 
-		runtime.shutdown_on_idle().wait().expect("Error shutting down runtime");
+		runtime.shutdown_now().wait().expect("Error shutting down runtime");
 
 		temp.close().expect("Error removing temp dir");
 	}
