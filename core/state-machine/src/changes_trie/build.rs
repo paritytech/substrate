@@ -33,16 +33,15 @@ use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 /// required data.
 /// Returns Ok(None) data required to prepare input pairs is not collected
 /// or storage is not provided.
-pub fn prepare_input<'a, B, S, H, Number>(
+pub fn prepare_input<'a, B, H, Number>(
 	backend: &B,
-	storage: &'a S,
+	storage: &'a Storage<H, Number>,
 	config: &'a Configuration,
 	changes: &OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<Option<Vec<InputPair<Number>>>, String>
 	where
 		B: Backend<H>,
-		S: Storage<H, Number>,
 		H: Hasher,
 		Number: BlockNumber,
 {
@@ -51,7 +50,7 @@ pub fn prepare_input<'a, B, S, H, Number>(
 		backend,
 		parent.number.clone() + 1.into(),
 		changes)?);
-	input.extend(prepare_digest_input::<_, H, Number>(
+	input.extend(prepare_digest_input::<H, Number>(
 		parent,
 		config,
 		storage)?);
@@ -97,13 +96,12 @@ fn prepare_extrinsics_input<B, H, Number>(
 }
 
 /// Prepare DigestIndex input pairs.
-fn prepare_digest_input<'a, S, H, Number>(
+fn prepare_digest_input<'a, H, Number>(
 	parent: &'a AnchorBlockId<H::Out, Number>,
 	config: &Configuration,
-	storage: &'a S
+	storage: &'a Storage<H, Number>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
-		S: Storage<H, Number>,
 		H: Hasher,
 		H::Out: 'a,
 		Number: BlockNumber,
@@ -149,7 +147,7 @@ mod test {
 	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
 
-	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {
+	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges, Configuration) {
 		let backend: InMemory<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -217,20 +215,20 @@ mod test {
 					extrinsics: Some(vec![1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
+			collect_extrinsics: true,
 		};
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
-		(backend, storage, changes)
+		(backend, storage, changes, config)
 	}
 
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
-		let (backend, storage, changes) = prepare_for_build();
-		let config = changes.changes_trie_config.as_ref().unwrap();
+		let (backend, storage, changes, config) = prepare_for_build();
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			config,
+			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 4 },
 		).unwrap();
@@ -243,12 +241,11 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
-		let (backend, storage, changes) = prepare_for_build();
-		let config = changes.changes_trie_config.as_ref().unwrap();
+		let (backend, storage, changes, config) = prepare_for_build();
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			config,
+			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },
 		).unwrap();
@@ -266,12 +263,11 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
-		let (backend, storage, changes) = prepare_for_build();
-		let config = changes.changes_trie_config.as_ref().unwrap();
+		let (backend, storage, changes, config) = prepare_for_build();
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			config,
+			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 15 },
 		).unwrap();
@@ -290,7 +286,7 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
-		let (backend, storage, mut changes) = prepare_for_build();
+		let (backend, storage, mut changes, config) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
 		changes.prospective.top.insert(vec![110], OverlayedValue {
@@ -298,11 +294,10 @@ mod test {
 			extrinsics: Some(vec![1].into_iter().collect())
 		});
 
-		let config = changes.changes_trie_config.as_ref().unwrap();
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			config,
+			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },
 		).unwrap();

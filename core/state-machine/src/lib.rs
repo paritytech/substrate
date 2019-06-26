@@ -23,9 +23,7 @@ use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
-use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain
-};
+use primitives::{NativeOrEncoded, NeverNativeValue, offchain};
 
 pub mod backend;
 mod changes_trie;
@@ -45,12 +43,14 @@ pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{
 	AnchorBlockId as ChangesTrieAnchorBlockId,
+	State as ChangesTrieState,
 	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
-	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
+	disabled_state as disabled_changes_trie_state,
 };
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{
@@ -449,18 +449,18 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 }
 
 /// Creates new substrate state machine.
-pub fn new<'a, H, N, B, T, O, Exec>(
+pub fn new<'a, H, N, B, O, Exec>(
 	backend: &'a B,
-	changes_trie_storage: Option<&'a T>,
+	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-) -> StateMachine<'a, H, N, B, T, O, Exec> {
+) -> StateMachine<'a, H, N, B, O, Exec> {
 	StateMachine {
 		backend,
-		changes_trie_storage,
+		changes_trie_state,
 		offchain_ext,
 		overlay,
 		exec,
@@ -471,9 +471,9 @@ pub fn new<'a, H, N, B, T, O, Exec>(
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, N, B, T, O, Exec> {
+pub struct StateMachine<'a, H, N, B, O, Exec> {
 	backend: &'a B,
-	changes_trie_storage: Option<&'a T>,
+	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
@@ -482,11 +482,10 @@ pub struct StateMachine<'a, H, N, B, T, O, Exec> {
 	_hasher: PhantomData<(H, N)>,
 }
 
-impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
+impl<'a, H, N, B, O, Exec> StateMachine<'a, H, N, B, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
-	T: ChangesTrieStorage<H, N>,
 	O: offchain::Externalities,
 	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
@@ -529,7 +528,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		let mut externalities = ext::Ext::new(
 			self.overlay,
 			self.backend,
-			self.changes_trie_storage,
+			self.changes_trie_state.as_ref(),
 			self.offchain_ext.as_mut().map(|x| &mut **x),
 		);
 		let (result, was_native) = self.exec.call(
@@ -621,21 +620,8 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 			CallResult<R, Exec::Error>
 		) -> CallResult<R, Exec::Error>
 	{
-		// read changes trie configuration. The reason why we're doing it here instead of the
-		// `OverlayedChanges` constructor is that we need proofs for this read as a part of
-		// proof-of-execution on light clients. And the proof is recorded by the backend which
-		// is created after OverlayedChanges
-
-		let backend = self.backend.clone();
-		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
-			let changes_trie_config = try_read_overlay_value(
-				overlay,
-				backend,
-				well_known_keys::CHANGES_TRIE_CONFIG
-			)?;
-			set_changes_trie_config(overlay, changes_trie_config, final_check)
-		};
-		init_overlay(self.overlay, false)?;
+		let changes_tries_enabled = self.changes_trie_state.is_some();
+		self.overlay.collect_extrinsics(changes_tries_enabled);
 
 		let result = {
 			let orig_prospective = self.overlay.prospective.clone();
@@ -658,10 +644,6 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 			};
 			result.map(move |out| (out, storage_delta, changes_delta))
 		};
-
-		if result.is_ok() {
-			init_overlay(self.overlay, true)?;
-		}
 
 		result.map_err(|e| Box::new(e) as _)
 	}
@@ -711,7 +693,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine {
 		backend: &proving_backend,
-		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H, u64>>,
+		changes_trie_state: changes_trie::disabled_state::<H, u64>(),
 		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
@@ -761,7 +743,7 @@ where
 {
 	let mut sm = StateMachine {
 		backend: trie_backend,
-		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H, u64>>,
+		changes_trie_state: changes_trie::disabled_state::<H, u64>(),
 		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
@@ -896,46 +878,6 @@ where
 	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
-/// Sets overlayed changes' changes trie configuration. Returns error if configuration
-/// differs from previous OR config decode has failed.
-pub(crate) fn set_changes_trie_config(
-	overlay: &mut OverlayedChanges,
-	config: Option<Vec<u8>>,
-	final_check: bool,
-) -> Result<(), Box<dyn Error>> {
-	let config = match config {
-		Some(v) => Some(Decode::decode(&mut &v[..])
-			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
-		None => None,
-	};
-
-	if final_check && overlay.changes_trie_config.is_some() != config.is_some() {
-		return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
-	}
-
-	if let Some(config) = config {
-		if !overlay.set_changes_trie_config(config) {
-			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
-		}
-	}
-	Ok(())
-}
-
-/// Reads storage value from overlay or from the backend.
-fn try_read_overlay_value<H, B>(overlay: &OverlayedChanges, backend: &B, key: &[u8])
-	-> Result<Option<Vec<u8>>, Box<dyn Error>>
-where
-	H: Hasher,
-	B: Backend<H>,
-{
-	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
-		Some(value) => Ok(value),
-		None => backend
-			.storage(key)
-			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<dyn Error>),
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
@@ -944,10 +886,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use super::changes_trie::{
-		InMemoryStorage as InMemoryChangesTrieStorage,
-		Configuration as ChangesTrieConfig,
-	};
+	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use primitives::{Blake2Hasher, map};
 
 	struct DummyCodeExecutor {
@@ -970,7 +909,7 @@ mod tests {
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
 				ext.place_storage(
-					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					Some(
 						ChangesTrieConfig {
 							digest_interval: 777,
@@ -1006,7 +945,7 @@ mod tests {
 	fn execute_works() {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
+			changes_trie::disabled_state::<_, u64>(),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -1027,7 +966,7 @@ mod tests {
 	fn execute_works_with_native_else_wasm() {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
+			changes_trie::disabled_state::<_, u64>(),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -1048,7 +987,7 @@ mod tests {
 		let mut consensus_failed = false;
 		assert!(new(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
+			changes_trie::disabled_state::<_, u64>(),
 			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
@@ -1117,8 +1056,13 @@ mod tests {
 		};
 
 		{
-			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
-			let mut ext = Ext::new(&mut overlay, backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			let state = changes_trie::disabled_state::<_, u64>();
+			let mut ext = Ext::new(
+				&mut overlay,
+				backend,
+				state.as_ref(),
+				NeverOffchainExt::new(),
+			);
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
@@ -1141,12 +1085,12 @@ mod tests {
 	fn set_child_storage_works() {
 		let mut state = InMemory::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
-		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut overlay = OverlayedChanges::default();
+		let changes_trie_state = changes_trie::disabled_state::<_, u64>();
 		let mut ext = Ext::new(
 			&mut overlay,
 			backend,
-			Some(&changes_trie_storage),
+			changes_trie_state.as_ref(),
 			NeverOffchainExt::new()
 		);
 
@@ -1215,45 +1159,5 @@ mod tests {
 		).unwrap();
 		assert_eq!(local_result1, Some(vec![142]));
 		assert_eq!(local_result2, None);
-	}
-
-	#[test]
-	fn cannot_change_changes_trie_config() {
-		assert!(new(
-			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
-			NeverOffchainExt::new(),
-			&mut Default::default(),
-			&DummyCodeExecutor {
-				change_changes_trie_config: true,
-				native_available: false,
-				native_succeeds: true,
-				fallback_succeeds: true,
-			},
-			"test",
-			&[],
-		).execute(
-			ExecutionStrategy::NativeWhenPossible
-		).is_err());
-	}
-
-	#[test]
-	fn cannot_change_changes_trie_config_with_native_else_wasm() {
-		assert!(new(
-			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
-			NeverOffchainExt::new(),
-			&mut Default::default(),
-			&DummyCodeExecutor {
-				change_changes_trie_config: true,
-				native_available: false,
-				native_succeeds: true,
-				fallback_succeeds: true,
-			},
-			"test",
-			&[],
-		).execute(
-			ExecutionStrategy::NativeElseWasm
-		).is_err());
 	}
 }

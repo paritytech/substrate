@@ -42,7 +42,7 @@ mod tests {
 	use super::*;
 	use parity_codec::{Encode, Decode, Joiner};
 	use executor::{NativeExecutionDispatch, native_executor_instance};
-	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
+	use state_machine::{self, OverlayedChanges, ExecutionStrategy};
 	use state_machine::backend::InMemory;
 	use test_client::{
 		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis},
@@ -84,7 +84,7 @@ mod tests {
 
 		state_machine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			state_machine::disabled_changes_trie_state::<_, u64>(),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
@@ -97,7 +97,7 @@ mod tests {
 		for tx in transactions.iter() {
 			state_machine::new(
 				backend,
-				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+				state_machine::disabled_changes_trie_state::<_, u64>(),
 				state_machine::NeverOffchainExt::new(),
 				&mut overlay,
 				&executor(),
@@ -110,7 +110,7 @@ mod tests {
 
 		let (ret_data, _, _) = state_machine::new(
 			backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			state_machine::disabled_changes_trie_state::<_, u64>(),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
@@ -157,7 +157,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = state_machine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			state_machine::disabled_changes_trie_state::<_, u64>(),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
@@ -186,7 +186,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = state_machine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			state_machine::disabled_changes_trie_state::<_, u64>(),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
@@ -215,7 +215,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let r = state_machine::new(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
+			state_machine::disabled_changes_trie_state::<_, u64>(),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&Executor::new(None),

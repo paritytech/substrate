@@ -19,11 +19,13 @@
 use std::collections::{HashMap, BTreeMap};
 use std::iter::FromIterator;
 use hash_db::Hasher;
+use parity_codec::Decode;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
 use crate::changes_trie::{
 	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage,
-	BlockNumber as ChangesTrieBlockNumber,
+	BlockNumber as ChangesTrieBlockNumber, Configuration as ChangesTrieConfiguration,
+	State as ChangesTrieState,
 };
 use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
@@ -36,6 +38,7 @@ const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within 
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	offchain: Option<Box<dyn offchain::Externalities>>,
 }
@@ -49,18 +52,16 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
-
-		super::set_changes_trie_config(
-			&mut overlay,
-			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
-			false,
-		).expect("changes trie configuration is correct in test env; qed");
+		let changes_trie_config = inner.get(CHANGES_TRIE_CONFIG)
+			.and_then(|v| Decode::decode(&mut &v[..]));
+		overlay.collect_extrinsics(changes_trie_config.is_some());
 
 		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		inner.insert(CODE.to_vec(), code.to_vec());
 
 		TestExternalities {
 			overlay,
+			changes_trie_config,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: inner.into(),
 			offchain: None,
@@ -226,12 +227,18 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> {
-		Ok(compute_changes_trie_root::<_, _, H, N>(
-			&self.backend,
-			Some(&self.changes_trie_storage),
-			&self.overlay,
-			parent,
-		)?.map(|(root, _)| root.clone()))
+		match self.changes_trie_config.clone() {
+			Some(config) => {
+				let state = ChangesTrieState::new(config, &self.changes_trie_storage);
+				Ok(compute_changes_trie_root::<_, H, N>(
+					&self.backend,
+					Some(&state),
+					&self.overlay,
+					parent,
+				)?.map(|(root, _)| root.clone()))
+			},
+			None => Ok(None),
+		}
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

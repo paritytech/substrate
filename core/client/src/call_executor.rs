@@ -191,7 +191,7 @@ where
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,
-			self.backend.changes_trie_storage(),
+			backend::changes_tries_state_at_block(&*self.backend, id)?,
 			side_effects_handler,
 			&mut changes,
 			&self.executor,
@@ -240,6 +240,7 @@ where
 		}
 
 		let mut state = self.backend.state_at(*at)?;
+		let changes_trie_state = backend::changes_tries_state_at_block(&*self.backend, at)?;
 
 		match recorder {
 			Some(recorder) => {
@@ -256,7 +257,7 @@ where
 
 				state_machine::new(
 					&backend,
-					self.backend.changes_trie_storage(),
+					changes_trie_state,
 					side_effects_handler,
 					&mut *changes.borrow_mut(),
 					&self.executor,
@@ -273,7 +274,7 @@ where
 			}
 			None => state_machine::new(
 				&state,
-				self.backend.changes_trie_storage(),
+				changes_trie_state,
 				side_effects_handler,
 				&mut *changes.borrow_mut(),
 				&self.executor,
@@ -293,10 +294,12 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
+		let changes_trie_state = backend::changes_tries_state_at_block(&*self.backend, id)?;
+		let mut ext = Ext::new(&mut overlay, &state, changes_trie_state.as_ref(), NeverOffchainExt::new());
 		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
 	}
 
+	// TODO: probably remove this method???
 	fn call_at_state<
 		O: offchain::Externalities,
 		S: state_machine::Backend<Blake2Hasher>,
@@ -315,9 +318,13 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+		let changes_trie_state = match self.backend.changes_trie_storage() {
+			Some(changes_trie_storage) => backend::changes_tries_state_at_state::<_, Block, _>(state, changes_trie_storage)?,
+			None => None,
+		};
 		state_machine::new(
 			state,
-			self.backend.changes_trie_storage(),
+			changes_trie_state,
 			side_effects_handler,
 			changes,
 			&self.executor,

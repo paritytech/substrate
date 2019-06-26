@@ -18,11 +18,12 @@
 
 use std::collections::HashMap;
 use crate::error;
-use primitives::ChangesTrieConfiguration;
+use parity_codec::Decode;
+use primitives::{storage::well_known_keys::CHANGES_TRIE_CONFIG, ChangesTrieConfiguration};
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
-use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
+use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieState};
 use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
@@ -221,4 +222,32 @@ where
 {
 	/// Returns true if the state for given block is available locally.
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool;
+}
+
+/// Return changes tries state at given block.
+pub fn changes_tries_state_at_block<'a, B: Backend<Block, H>, Block: BlockT, H: Hasher>(
+	backend: &'a B,
+	block: &BlockId<Block>,
+) -> error::Result<Option<ChangesTrieState<'a, H, NumberFor<Block>>>>
+	where
+		H: Hasher<Out=Block::Hash>,
+{
+	let changes_trie_storage = match backend.changes_trie_storage() {
+		Some(changes_trie_storage) => changes_trie_storage,
+		None => return Ok(None),
+	};
+
+	let state = backend.state_at(*block)?;
+	changes_tries_state_at_state::<_, Block, _>(&state, changes_trie_storage)
+}
+
+/// Return changes tries state at given state.
+pub fn changes_tries_state_at_state<'a, S: StateBackend<H>, Block: BlockT, H: Hasher>(
+	state: &S,
+	storage: &'a dyn StateChangesTrieStorage<H, NumberFor<Block>>,
+) -> error::Result<Option<ChangesTrieState<'a, H, NumberFor<Block>>>> {
+	Ok(state.storage(CHANGES_TRIE_CONFIG)
+		.map_err(|e| error::Error::from_state(Box::new(e)))?
+		.and_then(|v| Decode::decode(&mut &v[..]))
+		.map(|config| ChangesTrieState::new(config, storage)))
 }

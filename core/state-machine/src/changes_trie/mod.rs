@@ -96,6 +96,14 @@ pub struct AnchorBlockId<Hash: ::std::fmt::Debug, Number: BlockNumber> {
 	pub number: Number,
 }
 
+/// Changes tries state at some block.
+pub struct State<'a, H, Number> {
+	/// Configuration that is active at given block.
+	pub config: Configuration,
+	/// Underlying changes tries storage reference.
+	pub storage: &'a dyn Storage<H, Number>,
+}
+
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 	/// Resolve hash of the block into anchor.
@@ -125,29 +133,45 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 /// Changes trie configuration.
 pub type Configuration = primitives::ChangesTrieConfiguration;
 
+impl<'a, H, Number> State<'a, H, Number> {
+	/// Create state with given config and storage.
+	pub fn new(config: Configuration, storage: &'a dyn Storage<H, Number>) -> Self {
+		Self {
+			config,
+			storage,
+		}
+	}
+}
+
+/// Create state where changes tries are disabled.
+pub fn disabled_state<'a, H, Number>() -> Option<State<'a, H, Number>> {
+	None
+}
+
 /// Compute the changes trie root and transaction for given block.
 /// Returns Err(()) if unknown `parent_hash` has been passed.
 /// Returns Ok(None) if there's no data to perform computation.
 /// Panics if background storage returns an error.
-pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
+pub fn compute_changes_trie_root<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	backend: &B,
-	storage: Option<&'a S>,
+	state: Option<&'a State<'a, H, Number>>,
 	changes: &OverlayedChanges,
 	parent_hash: H::Out,
 ) -> Result<Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>, ()>
 	where
 		H::Out: Ord + 'static,
 {
-	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
-		(Some(storage), Some(config)) => (storage, config),
-		_ => return Ok(None),
+	// when storage isn't provided, changes tries aren't created
+	let state = match state {
+		Some(state) => state,
+		None => return Ok(None),
 	};
 
 	// build_anchor error should not be considered fatal
-	let parent = storage.build_anchor(parent_hash).map_err(|_| ())?;
+	let parent = state.storage.build_anchor(parent_hash).map_err(|_| ())?;
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let input_pairs = prepare_input::<B, S, H, Number>(backend, storage, config, changes, &parent)
+	let input_pairs = prepare_input::<B, H, Number>(backend, state.storage, &state.config, changes, &parent)
 		.expect("storage is not allowed to fail within runtime");
 	match input_pairs {
 		Some(input_pairs) => {

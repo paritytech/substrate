@@ -42,12 +42,7 @@ impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
-		super::set_changes_trie_config(
-			&mut overlay,
-			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
-			false,
-		).expect("changes trie configuration is correct in test env; qed");
-
+		overlay.collect_extrinsics(inner.contains_key(CHANGES_TRIE_CONFIG));
 		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 
 		BasicExternalities {
