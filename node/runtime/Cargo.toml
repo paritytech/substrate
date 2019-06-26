@@ -43,7 +43,7 @@ wasm-builder-runner = { path = "../../core/utils/wasm-builder-runner" }
 [features]
 default = ["std"]
 no_std = [
-	"contract/core",
+	"contracts/core",
 ]
 std = [
 	"parity-codec/std",

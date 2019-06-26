@@ -55,7 +55,7 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event, WASM_BINARY, SessionKeys
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, SessionKeys
 	};
 	use wabt;
 	use primitives::map;
@@ -66,14 +66,14 @@ mod tests {
 	/// making the binary slimmer. There is a convention to use compact version of the runtime
 	/// as canonical. This is why `native_executor_instance` also uses the compact version of the
 	/// runtime.
-	const COMPACT_CODE: &[u8] = WASM_BINARY;
+	const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
 
 	/// The wasm runtime binary which hasn't undergone the compacting process.
 	///
 	/// The idea here is to pass it as the current runtime code to the executor so the executor will
 	/// have to execute provided wasm code instead of the native equivalent. This trick is used to
 	/// test code paths that differ between native and wasm versions.
-	const BLOATY_CODE: &[u8] = WASM_BINARY;
+	const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
@@ -140,12 +140,12 @@ mod tests {
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		::substrate_executor::NativeExecutor::new(None)
+		substrate_executor::NativeExecutor::new(None)
 	}
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(WASM_BINARY, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
@@ -196,7 +196,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(WASM_BINARY, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
@@ -247,7 +247,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(WASM_BINARY, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
@@ -288,7 +288,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(WASM_BINARY, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			},
@@ -460,7 +460,7 @@ mod tests {
 
 	fn changes_trie_block() -> (Vec<u8>, Hash) {
 		construct_block(
-			&mut new_test_ext(WASM_BINARY, true),
+			&mut new_test_ext(COMPACT_CODE, true),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -480,7 +480,7 @@ mod tests {
 	// are not guaranteed to be deterministic) and to ensure that the correct state is propagated
 	// from block1's execution to block2 to derive the correct storage_root.
 	fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 		let block1 = construct_block(
 			&mut t,
 			1,
@@ -526,7 +526,7 @@ mod tests {
 
 	fn big_block() -> (Vec<u8>, Hash) {
 		construct_block(
-			&mut new_test_ext(WASM_BINARY, false),
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -544,7 +544,7 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works() {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		let (block1, block2) = blocks();
 
@@ -675,11 +675,11 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		let (block1, block2) = blocks();
 
-		WasmExecutor::new().call(&mut t, 8, WASM_BINARY, "Core_execute_block", &block1.0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			// block1 transfers from alice 69 to bob.
@@ -688,7 +688,7 @@ mod tests {
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69);
 		});
 
-		WasmExecutor::new().call(&mut t, 8, WASM_BINARY, "Core_execute_block", &block2.0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
@@ -804,7 +804,7 @@ mod tests {
 		);
 
 		let b = construct_block(
-			&mut new_test_ext(WASM_BINARY, false),
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
 			vec![
@@ -838,9 +838,9 @@ mod tests {
 			]
 		);
 
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		WasmExecutor::new().call(&mut t, 8, WASM_BINARY,"Core_execute_block", &b.0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &b.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
@@ -856,13 +856,13 @@ mod tests {
 
 	#[test]
 	fn wasm_big_block_import_fails() {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
 			WasmExecutor::new().call(
 				&mut t,
 				4,
-				WASM_BINARY,
+				COMPACT_CODE,
 				"Core_execute_block",
 				&big_block().0
 			).is_err()
@@ -871,7 +871,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -884,7 +884,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
-		let mut t = new_test_ext(WASM_BINARY, false);
+		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
 			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
@@ -916,10 +916,10 @@ mod tests {
 		]);
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, WASM_BINARY, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, WASM_BINARY, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(ApplyError::CantPay));
 	}
@@ -943,10 +943,10 @@ mod tests {
 		]);
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, WASM_BINARY, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, WASM_BINARY, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
+			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
@@ -962,7 +962,7 @@ mod tests {
 		let block_data = block1.0;
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
-		let mut t = new_test_ext(WASM_BINARY, true);
+		let mut t = new_test_ext(COMPACT_CODE, true);
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -978,9 +978,9 @@ mod tests {
 	fn full_wasm_block_import_works_with_changes_trie() {
 		let block1 = changes_trie_block();
 
-		let mut t = new_test_ext(WASM_BINARY, true);
+		let mut t = new_test_ext(COMPACT_CODE, true);
 		WasmExecutor::new()
-			.call(&mut t, 8, WASM_BINARY, "Core_execute_block", &block1.0).unwrap();
+			.call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
@@ -1010,7 +1010,7 @@ mod tests {
 			let (block1, block2) = blocks();
 
 			b.iter(|| {
-				let mut t = new_test_ext(WASM_BINARY, false);
+				let mut t = new_test_ext(COMPACT_CODE, false);
 				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1.0).unwrap();
 				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2.0).unwrap();
 			});

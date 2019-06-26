@@ -17,7 +17,9 @@
 //! The WASM builder is a utility for building a project as WASM binary.
 //!
 //! The functions need to be called from a `build.rs` and will create a file with a given name in
-//! `OUT_DIR`. This file contains the `WASM_BINARY` constant which contains the build wasm binary.
+//! `OUT_DIR`. This file contains the `WASM_BINARY` constant and the `WASM_BINARY_BLOATY` constant.
+//! The former contains the build and compacted wasm binary, while the later just contains the
+//! build wasm binary.
 //!
 //! When passing `SKIP_WASM_BUILD` to the build, the WASM binary will not be rebuild.
 //!
@@ -68,11 +70,18 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 		return
 	}
 
-	let wasm_binary = wasm_project::create_and_compile(&cargo_manifest);
+	let (wasm_binary, bloaty) = wasm_project::create_and_compile(&cargo_manifest);
 
 	create_out_file(
 		file_name,
-		format!("pub const WASM_BINARY: &[u8] = include_bytes!(\"{}\");", wasm_binary.display()),
+		format!(
+			r#"
+				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
+				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
+			"#,
+			wasm_binary = wasm_binary.wasm_binary_path().display(),
+			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path().display(),
+		),
 	);
 }
 

@@ -21,17 +21,38 @@ use toml::value::Table;
 /// The name for the wasm binary.
 const WASM_BINARY: &str = "wasm_binary";
 
+/// Holds the path to the bloaty WASM binary.
+pub struct WasmBinaryBloaty(PathBuf);
+
+impl WasmBinaryBloaty {
+	/// Returns the path to the bloaty wasm binary.
+	pub fn wasm_binary_bloaty_path(&self) -> &Path {
+		&self.0
+	}
+}
+
+/// Holds the path to the WASM binary.
+pub struct WasmBinary(PathBuf);
+
+impl WasmBinary {
+	/// Returns the path to the wasm binary.
+	pub fn wasm_binary_path(&self) -> &Path {
+		&self.0
+	}
+}
+
 /// Creates the WASM project, compiles the WASM binary and compacts the WASM binary.
 ///
 /// # Returns
-/// The path to the compact WASM binary.
-pub fn create_and_compile(cargo_manifest: &Path) -> PathBuf {
+/// The path to the compact WASM binary and the bloaty WASM binary.
+pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloaty)  {
 	let project = create_project(cargo_manifest);
 
 	build_project(&project);
-	compact_wasm_file(&project);
+	let bloaty = WasmBinaryBloaty(compact_wasm_file(&project));
+	let wasm_binary = WasmBinary(project.join(format!("{}.compact.wasm", WASM_BINARY)));
 
-	project.join(format!("{}.compact.wasm", WASM_BINARY))
+	(wasm_binary, bloaty)
 }
 
 /// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
@@ -151,14 +172,14 @@ fn build_project(project: &Path) {
 	}
 }
 
-/// Compact the WASM binary using `wasm-gc`.
-fn compact_wasm_file(project: &Path) {
+/// Compact the WASM binary using `wasm-gc` and returns the path to the bloaty WASM binary.
+fn compact_wasm_file(project: &Path) -> PathBuf {
 	let target = if build_helper::debug() { "debug" } else { "release" };
 	let wasm_file = project.join("target/wasm32-unknown-unknown")
 		.join(target)
 		.join(format!("{}.wasm", WASM_BINARY));
 
-	let res = Command::new("wasm-gc").arg(wasm_file)
+	let res = Command::new("wasm-gc").arg(&wasm_file)
 		.arg(project.join(format!("{}.compact.wasm", WASM_BINARY)))
 		.status()
 		.map(|s| s.success());
@@ -167,4 +188,6 @@ fn compact_wasm_file(project: &Path) {
 		Ok(true) => {},
 		_ => panic!("Failed to compact generated WASM binary."),
 	}
+
+	wasm_file
 }
