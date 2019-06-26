@@ -388,6 +388,15 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 	}
 }
 
+impl ChangesTrieSignal {
+	/// Try to cast this signal to NewConfiguration.
+	pub fn as_new_configuration(&self) -> Option<&Option<ChangesTrieConfiguration>> {
+		match self {
+			ChangesTrieSignal::NewConfiguration(config) => Some(config),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
