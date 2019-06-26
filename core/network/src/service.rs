@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
-use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::multihash::Multihash;
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
@@ -752,7 +752,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::Behaviour(outcome)))) => outcome,
+				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
 				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
 					network_service.user_protocol_mut()
 						.on_event(Event::Dht(ev));
@@ -790,5 +790,5 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, S, H> = libp2p::core::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
-	Behaviour<Protocol<B, S, H>, CustomMessageOutcome<B>, Substream<StreamMuxerBox>>
+	Behaviour<B, S, H>
 >;
