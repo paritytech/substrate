@@ -66,6 +66,7 @@ pub fn start_http(
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.health_api(("/health", "system_health"))
+		.allowed_hosts(hosts_filtering(cors.is_some()))
 		.rest_api(if cors.is_some() {
 			http::RestApi::Secure
 		} else {
@@ -87,6 +88,7 @@ pub fn start_ws(
 		.max_payload(MAX_PAYLOAD)
 		.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 		.allowed_origins(map_cors(cors))
+		.allowed_hosts(hosts_filtering(cors.is_some()))
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error::Io(io) => io,
@@ -102,4 +104,15 @@ fn map_cors<T: for<'a> From<&'a str>>(
 	cors: Option<&Vec<String>>
 ) -> http::DomainsValidation<T> {
 	cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
+}
+
+fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
+	if enable {
+		// NOTE The listening address is whitelisted by default.
+		// Setting an empty vector here enables the validation
+		// and allows only the listening address.
+		http::DomainsValidation::AllowOnly(vec![])
+	} else {
+		http::DomainsValidation::Disabled
+	}
 }

@@ -44,7 +44,7 @@ fn submit_transaction_should_not_cause_error() {
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
-		subscriptions: Subscriptions::new(runtime.executor()),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -65,7 +65,7 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
-		subscriptions: Subscriptions::new(runtime.executor()),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 	};
 	let xt = uxt(AccountKeyring::Alice, 0).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -88,7 +88,7 @@ fn should_watch_extrinsic() {
 	let p = Author {
 		client,
 		pool: pool.clone(),
-		subscriptions: Subscriptions::new(runtime.executor()),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
@@ -128,7 +128,7 @@ fn should_return_pending_extrinsics() {
 	let p = Author {
 		client,
 		pool: pool.clone(),
-		subscriptions: Subscriptions::new(runtime.executor()),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
@@ -146,7 +146,7 @@ fn should_remove_extrinsics() {
 	let p = Author {
 		client,
 		pool: pool.clone(),
-		subscriptions: Subscriptions::new(runtime.executor()),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 	};
 	let ex1 = uxt(AccountKeyring::Alice, 0);
 	p.submit_extrinsic(ex1.encode().into()).unwrap();

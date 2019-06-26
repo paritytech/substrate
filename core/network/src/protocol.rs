@@ -35,6 +35,7 @@ use message::{
 };
 use message::{BlockAttributes, Direction, FromBlock, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
+use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use specialization::NetworkSpecialization;
@@ -54,6 +55,7 @@ use util::LruHashSet;
 mod util;
 pub mod consensus_gossip;
 pub mod message;
+pub mod event;
 pub mod on_demand;
 pub mod specialization;
 pub mod sync;
@@ -562,6 +564,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
+	}
+
+	pub fn on_event(&mut self, event: Event) {
+		self.specialization.on_event(event);
 	}
 
 	pub fn on_custom_message(
