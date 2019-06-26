@@ -25,7 +25,7 @@ use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use crate::protocol_behaviour::ProtocolBehaviour;
+use crate::protocol::Protocol;
 use crate::{behaviour::Behaviour, parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
@@ -169,7 +169,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let (protocol, peerset_handle) = ProtocolBehaviour::new(
+		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
@@ -694,12 +694,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ProtocolMsg::BlockFinalized(hash, header) =>
 					network_service.user_protocol_mut().on_block_finalized(hash, &header),
 				ProtocolMsg::ExecuteWithSpec(task) => {
-					let protocol = network_service.user_protocol_mut().protocol();
+					let protocol = network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
 					task.call_box(spec, &mut context);
 				},
 				ProtocolMsg::ExecuteWithGossip(task) => {
-					let protocol = network_service.user_protocol_mut().protocol();
+					let protocol = network_service.user_protocol_mut();
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task.call_box(gossip, &mut context);
 				}
@@ -774,5 +774,5 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, S, H> = libp2p::core::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
-	Behaviour<ProtocolBehaviour<B, S, H>, CustomMessageOutcome<B>, Substream<StreamMuxerBox>>
+	Behaviour<Protocol<B, S, H>, CustomMessageOutcome<B>, Substream<StreamMuxerBox>>
 >;
