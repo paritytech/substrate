@@ -512,20 +512,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}, rq);
 	}
 
-	pub fn poll(
-		&mut self
-	) -> Poll<void::Void, void::Void> {
-		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
-			self.tick();
-		}
-
-		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
-			self.propagate_extrinsics();
-		}
-
-		Ok(Async::NotReady)
-	}
-
 	fn is_on_demand_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
 		self.on_demand_core.is_on_demand_response(&who, response_id)
 	}
@@ -1600,10 +1586,12 @@ Protocol<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		match self.poll() {
-			Ok(Async::Ready(v)) => void::unreachable(v),
-			Ok(Async::NotReady) => {}
-			Err(err) => void::unreachable(err),
+		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
+			self.tick();
+		}
+
+		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
+			self.propagate_extrinsics();
 		}
 
 		let event = match self.behaviour.poll(params) {
