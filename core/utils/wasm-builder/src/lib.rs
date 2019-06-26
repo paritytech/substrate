@@ -35,6 +35,12 @@ mod wasm_project;
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
+/// Environment variable to force a certain build type when building the WASM binary.
+/// Expects "debug" or "release" as value.
+///
+/// By default the WASM binary uses the same build type a the main cargo build.
+const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
+
 /// Build the currently build project as WASM binary.
 ///
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.

@@ -78,6 +78,8 @@ impl WasmBuilderSource {
 ///               constant `WASM_BINARY` which contains the build wasm binary.
 /// `wasm_builder_path` - Path to the wasm-builder project, relative to `CARGO_MANIFEST_DIR`.
 pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSource) {
+	generate_rerun_if_changed_instructions();
+
 	if check_skip_build() {
 		return;
 	}
@@ -169,6 +171,16 @@ fn check_provide_dummy_wasm_binary() -> bool {
 
 /// Provide the dummy WASM binary
 fn provide_dummy_wasm_binary(file_path: &Path) {
-	fs::write(file_path, format!("pub const WASM_BINARY: &[u8] = &[];"))
-		.expect("Writing dummy WASM binary should not fail");
+	fs::write(
+		file_path,
+		format!("pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];")
+	).expect("Writing dummy WASM binary should not fail");
+}
+
+/// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
+/// rebuild when needed.
+fn generate_rerun_if_changed_instructions() {
+	// Make sure that the `build.rs` is called again if one of the following env variables changes.
+	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
 }

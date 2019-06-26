@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::Command};
+use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::Command, env};
 
 use toml::value::Table;
 
@@ -158,6 +158,23 @@ fn create_project(cargo_manifest: &Path) -> PathBuf {
 	project_folder
 }
 
+/// Returns if the project should be build a release.
+fn is_release_build() -> bool {
+	if let Ok(var) = env::var(crate::WASM_BUILD_TYPE_ENV) {
+		match var.as_str() {
+			"release" => true,
+			"debug" => false,
+			var => panic!(
+				"Unexpected value for `{}` env variable: {}\nOne of the following are expected: `debug` or `release`.",
+				crate::WASM_BUILD_TYPE_ENV,
+				var,
+			),
+		}
+	} else {
+		!build_helper::debug()
+	}
+}
+
 /// Build the project to create the WASM binary.
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
@@ -168,7 +185,7 @@ fn build_project(project: &Path) {
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
-	if !build_helper::debug() {
+	if is_release_build() {
 		build_cmd.arg("--release");
 	};
 
@@ -182,7 +199,7 @@ fn build_project(project: &Path) {
 
 /// Compact the WASM binary using `wasm-gc` and returns the path to the bloaty WASM binary.
 fn compact_wasm_file(project: &Path) -> PathBuf {
-	let target = if build_helper::debug() { "debug" } else { "release" };
+	let target = if is_release_build() { "release" } else { "debug" };
 	let wasm_file = project.join("target/wasm32-unknown-unknown")
 		.join(target)
 		.join(format!("{}.wasm", WASM_BINARY));
@@ -229,4 +246,8 @@ fn generate_rerun_if_changed_instructions(cargo_manifest: &Path, project_folder:
 				.filter_map(|p| p.ok())
 				.for_each(|p| rerun_if_changed(p.path()));
 		});
+
+	// Register our env variables
+	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
 }
