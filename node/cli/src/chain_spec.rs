@@ -20,7 +20,7 @@ use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, AuraId};
 use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys,
+	SudoConfig, ContractsConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys,
 	WASM_BINARY
 };
 pub use node_runtime::GenesisConfig;
