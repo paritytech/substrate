@@ -440,9 +440,9 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
 	}
 
-	/*#[test]
+	#[test]
 	#[ignore]
 	fn test_connectivity() {
 		service_test::connectivity::<Factory>(integration_test_config_with_two_authorities());
-	}*/
+	}
 }
