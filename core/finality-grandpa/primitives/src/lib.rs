@@ -160,17 +160,19 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 /// d) a reference to a previous challenge, if the current tx is an answer to it.
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrevoteChallenge<H, N> {
+pub struct PrevoteChallenge<H, N, Header> {
+	incompatible_block: (H, N),
+	finalized_block: (H, N),
 	challenged_votes: Vec<Prevote<H, N>>,
-	finalized_block: H,
-	block_proof: Vec<Precommit<H, N>>,
+	block_proof: (Vec<Precommit<H, N>>, Vec<Header>),
 	previous_challenge: Option<H>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrecommitChallenge<H, N> {
+pub struct PrecommitChallenge<H, N, Header> {
+	incompatible_block: (H, N),
+	finalized_block: (H, N),
 	challenged_votes: Vec<Precommit<H, N>>,
-	finalized_block: H,
-	block_proof: Vec<Precommit<H, N>>,
+	block_proof: (Vec<Precommit<H, N>>, Vec<Header>),
 	previous_challenge: Option<H>,
 }

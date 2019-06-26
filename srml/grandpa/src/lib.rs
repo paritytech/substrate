@@ -56,14 +56,14 @@ mod tests;
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Challenge<H, N> {
-	challenge: StoredPendingChallenge<H, N>,
+pub struct Challenge<H, N, Header> {
+	challenge: StoredPendingChallenge<H, N, Header>,
 }
 
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum Signal<H, N> {
+pub enum Signal<H, N, Header> {
 	/// Authorities set change has been signaled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChange(ScheduledChange<N>),
@@ -72,10 +72,10 @@ pub enum Signal<H, N> {
 	/// before applying and the new set of authorities.
 	ForcedAuthoritiesChange(N, ScheduledChange<N>),
 
-	Challenge(Challenge<H, N>),
+	Challenge(Challenge<H, N, Header>),
 }
 
-impl<H, N> Signal<H, N> {
+impl<H, N, Header> Signal<H, N, Header> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
@@ -146,29 +146,29 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 
 /// A stored pending change.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredPendingChallenge<H, N> {
+pub struct StoredPendingChallenge<H, N, Header> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
 	
-	pub prevote_challenge: PrevoteChallenge<H, N>,
+	pub prevote_challenge: PrevoteChallenge<H, N, Header>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N>,
+	pub precommit_challenge: PrecommitChallenge<H, N, Header>,
 }
 
 
 /// A stored pending change.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredChallengeSession<H, N> {
+pub struct StoredChallengeSession<H, N, Header> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
 	
-	pub prevote_challenge: PrevoteChallenge<H, N>,
+	pub prevote_challenge: PrevoteChallenge<H, N, Header>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N>,
+	pub precommit_challenge: PrecommitChallenge<H, N, Header>,
 }
 
 decl_event!(
@@ -188,10 +188,10 @@ decl_storage! {
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
-		ChallengeSessions get(challenge_sessions): Vec<StoredChallengeSession<T::Hash, T::BlockNumber>>;
+		ChallengeSessions get(challenge_sessions): Vec<StoredChallengeSession<T::Hash, T::BlockNumber, T::Header>>;
 
 		/// Pending challenge.
-		PendingChallenge: Option<StoredPendingChallenge<T::Hash, T::BlockNumber>>;
+		PendingChallenge: Option<StoredPendingChallenge<T::Hash, T::BlockNumber, T::Header>>;
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -224,7 +224,7 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_prevotes(
 			_origin,
-			_proof: PrevoteChallenge<T::Hash, T::BlockNumber>
+			_proof: PrevoteChallenge<T::Hash, T::BlockNumber, T::Header>
 		) {
 			// Slash?
 		}
@@ -232,7 +232,7 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_precommits(
 			_origin,
-			_proof: PrecommitChallenge<T::Hash, T::BlockNumber>
+			_proof: PrecommitChallenge<T::Hash, T::BlockNumber, T::Header>
 		) {
 			// Slash?
 		}
@@ -326,16 +326,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Signal<T::Hash, T::BlockNumber>) {
+	fn deposit_log(log: Signal<T::Hash, T::BlockNumber, T::Header>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::Hash, T::BlockNumber>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::Hash, T::BlockNumber, T::Header>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<Signal<T::Hash, T::BlockNumber>>(id))
+		digest.convert_first(|l| l.try_to::<Signal<T::Hash, T::BlockNumber, T::Header>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>)
@@ -498,19 +498,27 @@ where
 }
 
 fn handle_unjustified_prevotes<T: Trait>(
-	proof: &PrevoteChallenge<T::Hash, T::BlockNumber>
+	proof: &PrevoteChallenge<T::Hash, T::BlockNumber, T::Header>
 ) -> TransactionValidity
 where
 	T: Trait,
 	<<T as Trait>::Signature as Verify>::Signer:
 		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
-	
+	let round_v = 0;
+	let round_b = 0;
+
+	if round_b > round_v {
+		return TransactionValidity::Invalid(0)
+	}
+	// 1) check all votes are for round_s and that are incompatible with B
+	// 2) check that block proof contains supermajority of precommits for B
+	// 3) if there is a reference to a previous challenge check that is correct.
 	TransactionValidity::Invalid(0)
 }
 
 fn handle_unjustified_precommits<T: Trait>(
-	proof: &PrecommitChallenge<T::Hash, T::BlockNumber>
+	proof: &PrecommitChallenge<T::Hash, T::BlockNumber, T::Header>
 ) -> TransactionValidity
 where
 	T: Trait,
