@@ -594,6 +594,11 @@ pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
 
+/// A type that provides a randomness beacon.  The output MUST NOT be relied on
+/// to change every time the function is called.
+pub trait RandomnessBeacon {
+	fn random() -> [u8; 32];
+}
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}

@@ -23,7 +23,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating}};
+use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -126,7 +126,7 @@ decl_storage! {
 		/// (like everything else on-chain) is public.  For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness: [u8; 32];
+		Randomness: [u8; 32];
 	}
 }
 
@@ -135,6 +135,22 @@ decl_module! {
 		fn on_initialize() {
 			Self::process_inherent_digests()
 		}
+	}
+}
+
+impl<T: Trait> RandomnessBeacon for Module<T> {
+	/// The randomness we have right now.
+	///
+	/// # Security
+	///
+	/// This MUST NOT be used for gambling, as it can be influenced by a
+	/// malicious validator in the short term.  It MAY be used in many
+	/// cryptographic protocols, however, so long as one remembers that this
+	/// (like everything else on-chain) is public.  For example, it can be
+	/// used where a number is needed that cannot have been chosen by an
+	/// adversary, for purposes such as public-coin zero-knowledge proofs.
+	fn random() -> [u8; 32] {
+		<Randomness<T>>::get()
 	}
 }
 
