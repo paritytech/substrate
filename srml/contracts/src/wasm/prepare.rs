@@ -20,33 +20,33 @@
 
 use crate::wasm::env_def::ImportSatisfyCheck;
 use crate::wasm::PrefabWasmModule;
-use crate::{Schedule, Trait};
+use crate::Schedule;
 
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use runtime_primitives::traits::{UniqueSaturatedInto, SaturatedConversion};
+use runtime_primitives::traits::{SaturatedConversion};
 
-struct ContractModule<'a, Gas: 'a> {
+struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
 	///
 	/// An `Option` is used here for loaning (`take()`-ing) the module.
 	/// Invariant: Can't be `None` (i.e. on enter and on exit from the function
 	/// the value *must* be `Some`).
 	module: Option<elements::Module>,
-	schedule: &'a Schedule<Gas>,
+	schedule: &'a Schedule,
 }
 
-impl<'a, Gas: 'a + From<u32> + UniqueSaturatedInto<u32> + Clone> ContractModule<'a, Gas> {
+impl<'a> ContractModule<'a> {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
 	/// if it contains an invalid module.
 	fn new(
 		original_code: &[u8],
-		schedule: &'a Schedule<Gas>,
-	) -> Result<ContractModule<'a, Gas>, &'static str> {
+		schedule: &'a Schedule,
+	) -> Result<Self, &'static str> {
 		use wasmi_validation::{validate_module, PlainValidator};
 
 		let module =
@@ -290,9 +290,9 @@ impl<'a, Gas: 'a + From<u32> + UniqueSaturatedInto<u32> + Clone> ContractModule<
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
+pub fn prepare_contract<C: ImportSatisfyCheck>(
 	original_code: &[u8],
-	schedule: &Schedule<T::Gas>,
+	schedule: &Schedule,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.scan_exports()?;
@@ -347,7 +347,6 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::tests::Test;
 	use crate::exec::Ext;
 	use std::fmt;
 	use wabt;
@@ -377,8 +376,8 @@ mod tests {
 			#[test]
 			fn $name() {
 				let wasm = wabt::Wat2Wasm::new().validate(false).convert($wat).unwrap();
-				let schedule = Schedule::<u64>::default();
-				let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
+				let schedule = Schedule::default();
+				let r = prepare_contract::<TestEnv>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
 			}
 		};
@@ -406,7 +405,7 @@ mod tests {
 		// Tests below assumes that maximum page number is configured to a certain number.
 		#[test]
 		fn assume_memory_size() {
-			assert_eq!(Schedule::<u64>::default().max_memory_pages, 16);
+			assert_eq!(Schedule::default().max_memory_pages, 16);
 		}
 
 		prepare_test!(memory_with_one_page,
@@ -620,9 +619,9 @@ mod tests {
 				)
 				"#
 			).unwrap();
-			let mut schedule = Schedule::<u64>::default();
+			let mut schedule = Schedule::default();
 			schedule.enable_println = true;
-			let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
+			let r = prepare_contract::<TestEnv>(wasm.as_ref(), &schedule);
 			assert_matches!(r, Ok(_));
 		}
 	}

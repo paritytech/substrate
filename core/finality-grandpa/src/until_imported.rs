@@ -20,7 +20,7 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, CatchUp, CommunicationIn, Error, SignedMessage};
+use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
 
 use log::{debug, warn};
 use client::ImportNotifications;
@@ -428,7 +428,7 @@ pub(crate) type UntilGlobalMessageBlocksImported<Block, Status, I> = UntilImport
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::CompactCommit;
+	use crate::{CatchUp, CompactCommit};
 	use tokio::runtime::current_thread::Runtime;
 	use tokio::timer::Delay;
 	use test_client::runtime::{Block, Hash, Header};

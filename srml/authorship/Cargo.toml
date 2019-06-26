@@ -1,32 +1,27 @@
 [package]
-name = "srml-session"
-version = "2.0.0"
+name = "srml-authorship"
+version = "0.1.0"
+description = "Block and Uncle Author tracking for the SRML"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition =  "2018"
+edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true }
-safe-mix = { version = "1.0", default-features = false}
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-
-[dev-dependencies]
-substrate-primitives = { path = "../../core/primitives" }
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
-lazy_static = "1.0"
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 
 [features]
 default = ["std"]
 std = [
-	"serde",
-	"safe-mix/std",
 	"parity-codec/std",
+	"substrate-primitives/std",
 	"rstd/std",
 	"srml-support/std",
 	"primitives/std",
-	"timestamp/std"
+	"system/std",
+	"runtime_io/std",
 ]
