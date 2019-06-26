@@ -4097,7 +4097,6 @@ dependencies = [
 name = "substrate-consensus-babe"
 version = "2.0.0"
 dependencies = [
- "curve25519-dalek 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
