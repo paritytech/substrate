@@ -90,24 +90,24 @@ fn do_phragmen(
 					<<mock::Test as Trait>::CurrencyToVote as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
 				let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
 
-				let assignments_with_stakes = assignments.iter().map(|(n, a)|(
-					n.clone(),
-					Staking::slashable_balance_of(n),
-					a.iter().map(|(acc, r)| (
+				let assignments_with_stakes = assignments.into_iter().map(|(n, a)|(
+					n,
+					Staking::slashable_balance_of(&n),
+					a.into_iter().map(|(acc, r)| (
 						acc.clone(),
-						*r,
-						to_balance(ratio_of(Staking::slashable_balance_of(n), *r)),
+						r,
+						to_balance(ratio_of(Staking::slashable_balance_of(&n), r)),
 					))
 					.collect::<Vec<Assignment<Test>>>()
 				)).collect::<Vec<(AccountId, Balance, Vec<Assignment<Test>>)>>();
 
 				let mut exposures = <ExpoMap<Test>>::new();
 				elected_stashes
-					.iter()
-					.map(|e| (e, Staking::slashable_balance_of(e)))
+					.into_iter()
+					.map(|e| (e, Staking::slashable_balance_of(&e)))
 					.for_each(|(e, s)| {
 						let item = Exposure { own: s, total: s, ..Default::default() };
-						exposures.insert(e.clone(), item);
+						exposures.insert(e, item);
 					});
 
 				for (n, _, assignment) in &assignments_with_stakes {
@@ -119,11 +119,11 @@ fn do_phragmen(
 					}
 				}
 
-				let mut assignments_with_votes = assignments_with_stakes.iter()
+				let mut assignments_with_votes = assignments_with_stakes.into_iter()
 					.map(|a| (
-						a.0.clone(), a.1,
-						a.2.iter()
-							.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
+						a.0, a.1,
+						a.2.into_iter()
+							.map(|e| (e.0, e.1, to_votes(e.2)))
 							.collect::<Vec<(AccountId, ExtendedBalance, ExtendedBalance)>>()
 					))
 					.collect::<Vec<(
