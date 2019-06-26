@@ -144,7 +144,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
@@ -572,7 +572,7 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &dyn consensus_common::import_queue::Link<Block>) {
+		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
 			self.0.on_start(link)
 		}
 

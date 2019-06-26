@@ -16,31 +16,73 @@
 
 //! Rust implementation of Substrate contracts.
 
-use wasmi::{ValueType, RuntimeValue, HostError};
+use wasmi::{ValueType, RuntimeValue};
 use wasmi::nan_preserving_float::{F32, F64};
-use std::fmt;
 
-#[derive(Debug, PartialEq)]
-pub struct UserError(pub &'static str);
-impl fmt::Display for UserError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UserError: {}", self.0)
-	}
-}
-impl HostError for UserError {
+pub trait ConvertibleToWasm {
+	const VALUE_TYPE: ValueType;
+	type NativeType; fn to_runtime_value(self) -> RuntimeValue;
 }
 
-pub trait ConvertibleToWasm { const VALUE_TYPE: ValueType; type NativeType; fn to_runtime_value(self) -> RuntimeValue; }
-impl ConvertibleToWasm for i32 { type NativeType = i32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self) } }
-impl ConvertibleToWasm for u32 { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) } }
-impl ConvertibleToWasm for i64 { type NativeType = i64; const VALUE_TYPE: ValueType = ValueType::I64; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I64(self) } }
-impl ConvertibleToWasm for u64 { type NativeType = u64; const VALUE_TYPE: ValueType = ValueType::I64; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I64(self as i64) } }
-impl ConvertibleToWasm for F32 { type NativeType = F32; const VALUE_TYPE: ValueType = ValueType::F32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F32(self) } }
-impl ConvertibleToWasm for F64 { type NativeType = F64; const VALUE_TYPE: ValueType = ValueType::F64; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F64(self) } }
-impl ConvertibleToWasm for isize { type NativeType = i32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) } }
-impl ConvertibleToWasm for usize { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as u32 as i32) } }
-impl<T> ConvertibleToWasm for *const T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
-impl<T> ConvertibleToWasm for *mut T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
+impl ConvertibleToWasm for i32 {
+	type NativeType = i32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self) }
+}
+
+impl ConvertibleToWasm for u32 {
+	type NativeType = u32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) }
+}
+
+impl ConvertibleToWasm for i64 {
+	type NativeType = i64;
+	const VALUE_TYPE: ValueType = ValueType::I64;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I64(self) }
+}
+
+impl ConvertibleToWasm for u64 {
+	type NativeType = u64;
+	const VALUE_TYPE: ValueType = ValueType::I64;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I64(self as i64) }
+}
+
+impl ConvertibleToWasm for F32 {
+	type NativeType = F32;
+	const VALUE_TYPE: ValueType = ValueType::F32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F32(self) }
+}
+
+impl ConvertibleToWasm for F64 {
+	type NativeType = F64;
+	const VALUE_TYPE: ValueType = ValueType::F64;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F64(self) }
+}
+
+impl ConvertibleToWasm for isize {
+	type NativeType = i32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as i32) }
+}
+
+impl ConvertibleToWasm for usize {
+	type NativeType = u32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as u32 as i32) }
+}
+
+impl<T> ConvertibleToWasm for *const T {
+	type NativeType = u32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) }
+}
+
+impl<T> ConvertibleToWasm for *mut T {
+	type NativeType = u32;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) }
+}
 
 /// Converts arguments into respective WASM types.
 #[macro_export]
@@ -118,7 +160,7 @@ macro_rules! unmarshall_args {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, ::wasmi::Trap>
+	F: FnOnce() -> Result<R, crate::error::Error>
 {
 	f
 }
@@ -132,14 +174,14 @@ macro_rules! marshall {
 		>(|| {
 			unmarshall_args!($body, $objectname, $args_iter, $( $names : $params ),*)
 		});
-		let r = body()?;
+		let r = body().map_err(wasmi::Trap::from)?;
 		return Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
 	});
 	( $args_iter:ident, $objectname:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::wasm_utils::constrain_closure::<(), _>(|| {
 			unmarshall_args!($body, $objectname, $args_iter, $( $names : $params ),*)
 		});
-		body()?;
+		body().map_err(wasmi::Trap::from)?;
 		return Ok(None)
 	})
 }
@@ -154,7 +196,13 @@ macro_rules! dispatch_fn {
 		panic!("fn with index {} is undefined", $index);
 	};
 
-	( @iter $index:expr, $index_ident:ident, $objectname:ident, $args_iter:ident, $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt $($tail:tt)*) => (
+	(@iter
+		$index:expr,
+		$index_ident:ident,
+		$objectname:ident,
+		$args_iter:ident,
+		$name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt $($tail:tt)*
+	) => (
 		if $index_ident == $index {
 			{ marshall!($args_iter, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body) }
 		}
@@ -177,7 +225,11 @@ macro_rules! impl_function_executor {
 			fn resolver() -> &'static dyn $crate::wasmi::ModuleImportResolver {
 				struct Resolver;
 				impl $crate::wasmi::ModuleImportResolver for Resolver {
-					fn resolve_func(&self, name: &str, signature: &$crate::wasmi::Signature) -> ::std::result::Result<$crate::wasmi::FuncRef, $crate::wasmi::Error> {
+					fn resolve_func(
+						&self,
+						name: &str,
+						signature: &$crate::wasmi::Signature
+					) -> std::result::Result<$crate::wasmi::FuncRef, $crate::wasmi::Error> {
 						resolve_fn!(signature, name, $( $name( $( $params ),* ) $( -> $returns )* => )*);
 
 						Err($crate::wasmi::Error::Instantiation(
@@ -194,7 +246,7 @@ macro_rules! impl_function_executor {
 				&mut self,
 				index: usize,
 				args: $crate::wasmi::RuntimeArgs,
-			) -> ::std::result::Result<Option<$crate::wasmi::RuntimeValue>, $crate::wasmi::Trap> {
+			) -> std::result::Result<Option<$crate::wasmi::RuntimeValue>, $crate::wasmi::Trap> {
 				let $objectname = self;
 				let mut args = args.as_ref().iter();
 				dispatch_fn!(index, $objectname, args, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);

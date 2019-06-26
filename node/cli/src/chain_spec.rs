@@ -164,7 +164,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			spend_period: 1 * DAYS,
 			burn: Permill::from_percent(50),
 		}),
-		contract: Some(ContractConfig {
+		contracts: Some(ContractsConfig {
 			signed_claim_handicap: 2,
 			rent_byte_price: 4,
 			rent_deposit_offset: 1000,
@@ -270,7 +270,7 @@ pub fn testnet_genesis(
 	const ENDOWMENT: u128 = 1 << 20;
 
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
-	let mut contract_config = ContractConfig {
+	let mut contracts_config = ContractsConfig {
 		signed_claim_handicap: 2,
 		rent_byte_price: 4,
 		rent_deposit_offset: 1000,
@@ -290,7 +290,7 @@ pub fn testnet_genesis(
 		current_schedule: Default::default(),
 	};
 	// this should only be enabled on development chains
-	contract_config.current_schedule.enable_println = enable_println;
+	contracts_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -351,7 +351,7 @@ pub fn testnet_genesis(
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
 		}),
-		contract: Some(contract_config),
+		contracts: Some(contracts_config),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),

@@ -67,7 +67,7 @@ members = [
 	"srml/assets",
 	"srml/aura",
 	"srml/balances",
-	"srml/contract",
+	"srml/contracts",
 	"srml/council",
 	"srml/democracy",
 	"srml/example",

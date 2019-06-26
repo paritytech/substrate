@@ -162,6 +162,21 @@ impl Permill {
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per million fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/million)) < million
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
+
+		Permill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Permill
@@ -254,6 +269,21 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per billion fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
+
+		Perbill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -318,8 +348,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
@@ -646,9 +675,9 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 mod tests {
 	use crate::codec::{Encode, Decode};
 
-	macro_rules! per_thing_mul_upper_test {
+	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
-			// all sort of from_percent
+			// multiplication from all sort of from_percent
 			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 			assert_eq!(
 				$per::from_percent(99) * $num_type::max_value(),
@@ -658,9 +687,23 @@ mod tests {
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
 
-			// bounds
+			// multiplication with bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
+
+			// from_rational_approximation
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
+				$per::one(),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value()/3, u128::max_value()),
+				$per::from_parts($per::one().0/3),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(1, u128::max_value()),
+				$per::zero(),
+			);
 		}
 	}
 
@@ -714,13 +757,14 @@ mod tests {
 		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
-		per_thing_mul_upper_test!(u32, Perbill);
-		per_thing_mul_upper_test!(u64, Perbill);
-		per_thing_mul_upper_test!(u128, Perbill);
+		per_thing_upper_test!(u32, Perbill);
+		per_thing_upper_test!(u64, Perbill);
+		per_thing_upper_test!(u128, Perbill);
 
-		per_thing_mul_upper_test!(u32, Permill);
-		per_thing_mul_upper_test!(u64, Permill);
-		per_thing_mul_upper_test!(u128, Permill);
+		per_thing_upper_test!(u32, Permill);
+		per_thing_upper_test!(u64, Permill);
+		per_thing_upper_test!(u128, Permill);
+
 	}
 
 	#[test]

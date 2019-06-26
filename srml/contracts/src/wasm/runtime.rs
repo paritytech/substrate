@@ -39,9 +39,8 @@ enum SpecialTrap {
 }
 
 /// Can only be used for one call.
-pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
+pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	input_data: &'data [u8],
 	// A VM can return a result only once and only by value. So
 	// we wrap output buffer to make it possible to take the buffer out.
 	empty_output_buf: Option<EmptyOutputBuf>,
@@ -51,10 +50,10 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
-impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
-		input_data: &'data [u8],
+		input_data: Vec<u8>,
 		empty_output_buf: EmptyOutputBuf,
 		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
@@ -62,9 +61,9 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	) -> Self {
 		Runtime {
 			ext,
-			input_data,
 			empty_output_buf: Some(empty_output_buf),
-			scratch_buf: Vec::new(),
+			// Put the input data into the scratch buffer immediately.
+			scratch_buf: input_data,
 			schedule,
 			memory,
 			gas_meter,
@@ -443,6 +442,8 @@ define_env!(Env, <E: Ext>,
 
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
+	//
+	// This is the only way to return a data buffer to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		match ctx
 			.gas_meter
@@ -485,13 +486,15 @@ define_env!(Env, <E: Ext>,
 	// will be returned. Otherwise, if this call is initiated by another contract then the address
 	// of the contract will be returned.
 	ext_caller(ctx) => {
-		ctx.scratch_buf = ctx.ext.caller().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.caller().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
 	// Stores the address of the current contract into the scratch buffer.
 	ext_address(ctx) => {
-		ctx.scratch_buf = ctx.ext.address().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.address().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -499,7 +502,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_price(ctx) => {
-		ctx.scratch_buf = ctx.gas_meter.gas_price().encode();
+		ctx.scratch_buf.clear();
+		ctx.gas_meter.gas_price().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -507,7 +511,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_left(ctx) => {
-		ctx.scratch_buf = ctx.gas_meter.gas_left().encode();
+		ctx.scratch_buf.clear();
+		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -515,7 +520,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_balance(ctx) => {
-		ctx.scratch_buf = ctx.ext.balance().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.balance().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -523,7 +529,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_value_transferred(ctx) => {
-		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.value_transferred().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -539,13 +546,15 @@ define_env!(Env, <E: Ext>,
 		}
 
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.random(&subject_buf).encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
 	// Load the latest block timestamp into the scratch buffer
 	ext_now(ctx) => {
-		ctx.scratch_buf = ctx.ext.now().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -573,45 +582,19 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Returns the size of the input buffer.
-	ext_input_size(ctx) -> u32 => {
-		Ok(ctx.input_data.len() as u32)
-	},
-
-	// Copy data from the input buffer starting from `offset` with length `len` into the contract memory.
-	// The region at which the data should be put is specified by `dest_ptr`.
-	ext_input_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
-		let offset = offset as usize;
-		if offset > ctx.input_data.len() {
-			// Offset can't be larger than input buffer length.
-			return Err(sandbox::HostError);
-		}
-
-		// This can't panic since `offset <= ctx.input_data.len()`.
-		let src = &ctx.input_data[offset..];
-		if src.len() != len as usize {
-			return Err(sandbox::HostError);
-		}
-
-		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
-
-		Ok(())
-	},
-
 	// Returns the size of the scratch buffer.
+	//
+	// For more details on the scratch buffer see `ext_scratch_copy`.
 	ext_scratch_size(ctx) -> u32 => {
 		Ok(ctx.scratch_buf.len() as u32)
 	},
 
 	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract memory.
 	// The region at which the data should be put is specified by `dest_ptr`.
+	//
+	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
+	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
+	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
 	ext_scratch_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
 		let offset = offset as usize;
 		if offset > ctx.scratch_buf.len() {
@@ -702,7 +685,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_rent_allowance(ctx) => {
-		ctx.scratch_buf = ctx.ext.rent_allowance().encode();
+		ctx.scratch_buf.clear();
+		ctx.ext.rent_allowance().encode_to(&mut ctx.scratch_buf);
 
 		Ok(())
 	},
