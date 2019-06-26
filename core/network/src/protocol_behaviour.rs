@@ -17,9 +17,9 @@
 //! Implementation of libp2p's `NetworkBehaviour` trait that handles everything Substrate-specific.
 
 use crate::{ExHashT, DiscoveryNetBehaviour, ProtocolId};
-use crate::custom_proto::{CustomProto, CustomProtoOut};
+use crate::custom_proto::CustomProto;
 use crate::chain::{Client, FinalityProofProvider};
-use crate::protocol::{self, CustomMessageOutcome, Protocol, ProtocolConfig, sync::SyncState};
+use crate::protocol::{CustomMessageOutcome, Protocol, ProtocolConfig, sync::SyncState};
 use crate::protocol::{PeerInfo, NetworkOut, message::Message, on_demand::RequestData};
 use crate::protocol::consensus_gossip::MessageRecipient as GossipMessageRecipient;
 use crate::protocol::specialization::NetworkSpecialization;
@@ -28,7 +28,6 @@ use crate::service::TransactionPool;
 use client::light::fetcher::FetchChecker;
 use futures::prelude::*;
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
-use log::debug;
 use libp2p::{PeerId, Multiaddr};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
@@ -38,8 +37,6 @@ use std::sync::Arc;
 
 /// Implementation of `NetworkBehaviour` that handles everything related to Substrate and Polkadot.
 pub struct ProtocolBehaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
 	/// Handles the logic behind the raw messages that we receive.
 	protocol: Protocol<B, S, H>,
 }
@@ -56,23 +53,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		protocol_id: ProtocolId,
 		peerset_config: peerset::PeersetConfig,
 	) -> crate::error::Result<(Self, peerset::PeersetHandle)> {
-		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
-
-		let protocol = Protocol::new(
+		let (protocol, peerset_handle) = Protocol::new(
 			config,
 			chain,
 			checker,
 			specialization,
 			transaction_pool,
 			finality_proof_provider,
-			peerset_handle.clone(),
+			protocol_id,
+			peerset_config,
 		)?;
-		let versions = &((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let behaviour = ProtocolBehaviour {
 			protocol,
-			behaviour,
 		};
 
 		Ok((behaviour, peerset_handle))
@@ -80,17 +73,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Returns the list of all the peers we have an open channel to.
 	pub fn open_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.open_peers()
+		self.protocol.open_peers()
 	}
 
 	/// Returns true if we have a channel open with this node.
 	pub fn is_open(&self, peer_id: &PeerId) -> bool {
-		self.behaviour.is_open(peer_id)
+		self.protocol.is_open(peer_id)
 	}
 
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId) {
-		self.behaviour.disconnect_peer(peer_id)
+		self.protocol.disconnect_peer(peer_id)
 	}
 
 	/// Adjusts the reputation of a node.
@@ -100,7 +93,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Returns true if we try to open protocols with the given peer.
 	pub fn is_enabled(&self, peer_id: &PeerId) -> bool {
-		self.behaviour.is_enabled(peer_id)
+		self.protocol.is_enabled(peer_id)
 	}
 
 	/// Sends a message to a peer.
@@ -110,12 +103,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	pub fn send_packet(&mut self, target: &PeerId, message: Message<B>) {
-		self.behaviour.send_packet(target, message)
+		self.protocol.send_packet(target, message)
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
-		self.behaviour.peerset_debug_info()
+		self.protocol.peerset_debug_info()
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -148,7 +141,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
 	pub(crate) fn add_on_demand_request(&mut self, rq: RequestData<B>) {
 		self.protocol.add_on_demand_request(
-			&mut self.behaviour,
 			rq
 		);
 	}
@@ -158,15 +150,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		self.protocol.peers_info()
 	}
 
-	/// Locks `self` and gives access to the protocol and a context that can be used in order to
-	/// use `consensus_gossip_lock` or `specialization_lock`.
+	/// Gives access to the protocol.
 	///
 	/// **Important**: ONLY USE THIS FUNCTION TO CALL `consensus_gossip_lock` or `specialization_lock`.
 	/// This function is a very bad API.
-	pub fn protocol_context_lock<'a>(
-		&'a mut self,
-	) -> (&'a mut Protocol<B, S, H>, &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>) {
-		(&mut self.protocol, &mut self.behaviour)
+	pub fn protocol(&mut self) -> &mut Protocol<B, S, H> {
+		&mut self.protocol
 	}
 
 	/// Gossip a consensus message to the network.
@@ -178,7 +167,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		recipient: GossipMessageRecipient,
 	) {
 		self.protocol.gossip_consensus_message(
-			&mut self.behaviour,
 			topic,
 			engine_id,
 			message,
@@ -188,9 +176,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Call when we must propagate ready extrinsics to peers.
 	pub fn propagate_extrinsics(&mut self) {
-		self.protocol.propagate_extrinsics(
-			&mut self.behaviour
-		)
+		self.protocol.propagate_extrinsics()
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -198,17 +184,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash) {
-		self.protocol.announce_block(
-			&mut self.behaviour,
-			hash
-		)
+		self.protocol.announce_block(hash)
 	}
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
 	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_imported(
-			&mut self.behaviour,
 			hash,
 			header
 		)
@@ -218,7 +200,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_finalized(
-			&mut self.behaviour,
 			hash,
 			header
 		)
@@ -229,11 +210,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.request_justification(
-			&mut self.behaviour,
-			hash,
-			number
-		)
+		self.protocol.request_justification(hash, number)
 	}
 
 	/// Clears all pending justification requests.
@@ -249,16 +226,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		processed_blocks: Vec<B::Hash>,
 		has_error: bool,
 	) {
-		self.protocol.blocks_processed(
-			&mut self.behaviour,
-			processed_blocks,
-			has_error,
-		)
+		self.protocol.blocks_processed(processed_blocks, has_error)
 	}
 
 	/// Restart the sync process.
 	pub fn restart(&mut self) {
-		self.protocol.restart(&mut self.behaviour);
+		self.protocol.restart();
 	}
 
 	/// Notify about successful import of the given block.
@@ -284,11 +257,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		hash: &B::Hash,
 		number: NumberFor<B>,
 	) {
-		self.protocol.request_finality_proof(
-			&mut self.behaviour,
-			&hash,
-			number,
-		);
+		self.protocol.request_finality_proof(&hash, number);
 	}
 
 	pub fn finality_proof_import_result(
@@ -300,7 +269,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	}
 
 	pub fn tick(&mut self) {
-		self.protocol.tick(&mut self.behaviour);
+		self.protocol.tick();
 	}
 }
 
@@ -310,19 +279,19 @@ ProtocolBehaviour<B, S, H> {
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		self.behaviour.new_handler()
+		self.protocol.new_handler()
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		self.behaviour.addresses_of_peer(peer_id)
+		self.protocol.addresses_of_peer(peer_id)
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_connected(peer_id, endpoint)
+		self.protocol.inject_connected(peer_id, endpoint)
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_disconnected(peer_id, endpoint)
+		self.protocol.inject_disconnected(peer_id, endpoint)
 	}
 
 	fn inject_node_event(
@@ -330,7 +299,7 @@ ProtocolBehaviour<B, S, H> {
 		peer_id: PeerId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
-		self.behaviour.inject_node_event(peer_id, event)
+		self.protocol.inject_node_event(peer_id, event)
 	}
 
 	fn poll(
@@ -342,63 +311,11 @@ ProtocolBehaviour<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		match self.protocol.poll(&mut self.behaviour) {
-			Ok(Async::Ready(v)) => void::unreachable(v),
-			Ok(Async::NotReady) => {}
-			Err(err) => void::unreachable(err),
-		}
-
-		let event = match self.behaviour.poll(params) {
-			Async::NotReady => return Async::NotReady,
-			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-			Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
-		};
-
-		let outcome = match event {
-			CustomProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
-				debug_assert!(
-					version <= protocol::CURRENT_VERSION as u8
-					&& version >= protocol::MIN_VERSION as u8
-				);
-				self.protocol.on_peer_connected(&mut self.behaviour, peer_id);
-				CustomMessageOutcome::None
-			}
-			CustomProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.protocol.on_peer_disconnected(&mut self.behaviour, peer_id);
-				CustomMessageOutcome::None
-			},
-			CustomProtoOut::CustomMessage { peer_id, message } =>
-				self.protocol.on_custom_message(
-					&mut self.behaviour,
-					peer_id,
-					message,
-				),
-			CustomProtoOut::Clogged { peer_id, messages } => {
-				debug!(target: "sync", "{} clogging messages:", messages.len());
-				for msg in messages.into_iter().take(5) {
-					debug!(target: "sync", "{:?}", msg);
-					self.protocol.on_clogged_peer(&mut self.behaviour, peer_id.clone(), Some(msg));
-				}
-				CustomMessageOutcome::None
-			}
-		};
-
-		if let CustomMessageOutcome::None = outcome {
-			Async::NotReady
-		} else {
-			Async::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
-		}
+		NetworkBehaviour::poll(&mut self.protocol, params)
 	}
 
 	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.behaviour.inject_replaced(peer_id, closed_endpoint, new_endpoint)
+		self.protocol.inject_replaced(peer_id, closed_endpoint, new_endpoint)
 	}
 
 	fn inject_addr_reach_failure(
@@ -407,30 +324,30 @@ ProtocolBehaviour<B, S, H> {
 		addr: &Multiaddr,
 		error: &dyn std::error::Error
 	) {
-		self.behaviour.inject_addr_reach_failure(peer_id, addr, error)
+		self.protocol.inject_addr_reach_failure(peer_id, addr, error)
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_dial_failure(peer_id)
+		self.protocol.inject_dial_failure(peer_id)
 	}
 
 	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_listen_addr(addr)
+		self.protocol.inject_new_listen_addr(addr)
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_expired_listen_addr(addr)
+		self.protocol.inject_expired_listen_addr(addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_external_addr(addr)
+		self.protocol.inject_new_external_addr(addr)
 	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour
 	for ProtocolBehaviour<B, S, H> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.behaviour.add_discovered_nodes(peer_ids)
+		self.protocol.add_discovered_nodes(peer_ids)
 	}
 }
 
