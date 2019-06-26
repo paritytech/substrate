@@ -18,6 +18,12 @@ use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::Command};
 
 use toml::value::Table;
 
+use build_helper::rerun_if_changed;
+
+use cargo_metadata::MetadataCommand;
+
+use walkdir::WalkDir;
+
 /// The name for the wasm binary.
 const WASM_BINARY: &str = "wasm_binary";
 
@@ -51,6 +57,8 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 	build_project(&project);
 	let bloaty = WasmBinaryBloaty(compact_wasm_file(&project));
 	let wasm_binary = WasmBinary(project.join(format!("{}.compact.wasm", WASM_BINARY)));
+
+	generate_rerun_if_changed_instructions(cargo_manifest, &project);
 
 	(wasm_binary, bloaty)
 }
@@ -190,4 +198,35 @@ fn compact_wasm_file(project: &Path) -> PathBuf {
 	}
 
 	wasm_file
+}
+
+/// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
+/// rebuild when needed.
+fn generate_rerun_if_changed_instructions(cargo_manifest: &Path, project_folder: &Path) {
+	// Rerun `build.rs` if the `Cargo.lock` changes
+	if let Some(cargo_lock) = find_cargo_lock(cargo_manifest) {
+		rerun_if_changed(cargo_lock);
+	}
+
+	let metadata = MetadataCommand::new()
+		.manifest_path(project_folder.join("Cargo.toml"))
+		.exec()
+		.expect("`cargo metadata` can not fail!");
+
+	// Make sure that if any file/folder of a depedency change, we need to rerun the `build.rs`
+	metadata.packages.into_iter()
+		.filter(|package| !package.manifest_path.starts_with(project_folder))
+		.for_each(|package| {
+			let mut manifest_path = package.manifest_path;
+			if manifest_path.ends_with("Cargo.toml") {
+				manifest_path.pop();
+			}
+
+			rerun_if_changed(&manifest_path);
+
+			WalkDir::new(manifest_path)
+				.into_iter()
+				.filter_map(|p| p.ok())
+				.for_each(|p| rerun_if_changed(p.path()));
+		});
 }
