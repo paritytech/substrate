@@ -229,12 +229,6 @@ pub fn testnet_genesis(
 	const STASH: Balance = 100 * DOLLARS;
 
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
-	let mut contracts_config = ContractsConfig {
-		current_schedule: Default::default(),
-		gas_price: 1 * MILLICENTS,
-	};
-	// this should only be enabled on development chains
-	contracts_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -276,7 +270,13 @@ pub fn testnet_genesis(
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.
 		}),
-		contracts: Some(contracts_config),
+		contracts: Some(ContractsConfig {
+			current_schedule: contracts::Schedule {
+				enable_println, // this should only be enabled on development chains
+				..Default::default()
+			},
+			gas_price: 1 * MILLICENTS,
+		}),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),

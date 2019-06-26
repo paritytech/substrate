@@ -144,7 +144,6 @@ parameter_types! {
 impl Trait for Test {
 	type Currency = Balances;
 	type Call = Call;
-	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;

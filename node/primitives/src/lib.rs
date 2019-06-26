@@ -41,9 +41,6 @@ pub type AccountIndex = u32;
 /// Balance of an account.
 pub type Balance = u128;
 
-/// Type used for expressing gas.
-pub type Gas = u64;
-
 /// Type used for expressing timestamp.
 pub type Moment = u64;
 

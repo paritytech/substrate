@@ -90,15 +90,16 @@ mod tests;
 
 use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
+pub use crate::gas::Gas;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, convert::TryFrom};
+use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{
-	Hash, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
+	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{
@@ -287,9 +288,6 @@ pub trait Trait: timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy +
-		Into<BalanceOf<Self>> + TryFrom<BalanceOf<Self>>;
-
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
@@ -352,11 +350,11 @@ pub trait Trait: timestamp::Trait {
 
 	/// The base fee charged for calling into a contract. A reasonable default
 	/// value is 135.
-	type CallBaseFee: Get<Self::Gas>;
+	type CallBaseFee: Get<Gas>;
 
 	/// The base fee charged for creating a contract. A reasonable default value
 	/// is 175.
-	type CreateBaseFee: Get<Self::Gas>;
+	type CreateBaseFee: Get<Gas>;
 
 	/// The maximum nesting level of a call/create stack. A reasonable default
 	/// value is 100.
@@ -364,7 +362,7 @@ pub trait Trait: timestamp::Trait {
 
 	/// The maximum amount of gas that could be expended per block. A reasonable
 	/// default value is 10_000_000.
-	type BlockGasLimit: Get<Self::Gas>;
+	type BlockGasLimit: Get<Gas>;
 }
 
 /// Simple contract address determiner.
@@ -410,7 +408,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		pub fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+		pub fn update_schedule(schedule: Schedule) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
@@ -425,7 +423,7 @@ decl_module! {
 		/// You can instantiate contracts only with stored code.
 		pub fn put_code(
 			origin,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -454,7 +452,7 @@ decl_module! {
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -514,7 +512,7 @@ decl_module! {
 		pub fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
 		) -> Result {
@@ -708,9 +706,9 @@ decl_event! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// Gas spent so far in this block.
-		GasSpent get(gas_spent): T::Gas;
+		GasSpent get(gas_spent): Gas;
 		/// Current cost schedule for contracts.
-		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
+		CurrentSchedule get(current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -738,14 +736,12 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// We assume that these values can't be changed in the
 /// course of transaction execution.
 pub struct Config<T: Trait> {
-	pub schedule: Schedule<T::Gas>,
+	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
 	pub max_depth: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
 	pub transfer_fee: BalanceOf<T>,
-	pub call_base_fee: T::Gas,
-	pub instantiate_base_fee: T::Gas,
 }
 
 impl<T: Trait> Config<T> {
@@ -757,8 +753,6 @@ impl<T: Trait> Config<T> {
 			contract_account_instantiate_fee: T::ContractFee::get(),
 			account_create_fee: T::CreationFee::get(),
 			transfer_fee: T::TransferFee::get(),
-			call_base_fee: T::CallBaseFee::get(),
-			instantiate_base_fee: T::CreateBaseFee::get(),
 		}
 	}
 }
@@ -766,7 +760,7 @@ impl<T: Trait> Config<T> {
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
-pub struct Schedule<Gas> {
+pub struct Schedule {
 	/// Version of the schedule.
 	pub version: u32,
 
@@ -790,6 +784,12 @@ pub struct Schedule<Gas> {
 
 	/// Gas cost to deposit an event; the base.
 	pub event_base_cost: Gas,
+
+	/// Base gas cost to call into a contract.
+	pub call_base_cost: Gas,
+
+ 	/// Base gas cost to instantiate a contract.
+	pub instantiate_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
@@ -817,19 +817,21 @@ pub struct Schedule<Gas> {
 	pub max_subject_len: u32,
 }
 
-impl<Gas: From<u32>> Default for Schedule<Gas> {
-	fn default() -> Schedule<Gas> {
+impl Default for Schedule {
+	fn default() -> Schedule {
 		Schedule {
 			version: 0,
-			put_code_per_byte_cost: 1.into(),
-			grow_mem_cost: 1.into(),
-			regular_op_cost: 1.into(),
-			return_data_per_byte_cost: 1.into(),
-			event_data_per_byte_cost: 1.into(),
-			event_per_topic_cost: 1.into(),
-			event_base_cost: 1.into(),
-			sandbox_data_read_cost: 1.into(),
-			sandbox_data_write_cost: 1.into(),
+			put_code_per_byte_cost: 1,
+			grow_mem_cost: 1,
+			regular_op_cost: 1,
+			return_data_per_byte_cost: 1,
+			event_data_per_byte_cost: 1,
+			event_per_topic_cost: 1,
+			event_base_cost: 1,
+			call_base_cost: 135,
+			instantiate_base_cost: 175,
+			sandbox_data_read_cost: 1,
+			sandbox_data_write_cost: 1,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
