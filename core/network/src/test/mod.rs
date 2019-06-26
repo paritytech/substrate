@@ -882,6 +882,8 @@ pub trait TestNetFactory: Sized {
 		&mut self,
 		protocol_status: Arc<RwLock<(bool, bool, usize)>>,
 		import_queue: Arc<Mutex<Box<BasicQueue<Block>>>>,
+		tx_pool: EmptyTransactionPool,
+		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, Self::Specialization>>,
 		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
@@ -894,6 +896,9 @@ pub trait TestNetFactory: Sized {
 			// Implementation of `protocol::NetworkOut` using the available local variables.
 			struct Ctxt<'a, B: BlockT>(&'a mpsc::UnboundedSender<NetworkMsg<B>>);
 			impl<'a, B: BlockT> NetworkOut<B> for Ctxt<'a, B> {
+				fn report_peer(&mut self, who: PeerId, reputation: i32) {
+					let _ = self.0.unbounded_send(NetworkMsg::ReportPeer(who, reputation));
+				}
 				fn disconnect_peer(&mut self, who: PeerId) {
 					let _ = self.0.unbounded_send(NetworkMsg::DisconnectPeer(who));
 				}
@@ -922,8 +927,10 @@ pub trait TestNetFactory: Sized {
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
 							protocol.on_custom_message(
 								&mut Ctxt(&network_sender),
+								&tx_pool,
 								peer_id,
 								message,
+								finality_proof_provider.as_ref().map(|p| &**p)
 							),
 						Some(FromNetworkMsg::Synchronize) => {
 							let _ = network_sender.unbounded_send(NetworkMsg::Synchronized);
@@ -994,7 +1001,7 @@ pub trait TestNetFactory: Sized {
 						ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 							protocol.finality_proof_import_result(requested_block, finalziation_result),
 						ProtocolMsg::PropagateExtrinsics =>
-							protocol.propagate_extrinsics(&mut Ctxt(&network_sender)),
+							protocol.propagate_extrinsics(&mut Ctxt(&network_sender), &tx_pool),
 						#[cfg(any(test, feature = "test-helpers"))]
 						ProtocolMsg::Tick => protocol.tick(&mut Ctxt(&network_sender)),
 						#[cfg(any(test, feature = "test-helpers"))]
@@ -1005,7 +1012,7 @@ pub trait TestNetFactory: Sized {
 					}
 				}
 
-				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender)).unwrap() {
+				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender), &tx_pool).unwrap() {
 					return Ok(Async::Ready(()))
 				}
 
@@ -1056,21 +1063,14 @@ pub trait TestNetFactory: Sized {
 			client.clone(),
 			Arc::new(AlwaysBadChecker),
 			specialization,
-			Arc::new(EmptyTransactionPool),
-			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
-			peerset::Peerset::from_config(peerset::PeersetConfig {
-				in_peers: 5,
-				out_peers: 5,
-				bootnodes: Vec::new(),
-				reserved_only: false,
-				reserved_nodes: Vec::new(),
-			}).1,
 		).unwrap();
 
 		let protocol_status = Arc::new(RwLock::new((true, false, 0)));
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
 			protocol,
 			protocol_sender.clone(),
 			network_to_protocol_sender.clone(),
@@ -1119,21 +1119,14 @@ pub trait TestNetFactory: Sized {
 			client.clone(),
 			Arc::new(AlwaysBadChecker),
 			specialization,
-			Arc::new(EmptyTransactionPool),
-			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
-			peerset::Peerset::from_config(peerset::PeersetConfig {
-				in_peers: 5,
-				out_peers: 5,
-				bootnodes: Vec::new(),
-				reserved_only: false,
-				reserved_nodes: Vec::new(),
-			}).1,
 		).unwrap();
 
 		let protocol_status = Arc::new(RwLock::new((true, false, 0)));
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			protocol,
 			protocol_sender.clone(),
 			network_to_protocol_sender.clone(),
