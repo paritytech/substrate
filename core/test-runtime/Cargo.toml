@@ -32,7 +32,7 @@ substrate-executor = { path = "../executor" }
 substrate-test-runtime-client = { path = "./client" }
 
 [build-dependencies]
-wasm-builder-runner = { path = "../utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../utils/wasm-builder-runner" }
 
 [features]
 default = [

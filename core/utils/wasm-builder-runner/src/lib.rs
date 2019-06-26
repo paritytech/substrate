@@ -123,7 +123,7 @@ fn create_project(
 				edition = "2018"
 
 				[dependencies]
-				wasm-builder = {{ {wasm_builder_source} }}
+				substrate-wasm-builder = {{ {wasm_builder_source} }}
 
 				[workspace]
 			"#,
@@ -136,7 +136,7 @@ fn create_project(
 		format!(
 			r#"
 				fn main() {{
-					wasm_builder::build_project("{file_path}", "{cargo_toml_path}")
+					substrate_wasm_builder::build_project("{file_path}", "{cargo_toml_path}")
 				}}
 			"#,
 			file_path = file_path.display(),

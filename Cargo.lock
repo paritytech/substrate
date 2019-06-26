@@ -2302,7 +2302,7 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "wasm-builder-runner 2.0.0",
+ "substrate-wasm-builder-runner 2.0.0",
 ]
 
 [[package]]
@@ -2356,7 +2356,7 @@ dependencies = [
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "wasm-builder-runner 2.0.0",
+ "substrate-wasm-builder-runner 2.0.0",
 ]
 
 [[package]]
@@ -4506,7 +4506,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-sandbox 2.0.0",
  "substrate-primitives 2.0.0",
- "wasm-builder-runner 2.0.0",
+ "substrate-wasm-builder-runner 2.0.0",
 ]
 
 [[package]]
@@ -4663,8 +4663,8 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
+ "substrate-wasm-builder-runner 2.0.0",
  "trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasm-builder-runner 2.0.0",
 ]
 
 [[package]]
@@ -4728,6 +4728,21 @@ dependencies = [
  "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-standardmap 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "substrate-wasm-builder"
+version = "2.0.0"
+dependencies = [
+ "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cargo_metadata 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 3.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "walkdir 2.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-wasm-builder-runner"
+version = "2.0.0"
 
 [[package]]
 name = "subtle"
@@ -5459,21 +5474,6 @@ dependencies = [
  "wasm-bindgen-backend 0.2.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "weedle 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "wasm-builder"
-version = "2.0.0"
-dependencies = [
- "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "cargo_metadata 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempfile 3.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "walkdir 2.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "wasm-builder-runner"
-version = "2.0.0"
 
 [[package]]
 name = "wasm-timer"
