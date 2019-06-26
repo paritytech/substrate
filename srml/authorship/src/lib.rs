@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use rstd::collections::btree_set::BTreeSet;
-use srml_support::{decl_module, decl_storage, StorageValue};
+use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
 use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
 use parity_codec::{Encode, Decode};
@@ -63,10 +63,29 @@ pub trait EventHandler<Author, BlockNumber> {
 	fn note_uncle(author: Author, age: BlockNumber);
 }
 
-impl<A, B> EventHandler<A, B> for () {
-	fn note_author(_author: A) { }
-	fn note_uncle(_author: A, _age: B) { }
+macro_rules! impl_event_handler {
+	() => (
+		impl<A, B> EventHandler<A, B> for () {
+			fn note_author(_author: A) { }
+			fn note_uncle(_author: A, _age: B) { }
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<Author: Clone, BlockNumber: Clone, $($t: EventHandler<Author, BlockNumber>),*>
+			EventHandler<Author, BlockNumber> for ($($t,)*)
+		{
+			fn note_author(author: Author) {
+				$($t::note_author(author.clone());)*
+			}
+			fn note_uncle(author: Author, age: BlockNumber) {
+				$($t::note_uncle(author.clone(), age.clone());)*
+			}
+		}
+	}
 }
+
+for_each_tuple!(impl_event_handler);
 
 /// Additional filtering on uncles that pass preliminary ancestry checks.
 ///
