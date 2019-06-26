@@ -24,7 +24,6 @@ state_machine = { package = "substrate-state-machine", path = "../state-machine"
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../sr-version" }
-tokio = "0.1.7"
 
 [dev-dependencies]
 assert_matches = "1.1"
@@ -32,3 +31,4 @@ futures = "0.1.17"
 sr-io = { path = "../sr-io" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 rustc-hex = "2.0"
+tokio = "0.1.17"

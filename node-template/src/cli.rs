@@ -25,16 +25,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
 			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
-			let executor = runtime.executor();
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
-				 	service::Factory::new_light(config, executor).map_err(|e| format!("{:?}", e))?,
+				 	service::Factory::new_light(config).map_err(|e| format!("{:?}", e))?,
 					exit
 				),
 				_ => run_until_exit(
 					runtime,
-					service::Factory::new_full(config, executor).map_err(|e| format!("{:?}", e))?,
+					service::Factory::new_full(config).map_err(|e| format!("{:?}", e))?,
 					exit
 				),
 			}.map_err(|e| format!("{:?}", e))
@@ -55,7 +54,7 @@ fn run_until_exit<T, C, E>(
 	e: E,
 ) -> error::Result<()>
 	where
-		T: Deref<Target=substrate_service::Service<C>>,
+		T: Deref<Target=substrate_service::Service<C>> + Future<Item = (), Error = ()> + Send + 'static,
 		C: substrate_service::Components,
 		E: IntoExit,
 {
@@ -64,13 +63,13 @@ fn run_until_exit<T, C, E>(
 	let informant = informant::build(&service);
 	runtime.executor().spawn(exit.until(informant).map(|_| ()));
 
-	let _ = runtime.block_on(e.into_exit());
-	exit_send.fire();
-
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
-	drop(service);
+
+	let _ = runtime.block_on(service.select(e.into_exit()));
+	exit_send.fire();
+
 	Ok(())
 }
 

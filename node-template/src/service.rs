@@ -9,7 +9,6 @@ use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	TaskExecutor,
 	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
@@ -62,11 +61,11 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig,
 		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
-				FullComponents::<Factory>::new(config, executor)
+			{ |config: FactoryFullConfiguration<Self>|
+				FullComponents::<Factory>::new(config)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<Pair>>| {
+			|service: Self::FullService, key: Option<Arc<Pair>>| {
 				if let Some(key) = key {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
@@ -87,14 +86,14 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
 
 				Ok(service)
 			}
 		},
 		LightService = LightComponents<Self>
-			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
