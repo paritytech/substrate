@@ -336,18 +336,16 @@ where
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
-			Err(err) => {
-				return match err.into() {
-					// An unknown account index implies that the transaction may yet become valid.
-					// TODO: avoid hardcoded error string here
-					PrimitiveError::Unknown("invalid account index") =>
-						TransactionValidity::Unknown(INVALID_INDEX),
-					// Technically a bad signature could also imply an out-of-date account index, but
-					// that's more of an edge case.
-					PrimitiveError::BadSignature =>
-						TransactionValidity::Invalid(ApplyError::BadSignature as i8),
-					_ => TransactionValidity::Invalid(UNKNOWN_ERROR),
-				}
+			Err(err) => return match err.into() {
+				// An unknown account index implies that the transaction may yet become valid.
+				// TODO: avoid hardcoded error string here
+				PrimitiveError::Unknown("invalid account index") =>
+					TransactionValidity::Unknown(INVALID_INDEX),
+				// Technically a bad signature could also imply an out-of-date account index, but
+				// that's more of an edge case.
+				PrimitiveError::BadSignature =>
+					TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+				_ => TransactionValidity::Invalid(UNKNOWN_ERROR),
 			}
 		};
 

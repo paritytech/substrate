@@ -113,11 +113,11 @@ mod tests {
 		type EmergencyVotingPeriod = VotingPeriod;
 		type VotingPeriod = VotingPeriod;
 		type MinimumDeposit = MinimumDeposit;
-		type ExternalOrigin = motions::EnsureProportionAtLeast<_1, _2, u64>;
-		type ExternalMajorityOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
-		type EmergencyOrigin = motions::EnsureProportionAtLeast<_1, _1, u64>;
-		type CancellationOrigin = motions::EnsureProportionAtLeast<_2, _3, u64>;
-		type VetoOrigin = motions::EnsureMember<u64>;
+		type ExternalOrigin = motions::EnsureProportionAtLeast<_1, _2, u64, &'static str>;
+		type ExternalMajorityOrigin = motions::EnsureProportionAtLeast<_2, _3, u64, &'static str>;
+		type EmergencyOrigin = motions::EnsureProportionAtLeast<_1, _1, u64, &'static str>;
+		type CancellationOrigin = motions::EnsureProportionAtLeast<_2, _3, u64, &'static str>;
+		type VetoOrigin = motions::EnsureMember<u64, &'static str>;
 		type CooloffPeriod = CooloffPeriod;
 	}
 	impl seats::Trait for Test {

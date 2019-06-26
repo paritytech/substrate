@@ -187,11 +187,11 @@ impl democracy::Trait for Runtime {
 	type VotingPeriod = VotingPeriod;
 	type EmergencyVotingPeriod = EmergencyVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
-	type ExternalOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
-	type ExternalMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId>;
-	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type VetoOrigin = council_motions::EnsureMember<AccountId>;
+	type ExternalOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId, &'static str>;
+	type ExternalMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId, &'static str>;
+	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId, &'static str>;
+	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId, &'static str>;
+	type VetoOrigin = council_motions::EnsureMember<AccountId, &'static str>;
 	type CooloffPeriod = CooloffPeriod;
 }
 
@@ -212,8 +212,8 @@ impl council::motions::Trait for Runtime {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = council_motions::EnsureMembers<_4, AccountId>;
-	type RejectOrigin = council_motions::EnsureMembers<_2, AccountId>;
+	type ApproveOrigin = council_motions::EnsureMembers<_4, AccountId, &'static str>;
+	type RejectOrigin = council_motions::EnsureMembers<_2, AccountId, &'static str>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
