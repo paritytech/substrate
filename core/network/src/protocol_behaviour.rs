@@ -42,11 +42,6 @@ pub struct ProtocolBehaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT>
 	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
 	/// Handles the logic behind the raw messages that we receive.
 	protocol: Protocol<B, S, H>,
-	/// Used to report reputation changes.
-	peerset_handle: peerset::PeersetHandle,
-	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	/// When asked for a proof of finality, we use this struct to build one.
-	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S, H> {
@@ -63,16 +58,21 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	) -> crate::error::Result<(Self, peerset::PeersetHandle)> {
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 
-		let protocol = Protocol::new(config, chain, checker, specialization)?;
+		let protocol = Protocol::new(
+			config,
+			chain,
+			checker,
+			specialization,
+			transaction_pool,
+			finality_proof_provider,
+			peerset_handle.clone(),
+		)?;
 		let versions = &((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let behaviour = ProtocolBehaviour {
 			protocol,
 			behaviour,
-			peerset_handle: peerset_handle.clone(),
-			transaction_pool,
-			finality_proof_provider,
 		};
 
 		Ok((behaviour, peerset_handle))
@@ -95,7 +95,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Adjusts the reputation of a node.
 	pub fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.peerset_handle.report_peer(who, reputation)
+		self.protocol.report_peer(who, reputation)
 	}
 
 	/// Returns true if we try to open protocols with the given peer.
@@ -148,7 +148,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
 	pub(crate) fn add_on_demand_request(&mut self, rq: RequestData<B>) {
 		self.protocol.add_on_demand_request(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			rq
 		);
 	}
@@ -166,7 +166,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	pub fn protocol_context_lock<'a>(
 		&'a mut self,
 	) -> (&'a mut Protocol<B, S, H>, LocalNetworkOut<'a, B>) {
-		let net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
+		let net_out = LocalNetworkOut { inner: &mut self.behaviour };
 		(&mut self.protocol, net_out)
 	}
 
@@ -179,7 +179,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		recipient: GossipMessageRecipient,
 	) {
 		self.protocol.gossip_consensus_message(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			topic,
 			engine_id,
 			message,
@@ -190,8 +190,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// Call when we must propagate ready extrinsics to peers.
 	pub fn propagate_extrinsics(&mut self) {
 		self.protocol.propagate_extrinsics(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
-			&*self.transaction_pool
+			&mut LocalNetworkOut { inner: &mut self.behaviour }
 		)
 	}
 
@@ -201,7 +200,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash) {
 		self.protocol.announce_block(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			hash
 		)
 	}
@@ -210,7 +209,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// the network.
 	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_imported(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			hash,
 			header
 		)
@@ -220,7 +219,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
 		self.protocol.on_block_finalized(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			hash,
 			header
 		)
@@ -232,7 +231,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.request_justification(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			hash,
 			number
 		)
@@ -252,7 +251,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		has_error: bool,
 	) {
 		self.protocol.blocks_processed(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			processed_blocks,
 			has_error,
 		)
@@ -260,7 +259,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 
 	/// Restart the sync process.
 	pub fn restart(&mut self) {
-		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
+		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour };
 		self.protocol.restart(&mut net_out);
 	}
 
@@ -288,7 +287,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 		number: NumberFor<B>,
 	) {
 		self.protocol.request_finality_proof(
-			&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle },
+			&mut LocalNetworkOut { inner: &mut self.behaviour },
 			&hash,
 			number,
 		);
@@ -303,7 +302,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	}
 
 	pub fn tick(&mut self) {
-		self.protocol.tick(&mut LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle });
+		self.protocol.tick(&mut LocalNetworkOut { inner: &mut self.behaviour });
 	}
 }
 
@@ -345,8 +344,8 @@ ProtocolBehaviour<B, S, H> {
 			Self::OutEvent
 		>
 	> {
-		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour, peerset_handle: &self.peerset_handle };
-		match self.protocol.poll(&mut net_out, &*self.transaction_pool) {
+		let mut net_out = LocalNetworkOut { inner: &mut self.behaviour };
+		match self.protocol.poll(&mut net_out) {
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
@@ -367,7 +366,6 @@ ProtocolBehaviour<B, S, H> {
 
 		let mut network_out = LocalNetworkOut {
 			inner: &mut self.behaviour,
-			peerset_handle: &self.peerset_handle,
 		};
 
 		let outcome = match event {
@@ -386,10 +384,8 @@ ProtocolBehaviour<B, S, H> {
 			CustomProtoOut::CustomMessage { peer_id, message } =>
 				self.protocol.on_custom_message(
 					&mut network_out,
-					&*self.transaction_pool,
 					peer_id,
 					message,
-					self.finality_proof_provider.as_ref().map(|p| &**p)
 				),
 			CustomProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
@@ -448,14 +444,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> DiscoveryNetBehaviour
 /// Has to be public for stupid API reasons. This should be made private again ASAP.
 pub struct LocalNetworkOut<'a, B: BlockT> {
 	inner: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
-	peerset_handle: &'a peerset::PeersetHandle,
 }
 
 impl<'a, B: BlockT> NetworkOut<B> for LocalNetworkOut<'a, B> {
-	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.peerset_handle.report_peer(who, reputation)
-	}
-
 	fn disconnect_peer(&mut self, who: PeerId) {
 		self.inner.disconnect_peer(&who)
 	}
