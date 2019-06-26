@@ -21,13 +21,13 @@ use crate::exec::{
 	Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey,
 	TopicOf,
 };
-use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{CheckedMul, CheckedAdd, Bounded, SaturatedConversion};
+use runtime_primitives::traits::{Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -45,7 +45,7 @@ pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	// we wrap output buffer to make it possible to take the buffer out.
 	empty_output_buf: Option<EmptyOutputBuf>,
 	scratch_buf: Vec<u8>,
-	schedule: &'a Schedule<<E::T as Trait>::Gas>,
+	schedule: &'a Schedule,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
@@ -55,7 +55,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		ext: &'a mut E,
 		input_data: Vec<u8>,
 		empty_output_buf: EmptyOutputBuf,
-		schedule: &'a Schedule<<E::T as Trait>::Gas>,
+		schedule: &'a Schedule,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
@@ -97,7 +97,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-pub enum RuntimeToken<Gas> {
+pub enum RuntimeToken {
 	/// Explicit call to the `gas` function. Charge the gas meter
 	/// with the value provided.
 	Explicit(u32),
@@ -115,39 +115,39 @@ pub enum RuntimeToken<Gas> {
 	DepositEvent(u32, u32),
 }
 
-impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
-	type Metadata = Schedule<T::Gas>;
+impl<T: Trait> Token<T> for RuntimeToken {
+	type Metadata = Schedule;
 
-	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Schedule) -> Gas {
 		use self::RuntimeToken::*;
 		let value = match *self {
 			Explicit(amount) => Some(amount.into()),
 			ReadMemory(byte_count) => metadata
 				.sandbox_data_read_cost
-				.checked_mul(&byte_count.into()),
+				.checked_mul(byte_count.into()),
 			WriteMemory(byte_count) => metadata
 				.sandbox_data_write_cost
-				.checked_mul(&byte_count.into()),
+				.checked_mul(byte_count.into()),
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
-				.checked_mul(&byte_count.into()),
+				.checked_mul(byte_count.into()),
 			DepositEvent(topic_count, data_byte_count) => {
 				let data_cost = metadata
 					.event_data_per_byte_cost
-					.checked_mul(&data_byte_count.into());
+					.checked_mul(data_byte_count.into());
 
 				let topics_cost = metadata
 					.event_per_topic_cost
-					.checked_mul(&topic_count.into());
+					.checked_mul(topic_count.into());
 
 				data_cost
 					.and_then(|data_cost| {
 						topics_cost.and_then(|topics_cost| {
-							data_cost.checked_add(&topics_cost)
+							data_cost.checked_add(topics_cost)
 						})
 					})
 					.and_then(|data_and_topics_cost|
-						data_and_topics_cost.checked_add(&metadata.event_base_cost)
+						data_and_topics_cost.checked_add(metadata.event_base_cost)
 					)
 			},
 			ComputedDispatchFee(gas) => Some(gas),
@@ -221,7 +221,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 /// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
 fn write_sandbox_memory<T: Trait>(
-	schedule: &Schedule<T::Gas>,
+	schedule: &Schedule,
 	gas_meter: &mut GasMeter<T>,
 	memory: &sandbox::Memory,
 	ptr: u32,
@@ -509,7 +509,7 @@ define_env!(Env, <E: Ext>,
 
 	// Stores the amount of gas left into the scratch buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	// The data is encoded as Gas. The current contents of the scratch buffer are overwritten.
 	ext_gas_left(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);
@@ -573,7 +573,7 @@ define_env!(Env, <E: Ext>,
 		// Charge gas for dispatching this call.
 		let fee = {
 			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
-			approx_gas_for_balance::<<E as Ext>::T>(ctx.gas_meter.gas_price(), balance_fee)
+			approx_gas_for_balance(ctx.gas_meter.gas_price(), balance_fee)
 		};
 		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
 

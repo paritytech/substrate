@@ -17,7 +17,7 @@ substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
 schnorrkel = "0.1"
 hex = "0.3"
 hex-literal = "0.2"
-parity-codec = "3.2"
+parity-codec = "3.5.4"
 
 [features]
 bench = []

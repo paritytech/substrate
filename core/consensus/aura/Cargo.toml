@@ -6,7 +6,7 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.4"
+parity-codec = "3.5.4"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }

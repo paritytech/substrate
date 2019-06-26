@@ -5,4 +5,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-parity-codec = { version = "3.3", features = ["derive"] }
+parity-codec = { version = "3.5.4", features = ["derive"] }
