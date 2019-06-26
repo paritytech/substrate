@@ -17,7 +17,7 @@ runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 tokio-executor = "0.1.6"
 tokio-timer = "0.2"
-parity-codec = { version = "3.5.4", features = ["derive"] }
+parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 
 [dev-dependencies]

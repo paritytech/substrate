@@ -26,7 +26,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 client = { package = "substrate-client", path = "../../core/client" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
-parity-codec = "3.5.4"
+parity-codec = "4.1.1"
 substrate-executor = { path = "../../core/executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 rpc = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
