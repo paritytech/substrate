@@ -29,16 +29,17 @@ use crate::changes_trie::storage::TrieBackendAdapter;
 /// given changes trie configuration, pruning parameter and number of
 /// best finalized block.
 pub fn oldest_non_pruned_trie<Number: BlockNumber>(
+	config_activation_block: Number,
 	config: &Configuration,
 	min_blocks_to_keep: Number,
 	best_finalized_block: Number,
 ) -> Number {
 	let max_digest_interval = config.max_digest_interval();
-	let best_finalized_block_rem = best_finalized_block.clone() % max_digest_interval.into();
+	let best_finalized_block_rem = (best_finalized_block.clone() - config_activation_block.clone()) % max_digest_interval.into();
 	let max_digest_block = best_finalized_block - best_finalized_block_rem;
-	match pruning_range(config, min_blocks_to_keep, max_digest_block) {
+	match pruning_range(config_activation_block.clone(), config, min_blocks_to_keep, max_digest_block) {
 		Some((_, last_pruned_block)) => last_pruned_block + One::one(),
-		None => One::one(),
+		None => config_activation_block + One::one(),
 	}
 }
 
@@ -48,6 +49,7 @@ pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 /// ranges.
 /// Returns MemoryDB that contains all deleted changes tries nodes.
 pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
+	config_activation_block: Number,
 	config: &Configuration,
 	storage: &S,
 	min_blocks_to_keep: Number,
@@ -55,13 +57,12 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	mut remove_trie_node: F,
 ) {
 	// select range for pruning
-	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number.clone()) {
+	let (first, last) = match pruning_range(config_activation_block, config, min_blocks_to_keep, current_block.number.clone()) {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
 
 	// delete changes trie for every block in range
-	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	let mut block = first;
 	loop {
 		if block >= last.clone() + One::one() {
@@ -103,6 +104,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 
 /// Select blocks range (inclusive from both ends) for pruning changes tries in.
 fn pruning_range<Number: BlockNumber>(
+	config_activation_block: Number,
 	config: &Configuration,
 	min_blocks_to_keep: Number,
 	block: Number,
@@ -110,7 +112,7 @@ fn pruning_range<Number: BlockNumber>(
 	// compute number of changes tries we actually want to keep
 	let (prune_interval, blocks_to_keep) = if config.is_digest_build_enabled() {
 		// we only CAN prune at block where max-level-digest is created
-		let max_digest_interval = match config.digest_level_at_block(block.clone()) {
+		let max_digest_interval = match config.digest_level_at_block(config_activation_block.clone(), block.clone()) {
 			Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
 				digest_interval,
 			_ => return None,
@@ -132,11 +134,17 @@ fn pruning_range<Number: BlockNumber>(
 	};
 
 	// last block for which changes trie is pruned
-	let last_block_to_prune = blocks_to_keep.and_then(|b| block.checked_sub(&b));
-	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(&prune_interval.into()));
+	let last_block_to_prune = match blocks_to_keep.and_then(|b| block.checked_sub(&b)) {
+		Some(last_block_to_prune) => if last_block_to_prune > config_activation_block {
+			last_block_to_prune
+		} else {
+			return None;
+		},
+		_ => return None,
+	};
+	let first_block_to_prune = last_block_to_prune.checked_sub(&prune_interval.into());
 
-	last_block_to_prune
-		.and_then(|last| first_block_to_prune.map(|first| (first + One::one(), last)))
+	first_block_to_prune.map(|first| (first + One::one(), last_block_to_prune))
 }
 
 /// Select pruning delay for the changes tries. To make sure we could build a changes
@@ -145,7 +153,7 @@ fn pruning_range<Number: BlockNumber>(
 /// blocks. So we can only prune blocks that are earlier than B - max_digest_interval.
 /// The pruning_delay stands for number of max_digest_interval-s that we want to keep:
 /// 0 or 1: means that only last changes trie is guaranteed to exists;
-/// 2: the last chnages trie + previous changes trie
+/// 2: the last changes trie + previous changes trie
 /// ...
 fn max_digest_intervals_to_keep<Number: BlockNumber>(
 	min_blocks_to_keep: Number,
@@ -182,17 +190,18 @@ mod tests {
 		config: &Configuration,
 		storage: &S,
 		min_blocks_to_keep: u64,
+		zero: u64,
 		current_block: u64,
 	) -> HashSet<H::Out> {
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
+		prune(zero, config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
 			|node| { pruned_trie_nodes.insert(node); });
 		pruned_trie_nodes
 	}
 
 	#[test]
 	fn prune_works() {
-		fn prepare_storage() -> InMemoryStorage<Blake2Hasher, u64> {
+		fn prepare_storage(zero: u64) -> InMemoryStorage<Blake2Hasher, u64> {
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
 			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
@@ -202,90 +211,102 @@ mod tests {
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
 			let root4 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb4, vec![(vec![15], vec![25])]).unwrap();
 			let storage = InMemoryStorage::new();
-			storage.insert(65, root1, mdb1);
-			storage.insert(66, root2, mdb2);
-			storage.insert(67, root3, mdb3);
-			storage.insert(68, root4, mdb4);
+			storage.insert(zero + 65, root1, mdb1);
+			storage.insert(zero + 66, root2, mdb2);
+			storage.insert(zero + 67, root3, mdb3);
+			storage.insert(zero + 68, root4, mdb4);
 
 			storage
 		}
 
-		// l1-digest is created every 2 blocks
-		// l2-digest is created every 4 blocks
-		// we do not want to keep any additional changes tries
-		// => only one l2-digest is saved AND it is pruned once next is created
-		let config = Configuration { digest_interval: 2, digest_levels: 2 };
-		let storage = prepare_storage();
-		assert!(prune_by_collect(&config, &storage, 0, 69).is_empty());
-		assert!(prune_by_collect(&config, &storage, 0, 70).is_empty());
-		assert!(prune_by_collect(&config, &storage, 0, 71).is_empty());
-		let non_empty = prune_by_collect(&config, &storage, 0, 72);
-		assert!(!non_empty.is_empty());
-		storage.remove_from_storage(&non_empty);
-		assert!(storage.into_mdb().drain().is_empty());
+		fn test_with_zero(zero: u64) {
+			// l1-digest is created every 2 blocks
+			// l2-digest is created every 4 blocks
+			// we do not want to keep any additional changes tries
+			// => only one l2-digest is saved AND it is pruned once next is created
+			let config = Configuration { digest_interval: 2, digest_levels: 2 };
+			let storage = prepare_storage(zero);
+			assert!(prune_by_collect(&config, &storage, 0, zero, zero + 69).is_empty());
+			assert!(prune_by_collect(&config, &storage, 0, zero, zero + 70).is_empty());
+			assert!(prune_by_collect(&config, &storage, 0, zero, zero + 71).is_empty());
+			let non_empty = prune_by_collect(&config, &storage, 0, zero, zero + 72);
+			assert!(!non_empty.is_empty());
+			storage.remove_from_storage(&non_empty);
+			assert!(storage.into_mdb().drain().is_empty());
 
-		// l1-digest is created every 2 blocks
-		// l2-digest is created every 4 blocks
-		// we want keep 1 additional changes tries
-		let config = Configuration { digest_interval: 2, digest_levels: 2 };
-		let storage = prepare_storage();
-		assert!(prune_by_collect(&config, &storage, 8, 69).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 70).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 71).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 72).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 73).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 74).is_empty());
-		assert!(prune_by_collect(&config, &storage, 8, 75).is_empty());
-		let non_empty = prune_by_collect(&config, &storage, 8, 76);
-		assert!(!non_empty.is_empty());
-		storage.remove_from_storage(&non_empty);
-		assert!(storage.into_mdb().drain().is_empty());
+			// l1-digest is created every 2 blocks
+			// l2-digest is created every 4 blocks
+			// we want keep 1 additional changes tries
+			let config = Configuration { digest_interval: 2, digest_levels: 2 };
+			let storage = prepare_storage(zero);
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 69).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 70).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 71).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 72).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 73).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 74).is_empty());
+			assert!(prune_by_collect(&config, &storage, 8, zero, zero + 75).is_empty());
+			let non_empty = prune_by_collect(&config, &storage, 8, zero, zero + 76);
+			assert!(!non_empty.is_empty());
+			storage.remove_from_storage(&non_empty);
+			assert!(storage.into_mdb().drain().is_empty());
 
-		// l1-digest is created every 2 blocks
-		// we want keep 2 additional changes tries
-		let config = Configuration { digest_interval: 2, digest_levels: 1 };
-		let storage = prepare_storage();
-		assert!(prune_by_collect(&config, &storage, 4, 69).is_empty());
-		let non_empty = prune_by_collect(&config, &storage, 4, 70);
-		assert!(!non_empty.is_empty());
-		storage.remove_from_storage(&non_empty);
-		assert!(prune_by_collect(&config, &storage, 4, 71).is_empty());
-		let non_empty = prune_by_collect(&config, &storage, 4, 72);
-		assert!(!non_empty.is_empty());
-		storage.remove_from_storage(&non_empty);
-		assert!(storage.into_mdb().drain().is_empty());
+			// l1-digest is created every 2 blocks
+			// we want keep 2 additional changes tries
+			let config = Configuration { digest_interval: 2, digest_levels: 1 };
+			let storage = prepare_storage(zero);
+			assert!(prune_by_collect(&config, &storage, 4, zero, zero + 69).is_empty());
+			let non_empty = prune_by_collect(&config, &storage, 4, zero, zero + 70);
+			assert!(!non_empty.is_empty());
+			storage.remove_from_storage(&non_empty);
+			assert!(prune_by_collect(&config, &storage, 4, zero, zero + 71).is_empty());
+			let non_empty = prune_by_collect(&config, &storage, 4, zero, zero + 72);
+			assert!(!non_empty.is_empty());
+			storage.remove_from_storage(&non_empty);
+			assert!(storage.into_mdb().drain().is_empty());
+		}
+
+		test_with_zero(0);
+		test_with_zero(1023);
+		test_with_zero(1024);
 	}
 
 	#[test]
 	fn pruning_range_works() {
-		// DIGESTS ARE NOT CREATED + NO TRIES ARE PRUNED
-		assert_eq!(pruning_range(&config(10, 0), 2u64, 2u64), None);
+		fn test_with_zero(zero: u64) {
+			// DIGESTS ARE NOT CREATED + NO TRIES ARE PRUNED
+			assert_eq!(pruning_range(zero, &config(10, 0), 2u64, zero + 2u64), None);
 
-		// DIGESTS ARE NOT CREATED + SOME TRIES ARE PRUNED
-		assert_eq!(pruning_range(&config(10, 0), 100u64, 110u64), Some((10, 10)));
-		assert_eq!(pruning_range(&config(10, 0), 100u64, 210u64), Some((110, 110)));
+			// DIGESTS ARE NOT CREATED + SOME TRIES ARE PRUNED
+			assert_eq!(pruning_range(zero, &config(10, 0), 100u64, zero + 110u64), Some((zero + 10, zero + 10)));
+			assert_eq!(pruning_range(zero, &config(10, 0), 100u64, zero + 210u64), Some((zero + 110, zero + 110)));
 
-		// DIGESTS ARE CREATED + NO TRIES ARE PRUNED
+			// DIGESTS ARE CREATED + NO TRIES ARE PRUNED
 
-		assert_eq!(pruning_range(&config(10, 2), 2u64, 0u64), None);
-		assert_eq!(pruning_range(&config(10, 2), 30u64, 100u64), None);
-		assert_eq!(pruning_range(&config(::std::u32::MAX, 2), 1u64, 1024u64), None);
-		assert_eq!(pruning_range(&config(::std::u32::MAX, 2), ::std::u64::MAX, 1024u64), None);
-		assert_eq!(pruning_range(&config(32, 2), 2048u64, 512u64), None);
-		assert_eq!(pruning_range(&config(32, 2), 2048u64, 1024u64), None);
+			assert_eq!(pruning_range(zero, &config(10, 2), 2u64, zero + 0u64), None);
+			assert_eq!(pruning_range(zero, &config(10, 2), 30u64, zero + 100u64), None);
+			assert_eq!(pruning_range(zero, &config(::std::u32::MAX, 2), 1u64, zero + 1024u64), None);
+			assert_eq!(pruning_range(zero, &config(::std::u32::MAX, 2), ::std::u64::MAX, zero + 1024u64), None);
+			assert_eq!(pruning_range(zero, &config(32, 2), 2048u64, zero + 512u64), None);
+			assert_eq!(pruning_range(zero, &config(32, 2), 2048u64, zero + 1024u64), None);
 
-		// DIGESTS ARE CREATED + SOME TRIES ARE PRUNED
+			// DIGESTS ARE CREATED + SOME TRIES ARE PRUNED
 
-		// when we do not want to keep any highest-level-digests
-		// (system forces to keep at least one)
-		assert_eq!(pruning_range(&config(4, 2), 0u64, 32u64), Some((1, 16)));
-		assert_eq!(pruning_range(&config(4, 2), 0u64, 64u64), Some((33, 48)));
-		// when we want to keep 1 (last) highest-level-digest
-		assert_eq!(pruning_range(&config(4, 2), 16u64, 32u64), Some((1, 16)));
-		assert_eq!(pruning_range(&config(4, 2), 16u64, 64u64), Some((33, 48)));
-		// when we want to keep 1 (last) + 1 additional level digests
-		assert_eq!(pruning_range(&config(32, 2), 4096u64, 5120u64), Some((1, 1024)));
-		assert_eq!(pruning_range(&config(32, 2), 4096u64, 6144u64), Some((1025, 2048)));
+			// when we do not want to keep any highest-level-digests
+			// (system forces to keep at least one)
+			assert_eq!(pruning_range(zero, &config(4, 2), 0u64, zero + 32u64), Some((zero + 1, zero + 16)));
+			assert_eq!(pruning_range(zero, &config(4, 2), 0u64, zero + 64u64), Some((zero + 33, zero + 48)));
+			// when we want to keep 1 (last) highest-level-digest
+			assert_eq!(pruning_range(zero, &config(4, 2), 16u64, zero + 32u64), Some((zero + 1, zero + 16)));
+			assert_eq!(pruning_range(zero, &config(4, 2), 16u64, zero + 64u64), Some((zero + 33, zero + 48)));
+			// when we want to keep 1 (last) + 1 additional level digests
+			assert_eq!(pruning_range(zero, &config(32, 2), 4096u64, zero + 5120u64), Some((zero + 1, zero + 1024)));
+			assert_eq!(pruning_range(zero, &config(32, 2), 4096u64, zero + 6144u64), Some((zero + 1025, zero + 2048)));
+		}
+
+		test_with_zero(0);
+		test_with_zero(1023);
+		test_with_zero(1024);
 	}
 
 	#[test]
@@ -299,20 +320,26 @@ mod tests {
 
 	#[test]
 	fn oldest_non_pruned_trie_works() {
-		// when digests are not created at all
-		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100u64, 10u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100u64, 110u64), 11);
+		fn test_with_zero(zero: u64) {
+			// when digests are not created at all
+			assert_eq!(oldest_non_pruned_trie(zero, &config(0, 0), 100u64, zero + 10u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(0, 0), 100u64, zero + 110u64), zero + 11);
 
-		// when only l1 digests are created
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 50u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 110u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 210u64), 101);
+			// when only l1 digests are created
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 1), 100u64, zero +50u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 1), 100u64, zero +110u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 1), 100u64, zero +210u64), zero + 101);
 
-		// when l2 digests are created
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 50u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 110u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 210u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 10110u64), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 20110u64), 10001);
+			// when l2 digests are created
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 2), 100u64, zero + 50u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 2), 100u64, zero + 110u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 2), 100u64, zero + 210u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 2), 100u64, zero + 10110u64), zero + 1);
+			assert_eq!(oldest_non_pruned_trie(zero, &config(100, 2), 100u64, zero + 20110u64), zero + 10001);
+		}
+
+		test_with_zero(0);
+		test_with_zero(100);
+		test_with_zero(101);
 	}
 }

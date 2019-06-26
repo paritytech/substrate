@@ -100,6 +100,10 @@ pub struct AnchorBlockId<Hash: ::std::fmt::Debug, Number: BlockNumber> {
 pub struct State<'a, H, Number> {
 	/// Configuration that is active at given block.
 	pub config: Configuration,
+	/// Configuration activation block number. Zero if it is the first coonfiguration on the chain,
+	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
+	/// starting from the **next** block).
+	pub config_activation_block: Number,
 	/// Underlying changes tries storage reference.
 	pub storage: &'a dyn Storage<H, Number>,
 }
@@ -135,9 +139,14 @@ pub type Configuration = primitives::ChangesTrieConfiguration;
 
 impl<'a, H, Number> State<'a, H, Number> {
 	/// Create state with given config and storage.
-	pub fn new(config: Configuration, storage: &'a dyn Storage<H, Number>) -> Self {
+	pub fn new(
+		config: Configuration,
+		config_activation_block: Number,
+		storage: &'a dyn Storage<H, Number>,
+	) -> Self {
 		Self {
 			config,
+			config_activation_block,
 			storage,
 		}
 	}
@@ -171,7 +180,7 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, H: Hasher, Number: BlockNumb
 	let parent = state.storage.build_anchor(parent_hash).map_err(|_| ())?;
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let input_pairs = prepare_input::<B, H, Number>(backend, state.storage, &state.config, changes, &parent)
+	let input_pairs = prepare_input::<B, H, Number>(backend, state.storage, state.config_activation_block.clone(), &state.config, changes, &parent)
 		.expect("storage is not allowed to fail within runtime");
 	match input_pairs {
 		Some(input_pairs) => {

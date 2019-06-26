@@ -348,6 +348,7 @@ where
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
+	use num_traits::Zero;
 	use parity_codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
@@ -398,7 +399,7 @@ mod tests {
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_non_empty() {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
-		let state = Some(ChangesTrieState::new(changes_trie_config(), &storage));
+		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, state.as_ref(), None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
@@ -410,7 +411,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
-		let state = Some(ChangesTrieState::new(changes_trie_config(), &storage));
+		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, state.as_ref(), None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),

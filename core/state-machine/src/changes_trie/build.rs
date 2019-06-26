@@ -36,6 +36,7 @@ use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 pub fn prepare_input<'a, B, H, Number>(
 	backend: &B,
 	storage: &'a Storage<H, Number>,
+	config_activation_block: Number,
 	config: &'a Configuration,
 	changes: &OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
@@ -52,6 +53,7 @@ pub fn prepare_input<'a, B, H, Number>(
 		changes)?);
 	input.extend(prepare_digest_input::<H, Number>(
 		parent,
+		config_activation_block,
 		config,
 		storage)?);
 
@@ -98,6 +100,7 @@ fn prepare_extrinsics_input<B, H, Number>(
 /// Prepare DigestIndex input pairs.
 fn prepare_digest_input<'a, H, Number>(
 	parent: &'a AnchorBlockId<H::Out, Number>,
+	config_activation_block: Number,
 	config: &Configuration,
 	storage: &'a Storage<H, Number>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
@@ -107,7 +110,7 @@ fn prepare_digest_input<'a, H, Number>(
 		Number: BlockNumber,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<Number>>::new();
-	for digest_build_block in digest_build_iterator(config, parent.number.clone() + One::one()) {
+	for digest_build_block in digest_build_iterator(config, config_activation_block, parent.number.clone() + One::one()) {
 		let trie_root = storage.root(parent, digest_build_block.clone())?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
 		let trie_storage = TrieBackendEssence::<_, H>::new(
@@ -228,6 +231,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
+			0, // TODO: test other cases
 			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 4 },
@@ -245,6 +249,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
+			0, // TODO: test other cases
 			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },
@@ -267,6 +272,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
+			0, // TODO: test other cases
 			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 15 },
@@ -297,6 +303,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
+			0, // TODO: test other cases
 			&config,
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },

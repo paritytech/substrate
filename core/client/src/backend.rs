@@ -21,7 +21,7 @@ use crate::error;
 use parity_codec::Decode;
 use primitives::{storage::well_known_keys::CHANGES_TRIE_CONFIG, ChangesTrieConfiguration};
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Zero, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieState};
 use consensus::well_known_cache_keys;
@@ -249,5 +249,5 @@ pub fn changes_tries_state_at_state<'a, S: StateBackend<H>, Block: BlockT, H: Ha
 	Ok(state.storage(CHANGES_TRIE_CONFIG)
 		.map_err(|e| error::Error::from_state(Box::new(e)))?
 		.and_then(|v| Decode::decode(&mut &v[..]))
-		.map(|config| ChangesTrieState::new(config, storage)))
+		.map(|config| ChangesTrieState::new(config, Zero::zero(), storage)))
 }

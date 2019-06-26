@@ -561,6 +561,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		};
 
 		state_machine::prune_changes_tries(
+			Zero::zero(), // TODO: not true
 			config,
 			&*self,
 			min_blocks_to_keep.into(),
@@ -584,6 +585,7 @@ where
 	) -> NumberFor<Block> {
 		match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
+				Zero::zero(), // TODO: not true
 				config,
 				min_blocks_to_keep.into(),
 				best_finalized_block,

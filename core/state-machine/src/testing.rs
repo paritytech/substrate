@@ -19,6 +19,7 @@
 use std::collections::{HashMap, BTreeMap};
 use std::iter::FromIterator;
 use hash_db::Hasher;
+use num_traits::Zero;
 use parity_codec::Decode;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -229,7 +230,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> {
 		match self.changes_trie_config.clone() {
 			Some(config) => {
-				let state = ChangesTrieState::new(config, &self.changes_trie_storage);
+				let state = ChangesTrieState::new(config, Zero::zero(), &self.changes_trie_storage);
 				Ok(compute_changes_trie_root::<_, H, N>(
 					&self.backend,
 					Some(&state),

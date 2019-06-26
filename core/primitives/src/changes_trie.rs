@@ -45,13 +45,17 @@ impl ChangesTrieConfiguration {
 	}
 
 	/// Do we need to build digest at given block?
-	pub fn is_digest_build_required_at_block<Number>(&self, block: Number) -> bool
+	pub fn is_digest_build_required_at_block<Number>(
+		&self,
+		zero: Number,
+		block: Number,
+	) -> bool
 		where
-			Number: From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + Zero,
+			Number: From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::cmp::PartialOrd + Zero,
 	{
-		block != 0.into()
+		block > zero
 			&& self.is_digest_build_enabled()
-			&& (block % self.digest_interval.into()).is_zero()
+			&& ((block - zero) % self.digest_interval.into()).is_zero()
 	}
 
 	/// Returns max digest interval. One if digests are not created at all.
@@ -78,20 +82,21 @@ impl ChangesTrieConfiguration {
 	///  digest interval (in blocks)
 	///  step between blocks we're interested in when digest is built
 	/// )
-	pub fn digest_level_at_block<Number>(&self, block: Number) -> Option<(u32, u32, u32)>
+	pub fn digest_level_at_block<Number>(&self, zero: Number, block: Number) -> Option<(u32, u32, u32)>
 		where
-			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + Zero,
+			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::cmp::PartialOrd + Zero,
 	{
-		if !self.is_digest_build_required_at_block(block.clone()) {
+		if !self.is_digest_build_required_at_block(zero.clone(), block.clone()) {
 			return None;
 		}
 
+		let relative_block = block - zero;
 		let mut digest_interval = self.digest_interval;
 		let mut current_level = 1u32;
 		let mut digest_step = 1u32;
 		while current_level < self.digest_levels {
 			let new_digest_interval = match digest_interval.checked_mul(self.digest_interval) {
-				Some(new_digest_interval) if (block.clone() % new_digest_interval.into()).is_zero()
+				Some(new_digest_interval) if (relative_block.clone() % new_digest_interval.into()).is_zero()
 					=> new_digest_interval,
 				_ => break,
 			};
@@ -131,31 +136,43 @@ mod tests {
 
 	#[test]
 	fn is_digest_build_required_at_block_works() {
-		assert!(!config(8, 4).is_digest_build_required_at_block(0u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(1u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(2u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(4u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(8u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(9u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(64u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(64u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(512u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(4096u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(4103u64));
-		assert!(config(8, 4).is_digest_build_required_at_block(4104u64));
-		assert!(!config(8, 4).is_digest_build_required_at_block(4108u64));
+		fn test_with_zero(zero: u64) {
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 0u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 1u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 2u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 4u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 8u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 9u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 64u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 64u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 512u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 4096u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 4103u64));
+			assert!(config(8, 4).is_digest_build_required_at_block(zero, zero + 4104u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 4108u64));
+		}
+
+		test_with_zero(0);
+		test_with_zero(8);
+		test_with_zero(17);
 	}
 
 	#[test]
 	fn digest_level_at_block_works() {
-		assert_eq!(config(8, 4).digest_level_at_block(0u64), None);
-		assert_eq!(config(8, 4).digest_level_at_block(7u64), None);
-		assert_eq!(config(8, 4).digest_level_at_block(63u64), None);
-		assert_eq!(config(8, 4).digest_level_at_block(8u64), Some((1, 8, 1)));
-		assert_eq!(config(8, 4).digest_level_at_block(64u64), Some((2, 64, 8)));
-		assert_eq!(config(8, 4).digest_level_at_block(512u64), Some((3, 512, 64)));
-		assert_eq!(config(8, 4).digest_level_at_block(4096u64), Some((4, 4096, 512)));
-		assert_eq!(config(8, 4).digest_level_at_block(4112u64), Some((1, 8, 1)));
+		fn test_with_zero(zero: u64) {
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 0u64), None);
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 7u64), None);
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 63u64), None);
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 8u64), Some((1, 8, 1)));
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 64u64), Some((2, 64, 8)));
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 512u64), Some((3, 512, 64)));
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 4096u64), Some((4, 4096, 512)));
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 4112u64), Some((1, 8, 1)));
+		}
+
+		test_with_zero(0);
+		test_with_zero(8);
+		test_with_zero(17);
 	}
 
 	#[test]
@@ -165,4 +182,6 @@ mod tests {
 		assert_eq!(config(8, 4).max_digest_interval(), 4096);
 		assert_eq!(config(::std::u32::MAX, 1024).max_digest_interval(), ::std::u32::MAX);
 	}
+
+	// TODO: test that it doesn't panic when zero > block
 }
