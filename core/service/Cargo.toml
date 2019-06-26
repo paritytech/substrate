@@ -11,7 +11,7 @@ parking_lot = "0.8.0"
 lazy_static = "1.0"
 log = "0.4"
 slog = {version = "^2", features = ["nested-values"]}
-tokio = "0.1.7"
+tokio-executor = "0.1.7"
 tokio-timer = "0.2"
 exit-future = "0.1"
 serde = { version = "1.0", features = ["derive"] }

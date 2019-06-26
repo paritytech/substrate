@@ -31,7 +31,7 @@ use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
 	error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
@@ -76,10 +76,10 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
 		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
-				FullComponents::<Factory>::new(config, executor) },
+			{ |config: FactoryFullConfiguration<Self>|
+				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
+			|mut service: Self::FullService, local_key: Option<Arc<ed25519::Pair>>| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
@@ -104,7 +104,7 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -125,18 +125,16 @@ construct_service_factory! {
 
 				match config.local_key {
 					None => {
-						executor.spawn(grandpa::run_grandpa_observer(
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
 							service.network(),
 							service.on_exit(),
-						)?);
+						)?));
 					},
 					Some(_) => {
 						let telemetry_on_connect = TelemetryOnConnect {
-							on_exit: Box::new(service.on_exit()),
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-							executor: &executor,
 						};
 						let grandpa_config = grandpa::GrandpaParams {
 							config: config,
@@ -146,7 +144,7 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						executor.spawn(grandpa::run_grandpa_voter(grandpa_config)?);
+						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 					},
 				}
 
@@ -154,7 +152,7 @@ construct_service_factory! {
 			}
 		},
 		LightService = LightComponents<Self>
-			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;

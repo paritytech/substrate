@@ -16,12 +16,12 @@ parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-tokio = "0.1.7"
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 env_logger = "0.6"
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
+tokio = "0.1.7"
 
 [features]
 default = []
