@@ -22,12 +22,14 @@ use std::net::Ipv4Addr;
 use std::time::Duration;
 use std::collections::HashMap;
 use log::info;
-use futures::{Future, Stream};
+use futures::{Future, Stream, Poll};
 use tempdir::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use service::{
+	Service,
 	ServiceFactory,
+	Components,
 	Configuration,
 	FactoryFullConfiguration,
 	FactoryChainSpec,
@@ -50,6 +52,17 @@ struct TestNet<F: ServiceFactory> {
 	chain_spec: FactoryChainSpec<F>,
 	base_port: u16,
 	nodes: usize,
+}
+
+/// Wraps around an `Arc<Service>>` and implements `Future`.
+struct ArcService<T>(Arc<T>);
+impl<T, C: Components> Future for ArcService<T> where T: std::ops::Deref<Target = Service<C>> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		Future::poll(&mut &**self.0)
+	}
 }
 
 impl<F: ServiceFactory> TestNet<F> {
@@ -186,8 +199,9 @@ impl<F: ServiceFactory> TestNet<F> {
 		self.authority_nodes.extend(authorities.iter().enumerate().map(|(index, key)| {
 			let node_config = node_config::<F>(index as u32, &spec, Roles::AUTHORITY, Some(key.clone()), base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = Arc::new(F::new_full(node_config, executor.clone())
+			let service = Arc::new(F::new_full(node_config)
 				.expect("Error creating test node service"));
+			executor.spawn(ArcService(service.clone()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().into()));
 			((index + nodes) as u32, service, addr)
 		}));
@@ -196,8 +210,9 @@ impl<F: ServiceFactory> TestNet<F> {
 		self.full_nodes.extend((nodes..nodes + full as usize).map(|index| {
 			let node_config = node_config::<F>(index as u32, &spec, Roles::FULL, None, base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = Arc::new(F::new_full(node_config, executor.clone())
+			let service = Arc::new(F::new_full(node_config)
 				.expect("Error creating test node service"));
+			executor.spawn(ArcService(service.clone()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().into()));
 			(index as u32, service, addr)
 		}));
@@ -206,8 +221,9 @@ impl<F: ServiceFactory> TestNet<F> {
 		self.light_nodes.extend((nodes..nodes + light as usize).map(|index| {
 			let node_config = node_config::<F>(index as u32, &spec, Roles::LIGHT, None, base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = Arc::new(F::new_light(node_config, executor.clone())
+			let service = Arc::new(F::new_light(node_config)
 				.expect("Error creating test node service"));
+			executor.spawn(ArcService(service.clone()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().into()));
 			(index as u32, service, addr)
 		}));
@@ -247,7 +263,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 			network.runtime
 		};
 
-		runtime.shutdown_on_idle().wait().expect("Error shutting down runtime");
+		runtime.shutdown_now().wait().expect("Error shutting down runtime");
 
 		temp.close().expect("Error removing temp dir");
 	}

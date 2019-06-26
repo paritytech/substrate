@@ -9,7 +9,8 @@ fork-tree = { path = "../../core/util/fork-tree" }
 futures = "0.1"
 log = "0.4"
 parking_lot = "0.8.0"
-tokio = "0.1.7"
+tokio-executor = "0.1.7"
+tokio-timer = "0.2.11"
 rand = "0.6"
 parity-codec = { version = "4.1.1", features = ["derive"] }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
@@ -31,6 +32,7 @@ network = { package = "substrate-network", path = "../network", features = ["tes
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 env_logger = "0.6"
+tokio = "0.1.17"
 
 [features]
 default = ["service-integration"]
