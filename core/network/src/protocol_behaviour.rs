@@ -19,7 +19,7 @@
 use crate::{ExHashT, DiscoveryNetBehaviour, ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use crate::chain::{Client, FinalityProofProvider};
-use crate::protocol::{self, CustomMessageOutcome, Protocol, ProtocolConfig, sync::SyncState};
+use crate::protocol::{self, event::Event, CustomMessageOutcome, Protocol, ProtocolConfig, sync::SyncState};
 use crate::protocol::{PeerInfo, NetworkOut, message::Message, on_demand::RequestData};
 use crate::protocol::consensus_gossip::MessageRecipient as GossipMessageRecipient;
 use crate::protocol::specialization::NetworkSpecialization;
@@ -274,6 +274,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> ProtocolBehaviour<B, S,
 	/// errors.
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.justification_import_result(hash, number, success)
+	}
+
+	/// The networking-level event has happened.
+	pub fn on_event(&mut self, event: Event) {
+		self.protocol.on_event(event);
 	}
 
 	/// Request a finality proof for the given block.

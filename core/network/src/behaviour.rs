@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour};
+use crate::{
+	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour, event::DhtEvent
+};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, protocols_handler::IntoProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
+use libp2p::multihash::Multihash;
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
 #[cfg(not(target_os = "unknown"))]
@@ -30,7 +33,7 @@ use void;
 
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "TBehaviourEv", poll_method = "poll")]
+#[behaviour(out_event = "BehaviourOut<TBehaviourEv>", poll_method = "poll")]
 pub struct Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	/// Main protocol that handles everything except the discovery and the technicalities.
 	user_protocol: UserBehaviourWrap<TBehaviour>,
@@ -45,7 +48,13 @@ pub struct Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
-	events: Vec<TBehaviourEv>,
+	events: Vec<BehaviourOut<TBehaviourEv>>,
+}
+
+/// A wrapper for the behavbour event that adds DHT-related event variant.
+pub enum BehaviourOut<TBehaviourEv> {
+	Behaviour(TBehaviourEv),
+	Dht(DhtEvent),
 }
 
 impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
@@ -112,6 +121,16 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	pub fn user_protocol_mut(&mut self) -> &mut TBehaviour {
 		&mut self.user_protocol.0
 	}
+
+	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a `ValueNotFound` event.
+	pub fn get_value(&mut self, key: &Multihash) {
+		self.discovery.get_value(key);
+	}
+
+	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
+	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+		self.discovery.put_value(key, value);
+	}
 }
 
 impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<void::Void> for
@@ -124,7 +143,7 @@ Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<UserEventWrap<TBehaviourEv>> for
 Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	fn inject_event(&mut self, event: UserEventWrap<TBehaviourEv>) {
-		self.events.push(event.0);
+		self.events.push(BehaviourOut::Behaviour(event.0));
 	}
 }
 
@@ -158,6 +177,18 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<Discover
 			DiscoveryOut::Discovered(peer_id) => {
 				self.user_protocol.0.add_discovered_nodes(iter::once(peer_id));
 			}
+			DiscoveryOut::ValueFound(results) => {
+				self.events.push(BehaviourOut::Dht(DhtEvent::ValueFound(results)));
+			}
+			DiscoveryOut::ValueNotFound(key) => {
+				self.events.push(BehaviourOut::Dht(DhtEvent::ValueNotFound(key)));
+			}
+			DiscoveryOut::ValuePut(key) => {
+				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePut(key)));
+			}
+			DiscoveryOut::ValuePutFailed(key) => {
+				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePutFailed(key)));
+			}
 		}
 	}
 }
@@ -177,7 +208,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<MdnsEven
 }
 
 impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
-	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, TBehaviourEv>> {
+	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut<TBehaviourEv>>> {
 		if !self.events.is_empty() {
 			return Async::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}
