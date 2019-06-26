@@ -17,7 +17,7 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
 state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
-parity-codec = { version = "3.3", features = ["derive"] }
+parity-codec = { version = "3.5.4", features = ["derive"] }
 executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
