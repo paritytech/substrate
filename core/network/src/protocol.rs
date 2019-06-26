@@ -158,16 +158,6 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-/// Context passed as input to the methods of `protocol.rs` and that is used to communicate back
-/// with the network.
-pub trait NetworkOut<B: BlockT> {
-	/// Force disconnecting from a peer.
-	fn disconnect_peer(&mut self, who: PeerId);
-
-	/// Send a message to a peer.
-	fn send_message(&mut self, who: PeerId, message: Message<B>);
-}
-
 struct OnDemandIn<'a, B: BlockT> {
 	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
