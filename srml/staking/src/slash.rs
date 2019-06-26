@@ -71,7 +71,12 @@ mod tests {
 			// (1125 * 0.015) = 16.875
 			//
 			// Illustration that we loose accurancy representing it as a `Fraction`
-			assert_eq!(Staking::slash_on_checkpoint(&[11, 21, 31, 41], 30, &misconduct::Unresponsive), 3);
+
+			let misbehaved = [11, 21, 31, 41];
+			let validator_len = 30;
+			// not used
+			let era_len = 10;
+			assert_eq!(Staking::slash(&misbehaved, validator_len, era_len, &misconduct::Unresponsive), 3);
 			assert_eq!(984, Balances::free_balance(&11));
 		});
 	}
