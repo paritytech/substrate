@@ -95,8 +95,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - ./scripts/build.sh --locked
-    - time cargo check --benches
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches
     - sccache -s
 
 
@@ -107,7 +106,7 @@ cargo-check-subkey:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./subkey
-    - time cargo check --release   # makes sense to save artifacts for building it
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
 
 
