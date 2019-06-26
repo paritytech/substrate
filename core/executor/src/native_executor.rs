@@ -26,9 +26,6 @@ use log::trace;
 
 use crate::RuntimesCache;
 
-// For the internal Runtime Cache:
-// Is it compatible enough to run this natively or do we need to fall back on the WasmModule
-
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
 }
