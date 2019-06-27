@@ -241,7 +241,7 @@ decl_storage! {
 		}): map T::AccountId => Option<T::Keys>;
 
 		/// The queued keys for the next session.
-		QueuedKeys build(|config: &GenesisConfig<T>| {
+		QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): Vec<(T::AccountId, T::Keys)>;
 
@@ -524,7 +524,7 @@ mod tests {
 			force_new_session();
 			System::set_block_number(1);
 			Session::on_initialize(1);
-			assert_eq!(<QueuedKeys<Test>>::get(), vec![
+			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
 			]);
@@ -534,7 +534,7 @@ mod tests {
 			force_new_session();
 			System::set_block_number(2);
 			Session::on_initialize(2);
-			assert_eq!(<QueuedKeys<Test>>::get(), vec![
+			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
 			]);
@@ -546,7 +546,7 @@ mod tests {
 			force_new_session();
 			System::set_block_number(3);
 			Session::on_initialize(3);
-			assert_eq!(<QueuedKeys<Test>>::get(), vec![
+			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
 				(4, UintAuthorityId(4)),
@@ -557,7 +557,7 @@ mod tests {
 			force_new_session();
 			System::set_block_number(3);
 			Session::on_initialize(3);
-			assert_eq!(<QueuedKeys<Test>>::get(), vec![
+			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
 				(4, UintAuthorityId(4)),
