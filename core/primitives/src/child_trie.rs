@@ -28,15 +28,14 @@ pub use impl_serde::serialize as bytes;
 /// From a `TrieDB` perspective, accessing a child trie content requires
 /// both the child trie root, but also the `KeySpace` used to store
 /// this child trie.
-/// The `KeySpace` of a child trie must be unique in order to avoid
-/// key collision at a key value database level.
-/// Therefore `KeySpace` should only be the result of a call to
-/// `KeySpaceGenerator` trait `generate_keyspace` method.
-/// The uniqueness property allows to move child trie between trie node
-/// by only changing child trie root and `KeySpace` in the child trie
-/// encoded information.
+/// The `KeySpace` of a child trie must be unique for the canonical chain
+/// in order to avoid key collision at a key value database level.
+/// This is currently build by using the `ParentTrie` path of the child trie
+/// at its creation and the block number at its creation (a child trie
+/// when new if moved must therefore update its keyspace).
+/// This id is unique as for a block number state we cannot have
+/// two created child trie with the same `ParentTrie`.
 pub type KeySpace = Vec<u8>;
-
 
 /// Parent trie origin. This type contains all information
 /// needed to access a parent trie.
@@ -64,14 +63,22 @@ pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
 /// The struct can be build directly with invalid data, so
 /// its usage is limited to read only querying.
 #[derive(Clone)]
-pub struct ChildTrieReadRef<'a> {
-	/// Subtrie unique keyspace, see [`KeySpace`] for details.
-	pub keyspace: &'a KeySpace,
-	/// Subtrie root hash.
-	/// This is optional for the case where a child trie is pending creation.
-	pub root: Option<&'a [u8]>,
+pub enum ChildTrieReadRef<'a> {
+	/// Subtrie path for new trie, see [`ParentTrie`] for details.
+	New(&'a KeySpace),
+	/// Subtrie root hash and keyspace for existing child trie.
+	Existing(&'a [u8], &'a KeySpace),
 }
 
+impl<'a> ChildTrieReadRef<'a> {
+	/// Keyspace accessor for the enum.
+	pub fn keyspace(&self) -> &KeySpace {
+		match self {
+			ChildTrieReadRef::New(k) => k,
+			ChildTrieReadRef::Existing(_, k) => k,
+		}
+	}
+}
 /// Current codec version of a child trie definition.
 const LAST_SUBTRIE_CODEC_VERSION: u16 = 1u16;
 
@@ -82,8 +89,6 @@ struct ChildTrieReadEncode<'a> {
 	/// Current codec version
 	#[codec(compact)]
 	version: u16,
-	/// Child trie unique keyspace
-	keyspace: &'a KeySpace,
 	/// Child trie root hash
 	root: &'a [u8],
 }
@@ -92,24 +97,16 @@ struct ChildTrieReadEncode<'a> {
 struct ChildTrieReadDecode {
 	#[codec(compact)]
 	version: u16,
-	keyspace: KeySpace,
 	root: Vec<u8>,
 }
 
-impl Into<ChildTrieRead> for ChildTrieReadDecode {
-	fn into(self) -> ChildTrieRead {
-		let ChildTrieReadDecode { keyspace, root, .. } = self;
-		ChildTrieRead { keyspace, root }
-	}
-}
-
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 /// This struct contains information needed to access a child trie.
-/// This is semantically similar to `ChildTrieReadRef` but with owned values.
+/// When doing a remote query.
 pub struct ChildTrieRead {
-	/// Child trie unique keyspace, see [`KeySpace`] for details.
-	pub keyspace: KeySpace,
+	/// Child trie parent key.
+	pub parent: ParentTrie,
 	/// Child trie root hash
 	pub root: Vec<u8>,
 }
@@ -117,34 +114,9 @@ pub struct ChildTrieRead {
 impl ChildTrieRead {
 	/// Use `ChildTrieRead` as a `ChildTrieReadRef`,
 	/// forcing root field to an existing value.
-	pub fn node_ref(&self) -> ChildTrieReadRef {
+	pub fn node_ref<'a>(&'a self, keyspace: &'a KeySpace) -> ChildTrieReadRef<'a> {
 		debug_assert!(self.root.len() > 0);
-		ChildTrieReadRef {
-			keyspace: &self.keyspace,
-			root: Some(&self.root[..]),
-		}
-	}
-}
-
-impl parity_codec::Encode for ChildTrieRead {
-	fn encode(&self) -> Vec<u8> {
-		ChildTrieReadEncode {
-			version: LAST_SUBTRIE_CODEC_VERSION,
-			keyspace: &self.keyspace,
-			root: &self.root[..]
-		}.encode()
-	}
-}
-
-impl parity_codec::Decode for ChildTrieRead {
-	fn decode<I: parity_codec::Input>(i: &mut I) -> Option<Self> {
-		ChildTrieReadDecode::decode(i)
-			.and_then(|v| if v.version == LAST_SUBTRIE_CODEC_VERSION {
-				Some(v.into())
-			} else {
-				None
-			}
-		)
+		ChildTrieReadRef::Existing(&self.root[..], keyspace)
 	}
 }
 
@@ -152,6 +124,7 @@ impl parity_codec::Decode for ChildTrieRead {
 /// This contains information needed to access a child trie
 /// content but also information needed to manage child trie
 /// from its parent trie (removal, move, update of root).
+///
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 pub struct ChildTrie {
@@ -185,23 +158,22 @@ impl ChildTrie {
 	}
 	/// Method for fetching or initiating a new child trie.
 	///
-	/// By using a `KeySpaceGenerator` it does not allow setting an existing `KeySpace`.
-	/// If a new trie is created (see `is_new` method), the trie is not commited and
-	/// another call to this method will create a new trie.
+	/// Note that call back could do nothing, which will allow unspecified behavior,
+	/// but can be usefull in case we create a child trie at a known unused location,
+	/// or for performance purpose (later write).
 	///
-	/// This can be quite unsafe for user, so use with care (write new trie information
-	/// as soon as possible).
-	pub fn fetch_or_new(
-		keyspace_builder: &mut impl KeySpaceGenerator,
+	/// We also provide an encodable value specific to the creation state (block number).
+	pub fn fetch_or_new<N: Encode>(
 		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
 		child_trie_update: impl FnOnce(ChildTrie),
 		parent: &[u8],
+		block_nb: &N,
 	) -> Self {
 		parent_fetcher(parent)
 			.unwrap_or_else(|| {
 			let parent = Self::prefix_parent_key(parent);
 			let ct = ChildTrie {
-				keyspace: keyspace_builder.generate_keyspace(),
+				keyspace: generate_keyspace(block_nb, &parent),
 				root: Default::default(),
 				parent,
 				extension: Default::default(),
@@ -213,23 +185,29 @@ impl ChildTrie {
 	/// Get a reference to the child trie information
 	/// needed for a read only query.
 	pub fn node_ref(&self) -> ChildTrieReadRef {
-		ChildTrieReadRef {
-			keyspace: &self.keyspace,
-			root: self.root.as_ref().map(|r| &r[..]),
+		if let Some(root) = self.root.as_ref() {
+			ChildTrieReadRef::Existing(&root[..], &self.keyspace)
+		} else {
+			ChildTrieReadRef::New(&self.keyspace)
 		}
 	}
 	/// Instantiate child trie from its encoded value and location.
 	/// Please do not use this function with encoded content
 	/// which is not fetch from an existing child trie.
-	pub fn decode_node_with_parent(encoded_node: &[u8], parent: ParentTrie) -> Option<Self> {
+	pub fn decode_node_with_parent(
+		encoded_node: &[u8],
+		parent: ParentTrie,
+		keyspace: KeySpace,
+	) -> Option<Self> {
 		let input = &mut &encoded_node[..];
-		ChildTrieRead::decode(input).map(|ChildTrieRead { keyspace, root }|
+		ChildTrieReadDecode::decode(input).map(|ChildTrieReadDecode { version, root }| {
+			debug_assert!(version == LAST_SUBTRIE_CODEC_VERSION);
 			ChildTrie {
 				keyspace,
 				root: Some(root),
 				parent,
 				extension: (*input).to_vec(),
-		})
+		}})
 	}
 	/// Return true when the child trie is new and does not contain a root.
 	pub fn is_new(&self) -> bool {
@@ -261,7 +239,6 @@ impl ChildTrie {
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
 		let mut enc = parity_codec::Encode::encode(&ChildTrieReadEncode{
 			version: LAST_SUBTRIE_CODEC_VERSION,
-			keyspace: &self.keyspace,
 			root: new_root,
 		});
 		enc.extend_from_slice(&self.extension[..]);
@@ -296,15 +273,15 @@ impl ChildTrie {
 	/// This is unsafe to use because it allows to build invalid
 	/// child trie object: duplicate keyspace or invalid root.
 	pub fn unsafe_from_ptr_child_trie(
-    keyspace: *mut u8,
-    kl: u32,
-    root: *mut u8,
-    rl: u32,
-    parent: *mut u8,
-    pl: u32,
-    extension: *mut u8,
-    el: u32,
-  ) -> Self {
+		keyspace: *mut u8,
+		kl: u32,
+		root: *mut u8,
+		rl: u32,
+		parent: *mut u8,
+		pl: u32,
+		extension: *mut u8,
+		el: u32,
+	) -> Self {
 		unsafe {
 			let keyspace = from_raw_parts(keyspace, kl).expect("non optional; qed");
 			let root = from_raw_parts(root, rl);
@@ -316,7 +293,12 @@ impl ChildTrie {
 	/// Function to rebuild child trie accessed from mem copied field.
 	/// This is unsafe to use because it allows to build invalid
 	/// child trie object: duplicate keyspace or invalid root.
-	pub fn unsafe_from_ptr_vecs(a: Vec<u8>, b: Option<Vec<u8>>, c: Vec<u8>, d: Vec<u8>) -> Self {
+	pub fn unsafe_from_ptr_vecs(
+		a: Vec<u8>,
+		b: Option<Vec<u8>>,
+		c: Vec<u8>,
+		d: Vec<u8>,
+	) -> Self {
 		ChildTrie { keyspace: a, root: b , parent: c, extension: d }
 	}
 
@@ -348,29 +330,11 @@ impl AsRef<ChildTrie> for ChildTrie {
 	}
 }
 
-/// Builder for `KeySpace`.
-/// Implementation of this trait must ensure unicity of generated `KeySpace` over the whole runtime context.
-/// In the context of deterministic generation this can be difficult, so
-/// using a fixed module specific prefix over a module counter is considered fine (prefix should be
-/// long enought to avoid collision).
-pub trait KeySpaceGenerator {
-	/// generate a new keyspace
-	fn generate_keyspace(&mut self) -> KeySpace;
-}
-
-/// Test keyspace generator, it is a simple in memory counter, only for test usage.
-pub struct TestKeySpaceGenerator(u32);
-
-impl TestKeySpaceGenerator {
-	/// Intitialize a new keyspace builder with first id being 1.
-	/// This does not verify the unique id asumption of `KeySpace`
-	/// and should only be use in tests.
-	pub fn new() -> Self { TestKeySpaceGenerator(0) }
-}
-
-impl KeySpaceGenerator for TestKeySpaceGenerator {
-	fn generate_keyspace(&mut self) -> KeySpace {
-		self.0 += 1;
-		parity_codec::Encode::encode(&self.0)
-	}
+/// generate a new keyspace
+pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8> {
+	// using 8 for block number and additianal encoding targeting ~u64
+	let mut result = Vec::with_capacity(parent_trie.len() + 8);
+	parity_codec::Encode::encode_to(ChildTrie::parent_key_slice(parent_trie), &mut result);
+	parity_codec::Encode::encode_to(block_nb, &mut result);
+	result
 }

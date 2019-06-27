@@ -18,7 +18,7 @@
 
 use super::{
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Module, Trait, TrieId,
-	TrieIdGenerator, TempKeyspaceGen, prefixed_child_trie,
+	TrieIdGenerator, prefixed_child_trie,
 };
 use crate::exec::StorageKey;
 use rstd::cell::RefCell;
@@ -124,6 +124,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					Some(ContractInfo::Tombstone(_)) => continue,
 				};
 
+				let block_number = <system::Module<T>>::block_number();
+
 				let mut new_info = if let Some(info) = old_info.clone() {
 					info
 				} else if let Some(code_hash) = changed.code_hash {
@@ -131,7 +133,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						code_hash,
 						storage_size: <Module<T>>::storage_size_offset(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-						deduct_block: <system::Module<T>>::block_number(),
+						deduct_block: block_number,
 						rent_allowance: <BalanceOf<T>>::max_value(),
 						last_write: None,
 					}
@@ -152,12 +154,12 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// and remove trie_id field (replaces parameter by 
 				// `TrieIdFromParentCounter(&address),`).
 				let child_trie = child::fetch_or_new(
-					&mut TempKeyspaceGen(new_info.trie_id.as_ref()),
 					p_key.as_ref(),
+					&block_number,
 				);
 
 				if !changed.storage.is_empty() {
-					new_info.last_write = Some(<system::Module<T>>::block_number());
+					new_info.last_write = Some(block_number);
 				}
 
 				for (k, v) in changed.storage.into_iter() {

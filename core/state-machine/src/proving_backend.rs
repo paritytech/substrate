@@ -223,7 +223,6 @@ mod tests {
 	use crate::backend::{InMemory};
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::child_trie::{TestKeySpaceGenerator};
 	use primitives::{Blake2Hasher};
 
 	fn test_proving<'a>(
@@ -289,9 +288,8 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), b"sub1");
-		let child_trie2 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), b"sub2");
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), b"sub1", &0u64);
+		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), b"sub2", &0u64);
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
 			.chain((28..65).map(|i| (Some(child_trie1.clone()), vec![i], Some(vec![i]))))
 			.chain((10..15).map(|i| (Some(child_trie2.clone()), vec![i], Some(vec![i]))))

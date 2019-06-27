@@ -365,7 +365,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
 			Some(&root[..])
 		} else { None };
-		let child_trie = ChildTrieReadRef { keyspace, root };
+		let child_trie = if let Some(root) = root {
+			ChildTrieReadRef::Existing(root, keyspace)
+		} else {
+			ChildTrieReadRef::New(keyspace)
+		};
 		Ok(if this.ext.exists_child_storage(child_trie, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
@@ -438,7 +442,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
 			Some(&root[..])
 		} else { None };
-		let child_trie = ChildTrieReadRef { keyspace, root };
+		let child_trie = if let Some(root) = root {
+			ChildTrieReadRef::Existing(root, keyspace)
+		} else {
+			ChildTrieReadRef::New(keyspace)
+		};
 		let maybe_value = this.ext.child_storage(child_trie, &key);
 
 		debug_trace!(
@@ -530,7 +538,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
 			Some(&root[..])
 		} else { None };
-		let child_trie = ChildTrieReadRef { keyspace, root };
+		let child_trie = if let Some(root) = root {
+			ChildTrieReadRef::Existing(root, keyspace)
+		} else {
+			ChildTrieReadRef::New(keyspace)
+		};
 
 		let maybe_value = this.ext.child_storage(child_trie, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",

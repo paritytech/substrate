@@ -1004,7 +1004,7 @@ pub mod tests {
 			header: dummy_header(),
 			block: Default::default(),
 			child_trie: ChildTrieRead {
-				keyspace: b"keyspace".to_vec(),
+				parent: b"keyspace".to_vec(),
 				// dummy : this should be queried
 				root: b"root".to_vec(),
 			},

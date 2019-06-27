@@ -396,9 +396,11 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
+		// Proof check does not need a keyspace.
+		let no_keyspace = Default::default();
 		read_child_proof_check::<H>(
 			remote_proof,
-			request.child_trie.node_ref(),
+			request.child_trie.node_ref(&no_keyspace),
 			&request.key[..]
 		).map_err(Into::into)
 	}

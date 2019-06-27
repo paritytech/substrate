@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo,
-	Trait, TempKeyspaceGen, prefixed_child_trie};
+	Trait, prefixed_child_trie};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
@@ -162,8 +162,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			// leave tombstone.
 			let p_key = prefixed_child_trie(&contract.trie_id);
 			let child_trie = child::fetch_or_new(
-				&mut TempKeyspaceGen(contract.trie_id.as_ref()),
 				p_key.as_ref(),
+				&current_block_number,
 			);
 
 			// Note: this operation is heavy.

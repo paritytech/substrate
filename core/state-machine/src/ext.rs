@@ -299,13 +299,15 @@ where
 				.map(|v|&v.2);
 
 		let child_delta_iter = child_storage_tries.map(|child_trie|
-			(child_trie, self.overlay.committed.children.get(child_trie.keyspace())
-				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(child_trie.keyspace())
-					.into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
-
+			(child_trie, {
+				let keyspace = child_trie.keyspace();
+				self.overlay.committed.children
+					.get(keyspace).into_iter()
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+					.chain(self.overlay.prospective.children.get(keyspace).into_iter()
+						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))
+			})
+		);
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -324,14 +326,13 @@ where
 				.and_then(|child_trie| child_trie.root_initial_value().clone())
 				.unwrap_or(default_child_trie_root::<H>())
 		} else {
-
-			let delta = self.overlay.committed.children.get(child_trie.keyspace())
+			let keyspace = child_trie.keyspace();
+			let delta = self.overlay.committed.children.get(keyspace)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(child_trie.keyspace())
-						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter()));
-
+				.chain(self.overlay.prospective.children.get(keyspace)
+					.into_iter()
+					.flat_map(|map| map.1.clone().into_iter()));
 			let root = self.backend.child_storage_root(child_trie, delta).0;
 
 			self.overlay.set_storage(
@@ -340,7 +341,6 @@ where
 			);
 
 			root
-
 		}
 	}
 

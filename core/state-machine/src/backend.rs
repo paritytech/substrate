@@ -24,14 +24,18 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,
-	KeySpacedDBMut};
+use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,	KeySpacedDBMut};
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 
 // see FIXME #2740 related to performance.
 /// Type alias over a in memory change cache, with support for child trie.
 /// This need to allow efficient access to value based on keys.
-pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<ChildTrie>)>;
+/// First field is top map, second field is existing child trie map,
+/// third field is to be created child trie map.
+pub type MapTransaction = (
+	(HashMap<Vec<u8>, Vec<u8>>),
+	HashMap<KeySpace, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
+);
 
 // see FIXME #2740 related to performance.
 /// Type alias over a list of memory change cache, with support for child trie.
@@ -61,11 +65,16 @@ pub trait Backend<H: Hasher> {
 		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
 	}
 
+	/// Get ChildTrie keyspace or `None` if no child trie is defined for this key.
+	fn child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> { unimplemented!("EMCH") }
+
 	/// Get ChildTrie information or `None` if no child trie is defined for this key.
 	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<ChildTrie>, Self::Error> {
-		let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
-		Ok(self.storage(&prefixed_key[..])?
-			.and_then(|n|ChildTrie::decode_node_with_parent(&n[..], prefixed_key)))
+		if let Some(keyspace) = self.child_keyspace(storage_key)? {
+			let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
+			Ok(self.storage(&prefixed_key[..])?
+				.and_then(|n| ChildTrie::decode_node_with_parent(&n[..], prefixed_key, keyspace)))
+		} else { Ok(None) }
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
@@ -250,26 +259,34 @@ impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		// costy clone
-		let mut inner: HashMap<_, _> = self.inner.clone();
+		let mut inner = self.inner.clone();
+
 		for (child_trie, key, val) in changes {
-			match val {
-				Some(v) => {
-					let mut entry = inner.entry(child_trie.as_ref().map(|s| s.keyspace().clone()))
+			if let Some(child_trie) = child_trie {
+				let mut entry = inner.1.entry(child_trie.keyspace().clone())
 						.or_insert_with(|| (Default::default(), child_trie.clone()));
-					entry.0.insert(key, v);
-					// very costy clone
-					entry.1 = child_trie.as_ref().cloned();
-				},
-				None => {
-					inner.entry(child_trie.as_ref().map(|s| s.keyspace().clone()))
-						.or_insert_with(|| (Default::default(), child_trie.clone()))
-						.0.remove(&key);
-				},
+				match val {
+					Some(v) => {
+						entry.0.insert(key, v);
+						// very costy clone here for update of value: could be change
+						entry.1 = child_trie;
+					},
+					None => {
+						entry.0.remove(&key);
+					},
+				}
+			} else {
+				match val {
+					Some(v) => { let _ = inner.0.insert(key, v); },
+					None => { let _ = inner.0.remove(&key); },
+				}
 			}
+
 		}
 
 		inner.into()
 	}
+
 }
 
 impl<H: Hasher> From<MapTransaction> for InMemory<H> {
@@ -284,10 +301,8 @@ impl<H: Hasher> From<MapTransaction> for InMemory<H> {
 
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		let mut expanded = HashMap::new();
-		expanded.insert(None, (inner, None));
 		InMemory {
-			inner: expanded,
+			inner: (inner, Default::default()),
 			trie: None,
 			_hasher: PhantomData,
 		}
@@ -296,13 +311,17 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 
 impl<H: Hasher> From<VecTransaction> for InMemory<H> {
 	fn from(inner: VecTransaction) -> Self {
-		let mut expanded: MapTransaction = HashMap::new();
+		let mut expanded: MapTransaction = Default::default();
 		for (child_key, key, value) in inner {
 			if let Some(value) = value {
-				let mut entry = expanded.entry(child_key.as_ref().map(|s|s.keyspace().clone()))
-					.or_insert_with(||(Default::default(), child_key.clone()));
-				entry.0.insert(key, value);
-				entry.1 = child_key;
+				if let Some(child_trie) = child_key {
+					let mut entry = expanded.1.entry(child_trie.keyspace().clone())
+							.or_insert_with(|| (Default::default(), child_trie.clone()));
+					entry.0.insert(key, value);
+					entry.1 = child_trie;
+				} else {
+					expanded.0.insert(key, value);
+				}
 			}
 		}
 		expanded.into()
@@ -315,7 +334,7 @@ impl super::Error for Void {}
 impl<H: Hasher> InMemory<H> {
 	/// Child trie in memory content iterator.
 	pub fn child_storage_child_trie(&self) -> impl Iterator<Item=&ChildTrie> {
-		self.inner.iter().filter_map(|item| (item.1).1.as_ref())
+		self.inner.1.iter().map(|item| &(item.1).1)
 	}
 }
 
@@ -325,23 +344,23 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.get(&None).and_then(|map| map.0.get(key).map(Clone::clone)))
+		Ok(self.inner.0.get(key).map(Clone::clone))
 	}
 
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.get(&Some(child_trie.keyspace.to_vec())).and_then(|map| map.0.get(key).map(Clone::clone)))
+		Ok(self.inner.1.get(child_trie.keyspace()).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.inner.get(&None).map(|map| map.0.get(key).is_some()).unwrap_or(false))
+		Ok(self.storage(key)?.is_some())
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.inner.get(&None).map(|map| map.0.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+		self.inner.0.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, mut f: F) {
-		self.inner.get(&Some(child_trie.keyspace.clone())).map(|map| map.0.keys().for_each(|k| f(&k)));
+		self.inner.1.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -349,9 +368,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.get(&None)
-			.into_iter()
-			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.0.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let map_input = existing_pairs.chain(transaction.iter().cloned())
@@ -372,12 +389,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		// costy clone
-		let existing_pairs = self.inner.get(&Some(child_trie.keyspace().clone()))
-			.into_iter()
-			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-
 		let transaction: Vec<_> = delta.into_iter().collect();
+		// all content is clone with this method, avoiding it would require changing
+		// the prototype (having a function for calculating root on reference and
+		// one for getting transaction while dropping value.
+		let existing_pairs = self.inner.1.get(
+		 child_trie.keyspace()
+		).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 		let root = child_trie_root::<H, _, _, _>(
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
@@ -385,6 +403,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
+		// note that the child trie is from parameter, this is allowed because update of child
+		// trie should be done by the same child trie instance; can prove problematic?
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(child_trie.clone()), k, v)).collect();
 
 		let is_default = root == default_child_trie_root::<H>();
@@ -393,58 +413,44 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.get(&None)
-			.into_iter()
-			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), v.clone())))
-			.collect()
+		self.inner.0.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.get(&None)
-			.into_iter()
-			.flat_map(|map| map.0.keys().filter(|k| k.starts_with(prefix)).cloned())
-			.collect()
+		self.inner.0.keys().filter(|k| k.starts_with(prefix)).cloned().collect()
 	}
 
 	fn as_trie_backend(&mut self)-> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+		// Warning tihs do not use keyspace for child trie, that is not an issue unless
+		// the memorydb gets incorectly use to fead keyvalue database.
 		let mut mdb = MemoryDB::default();
-		let mut root = None;
 		let mut new_child_roots = Vec::new();
-		let mut root_map = None;
-		for (_o_keyspace, (map, o_child_trie)) in self.inner.iter() {
-			if o_child_trie.is_some() {
-				let ch = insert_into_memory_db::<H, _>(
-					&mut mdb, map.clone().into_iter(),
-					o_child_trie.as_ref().map(|s| s.node_ref())
-				)?;
-				new_child_roots.push(
-					o_child_trie.as_ref().map(|s| (
-						s.parent_trie().to_vec(),
-						s.encoded_with_root(ch.as_ref()))
-					).expect("is_some previously checked;qed"),
-				);
-			} else {
-				root_map = Some(map.clone());
-			}
+    let (root_map, child_map) = std::mem::replace(&mut self.inner, Default::default());
+
+		for (_k, (map, child_trie)) in child_map.into_iter() {
+			let ch = insert_into_memory_db::<H, _>(
+				&mut mdb,
+				map.into_iter(),
+				Some(child_trie.node_ref()),
+			)?;
+			new_child_roots.push((
+				child_trie.parent_trie().to_vec(),
+				child_trie.encoded_with_root(ch.as_ref())));
 		}
 		// root handling
-		if let Some(map) = root_map.take() {
-			root = Some(insert_into_memory_db::<H, _>(
-				&mut mdb,
-				map.clone().into_iter().chain(new_child_roots.into_iter()),
-				None
-			)?);
-		}
-		let root = match root {
-			Some(root) => root,
-			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty(), None)?,
-		};
+		let root = insert_into_memory_db::<H, _>(
+			&mut mdb,
+			root_map.into_iter().chain(new_child_roots.into_iter()),
+			None,
+		)?;
 		self.trie = Some(TrieBackend::new(mdb, root));
 		self.trie.as_ref()
 	}
 }
 
 /// Insert input pairs into memory db.
+/// TODO EMCH the use case of this method should allow running
+/// without child trie.
 pub(crate) fn insert_into_memory_db<H, I>(
 	mdb: &mut MemoryDB<H>,
 	input: I,
@@ -457,7 +463,7 @@ pub(crate) fn insert_into_memory_db<H, I>(
 	let mut root = <H as Hasher>::Out::default();
 	{
 		if let Some(child_trie) = child_trie.as_ref() {
-			let mut mdb = KeySpacedDBMut::new(&mut *mdb, child_trie.keyspace);
+			let mut mdb = KeySpacedDBMut::new(&mut *mdb, child_trie.keyspace());
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {

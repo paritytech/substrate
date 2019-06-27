@@ -182,7 +182,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
-	use primitives::child_trie::{TestKeySpaceGenerator};
 	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB, KeySpacedDBMut};
 	use super::*;
 
@@ -191,8 +190,7 @@ pub mod tests {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 
-		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), &b"sub1"[..]);
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"sub1"[..], &0u64);
 		let mut sub_root = H256::default();
 		{
 			let mut kmdb = KeySpacedDBMut::new(&mut mdb, child_trie1.keyspace());

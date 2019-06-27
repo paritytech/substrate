@@ -204,7 +204,7 @@ pub mod ext {
 		fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 		/// Get child trie at a storage location.
 		///
-    /// # Returns
+		/// # Returns
 		///
 		/// - `1` if child trie found and content written.
 		/// - `0` otherwhise.
@@ -689,11 +689,14 @@ impl StorageApi for () {
 	fn child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		let empty_byte: [u8;0] = [];
-		let root = child_trie.root.unwrap_or(&empty_byte[..]);
+		let (keyspace, root) = match child_trie {
+			ChildTrieReadRef::New(keyspace) => (keyspace, &empty_byte[..]),
+			ChildTrieReadRef::Existing (root, keyspace) => (keyspace, root),
+		};
 		unsafe {
 			let ptr = ext_get_allocated_child_storage.get()(
-				child_trie.keyspace.as_ptr(),
-				child_trie.keyspace.len() as u32,
+				keyspace.as_ptr(),
+				keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(),
@@ -711,11 +714,14 @@ impl StorageApi for () {
 		value_offset: usize
 	) -> Option<usize> {
 		let empty_byte: [u8;0] = [];
-		let root = child_trie.root.unwrap_or(&empty_byte[..]);
+		let (keyspace, root) = match child_trie {
+			ChildTrieReadRef::New(keyspace) => (keyspace, &empty_byte[..]),
+			ChildTrieReadRef::Existing (root, keyspace) => (keyspace, root),
+		};
 		unsafe {
 			match ext_get_child_storage_into.get()(
-				child_trie.keyspace.as_ptr(),
-				child_trie.keyspace.len() as u32,
+				keyspace.as_ptr(),
+				keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(), key.len() as u32,
@@ -776,11 +782,14 @@ impl StorageApi for () {
 
 	fn exists_child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
 		let empty_byte: [u8;0] = [];
-		let root = child_trie.root.unwrap_or(&empty_byte[..]);
+		let (keyspace, root) = match child_trie {
+			ChildTrieReadRef::New(keyspace) => (keyspace, &empty_byte[..]),
+			ChildTrieReadRef::Existing (root, keyspace) => (keyspace, root),
+		};
 		unsafe {
 			ext_exists_child_storage.get()(
-				child_trie.keyspace.as_ptr(),
-				child_trie.keyspace.len() as u32,
+				keyspace.as_ptr(),
+				keyspace.len() as u32,
 				root.as_ptr(),
 				root.len() as u32,
 				key.as_ptr(), key.len() as u32

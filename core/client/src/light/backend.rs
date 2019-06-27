@@ -288,8 +288,7 @@ where
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: MapTransaction = HashMap::new();
-		storage.insert(None, (top, None));
+		let mut storage: MapTransaction = (top, Default::default());
 		// create a list of children keys to re-compute roots for
 		let child_delta : Vec<(ChildTrie, _)> = children.iter()
 			.map(|(_, (_, child_trie))| (child_trie.clone(), None))
@@ -297,7 +296,7 @@ where
 
 		// make sure to persist the child storage
 		for (child_key, (child_storage, child_trie)) in children {
-			storage.insert(Some(child_key), (child_storage, Some(child_trie)));
+			storage.1.insert(child_key, (child_storage, child_trie));
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();

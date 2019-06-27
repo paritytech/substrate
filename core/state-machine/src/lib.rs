@@ -874,7 +874,8 @@ where
 	H: Hasher,
 	H::Out: Ord
 {
-	if let Some(root) = child_trie.root {
+	// no need to use keyspace with proof
+	if let ChildTrieReadRef::Existing(root, _keyspace) = child_trie {
 		let root = trie::child_trie_root_as_hash::<H,_>(root);
 		let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
 		read_child_proof_check_on_proving_backend(&proving_backend, child_trie, key)
@@ -952,7 +953,6 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use parity_codec::{Encode, Decode};
-	use primitives::child_trie::{ChildTrieRead, TestKeySpaceGenerator};
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -1184,10 +1184,10 @@ mod tests {
 
 		assert_eq!(ext.child_trie(&b"testchild"[..]), None);
 		let child_trie = ChildTrie::fetch_or_new(
-			&mut TestKeySpaceGenerator::new(),
 			|_| None,
 			|_| (),
 			b"testchild",
+			&0u64, // block number
 		);
 		ext.set_child_storage(&child_trie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_trie.node_ref(), b"abc"), Some(b"def".to_vec()));
@@ -1229,7 +1229,12 @@ mod tests {
 			&pr_sub1,
 		).unwrap();
 	
-		let child_trie1: ChildTrieRead = Decode::decode(&mut &local_result1.unwrap()[..]).unwrap();
+		let child_trie1: ChildTrie = ChildTrie::decode_node_with_parent(
+			&local_result1.unwrap()[..],
+			b"value2".to_vec(),
+			// Proof run on empty keyspace.
+			Default::default(),
+		).unwrap();
 
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
@@ -1297,9 +1302,9 @@ mod tests {
 		use crate::trie_backend::tests::test_trie;
 		use std::collections::HashSet;
 
-		let mut ks_gen = TestKeySpaceGenerator::new();
-		let child_trie1 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), &[0x01]);
-		let child_trie2 = ChildTrie::fetch_or_new(&mut ks_gen, |_| None, |_| (), &[0x23]);
+		let block_number = 0u64;
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x01], &block_number);
+		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x23], &block_number);
 		let mut tr1 = {
 			let mut ttrie = test_trie();
 			let backend = ttrie.as_trie_backend().unwrap();

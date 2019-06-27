@@ -33,7 +33,7 @@ pub use state_machine::ExecutionStrategy;
 use std::sync::Arc;
 use std::collections::HashMap;
 use futures::future::FutureResult;
-use primitives::child_trie::{ChildTrie, TestKeySpaceGenerator};
+use primitives::child_trie::ChildTrie;
 use hash_db::Hasher;
 use runtime_primitives::traits::{
 	Block as BlockT, NumberFor
@@ -169,7 +169,6 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 			for (_key, value) in self.child_storage_extension {
 				// warning: no prefix, next child trie creation will go in same keyspace
 				let child_trie = ChildTrie::fetch_or_new(
-					&mut TestKeySpaceGenerator::new(),
 					// warning current implementation expect empty state
 					|_| None,
 					// warning current implementation relies on key
@@ -178,6 +177,8 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 					// actual backend update here.
 					|_| (),
 					&b"test"[..],
+					// block 0
+					&0u64,
 				);
 				storage.1.insert(
 					child_trie.keyspace().clone(),

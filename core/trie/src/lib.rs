@@ -183,25 +183,37 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = if let Some(root) = child_trie.root.as_ref() {
-		child_trie_root_as_hash::<H,_>(root)
-	} else {
-		// see FIXME #2741, default root is constant value
-		child_trie_root_as_hash::<H,_>(default_root)
-	};
-	{
-		let mut db = KeySpacedDBMut::new(&mut *db, child_trie.keyspace);
-		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
-
+	let process = |trie: &mut TrieDBMut<H>| -> Result<(), Box<TrieError<H::Out>>> { 
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
 				None => trie.remove(key.as_ref())?,
 			};
 		}
-	}
+		Ok(())
+	};
 
-	Ok(root.as_ref().to_vec())
+	match child_trie {
+		ChildTrieReadRef::Existing(root, keyspace) => {
+			let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
+			let mut root = child_trie_root_as_hash::<H,_>(root);
+			{
+				let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
+				process(&mut trie)?;
+			}
+			Ok(root.as_ref().to_vec())
+		},
+		ChildTrieReadRef::New(_keyspace) => {
+			let mut db = MemoryDB::default();
+			let mut root = child_trie_root_as_hash::<H,_>(default_root);
+			{
+				// No need for keyspace as we do not build transaction here
+				let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
+				process(&mut trie)?;
+			}
+			Ok(root.as_ref().to_vec())
+		},
+	}
 }
 
 /// Call `f` for all keys in a child trie.
@@ -212,9 +224,9 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = child_trie.root {
+	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
+		let db = KeySpacedDB::new(&*db, keyspace);
 
 		let trie = TrieDB::<H>::new(&db, &root)?;
 		let iter = trie.iter()?;
@@ -259,9 +271,9 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = child_trie.root {
+	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
+		let db = KeySpacedDB::new(&*db, keyspace);
 		Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -277,9 +289,9 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	if let Some(root) = child_trie.root {
+	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, child_trie.keyspace);
+		let db = KeySpacedDB::new(&*db, keyspace);
 		Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -456,8 +468,8 @@ impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
-	fn as_hash_db(&self) -> &hash_db::HashDB<H, T> { &*self }
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::HashDB<H, T> + 'b) {
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T> { &*self }
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {
 		&mut *self
 	}
 
