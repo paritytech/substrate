@@ -585,8 +585,18 @@ decl_storage! {
 					};
 				}
 
+				// Make sure the genesis state of the session module is consistent
+				// with the genesis state of the staking module.
 				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					<session::Validators<T>>::put(&validators);
+					let keys = validators.iter().map(|validator| {
+						(
+							validator.to_owned(),
+							<session::NextKeyFor<T>>::get(validator)
+								.unwrap_or_default()
+						)
+					}).collect::<Vec<_>>();
+					<session::Validators<T>>::put(validators);
+					<session::QueuedKeys<T>>::put(keys);
 				}
 			});
 		});

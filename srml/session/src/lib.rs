@@ -236,12 +236,12 @@ decl_storage! {
 		Changed: bool;
 
 		/// The next key for a given validator.
-		NextKeyFor build(|config: &GenesisConfig<T>| {
+		pub NextKeyFor build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::Keys>;
 
 		/// The queued keys for the next session.
-		QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
+		pub QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): Vec<(T::AccountId, T::Keys)>;
 
