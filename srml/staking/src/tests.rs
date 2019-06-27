@@ -537,6 +537,7 @@ fn less_than_needed_candidates_works() {
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(false)
+		.num_validators(3)
 		.build(),
 	|| {
 		assert_eq!(Staking::validator_count(), 4);
@@ -564,6 +565,7 @@ fn no_candidate_emergency_condition() {
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(10)
 		.validator_count(15)
+		.num_validators(4)
 		.validator_pool(true)
 		.nominate(false)
 		.build(),

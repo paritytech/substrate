@@ -134,6 +134,7 @@ pub struct ExtBuilder {
 	validator_count: u32,
 	minimum_validator_count: u32,
 	fair: bool,
+	num_validators: Option<u32>,
 }
 
 impl Default for ExtBuilder {
@@ -145,7 +146,8 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			fair: true
+			fair: true,
+			num_validators: None,
 		}
 	}
 }
@@ -175,6 +177,10 @@ impl ExtBuilder {
 		self.fair = is_fair;
 		self
 	}
+	pub fn num_validators(mut self, num_validators: u32) -> Self {
+		self.num_validators = Some(num_validators);
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -183,7 +189,8 @@ impl ExtBuilder {
 			1
 		};
 
-		let validators = (0..self.validator_count)
+		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10) as u64)
 			.collect::<Vec<_>>();
 		let _ = session::GenesisConfig::<Test> {
