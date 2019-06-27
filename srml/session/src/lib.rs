@@ -127,13 +127,19 @@ use srml_support::{
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
 
+#[cfg(feature = "historical")]
+pub mod historical;
+
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
 
+/// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
+	/// Return `true` if the session should be ended.
 	fn should_end_session(now: BlockNumber) -> bool;
 }
 
+/// Ends the session after a fixed period of blocks.
 pub struct PeriodicSessions<
 	Period,
 	Offset,
@@ -149,6 +155,7 @@ impl<
 	}
 }
 
+/// An event handler for when the session is ending.
 pub trait OnSessionEnding<AccountId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
 	fn on_session_ending(i: SessionIndex) -> Option<Vec<AccountId>>;

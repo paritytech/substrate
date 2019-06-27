@@ -513,15 +513,6 @@ decl_storage! {
 		/// This is keyed by the stash account.
 		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
-		// The historical validators and their nominations for a given era. Stored as a trie root
-		// of the mapping `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just
-		// the contents of `Stakers`, under a key that is the `era`.
-		//
-		// Every era change, this will be appended with the trie root of the contents of `Stakers`,
-		// and the oldest entry removed down to a specific number of entries (probably around 90 for
-		// a 3 month history).
-		// pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
-
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(current_elected): Vec<T::AccountId>;
 
@@ -552,6 +543,9 @@ decl_storage! {
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceNewEra get(forcing_new_era): bool;
+
+		/// A mapping from still-bonded eras to the first session index of that era.
+		BondedEras: Vec<(EraIndex, SessionIndex)>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1005,7 +999,7 @@ impl<T: Trait> Module<T> {
 		<CurrentEraReward<T>>::mutate(|r| *r += reward);
 
 		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
-			Self::new_era()
+			Self::new_era(session_index)
 		} else {
 			None
 		}
@@ -1015,7 +1009,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
-	fn new_era() -> Option<Vec<T::AccountId>> {
+	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Payout
 		let reward = <CurrentEraReward<T>>::take();
 		if !reward.is_zero() {
@@ -1032,7 +1026,26 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		CurrentEra::mutate(|s| *s += 1);
+		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+		let bonding_duration = T::BondingDuration::get();
+
+		if current_era > bonding_duration {
+			let first_kept = current_era - bonding_duration;
+			BondedEras::mutate(|bonded| {
+				bonded.push(current_era, start_session_index);
+
+				// prune out everything that's from before the first-kept index.
+				let n_to_prune = bonded.iter()
+					.take_while(|&&(ref era_idx, _)| era_idx < first_kept)
+					.count();
+
+				bonded.drain(..n_to_prune);
+
+				if let Some(&(_, first_session)) = bonded.first() {
+					<session::historical::Module<T>>::prune_up_to(first_session);
+				}
+			})
+		}
 
 		// Reassign all Stakers.
 		let (slot_stake, maybe_new_validators) = Self::select_validators();
