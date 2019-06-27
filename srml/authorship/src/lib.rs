@@ -312,7 +312,6 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
 	use primitives::generic::DigestItem;
@@ -421,7 +420,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.into()
 	}
 
@@ -499,7 +498,7 @@ mod tests {
 				);
 
 				assert!(
-					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok();
+					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok()
 				);
 
 				assert_eq!(
@@ -551,7 +550,7 @@ mod tests {
 				);
 
 				assert!(
-					Authorship::verify_and_import_uncles(vec![other_8]).is_ok();
+					Authorship::verify_and_import_uncles(vec![other_8]).is_ok()
 				);
 			}
 		});

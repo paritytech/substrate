@@ -353,7 +353,7 @@ decl_module! {
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
-			<CurrentSchedule<T>>::put(schedule);
+			CurrentSchedule::put(schedule);
 
 			Ok(())
 		}
@@ -609,7 +609,7 @@ decl_module! {
 		}
 
 		fn on_finalize() {
-			<GasSpent<T>>::kill();
+			GasSpent::kill();
 		}
 	}
 }
