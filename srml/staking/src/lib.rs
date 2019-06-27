@@ -305,6 +305,15 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Reward of an era.
+#[derive(Encode, Decode, Default)]
+pub struct EraRewards {
+	total: u32,
+	/// Reward at one index correspond to reward for validator in current_elected of this index.
+	/// Thus this reward vec is only valid for one elected set.
+	rewards: Vec<u32>,
+}
+
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum StakerStatus<AccountId> {
@@ -483,8 +492,6 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_parts(60);
 		/// Slash, per validator that is taken for the first time they are found to be offline.
 		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
 		/// Number of instances of offline reports before slashing begins for validators.
@@ -531,14 +538,11 @@ decl_storage! {
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): EraIndex;
 
-		/// The accumulated reward for the current era. Reset to zero at the beginning of the era and
-		/// increased for every successfully finished session.
+		/// The start of the current era.
 		pub CurrentEraStart get(current_era_start): T::Moment;
 
-		/// A vec of validator to reward and their associated number of points.
-		/// A validator can appear in many elements of this vec.
-		// TODO TODO: should we use such a structure ? aggregate with an existing one ? use a map ?
-		pub CurrentEraRewards: Vec<(T::AccountId, u32)>;
+		/// Rewards for the current era. Using indices of current elected set.
+		pub CurrentEraRewards: EraRewards;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -905,8 +909,18 @@ decl_module! {
 		///
 		/// At the end of the era each the total payout will be distributed among validator
 		/// relatively to their points.
-		fn add_reward_points_to_validators(add: Vec<(T::AccountId, u32)>) {
-			<CurrentEraRewards<T>>::append(&add[..]).unwrap();
+		fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
+			<Module<T>>::current_elected().iter()
+				.position(|elected| *elected == validator)
+				.map(|index| {
+					<CurrentEraRewards<T>>::mutate(|rewards| {
+						if let Some(new_total) = rewards.total.checked_add(points) {
+							rewards.total = new_total;
+							rewards.rewards.resize(index + 1, 0);
+							rewards.rewards[index] += points; // Addition is less than total
+						}
+					})
+				});
 		}
 	}
 }
@@ -1018,8 +1032,6 @@ impl<T: Trait> Module<T> {
 
 	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// TODO TODO: previous implementation was accumulating reward here, should we accumulate
-		// duration in a way ?
 		if <ForceNewEra<T>>::take() || session_index % T::SessionsPerEra::get() == 0 {
 			Self::new_era()
 		} else {
@@ -1045,34 +1057,21 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let mut total_points = 0u32;
-			let mut points_for_validator = BTreeMap::new();
-			for (validator, reward) in rewards {
-				// If the total number of points exceed u32::MAX then they are dismissed
-				// TODO TODO: if this is a problem we can use u64
-				if let Some(p) = total_points.checked_add(reward) {
-					total_points = p;
-
-					// Cannot overflow as inferior to total_points
-					*points_for_validator.entry(validator).or_insert(0) += reward;
-				}
-			}
-
-			// TODO TODO: does this should be generic ?
 			let total_payout = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				<BalanceOf<T>>::from(
-					// Era of duration more than u32::MAX is rewarded as u32::max_value.
+					// Era of duration more than u32::MAX is rewarded as u32::MAX.
 					TryInto::<u32>::try_into(era_duration).unwrap_or(u32::max_value())
 				),
 			);
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
 
-			for v in validators.iter() {
-				if let Some(&points) = points_for_validator.get(v) {
-					let reward = multiply_by_fraction(total_payout, points, total_points);
+			let total_points = rewards.total;
+			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
+				if points != 0 {
+					let reward = multiply_by_rational(total_payout, points, total_points);
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
@@ -1289,7 +1288,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 
 // This is guarantee not to overflow on whatever values.
 // `num` must be inferior to `den` otherwise it will be reduce to `den`.
-fn multiply_by_fraction<N>(value: N, num: u32, den: u32) -> N
+fn multiply_by_rational<N>(value: N, num: u32, den: u32) -> N
 	where N: SimpleArithmetic + Clone
 {
 	let num = num.min(den);
@@ -1303,8 +1302,7 @@ fn multiply_by_fraction<N>(value: N, num: u32, den: u32) -> N
 		let rem_u32 = rem.saturated_into::<u32>();
 
 		// Multiplication fits into u64 as both term are u32
-		let rem_part = rem_u32 as u64 * num as u64
-			/ den as u64;
+		let rem_part = rem_u32 as u64 * num as u64 / den as u64;
 
 		// Result fits into u32 as num < total_points
 		(rem_part as u32).into()
