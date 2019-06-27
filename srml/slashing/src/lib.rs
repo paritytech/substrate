@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![warn(missing_docs, rust_2018_idioms)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 //! # Slashing interface
 //!
