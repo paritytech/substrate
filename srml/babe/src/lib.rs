@@ -17,7 +17,7 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(unsafe_code)]
+#![forbid(unused_must_use, unsafe_code, unused_variables)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
@@ -66,6 +66,7 @@ pub struct InherentDataProvider {
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
+	/// Constructs `Self`
 	pub fn new(slot_duration: u64) -> Self {
 		Self {
 			slot_duration
@@ -105,6 +106,9 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+/// The length of the BABE randomness
+pub const RANDOMNESS_LENGTH: usize = 32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// The last timestamp.
@@ -113,10 +117,7 @@ decl_storage! {
 		/// The current authorities set.
 		Authorities get(authorities): Vec<AuthorityId>;
 
-		/// The VRF output
-		VRFOutputs get(vrf_output): Vec<[u8; VRF_OUTPUT_LENGTH]>;
-
-		/// The randomness we have right now.
+		/// The epoch randomness.
 		///
 		/// # Security
 		///
@@ -126,14 +127,38 @@ decl_storage! {
 		/// (like everything else on-chain) is public.  For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		Randomness: [u8; 32];
+		EpochRandomness get(epoch_randomness): [u8; 32];
+
+		/// The randomness under construction
+		UnderConstruction: [u8; 32];
+
+		/// The randomness for the next epoch
+		NextEpochRandomness: [u8; 32];
+
+		/// The current epoch
+		EpochIndex get(epoch_index): u64;
 	}
 }
 
 decl_module! {
+	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize() {
-			Self::process_inherent_digests()
+			for i in Self::get_inherent_digests()
+				.logs
+				.iter()
+				.filter_map(|s| s.as_pre_runtime())
+				.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID {
+					Decode::decode(&mut data)
+				} else { None }) {
+				let (ref vrf_output, ref _vrf_proof, ref _author, _slot_num): (
+					[u8; VRF_OUTPUT_LENGTH],
+					[u8; VRF_PROOF_LENGTH],
+					[u8; PUBLIC_KEY_LENGTH],
+					u64,
+				) = i;
+				Self::deposit_vrf_output(vrf_output);
+			}
 		}
 	}
 }
@@ -150,7 +175,7 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 	/// used where a number is needed that cannot have been chosen by an
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32] {
-		Randomness::get()
+		Self::epoch_randomness()
 	}
 }
 
@@ -170,37 +195,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
-		let l = Randomness::get();
-		let mut arr = [0u8; VRF_OUTPUT_LENGTH + 32];
-		arr[0..32].copy_from_slice(&l[..]);
-		arr[32..VRF_OUTPUT_LENGTH + 32].copy_from_slice(&vrf_output[..]);
-		Randomness::put(runtime_io::blake2_256(&arr));
-	}
-
-	pub fn process_inherent_digests() {
-		let mut is_first_babe_digest = true;
-		for i in Self::get_inherent_digests()
-			.logs
-			.iter()
-			.filter_map(|s| s.as_pre_runtime())
-			.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID {
-				Decode::decode(&mut data)
-			} else { None }) {
-			assert!(is_first_babe_digest, "BABE only allows one BABE pre-digest; qed");
-			is_first_babe_digest = false;
-			let (ref vrf_output, ref _vrf_proof, ref _author, _slot_num): (
-				[u8; VRF_OUTPUT_LENGTH],
-				[u8; VRF_PROOF_LENGTH],
-				[u8; PUBLIC_KEY_LENGTH],
-				u64,
-			) = i;
-			Self::deposit_vrf_output(vrf_output);
-		}
-		assert!(!is_first_babe_digest, "BABE requires exactly one BABE pre-digest; qed")
+		let mut under_construction = UnderConstruction::get();
+		under_construction.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y);
+		UnderConstruction::put(under_construction)
 	}
 
 	fn get_inherent_digests() -> system::DigestOf<T> {
-		<system::Module<T>>::get_inherent_digests()
+		<system::Module<T>>::digest()
 	}
 }
 
@@ -221,6 +222,18 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 				Self::change_authorities(next_authorities);
 			}
 		}
+
+		let rho = UnderConstruction::get();
+		UnderConstruction::put([0; 32]);
+		let last_epoch_randomness = EpochRandomness::get();
+		let epoch_index = EpochIndex::get().wrapping_add(1);
+		EpochIndex::put(epoch_index);
+		EpochRandomness::put(NextEpochRandomness::get());
+		let mut s = [0; 72];
+		s[..32].copy_from_slice(&last_epoch_randomness);
+		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
+		s[40..].copy_from_slice(&rho);
+		NextEpochRandomness::put(runtime_io::blake2_256(&s))
 	}
 	fn on_disabled(_i: usize) {
 		// ignore?
