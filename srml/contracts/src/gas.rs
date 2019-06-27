@@ -253,7 +253,7 @@ pub fn refund_unused_gas<T: Trait>(
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
 	// also has Gas type.
-	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+	GasSpent::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought at.
 	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();

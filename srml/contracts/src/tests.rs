@@ -116,7 +116,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
 		use substrate_primitives::storage::well_known_keys;
 
-		let new_seed = <super::AccountCounter<Test>>::mutate(|v| {
+		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -183,10 +183,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default()
-			.build_storage()
-			.unwrap()
-			.0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				transaction_base_fee: 0,

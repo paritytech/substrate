@@ -391,7 +391,6 @@ mod tests {
 			contracts: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
-				_genesis_phantom_data: Default::default(),
 				authorities: vec![],
 			}),
 		}.build_storage().unwrap().0);
