@@ -41,7 +41,7 @@ use crate::crypto::UncheckedFrom;
 type Seed = [u8; 32];
 
 /// A public key.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Hash)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.

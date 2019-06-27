@@ -20,6 +20,7 @@
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
+extern crate num_traits;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
@@ -31,9 +32,11 @@ use sr_primitives::{
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 use alloc::collections::BTreeMap;
+use num_traits as num;
 
 pub use grandpa_primitives::{
-	Precommit, Prevote, Equivocation, Message, Error as GrandpaError, Chain
+	Precommit, Prevote, Equivocation, Message, Error as GrandpaError, Chain,
+	validate_commit, Commit, VoterSet
 };
 
 /// The grandpa crypto scheme defined via the keypair type.
@@ -163,27 +166,27 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 /// d) a reference to a previous challenge, if the current tx is an answer to it.
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrevoteChallenge<H, N, Header> {
-	incompatible_block: (H, N),
-	finalized_block: (H, N),
-	challenged_votes: Vec<Prevote<H, N>>,
-	block_proof: (Vec<Precommit<H, N>>, Vec<Header>),
-	previous_challenge: Option<H>,
+pub struct PrevoteChallenge<H, N, Header, S, Id> {
+	pub incompatible_block: (H, N),
+	pub finalized_block: (H, N),
+	pub challenged_votes: Vec<Prevote<H, N>>,
+	pub block_proof: (Commit<H, N, S, Id>, Vec<Header>),
+	pub previous_challenge: Option<H>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrecommitChallenge<H, N, Header> {
-	incompatible_block: (H, N),
-	finalized_block: (H, N),
-	challenged_votes: Vec<Precommit<H, N>>,
-	block_proof: (Vec<Precommit<H, N>>, Vec<Header>),
-	previous_challenge: Option<H>,
+pub struct PrecommitChallenge<H, N, Header, S, Id> {
+	pub incompatible_block: (H, N),
+	pub finalized_block: (H, N),
+	pub challenged_votes: Vec<Precommit<H, N>>,
+	pub block_proof: (Commit<H, N, S, Id>, Vec<Header>),
+	pub previous_challenge: Option<H>,
 }
 
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
-struct AncestryChain<Block: BlockT> {
+pub struct AncestryChain<Block: BlockT> {
 	ancestry: BTreeMap<Block::Hash, Block::Header>,
 }
 
@@ -191,7 +194,7 @@ impl<Block: BlockT> AncestryChain<Block>
 where
 	<Block as BlockT>::Hash: Ord
 {
-	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
+	pub fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
 		let ancestry: BTreeMap<_, _> = ancestry
 			.iter()
 			.cloned()
@@ -202,29 +205,30 @@ where
 	}
 }
 
-// impl<Block: BlockT> Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block>
-// where
-// 	<Block as BlockT>::Hash: Ord
-// {
-// 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-// 		let mut route = Vec::new();
-// 		let mut current_hash = block;
-// 		loop {
-// 			if current_hash == base { break; }
-// 			match self.ancestry.get(&current_hash) {
-// 				Some(current_header) => {
-// 					current_hash = *current_header.parent_hash();
-// 					route.push(current_hash);
-// 				},
-// 				_ => return Err(GrandpaError::NotDescendent),
-// 			}
-// 		}
-// 		route.pop(); // remove the base
+impl<Block: BlockT> Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block>
+where
+	<Block as BlockT>::Hash: Ord,
+	<<Block as BlockT>::Header as Header>::Number: num::cast::AsPrimitive<usize>,
+{
+	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+		let mut route = Vec::new();
+		let mut current_hash = block;
+		loop {
+			if current_hash == base { break; }
+			match self.ancestry.get(&current_hash) {
+				Some(current_header) => {
+					current_hash = *current_header.parent_hash();
+					route.push(current_hash);
+				},
+				_ => return Err(GrandpaError::NotDescendent),
+			}
+		}
+		route.pop(); // remove the base
 
-// 		Ok(route)
-// 	}
+		Ok(route)
+	}
 
-// 	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-// 		None
-// 	}
-// }
+	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+		None
+	}
+}

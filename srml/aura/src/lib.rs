@@ -237,7 +237,7 @@ decl_storage! {
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities) config(): Vec<T::AuthorityId>;
+		pub Authorities get(authorities) config(): Vec<<T::Signature as Verify>::Signer>;
 	}
 }
 
@@ -254,7 +254,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	fn change_authorities(new: Vec<<T::Signature as Verify>::Signer>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
@@ -266,9 +266,9 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = T::AuthorityId;
+	type Key = <T::Signature as Verify>::Signer;
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, <T::Signature as Verify>::Signer)>
 	{
 		// instant changes
 		if changed {

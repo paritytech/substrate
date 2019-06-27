@@ -247,6 +247,7 @@ impl sudo::Trait for Runtime {
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Signature = AuthoritySignature;
+	type Block = Block;
 }
 
 impl finality_tracker::Trait for Runtime {
