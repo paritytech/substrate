@@ -34,6 +34,7 @@
 #![warn(missing_docs)]
 
 use std::{
+	fmt,
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -45,7 +46,7 @@ use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-use tokio::runtime::TaskExecutor;
+use futures::future::Future;
 use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
@@ -55,22 +56,24 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
-#[derive(Debug)]
 pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
-	executor: TaskExecutor,
 	_block: PhantomData<Block>,
+}
+
+impl<C, Block: traits::Block> fmt::Debug for OffchainWorkers<C, Block> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_tuple("OffchainWorkers").finish()
+	}
 }
 
 impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
-		executor: TaskExecutor,
 	) -> Self {
 		Self {
 			client,
-			executor,
 			_block: PhantomData,
 		}
 	}
@@ -82,11 +85,12 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	C::Api: OffchainWorkerApi<Block>,
 {
 	/// Start the offchain workers after given block.
+	#[must_use]
 	pub fn on_block_imported<A>(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
-	) where
+	) -> impl Future<Item = (), Error = ()> where
 		A: ChainApi<Block=Block> + 'static,
 	{
 		let runtime = self.client.runtime_api();
@@ -96,11 +100,12 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::Api::new(pool.clone(), at.clone());
-			self.executor.spawn(runner.process());
-
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
 			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
+			futures::future::Either::A(runner.process())
+		} else {
+			futures::future::Either::B(futures::future::ok(()))
 		}
 	}
 }
@@ -119,8 +124,8 @@ mod tests {
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
 
 		// when
-		let offchain = OffchainWorkers::new(client, runtime.executor());
-		offchain.on_block_imported(&0u64, &pool);
+		let offchain = OffchainWorkers::new(client);
+		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();

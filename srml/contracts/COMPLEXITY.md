@@ -348,18 +348,6 @@ This function serializes the current block's timestamp into the scratch buffer.
 
 **complexity**: Assuming that the timestamp is of constant size, this function has constant complexity.
 
-## ext_input_size
-
-**complexity**: This function is of constant complexity.
-
-## ext_input_copy
-
-This function copies slice of data from the input buffer to the sandbox memory. The calling code specifies the slice length. Execution of the function consists of the following steps:
-
-1. Storing a specified slice of the input data into the sandbox memory (see sandboxing memory set)
-
-**complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
-
 ## ext_scratch_size
 
 This function returns the size of the scratch buffer.
