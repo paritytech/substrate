@@ -24,7 +24,7 @@ use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, Childr
 use runtime_primitives::traits::{Block as BlockT, Zero, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieState};
-use consensus::well_known_cache_keys;
+use crate::blockchain::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
 use parking_lot::Mutex;

@@ -27,8 +27,8 @@ use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
-	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
-	SelectChain,
+	ImportBlock, ImportResult, JustificationImport,
+	SelectChain, import_queue::CacheKeyId,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;
@@ -387,7 +387,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<CacheKeyId, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();

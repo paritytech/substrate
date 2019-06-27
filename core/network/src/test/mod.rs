@@ -27,7 +27,10 @@ use std::sync::Arc;
 use crate::AlwaysBadChecker;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
+use client::{
+	self, ClientInfo, BlockchainEvents, FinalityNotifications,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
@@ -37,7 +40,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
+use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};

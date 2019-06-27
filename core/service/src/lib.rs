@@ -730,10 +730,10 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
-/// # use client::{self, LongestChain};
+/// # use client::{self, well_known_cache_keys::Id as CacheKeyId, LongestChain};
 /// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, ImportBlock};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;

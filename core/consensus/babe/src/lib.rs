@@ -34,7 +34,6 @@ use consensus_common::import_queue::{
 	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, DigestItemFor, ProvideRuntimeApi,
@@ -68,7 +67,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::{SelectChain, well_known_cache_keys};
+use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -76,6 +75,7 @@ use client::{
 	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
+	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};

@@ -33,7 +33,7 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 use parity_codec::{Encode, Decode, Codec};
 use consensus_common::{self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
-	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
+	SelectChain,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
@@ -45,6 +45,7 @@ use client::{
 	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
+	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 
 use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};

@@ -115,12 +115,3 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 		T::is_offline(&*self)
 	}
 }
-
-/// A list of all well known keys in the cache.
-pub mod well_known_cache_keys {
-	/// The type representing cache keys.
-	pub type Id = [u8; 4];
-
-	/// A list of authorities.
-	pub const AUTHORITIES: Id = *b"auth";
-}

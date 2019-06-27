@@ -24,10 +24,11 @@ use client::{
 	backend::{AuxStore, Backend},
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
+	well_known_cache_keys,
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::{Verifier, SharedFinalityProofRequestBuilder}, well_known_cache_keys,
+	import_queue::{Verifier, SharedFinalityProofRequestBuilder},
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
 	Error as ConsensusError, FinalityProofRequestBuilder,
 };

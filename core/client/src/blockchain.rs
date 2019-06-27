@@ -21,7 +21,6 @@ use std::sync::Arc;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
-use consensus::well_known_cache_keys;
 
 use crate::error::{Error, Result};
 
@@ -257,4 +256,13 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 		route: from_branch,
 		pivot,
 	})
+}
+
+/// A list of all well known keys in the blockchain cache.
+pub mod well_known_cache_keys {
+	/// The type representing cache keys.
+	pub type Id = consensus::import_queue::CacheKeyId;
+
+	/// A list of authorities.
+	pub const AUTHORITIES: Id = *b"auth";
 }

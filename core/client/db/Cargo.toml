@@ -21,7 +21,6 @@ parity-codec = { version = "3.3", features = ["derive"] }
 executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
-consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }

@@ -30,7 +30,7 @@ use futures::{prelude::*, sync::mpsc};
 use runtime_primitives::{Justification, traits::{
 	Block as BlockT, Header as HeaderT, NumberFor,
 }};
-use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId, block_import::{
+use crate::{error::Error as ConsensusError, block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 	FinalityProofImport, FinalityProofRequestBuilder,
 }};
@@ -73,6 +73,9 @@ pub struct IncomingBlock<B: BlockT> {
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
 }
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Verify a justification of a block
 pub trait Verifier<B: BlockT>: Send + Sync {

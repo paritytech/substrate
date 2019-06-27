@@ -31,7 +31,6 @@ use runtime_primitives::{
 use consensus::{
 	Error as ConsensusError, ImportBlock,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
 };
 use runtime_primitives::traits::{
@@ -67,6 +66,7 @@ use crate::backend::{
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
 	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
+	well_known_cache_keys::Id as CacheKeyId,
 };
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};

@@ -68,5 +68,8 @@ pub use state_machine::{ExecutionStrategy, NeverOffchainExt};
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
 
+#[cfg(feature = "std")]
+pub use crate::blockchain::well_known_cache_keys;
+
 #[doc(inline)]
 pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

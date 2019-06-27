@@ -23,11 +23,13 @@ use parking_lot::Mutex;
 
 use runtime_primitives::{Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use consensus::well_known_cache_keys;
 
 use crate::backend::{AuxStore, NewBlockState};
-use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache};
+use crate::blockchain::{
+	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
+	well_known_cache_keys,
+};
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteBodyRequest, RemoteHeaderRequest};
