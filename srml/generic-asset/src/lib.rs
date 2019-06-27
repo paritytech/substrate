@@ -1,4 +1,6 @@
-// Copyright (C) 2019 Centrality Investments Limited
+// Copyright 2019
+//     by  Centrality Investments Ltd.
+//     and Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -303,9 +305,6 @@ decl_module! {
 			// The last available id serves as the overflow mark and won't be used.
 			let next_id = id.checked_add(&One::one()).ok_or_else(|| "No new assets id available.")?;
 
-			// Force to reserve cennz.
-			Self::reserve(&Self::staking_asset_id(), &origin, Self::create_asset_stake())?;
-
 			<NextAssetId<T>>::put(next_id);
 			<TotalIssuance<T>>::insert(id, &options.initial_issuance);
 			<FreeBalance<T>>::insert(&id, &origin, options.initial_issuance);
@@ -433,15 +432,13 @@ decl_storage! {
 		/// Permission options for a given asset.
 		pub Permissions get(get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
 
-		pub CreateAssetStakes get(create_asset_stake) config(): T::Balance;
-
 		/// Any liquidity locks on some account balances.
 		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 
-		/// Staking Asset ID.
+		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
 
-		/// Spending Asset ID.
+		/// The identity of the asset which is the one that is designated for paying the chain's transaction fee.
 		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
@@ -612,7 +609,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
-	pub fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(asset_id, who);
 		let free_slash = rstd::cmp::min(free_balance, amount);
 		let new_free_balance = free_balance - free_slash;
@@ -625,7 +624,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Adds up to `amount` to the free balance of `who`.
-	pub fn reward(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn reward(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
 		let original_free_balance = Self::free_balance(asset_id, who);
 		let new_free_balance = original_free_balance + amount;
 		Self::set_free_balance(asset_id, who, new_free_balance);
@@ -637,7 +638,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `amount` will be deducted as possible. If the reserve balance of `who`
 	/// is less than `amount`, then a non-zero second item will be returned.
-	pub fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
@@ -654,7 +657,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `amount` will be moved as possible. If this is less than `amount`, then
 	/// the `remaining` would be returned, else `Zero::zero()`.
-	pub fn repatriate_reserved(
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn repatriate_reserved(
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		beneficiary: &T::AccountId,

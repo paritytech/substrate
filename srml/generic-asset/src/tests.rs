@@ -1,4 +1,6 @@
-// Copyright (C) 2019 Centrality Investments Limited
+// Copyright 2019
+//     by  Centrality Investments Ltd.
+//     and Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
