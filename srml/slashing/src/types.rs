@@ -29,9 +29,7 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 
 	/// Create a new `Fraction` which uses `gcd` to create as small denominator and numerator as possible.
 	pub fn new(denominator: N, numerator: N) -> Self {
-		let gcd = naive_gcd(denominator, numerator);
-
-		Self { denominator: denominator / gcd, numerator: numerator / gcd }
+		Self { denominator, numerator }
 	}
 
 	/// Get denominator
@@ -59,31 +57,9 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 	}
 }
 
-/// Temp naive gcd algorithm
-// TODO(niklasad1): move this or use `num-integer::Integer::gcd`
-fn naive_gcd<N: SimpleArithmetic + Copy>(mut x: N, mut y: N) -> N {
-    while y != Zero::zero() {
-        let tmp = x;
-        x = y;
-        y = tmp % y;
-    }
-	x
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn it_works() {
-		let f = Fraction::new(48_u32, 26_u32);
-		assert_eq!(f.denominator(), 24, "gcd 2");
-		assert_eq!(f.numerator(), 13, "gcd 2");
-
-		let ff = Fraction::new(999_u64, 13_u64);
-		assert_eq!(ff.denominator(), 999, "999 and 13 are relative prime numbers");
-		assert_eq!(ff.numerator(), 13, "999 and 13 are relative prime numbers");
-	}
 
 	#[test]
 	fn misconduct_level() {
