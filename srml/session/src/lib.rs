@@ -293,7 +293,7 @@ decl_module! {
 					updates.push(None);
 					continue;
 				}
-				let mut active = <Active<T>>::get(i as u32);
+				let mut active = Active::get(i as u32);
 				match active.binary_search_by(|k| k[..].cmp(&new_key)) {
 					Ok(_) => return Err("duplicate key provided"),
 					Err(pos) => active.insert(pos, new_key.to_owned()),
@@ -313,12 +313,12 @@ decl_module! {
 
 			// Update the active sets.
 			for (i, active) in updates.into_iter().filter_map(|x| x) {
-				<Active<T>>::insert(i as u32, active);
+				Active::insert(i as u32, active);
 			}
 			// Set new keys value for next session.
 			<NextKeyFor<T>>::insert(who, keys);
 			// Something changed.
-			<Changed<T>>::put(true);
+			Changed::put(true);
 		}
 
 		/// Called when a block is finalized. Will rotate session if it is the last
@@ -335,9 +335,9 @@ impl<T: Trait> Module<T> {
 	/// Move on to next session: register the new authority set.
 	pub fn rotate_session() {
 		// Increment current session index.
-		let session_index = <CurrentIndex<T>>::get();
+		let session_index = CurrentIndex::get();
 
-		let mut changed = <Changed<T>>::take();
+		let mut changed = Changed::take();
 
 		// See if we have a new validator set.
 		let validators = if let Some(new) = T::OnSessionEnding::on_session_ending(session_index) {
@@ -349,7 +349,7 @@ impl<T: Trait> Module<T> {
 		};
 
 		let session_index = session_index + 1;
-		<CurrentIndex<T>>::put(session_index);
+		CurrentIndex::put(session_index);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
@@ -364,7 +364,7 @@ impl<T: Trait> Module<T> {
 	/// Disable the validator of index `i`.
 	pub fn disable_index(i: usize) {
 		T::SessionHandler::on_disabled(i);
-		<Changed<T>>::put(true);
+		Changed::put(true);
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking module, this would be
@@ -405,9 +405,9 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnInitialize};
-	use primitives::testing::{Header, UintAuthorityId};
+	use primitives::{
+		traits::{BlakeTwo256, IdentityLookup, OnInitialize}, testing::{Header, UintAuthorityId}
+	};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -487,11 +487,11 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(timestamp::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
+		t.extend(GenesisConfig::<Test> {
 			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
