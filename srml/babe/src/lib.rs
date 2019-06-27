@@ -21,9 +21,10 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue};
+use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor};
 use timestamp::{OnTimestampSet, Trait};
 use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
+use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -148,16 +149,8 @@ decl_module! {
 				.logs
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(engine, mut data)| if engine == BABE_ENGINE_ID {
-					Decode::decode(&mut data)
-				} else { None }) {
-				let (ref vrf_output, ref _vrf_proof, ref _author, _slot_num): (
-					[u8; VRF_OUTPUT_LENGTH],
-					[u8; VRF_PROOF_LENGTH],
-					[u8; PUBLIC_KEY_LENGTH],
-					u64,
-				) = i;
-				Self::deposit_vrf_output(vrf_output);
+				.filter_map(to_babe_pre_digest) {
+				Self::deposit_vrf_output(&i.0);
 			}
 		}
 	}
@@ -176,6 +169,33 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32] {
 		Self::epoch_randomness()
+	}
+}
+
+/// The data in a BABE pre-runtime digest
+type BabePreRuntimeData = (
+	[u8; VRF_OUTPUT_LENGTH],
+	[u8; VRF_PROOF_LENGTH],
+	BabeKey,
+	u64,
+);
+
+
+pub fn to_babe_pre_digest((engine, mut data): (ConsensusEngineId, &[u8])) -> Option<BabePreRuntimeData> {
+	if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }
+}
+
+/// A BABE public key
+pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
+
+impl<T: Trait> FindAuthor<BabeKey> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<BabeKey> where
+		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		for i in digests.into_iter().filter_map(to_babe_pre_digest) {
+			return Some(i.2)
+		}
+		return None
 	}
 }
 
