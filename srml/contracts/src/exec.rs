@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf};
+	TrieId, BalanceOf, ContractInfo};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 use crate::rent;
@@ -325,6 +325,11 @@ where
 		// cannot be changed before the first call
 		let contract_info = rent::pay_rent::<T>(&dest);
 
+		// Calls to dead contracts always fail.
+		if let Some(ContractInfo::Tombstone(_)) = contract_info {
+			return Err("contract has been evicted");
+		};
+
 		let mut output_data = Vec::new();
 
 		let (change_set, events, calls) = {
@@ -345,6 +350,8 @@ where
 				)?;
 			}
 
+			// If code_hash is not none, then the destination account is a live contract, otherwise
+			// it is a regular account since tombstone accounts have already been rejected.
 			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
 				let executable = self.loader.load_main(&dest_code_hash)?;
 				output_data = self
