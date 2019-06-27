@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System, DummyFeeHandler};
+use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,

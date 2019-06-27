@@ -542,7 +542,8 @@ mod tests {
 		let mut t = new_test_ext();
 		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69));
 		with_externalities(&mut t, || {
-			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+													[69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
@@ -557,7 +558,8 @@ mod tests {
 			let encoded = xt2.encode();
 			let len = if should_fail { (MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
-				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), 
+														[69u8; 32].into(), Digest::default()));
 				assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
 				Executive::apply_extrinsic(xt).unwrap();
@@ -580,126 +582,31 @@ mod tests {
 	}
 
 	#[test]
-	fn block_weight_multiple_checks() {
-		let run_test = |overflow_tx: i8| {
-			let mut t = new_test_ext();
-			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
-			let xt1 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
-			let xt2 = primitives::testing::TestXt(Some(1), 2, Call::transfer(33, 69));
-			let xt3 = primitives::testing::TestXt(Some(1), 3, Call::transfer(33, 69));
-			let xt4 = primitives::testing::TestXt(Some(1), 4, Call::transfer(33, 69));
-			let xt5 = primitives::testing::TestXt(Some(1), 5, Call::transfer(33, 69));
+	fn tipping_block_weight() {
+		let mut t = new_test_ext();
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+		let xt1 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+		let xt2 = primitives::testing::TestXt(Some(1), 2, Call::transfer(33, 69));
+		let xt3 = primitives::testing::TestXt(Some(1), 3, Call::transfer(33, 69));
+		let xt4 = primitives::testing::TestXt(Some(1), 4, Call::transfer(33, 69));
+		let xt5 = primitives::testing::TestXt(Some(1), 5, Call::transfer(33, 69));
+		let encoded = xt5.encode();
+		let len = (MAX_TRANSACTIONS_WEIGHT - 139) as usize;
+		with_externalities(&mut t, || {
+			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
+										[69u8; 32].into(), Digest::default()));
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
-			match overflow_tx {
-				0 => {
-					let encoded = xt.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT + 1) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						let res = Executive::apply_extrinsic_with_len(xt, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
-					});
-				},
-				1 => {
-					let encoded = xt1.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT - 27) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						Executive::apply_extrinsic(xt).unwrap();
-						let res = Executive::apply_extrinsic_with_len(xt1, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 28);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
-					});
-				},
-				2 => {
-					let encoded = xt2.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT - 55) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						Executive::apply_extrinsic(xt).unwrap();
-						Executive::apply_extrinsic(xt1).unwrap();
-						let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 56);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
-					});
-				},
-				3 => {
-					let encoded = xt3.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT - 83) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						Executive::apply_extrinsic(xt).unwrap();
-						Executive::apply_extrinsic(xt1).unwrap();
-						Executive::apply_extrinsic(xt2).unwrap();
-						let res = Executive::apply_extrinsic_with_len(xt3, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 84);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(3));
-					});
-				},
-				4 => {
-					let encoded = xt4.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT - 111) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						Executive::apply_extrinsic(xt).unwrap();
-						Executive::apply_extrinsic(xt1).unwrap();
-						Executive::apply_extrinsic(xt2).unwrap();
-						Executive::apply_extrinsic(xt3).unwrap();
-						let res = Executive::apply_extrinsic_with_len(xt4, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 112);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(4));
-					});
-				},
-				5 => {
-					let encoded = xt5.encode();
-					let len = (MAX_TRANSACTIONS_WEIGHT - 139) as usize;
-					with_externalities(&mut t, || {
-						Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-													[69u8; 32].into(), Digest::default()));
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-
-						Executive::apply_extrinsic(xt).unwrap();
-						Executive::apply_extrinsic(xt1).unwrap();
-						Executive::apply_extrinsic(xt2).unwrap();
-						Executive::apply_extrinsic(xt3).unwrap();
-						Executive::apply_extrinsic(xt4).unwrap();
-						let res = Executive::apply_extrinsic_with_len(xt5, len, Some(encoded));
-						assert!(res.is_err());
-						assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 140);
-						assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(5));
-					});
-				}
-				_ => {assert!(true);}
-			}
-		};
-
-		run_test(0);
-		run_test(1);
-		run_test(2);
-		run_test(3);
-		run_test(4);
-		run_test(5);
+			Executive::apply_extrinsic(xt).unwrap();
+			Executive::apply_extrinsic(xt1).unwrap();
+			Executive::apply_extrinsic(xt2).unwrap();
+			Executive::apply_extrinsic(xt3).unwrap();
+			Executive::apply_extrinsic(xt4).unwrap();
+			let res = Executive::apply_extrinsic_with_len(xt5, len, Some(encoded));
+			assert!(res.is_err());
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 140);
+			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(5));
+		});
 	}
 
 	#[test]
@@ -764,4 +671,38 @@ mod tests {
 			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail));
 		});
 	}
+
+	#[test]
+    fn stateful_weight_fee_range() {
+        // seeding fee with some block weight range
+        // testing how the fee varies with block weight
+        let t0 = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+        let enc0 = t0.encode();
+		let t1 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+        let enc1 = t1.encode();
+		let t2 = primitives::testing::TestXt(Some(1), 2, Call::transfer(33, 69));
+        let enc2 = t2.encode();
+		let t3 = primitives::testing::TestXt(Some(1), 3, Call::transfer(33, 69));
+        let enc3 = t3.encode();
+		let t4 = primitives::testing::TestXt(Some(1), 4, Call::transfer(33, 69));
+        let enc4 = t4.encode();
+		// length is constant to test fee variation as block weight increases
+		let large_const_len = (1000 * 2000) as usize;
+        let const_len = 200 as usize;
+        with_externalities(&mut new_test_ext(), || {
+            Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
+													[69u8; 32].into(), Digest::default()));
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+            let res = Executive::apply_extrinsic_with_len(t0, large_const_len, Some(enc0));
+            assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 2000000);
+			let res = Executive::apply_extrinsic_with_len(t1, large_const_len, Some(enc1));
+            assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 4000000);
+			let res = Executive::apply_extrinsic_with_len(t2, const_len, Some(enc2));
+            assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 4000200);
+			let res = Executive::apply_extrinsic_with_len(t3, const_len, Some(enc3));
+            assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 4000400);
+			let res = Executive::apply_extrinsic_with_len(t4, const_len, Some(enc4));
+            assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 4000600);
+        });// oddly enough, this seems to show that block saturation does not effect fees in a meaningful way?
+    }
 }

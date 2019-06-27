@@ -73,6 +73,8 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		let mut fee_multiplier = billion + second_term;
 		fee_multiplier = if positive { fee_multiplier + first_term } else { fee_multiplier - first_term};
 
+        // useful for testing
+        //println!("Fee Multiplier: {}", fee_multiplier);
 		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
 		let transaction_fee: u32 = p * weight;
 		transaction_fee.into()
@@ -146,48 +148,30 @@ mod tests {
     }
 
     #[test]
-    fn weight_to_fee_works_for_all_weight_ranges() {
-        with_externalities(&mut new_test_ext(), || {
-            // NOTE: u32::max_value() cannot be accurately calcualted with per_billion.
-            vec![0, 1, 100, 10000, 300_000_000, u32::max_value()/2, u32::max_value()-1]
-                .into_iter()
-                .for_each(|i| assert_eq!(WeightToFeeHandler::convert(i), poc(i, 0)));
-        })
-    }
-
-    #[test]
 	fn stateless_weight_fee_range() {
+        // as input grows, python reference impl becomes less precise? (see comments)
         with_externalities(&mut new_test_ext(), || {
-            // (1) Typical low-cost transaction.
-            assert_eq!(WeightToFeeHandler::convert(28), 27);
+            let mut inputs = Vec::new();
+            // (1) Typical low-cost transaction
+            inputs.push(28);
             // (2) Close to ideal. Fee is less than size.
-            assert_eq!(
-                WeightToFeeHandler::convert(IDEAL_TRANSACTIONS_WEIGHT/2),
-                (IDEAL_TRANSACTIONS_WEIGHT/2 - 3).into()
-            );
+            inputs.push(IDEAL_TRANSACTIONS_WEIGHT/2);
             // (3) 5 below the ideal, Less fee.
-            assert_eq!(
-                WeightToFeeHandler::convert(IDEAL_TRANSACTIONS_WEIGHT/2 + 5_000),
-                (IDEAL_TRANSACTIONS_WEIGHT/2 + 4_997).into()
-            );
-            // (4) 5 above the ideal,
-            assert_eq!(
-                WeightToFeeHandler::convert(IDEAL_TRANSACTIONS_WEIGHT + 10_000),
-                (IDEAL_TRANSACTIONS_WEIGHT + 10_000).into()
-            );
-            assert_eq!(WeightToFeeHandler::convert((1024 * 1024) + 87_381), 1135957);
-            // (5) 1 below maximum
-            assert_eq!(WeightToFeeHandler::convert((4 * 1024 * 1024) - 1), 4194303);
-            // (6) maximum weight
-            assert_eq!(WeightToFeeHandler::convert(4 * 1024 * 1024), 4194304);
-            // (7) above maximum
-            assert_eq!(WeightToFeeHandler::convert((4 * 1024 * 1024) + 1), 4194305);
+            inputs.push(IDEAL_TRANSACTIONS_WEIGHT/2 + 5_000);
+            // (4) 5 above the ideal
+            inputs.push(IDEAL_TRANSACTIONS_WEIGHT + 10_000);
+            // (6) last number that seems to work
+            inputs.push(1_129_826);
+            // (7) first number that doesn't work
+            inputs.push(1_129_827);
+            // (8) maximum weight = 4194304
+            // python returns fee = 4194430.83108
+            // poc gives something similar...
+            inputs.push(4 * 1024 * 1024);
+
+            // test equality
+            let mut count = 0;
+            inputs.into_iter().for_each(|i| { assert_eq!(WeightToFeeHandler::convert(i), poc(i, 0))});
         })
 	}
-
-    #[test]
-    #[ignore]
-    fn statefull_weight_fee_range() {
-        unimplemented!();
-    }
 }

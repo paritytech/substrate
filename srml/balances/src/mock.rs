@@ -19,13 +19,11 @@
 #![cfg(test)]
 
 use primitives::{
-	weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
 	traits::{IdentityLookup, Convert},
 	testing::{Digest, DigestItem, Header},
 	Perbill, BuildStorage,
 };
 use substrate_primitives::{H256, Blake2Hasher};
-use runtime_io;
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -51,7 +49,7 @@ impl system::Trait for Runtime {
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type WeightToFee = DummyFeeHandler;
+	type WeightToFee = ();
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
