@@ -128,7 +128,6 @@ impl Trait for Test {
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	current_era: EraIndex,
 	reward: u64,
 	validator_pool: bool,
 	nominate: bool,
@@ -141,7 +140,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			current_era: 0,
 			reward: 10,
 			validator_pool: false,
 			nominate: true,
@@ -155,10 +153,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn _current_era(mut self, current_era: EraIndex) -> Self {
-		self.current_era = current_era;
 		self
 	}
 	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
@@ -230,7 +224,7 @@ impl ExtBuilder {
 		};
 		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
-			current_era: self.current_era,
+			current_era: 0,
 			stakers: vec![
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
