@@ -269,12 +269,12 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	Some((elected_candidates, assigned))
 }
 
-/// Performs equalise post-processing to the output of the election algorithm
+/// Performs equalize post-processing to the output of the election algorithm
 /// This function mutates the input parameters, most noticeably it updates the exposure of
 /// the elected candidates.
 ///
 /// No value is returned from the function and the `expo_map` parameter is updated.
-pub fn equalise<T: Trait + 'static>(
+pub fn equalize<T: Trait + 'static>(
 	assignments: &mut Vec<(T::AccountId, BalanceOf<T>, Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>)>,
 	expo_map: &mut ExpoMap<T>,
 	tolerance: ExtendedBalance,
@@ -283,7 +283,7 @@ pub fn equalise<T: Trait + 'static>(
 	for _i in 0..iterations {
 		let mut max_diff = 0;
 		assignments.iter_mut().for_each(|(n, budget, assignment)| {
-			let diff = do_equalise::<T>(&n, *budget, assignment, expo_map, tolerance);
+			let diff = do_equalize::<T>(&n, *budget, assignment, expo_map, tolerance);
 			if diff > max_diff {
 				max_diff = diff;
 			}
@@ -294,7 +294,7 @@ pub fn equalise<T: Trait + 'static>(
 	}
 }
 
-fn do_equalise<T: Trait + 'static>(
+fn do_equalize<T: Trait + 'static>(
 	nominator: &T::AccountId,
 	budget_balance: BalanceOf<T>,
 	elected_edges: &mut Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>,

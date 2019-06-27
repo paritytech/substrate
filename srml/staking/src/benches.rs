@@ -131,7 +131,7 @@ fn do_phragmen(
 						Balance,
 						Vec<(AccountId, ExtendedBalance, ExtendedBalance)>
 					)>>();
-				equalise::<Test>(&mut assignments_with_votes, &mut exposures, eq_tolerance, eq_iters);
+				equalize::<Test>(&mut assignments_with_votes, &mut exposures, eq_tolerance, eq_iters);
 			}
 		})
 	})
@@ -147,7 +147,7 @@ macro_rules! phragmen_benches {
 			println!(
 				r#"
 ++ Benchmark: {} Validators // {} Nominators // {} Edges-per-nominator // {} total edges //
-electing {} // Equalise: {} iterations -- {} tolerance"#,
+electing {} // Equalize: {} iterations -- {} tolerance"#,
 				v, n, e, e * n, t, eq_iter, eq_tol,
 			);
 			do_phragmen(b, v, n, t, e, eq_iter, eq_tol);

@@ -23,9 +23,9 @@ balances = { package = "srml-balances", path = "../balances" }
 rand = "0.6.5"
 
 [features]
-equalise = []
+equalize = []
 bench = []
-default = ["std", "equalise"]
+default = ["std", "equalize"]
 std = [
 	"serde",
 	"safe-mix/std",

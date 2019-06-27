@@ -52,7 +52,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
-		if cfg!(feature = "equalise") {
+		if cfg!(feature = "equalize") {
 			assert_eq!(
 				Staking::stakers(11),
 				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
@@ -666,7 +666,7 @@ fn nominating_and_rewards_should_work() {
 
 		// ------ check the staked value of all parties.
 
-		if cfg!(feature = "equalise") {
+		if cfg!(feature = "equalize") {
 			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(11).own, 1000);
 			assert_eq!(Staking::stakers(11).total, 1000 + 999);
@@ -728,7 +728,7 @@ fn nominating_and_rewards_should_work() {
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
 		let approximation = 3;
-		if cfg!(feature = "equalise") {
+		if cfg!(feature = "equalize") {
 			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
 			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - approximation);
 			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - approximation);
@@ -1526,7 +1526,7 @@ fn phragmen_poc_works() {
 		assert_eq!(Staking::stakers(11).own, 1000);
 		assert_eq!(Staking::stakers(21).own, 1000);
 
-		if cfg!(feature = "equalise") {
+		if cfg!(feature = "equalize") {
 			assert_eq!(Staking::stakers(11).total, 1000 + 499);
 			assert_eq!(Staking::stakers(21).total, 1000 + 499);
 		} else {
@@ -1538,7 +1538,7 @@ fn phragmen_poc_works() {
 		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 
-		if cfg!(feature = "equalise") {
+		if cfg!(feature = "equalize") {
 			assert_eq_uvec!(
 				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
 				vec![333, 166]
@@ -1840,9 +1840,9 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 }
 
 
-#[cfg(feature = "equalise")]
+#[cfg(feature = "equalize")]
 #[test]
-fn phragmen_linear_worse_case_equalise() {
+fn phragmen_linear_worse_case_equalize() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)

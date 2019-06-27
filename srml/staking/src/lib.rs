@@ -290,7 +290,7 @@ use primitives::traits::{
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
 
-use phragmen::{elect, ACCURACY, ExtendedBalance, equalise};
+use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -1111,7 +1111,7 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalise") {
+			if cfg!(feature = "equalize") {
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
 				let mut assignments_with_votes = assignments_with_stakes.iter()
@@ -1126,7 +1126,7 @@ impl<T: Trait> Module<T> {
 						BalanceOf<T>,
 						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
 					)>>();
-				equalise::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
+				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}
 
 			// Clear Stakers and reduce their slash_count.
