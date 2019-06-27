@@ -296,7 +296,8 @@ mod tests {
 		let alice = Arc::new(AuthorityKeyring::Alice.pair());
 		let mut slot_num = 1u64;
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
-			let mut inherent_data = service.get()
+			let service = service.get();
+			let mut inherent_data = service
 				.config
 				.custom
 				.inherent_data_providers
@@ -305,19 +306,20 @@ mod tests {
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
 
-			let parent_id = BlockId::number(service.get().client().info().chain.best_number);
-			let parent_header = service.get().client().header(&parent_id).unwrap().unwrap();
+			let parent_id = BlockId::number(service.client().info().chain.best_number);
+			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
-				client: service.get().client(),
-				transaction_pool: service.get().transaction_pool(),
+				client: service.client(),
+				transaction_pool: service.transaction_pool(),
 			});
+
 			let mut digest = Digest::<H256>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,
-				::std::time::Duration::from_secs(1),
+				std::time::Duration::from_secs(1),
 			).expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
