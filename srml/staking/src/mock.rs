@@ -330,6 +330,8 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 }
 
 pub fn start_session(session_index: session::SessionIndex) {
+	// Compensate for session delay
+	let session_index = session_index + 1;
 	for i in 0..(session_index - Session::current_index()) {
 		System::set_block_number((i + 1).into());
 		Session::on_initialize(System::block_number());
