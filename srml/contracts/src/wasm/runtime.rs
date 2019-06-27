@@ -276,7 +276,7 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Retrieve the value at the given location from the strorage and return 0.
+	// Retrieve the value at the given location from the storage and return 0.
 	// If there is no entry at the given location then this function will return 1 and
 	// clear the scratch buffer.
 	//
