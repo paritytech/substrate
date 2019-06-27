@@ -15,14 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use srml_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV5,
-	DefaultByteGetter, RuntimeMetadataPrefixed,
-	StorageMetadata, StorageFunctionMetadata,
-	StorageFunctionType, StorageFunctionModifier,
-	DefaultByte, StorageHasher
+	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataV6,
+	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata,
+	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher
 };
-
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///
@@ -40,8 +36,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadata::V5 (
-					$crate::metadata::RuntimeMetadataV5 {
+				$crate::metadata::RuntimeMetadata::V6 (
+					$crate::metadata::RuntimeMetadataV6 {
 						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
@@ -67,6 +63,9 @@ macro_rules! __runtime_modules_to_metadata {
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
+				constants: $crate::metadata::FnEncode(
+					$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
+				)
 			};
 			$( $rest )*
 		)
@@ -228,8 +227,8 @@ mod tests {
 	use super::*;
 	use srml_metadata::{
 		EventMetadata,
-		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
-		StorageFunctionMetadata,
+		StorageEntryModifier, StorageEntryType, FunctionMetadata,
+		StorageEntryMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use crate::codec::{Encode, Decode};
@@ -417,10 +416,10 @@ mod tests {
 				prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
 				storage: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[
-						StorageFunctionMetadata {
+						StorageEntryMetadata {
 							name: DecodeDifferent::Encode("StorageMethod"),
-							modifier: StorageFunctionModifier::Optional,
-							ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+							modifier: StorageEntryModifier::Optional,
+							ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
 							default: DecodeDifferent::Encode(
 								DefaultByteGetter(
 									&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
