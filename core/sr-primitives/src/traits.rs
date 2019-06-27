@@ -594,9 +594,13 @@ pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
 
-/// A type that provides a randomness beacon.  The output MUST NOT be relied on
-/// to change every time the function is called.
+/// A type that provides a randomness beacon.
 pub trait RandomnessBeacon {
+	/// Returns 32 bytes of random data.  The output will change eventually, but
+	/// is not guaranteed to be different between any two calls.
+	///
+	/// Unless specified otherwise, the value this function returns is not
+	/// suitable for use in gambling applications.
 	fn random() -> [u8; 32];
 }
 
