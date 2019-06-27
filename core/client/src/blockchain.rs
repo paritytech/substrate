@@ -265,4 +265,7 @@ pub mod well_known_cache_keys {
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";
+
+	/// Changes trie configuration.
+	pub const CHANGES_TRIE_CONFIG: Id = *b"chtr";
 }
