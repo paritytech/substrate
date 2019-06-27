@@ -195,6 +195,16 @@ pub struct StorageEntryMetadata {
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
+/// All the metadata about one module constant.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct ModuleConstantMetadata {
+	pub name: DecodeDifferentStr,
+	pub ty: DecodeDifferentStr,
+	pub value: ByteGetter,
+	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
 pub trait DefaultByte {
 	fn default_byte(&self) -> Vec<u8>;
@@ -297,8 +307,10 @@ pub enum RuntimeMetadata {
 	V3(RuntimeMetadataDeprecated),
 	/// Version 4 for runtime metadata. No longer used.
 	V4(RuntimeMetadataDeprecated),
-	/// Version 5 for runtime metadata.
-	V5(RuntimeMetadataV5),
+	/// Version 5 for runtime metadata. No longer used.
+	V5(RuntimeMetadataDeprecated),
+	/// Version 6 for runtime metadata. No longer used.
+	V6(RuntimeMetadataV6),
 }
 
 /// Enum that should fail.
@@ -320,7 +332,7 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV5 {
+pub struct RuntimeMetadataV6 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
@@ -333,6 +345,7 @@ pub struct ModuleMetadata {
 	pub storage: ODFnA<StorageEntryMetadata>,
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
+	pub constants: ODFnA<ModuleConstantMetadata>,
 }
 
 type ODFnA<T> = Option<DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>>;
