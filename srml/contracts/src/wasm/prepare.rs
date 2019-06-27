@@ -30,11 +30,7 @@ use runtime_primitives::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
-	///
-	/// An `Option` is used here for loaning (`take()`-ing) the module.
-	/// Invariant: Can't be `None` (i.e. on enter and on exit from the function
-	/// the value *must* be `Some`).
-	module: Option<elements::Module>,
+	module: elements::Module,
 	schedule: &'a Schedule,
 }
 
@@ -58,7 +54,7 @@ impl<'a> ContractModule<'a> {
 		// Return a `ContractModule` instance with
 		// __valid__ module.
 		Ok(ContractModule {
-			module: Some(module),
+			module,
 			schedule,
 		})
 	}
@@ -69,11 +65,7 @@ impl<'a> ContractModule<'a> {
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
 	fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
-		let module = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be None; qed");
-		if module
+		if self.module
 			.memory_section()
 			.map_or(false, |ms| ms.entries().len() > 0)
 		{
@@ -82,7 +74,7 @@ impl<'a> ContractModule<'a> {
 		Ok(())
 	}
 
-	fn inject_gas_metering(&mut self) -> Result<(), &'static str> {
+	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules =
 			rules::Set::new(
 				self.schedule.regular_op_cost.clone().saturated_into(),
@@ -91,30 +83,22 @@ impl<'a> ContractModule<'a> {
 			.with_grow_cost(self.schedule.grow_mem_cost.clone().saturated_into())
 			.with_forbidden_floats();
 
-		let module = self
-			.module
-			.take()
-			.expect("On entry to the function `module` can't be `None`; qed");
-
-		let contract_module = pwasm_utils::inject_gas_counter(module, &gas_rules)
+		let contract_module = pwasm_utils::inject_gas_counter(self.module, &gas_rules)
 			.map_err(|_| "gas instrumentation failed")?;
-
-		self.module = Some(contract_module);
-		Ok(())
+		Ok(ContractModule {
+			module: contract_module,
+			schedule: self.schedule,
+		})
 	}
 
-	fn inject_stack_height_metering(&mut self) -> Result<(), &'static str> {
-		let module = self
-			.module
-			.take()
-			.expect("On entry to the function `module` can't be `None`; qed");
-
+	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
 		let contract_module =
-			pwasm_utils::stack_height::inject_limiter(module, self.schedule.max_stack_height)
+			pwasm_utils::stack_height::inject_limiter(self.module, self.schedule.max_stack_height)
 				.map_err(|_| "stack height instrumentation failed")?;
-
-		self.module = Some(contract_module);
-		Ok(())
+		Ok(ContractModule {
+			module: contract_module,
+			schedule: self.schedule,
+		})
 	}
 
 	/// Check that the module has required exported functions. For now
@@ -128,10 +112,7 @@ impl<'a> ContractModule<'a> {
 		let mut deploy_found = false;
 		let mut call_found = false;
 
-		let module = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be `None`; qed");
+		let module = &self.module;
 
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 		let export_entries = module
@@ -213,10 +194,7 @@ impl<'a> ContractModule<'a> {
 	///   their signatures.
 	/// - if there is a memory import, returns it's descriptor
 	fn scan_imports<C: ImportSatisfyCheck>(&self) -> Result<Option<&MemoryType>, &'static str> {
-		let module = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be `None`; qed");
+		let module = &self.module;
 
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 		let import_entries = module
@@ -269,13 +247,9 @@ impl<'a> ContractModule<'a> {
 		Ok(imported_mem_type)
 	}
 
-	fn into_wasm_code(mut self) -> Result<Vec<u8>, &'static str> {
-		elements::serialize(
-			self.module
-				.take()
-				.expect("On entry to the function `module` can't be `None`; qed"),
-		)
-		.map_err(|_| "error serializing instrumented module")
+	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
+		elements::serialize(self.module)
+			.map_err(|_| "error serializing instrumented module")
 	}
 }
 
@@ -332,8 +306,9 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 		}
 	};
 
-	contract_module.inject_gas_metering()?;
-	contract_module.inject_stack_height_metering()?;
+	contract_module = contract_module
+		.inject_gas_metering()?
+		.inject_stack_height_metering()?;
 
 	Ok(PrefabWasmModule {
 		schedule_version: schedule.version,
