@@ -58,7 +58,7 @@ impl WasmBuilderSource {
 	fn to_cargo_source(&self, manifest_dir: &Path) -> String {
 		match self {
 			WasmBuilderSource::Path(path) => {
-				format!("path = \"{}\"", manifest_dir.join(path).display())
+				format!("path = \"{}\"", manifest_dir.join(path).display()).replace("\\", "/")
 			}
 			WasmBuilderSource::Git { repo, rev } => {
 				format!("git = \"{}\", rev=\"{}\"", repo, rev)
