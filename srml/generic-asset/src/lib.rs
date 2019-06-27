@@ -623,17 +623,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Adds up to `amount` to the free balance of `who`.
-	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-	/// the caller will do this.
-	fn reward(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
-		let original_free_balance = Self::free_balance(asset_id, who);
-		let new_free_balance = original_free_balance + amount;
-		Self::set_free_balance(asset_id, who, new_free_balance);
-		<TotalIssuance<T>>::mutate(asset_id, |x| *x = x.saturating_add(amount));
-		Ok(())
-	}
-
 	/// Deducts up to `amount` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `amount` will be deducted as possible. If the reserve balance of `who`
