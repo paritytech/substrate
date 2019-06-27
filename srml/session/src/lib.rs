@@ -342,15 +342,15 @@ impl<T: Trait> Module<T> {
 		let session_index = CurrentIndex::get();
 
 		// Get queued session keys and validators.
-		let session_keys = QueuedKeys::get();
+		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
 			.map(|(validator, _)| validator.to_owned())
 			.collect::<Vec<_>>();
-		Validators::put(validators);
+		<Validators<T>>::put(validators);
 
 		// Get next validator set.
 		let next_validators = T::OnSessionEnding::on_session_ending(session_index)
-			.unwrap_or_else(|| Validators::get());
+			.unwrap_or_else(|| <Validators<T>>::get());
 
 		// Increment session index.
 		let session_index = session_index + 1;
@@ -358,9 +358,9 @@ impl<T: Trait> Module<T> {
 
 		// Queue next session keys.
 		let next_session_keys = next_validators.into_iter()
-			.map(|a| { let k = NextKeyFor::get(&a).unwrap_or_default(); (a, k) })
+			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
-		QueuedKeys::put(next_session_keys);
+		<QueuedKeys<T>>::put(next_session_keys);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
