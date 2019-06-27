@@ -68,8 +68,6 @@
 //!		// don't do anything
 //!		fn on_misconduct(&mut self) {}
 //!
-//!		// don't do anything
-//!		fn on_signal(&mut self) {}
 //!	}
 //!
 //! struct Balance<T>(PhantomData<T>);
@@ -142,9 +140,6 @@ pub trait Misconduct {
 
 	/// Increase severity based on previous state
 	fn on_misconduct(&mut self);
-
-	/// Decrease severity based on previous state
-	fn on_signal(&mut self);
 }
 
 /// Slashing interface
@@ -188,8 +183,6 @@ macro_rules! impl_misconduct_static_severity {
 			}
 
 			fn on_misconduct(&mut self) {}
-
-			fn on_signal(&mut self) {}
 		}
 	}
 }

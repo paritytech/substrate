@@ -19,8 +19,6 @@ impl Misconduct for Unresponsive {
 	}
 
 	fn on_misconduct(&mut self) {}
-
-	fn on_signal(&mut self) {}
 }
 
 /// Grandpa misconducts
@@ -53,8 +51,6 @@ pub mod grandpa {
 		}
 
 		fn on_misconduct(&mut self) {}
-
-		fn on_signal(&mut self) {}
 	}
 
 	/// Collusion of > 1/3 of validators which may lead to finalizing blocks in different chains
