@@ -40,7 +40,7 @@ use crate::protocol::{event::Event, message::Message};
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
-use crate::config::Params;
+use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
@@ -197,12 +197,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				user_agent,
 				local_public,
 				known_addresses,
-				params.network_config.enable_mdns
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => false,
+					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
+				}
 			);
-			let (transport, bandwidth) = transport::build_transport(
-				local_identity,
-				params.network_config.wasm_external_transport
-			);
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
+				};
+				transport::build_transport(local_identity, config_mem, config_wasm)
+			};
 			(Swarm::<B, S, H>::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 		};
 
