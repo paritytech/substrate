@@ -150,7 +150,7 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 	/// used where a number is needed that cannot have been chosen by an
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	fn random() -> [u8; 32] {
-		<Randomness<T>>::get()
+		Randomness::get()
 	}
 }
 
@@ -170,11 +170,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
-		let l = <Randomness<T>>::get();
+		let l = Randomness::get();
 		let mut arr = [0u8; VRF_OUTPUT_LENGTH + 32];
 		arr[0..32].copy_from_slice(&l[..]);
 		arr[32..VRF_OUTPUT_LENGTH + 32].copy_from_slice(&vrf_output[..]);
-		<Randomness<T>>::put(runtime_io::blake2_256(&arr));
+		Randomness::put(runtime_io::blake2_256(&arr));
 	}
 
 	pub fn process_inherent_digests() {
