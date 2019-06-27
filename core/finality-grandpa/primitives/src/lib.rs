@@ -33,7 +33,7 @@ use rstd::vec::Vec;
 use alloc::collections::BTreeMap;
 
 pub use grandpa_primitives::{
-	Precommit, Prevote, Equivocation, Message, Error as GrandpaError
+	Precommit, Prevote, Equivocation, Message, Error as GrandpaError, Chain
 };
 
 /// The grandpa crypto scheme defined via the keypair type.
