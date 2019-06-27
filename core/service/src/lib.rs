@@ -36,7 +36,7 @@ use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
@@ -66,7 +66,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
-pub use tokio::runtime::TaskExecutor;
+pub use futures::future::Executor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -81,6 +81,14 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	/// Sender for futures that must be spawned as background tasks.
+	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	/// Receiver for futures that must be spawned as background tasks.
+	to_spawn_rx: mpsc::UnboundedReceiver<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	/// List of futures to poll from `poll`.
+	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
+	/// The elements must then be polled manually.
+	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
@@ -109,13 +117,9 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 
 /// Used to hook on telemetry connection established events.
-pub struct TelemetryOnConnect<'a> {
-	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
+pub struct TelemetryOnConnect {
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
-	/// Executor to which the hook is spawned.
-	pub executor: &'a TaskExecutor,
 }
 
 impl<Components: components::Components> Service<Components> {
@@ -129,9 +133,12 @@ impl<Components: components::Components> Service<Components> {
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
-		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
+
+		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
+		let (to_spawn_tx, to_spawn_rx) =
+			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
 
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
@@ -212,11 +219,12 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		task_executor.spawn(build_network_future(network_mut, network_status_sinks.clone())
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(network_mut, network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
-			.then(|_| Ok(())));
+			.then(|_| Ok(()))));
 
+<<<<<<< HEAD
 		let offchain_workers = match (config.offchain_worker, client.backend().offchain_storage()) {
 			(true, Some(db)) => {
 				Some(Arc::new(offchain::OffchainWorkers::new(
@@ -230,6 +238,12 @@ impl<Components: components::Components> Service<Components> {
 				None
 			},
 			_ => None,
+=======
+		let offchain_workers =  if config.offchain_worker {
+			Some(Arc::new(offchain::OffchainWorkers::new(client.clone())))
+		} else {
+			None
+>>>>>>> master
 		};
 
 		{
@@ -238,6 +252,7 @@ impl<Components: components::Components> Service<Components> {
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+			let to_spawn_tx_ = to_spawn_tx.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
@@ -256,18 +271,19 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						Components::RuntimeServices::offchain_workers(
+						let future = Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,
 							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
+						let _ = to_spawn_tx_.unbounded_send(future);
 					}
 
 					Ok(())
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		{
@@ -313,7 +329,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		{
@@ -335,7 +351,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		// Periodically notify the telemetry.
@@ -346,7 +362,7 @@ impl<Components: components::Components> Service<Components> {
 		let self_pid = get_current_pid();
 		let (netstat_tx, netstat_rx) = mpsc::unbounded();
 		network_status_sinks.lock().push(netstat_tx);
-		task_executor.spawn(netstat_rx.for_each(move |net_status| {
+		let tel_task = netstat_rx.for_each(move |net_status| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -389,7 +405,8 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(())));
+		}).select(exit.clone()).then(|_| Ok(()));
+		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
 		let system_info = rpc::apis::system::SystemInfo {
@@ -399,6 +416,19 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		struct ExecutorWithTx(mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>);
+		impl futures::future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for ExecutorWithTx {
+			fn execute(
+				&self,
+				future: Box<dyn Future<Item = (), Error = ()> + Send>
+			) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+				self.0.unbounded_send(future)
+					.map_err(|err| {
+						let kind = futures::future::ExecuteErrorKind::Shutdown;
+						futures::future::ExecuteError::new(kind, err.into_inner())
+					})
+			}
+		}
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(),
 			system_rpc_tx,
@@ -407,14 +437,14 @@ impl<Components: components::Components> Service<Components> {
 			config.rpc_ws,
 			config.rpc_ws_max_connections,
 			config.rpc_cors.clone(),
-			task_executor.clone(),
+			Arc::new(ExecutorWithTx(to_spawn_tx.clone())),
 			transaction_pool.clone(),
 		)?;
-		task_executor.spawn(build_system_rpc_handler::<Components>(
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		));
+		)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -453,9 +483,9 @@ impl<Components: components::Components> Service<Components> {
 					});
 					Ok(())
 				});
-			task_executor.spawn(future
+			let _ = to_spawn_tx.unbounded_send(Box::new(future
 				.select(exit.clone())
-				.then(|_| Ok(())));
+				.then(|_| Ok(()))));
 			telemetry
 		});
 
@@ -466,6 +496,9 @@ impl<Components: components::Components> Service<Components> {
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
+			to_spawn_tx,
+			to_spawn_rx,
+			to_poll: Vec::new(),
 			keystore,
 			config,
 			exit,
@@ -493,9 +526,12 @@ impl<Components: components::Components> Service<Components> {
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
-}
 
-impl<Components> Service<Components> where Components: components::Components {
+	/// Spawns a task in the background that runs the future passed as parameter.
+	pub fn spawn_task(&self, task: Box<dyn Future<Item = (), Error = ()> + Send>) {
+		let _ = self.to_spawn_tx.unbounded_send(task);
+	}
+
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -531,6 +567,33 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()
+	}
+}
+
+impl<Components> Future for Service<Components> where Components: components::Components {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
+			let executor = tokio_executor::DefaultExecutor::current();
+			if let Err(err) = executor.execute(task_to_spawn) {
+				debug!(
+					target: "service",
+					"Failed to spawn background task: {:?}; falling back to manual polling",
+					err
+				);
+				self.to_poll.push(err.into_future());
+			}
+		}
+
+		// Polling all the `to_poll` futures.
+		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
+			self.to_poll.remove(pos);
+		}
+
+		// The service future never ends.
+		Ok(Async::NotReady)
 	}
 }
 
@@ -735,7 +798,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// ```
 /// # use substrate_service::{
 /// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
@@ -784,14 +847,14 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 		Genesis = GenesisConfig,
 /// 		Configuration = (),
 /// 		FullService = FullComponents<Self>
-/// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
+/// 			{ |config| <FullComponents<Factory>>::new(config) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 			|service: Self::FullService, key: Option<Arc<ed25519::Pair>>| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
-/// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+/// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
 /// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
@@ -902,21 +965,19 @@ macro_rules! construct_service_factory {
 			}
 
 			fn new_light(
-				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor
+				config: $crate::FactoryFullConfiguration<Self>
 			) -> $crate::Result<Self::LightService, $crate::Error>
 			{
-				( $( $light_service_init )* ) (config, executor)
+				( $( $light_service_init )* ) (config)
 			}
 
 			fn new_full(
-				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor,
+				config: $crate::FactoryFullConfiguration<Self>
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
+				( $( $full_service_init )* ) (config).and_then(|service| {
 					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, executor, key)
+					($( $authority_setup )*)(service, key)
 				})
 			}
 		}
