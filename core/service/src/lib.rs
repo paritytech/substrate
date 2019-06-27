@@ -224,7 +224,9 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
-		let offchain_workers = match (config.offchain_worker, client.backend().offchain_storage()) {
+		#[allow(deprecated)]
+		let offchain_storage = client.backend().offchain_storage();
+		let offchain_workers = match (config.offchain_worker, offchain_storage) {
 			(true, Some(db)) => {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
