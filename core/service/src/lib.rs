@@ -224,13 +224,11 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
-<<<<<<< HEAD
 		let offchain_workers = match (config.offchain_worker, client.backend().offchain_storage()) {
 			(true, Some(db)) => {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					task_executor.clone(),
 				)))
 			},
 			(true, None) => {
@@ -238,12 +236,6 @@ impl<Components: components::Components> Service<Components> {
 				None
 			},
 			_ => None,
-=======
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(client.clone())))
-		} else {
-			None
->>>>>>> master
 		};
 
 		{
