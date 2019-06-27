@@ -25,6 +25,8 @@ use generic_test_client::client::block_builder::api::BlockBuilder;
 pub trait BlockBuilderExt {
 	/// Add transfer extrinsic to the block.
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
+	/// Add storage change extrinsic to the block.
+	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error>;
 }
 
 impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
@@ -33,5 +35,9 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(transfer.into_signed_tx())
+	}
+
+	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error> {
+		self.push(runtime::Extrinsic::StorageChange(key, value))
 	}
 }

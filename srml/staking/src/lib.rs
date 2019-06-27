@@ -866,7 +866,7 @@ decl_module! {
 
 		/// The ideal number of validators.
 		fn set_validator_count(#[compact] new: u32) {
-			<ValidatorCount<T>>::put(new);
+			ValidatorCount::put(new);
 		}
 
 		// ----- Root calls.
@@ -885,7 +885,7 @@ decl_module! {
 
 		/// Set the offline slash grace period.
 		fn set_offline_slash_grace(#[compact] new: u32) {
-			<OfflineSlashGrace<T>>::put(new);
+			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
@@ -940,11 +940,10 @@ impl<T: Trait> Module<T> {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				// FIXME #1572 avoid overflow
-				let safe_mul_rational = |b| b * rest_slash / total;
 				for i in exposure.others.iter() {
+					let per_u64 = Perbill::from_rational_approximation(i.value, total);
 					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
+					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
 				}
 			}
 		}
@@ -986,13 +985,14 @@ impl<T: Trait> Module<T> {
 		} else {
 			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
-			// FIXME #1572:  avoid overflow
-			let safe_mul_rational = |b| b * reward / total;
+
 			for i in &exposure.others {
-				let nom_payout = safe_mul_rational(i.value);
-				imbalance.maybe_subsume(Self::make_payout(&i.who, nom_payout));
+				let per_u64 = Perbill::from_rational_approximation(i.value, total);
+				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
 			}
-			safe_mul_rational(exposure.own)
+
+			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
+			per_u64 * reward
 		};
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);
@@ -1004,7 +1004,7 @@ impl<T: Trait> Module<T> {
 		let reward = Self::current_session_reward();
 		<CurrentEraReward<T>>::mutate(|r| *r += reward);
 
-		if <ForceNewEra<T>>::take() || session_index % T::SessionsPerEra::get() == 0 {
+		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
 			Self::new_era()
 		} else {
 			None
@@ -1032,7 +1032,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		<CurrentEra<T>>::mutate(|s| *s += 1);
+		CurrentEra::mutate(|s| *s += 1);
 
 		// Reassign all Stakers.
 		let (slot_stake, maybe_new_validators) = Self::select_validators();
@@ -1161,7 +1161,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn apply_force_new_era() {
-		<ForceNewEra<T>>::put(true);
+		ForceNewEra::put(true);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the

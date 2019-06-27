@@ -106,6 +106,7 @@ pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
+	StorageChange(Vec<u8>, Option<Vec<u8>>),
 }
 
 #[cfg(feature = "std")]
@@ -129,6 +130,7 @@ impl BlindCheckable for Extrinsic {
 				}
 			},
 			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
 }
@@ -468,6 +470,7 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: std::u64::MAX,
+						median_required_blocks: 100,
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
@@ -609,6 +612,7 @@ cfg_if! {
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
+						median_required_blocks: 0,
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
