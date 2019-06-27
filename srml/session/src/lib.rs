@@ -240,6 +240,9 @@ decl_storage! {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::Keys>;
 
+		/// Queued keys changed.
+		QueuedChanged: bool;
+
 		/// The queued keys for the next session.
 		pub QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
@@ -341,6 +344,9 @@ impl<T: Trait> Module<T> {
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
 
+		let changed = QueuedChanged::take();
+		let mut next_changed = Changed::take();
+
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
@@ -349,8 +355,13 @@ impl<T: Trait> Module<T> {
 		<Validators<T>>::put(validators);
 
 		// Get next validator set.
-		let next_validators = T::OnSessionEnding::on_session_ending(session_index)
-			.unwrap_or_else(|| <Validators<T>>::get());
+		let next_validators = if let Some(validators) =
+			T::OnSessionEnding::on_session_ending(session_index) {
+				next_changed = true;
+				validators
+			} else {
+				<Validators<T>>::get()
+			};
 
 		// Increment session index.
 		let session_index = session_index + 1;
@@ -361,12 +372,13 @@ impl<T: Trait> Module<T> {
 			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
 		<QueuedKeys<T>>::put(next_session_keys);
+		QueuedChanged::put(next_changed);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		T::SessionHandler::on_new_session::<T::Keys>(true, &session_keys);
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys);
 	}
 
 	/// Disable the validator of index `i`.
