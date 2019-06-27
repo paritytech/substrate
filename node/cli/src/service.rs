@@ -229,6 +229,7 @@ mod tests {
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
 	use substrate_service::ServiceFactory;
+	use service_test::SyncService;
 	use crate::service::Factory;
 
 	#[cfg(feature = "rhd")]
@@ -264,8 +265,13 @@ mod tests {
 				auxiliary: Vec::new(),
 			}
 		};
-		let extrinsic_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())), Era::immortal(), service.client().genesis_hash());
+		let extrinsic_factory = |service: &SyncService<<Factory as service::ServiceFactory>::FullService>| {
+			let payload = (
+				0,
+				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
+				Era::immortal(),
+				service.client().genesis_hash()
+			);
 			let signature = alice.sign(&payload.encode()).into();
 			let id = alice.public().0.into();
 			let xt = UncheckedExtrinsic {
@@ -275,7 +281,11 @@ mod tests {
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 			OpaqueExtrinsic(v)
 		};
-		service_test::sync::<Factory, _, _>(chain_spec::integration_test_config(), block_factory, extrinsic_factory);
+		service_test::sync::<Factory, _, _>(
+			chain_spec::integration_test_config(),
+			block_factory,
+			extrinsic_factory,
+		);
 	}
 
 	#[test]
@@ -285,9 +295,14 @@ mod tests {
 
 		let alice = Arc::new(AuthorityKeyring::Alice.pair());
 		let mut slot_num = 1u64;
-		let block_factory = |service: &<Factory as ServiceFactory>::FullService| {
-			let mut inherent_data = service.config.custom.inherent_data_providers
-				.create_inherent_data().unwrap();
+		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
+			let service = service.get();
+			let mut inherent_data = service
+				.config
+				.custom
+				.inherent_data_providers
+				.create_inherent_data()
+				.expect("Creates inherent data.");
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
 
@@ -297,13 +312,14 @@ mod tests {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			});
+
 			let mut digest = Digest::<H256>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,
-				::std::time::Duration::from_secs(1),
+				std::time::Duration::from_secs(1),
 			).expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
@@ -333,11 +349,11 @@ mod tests {
 		let charlie = Arc::new(AccountKeyring::Charlie.pair());
 
 		let mut index = 0;
-		let extrinsic_factory = |service: &<Factory as ServiceFactory>::FullService| {
+		let extrinsic_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let amount = 1000;
 			let to = AddressPublic::from_raw(bob.public().0);
 			let from = AddressPublic::from_raw(charlie.public().0);
-			let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
+			let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));

@@ -281,7 +281,6 @@ impl<C: Components> OffchainWorker<Self> for C where
 pub trait ServiceTrait<C: Components>:
 	Deref<Target = Service<C>>
 	+ Send
-	+ Sync
 	+ 'static
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
@@ -290,7 +289,6 @@ pub trait ServiceTrait<C: Components>:
 impl<C: Components, T> ServiceTrait<C> for T where
 	T: Deref<Target = Service<C>>
 	+ Send
-	+ Sync
 	+ 'static
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
