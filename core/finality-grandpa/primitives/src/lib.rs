@@ -25,13 +25,16 @@ extern crate alloc;
 use serde::Serialize;
 use parity_codec::{Encode, Decode};
 use sr_primitives::{
-	ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT, Hash},
+	ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT, Hash, Header},
 	generic::Block,
 };
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+use alloc::collections::BTreeMap;
 
-pub use grandpa_primitives::{Precommit, Prevote, Equivocation, Message};
+pub use grandpa_primitives::{
+	Precommit, Prevote, Equivocation, Message, Error as GrandpaError
+};
 
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
@@ -176,3 +179,52 @@ pub struct PrecommitChallenge<H, N, Header> {
 	block_proof: (Vec<Precommit<H, N>>, Vec<Header>),
 	previous_challenge: Option<H>,
 }
+
+/// A utility trait implementing `grandpa::Chain` using a given set of headers.
+/// This is useful when validating commits, using the given set of headers to
+/// verify a valid ancestry route to the target commit block.
+struct AncestryChain<Block: BlockT> {
+	ancestry: BTreeMap<Block::Hash, Block::Header>,
+}
+
+impl<Block: BlockT> AncestryChain<Block> 
+where
+	<Block as BlockT>::Hash: Ord
+{
+	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
+		let ancestry: BTreeMap<_, _> = ancestry
+			.iter()
+			.cloned()
+			.map(|h: Block::Header| (h.hash(), h))
+			.collect();
+
+		AncestryChain { ancestry }
+	}
+}
+
+// impl<Block: BlockT> Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block>
+// where
+// 	<Block as BlockT>::Hash: Ord
+// {
+// 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+// 		let mut route = Vec::new();
+// 		let mut current_hash = block;
+// 		loop {
+// 			if current_hash == base { break; }
+// 			match self.ancestry.get(&current_hash) {
+// 				Some(current_header) => {
+// 					current_hash = *current_header.parent_hash();
+// 					route.push(current_hash);
+// 				},
+// 				_ => return Err(GrandpaError::NotDescendent),
+// 			}
+// 		}
+// 		route.pop(); // remove the base
+
+// 		Ok(route)
+// 	}
+
+// 	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+// 		None
+// 	}
+// }
