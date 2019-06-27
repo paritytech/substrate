@@ -74,20 +74,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::marker::PhantomData;
-use rstd::result;
-use primitives::{generic::{Digest, Tip, Tippable}, traits::{
-	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
-	ValidateUnsigned,
-}};
+use rstd::{prelude::*, marker::PhantomData, result};
+use primitives::{ApplyOutcome, ApplyError,
+	generic::{Digest, Tip, Tippable},
+	weights::Weighable,
+	transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity},
+	traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
+		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, SaturatedConversion,
+		SimpleArithmetic,
+	},
+};
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
-use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
-use primitives::weights::Weighable;
 
 mod internal {
 	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
@@ -124,14 +123,15 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId>,
+	Payment: MakePayment<System::AccountId, Balance>,
 	Balance,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable + Tippable<Balance>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -145,14 +145,15 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId>,
-	Balance,
+	Payment: MakePayment<System::AccountId, Balance>,
+	Balance: SimpleArithmetic + Copy,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	Block::Extrinsic: Checkable<Context> + Codec,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable + Tippable<Balance>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -268,6 +269,8 @@ where
 
 		// Check the weight of the block if that extrinsic is applied.
 		let weight = xt.weight(encoded_len);
+		let tip = xt.tip();
+		// TODO: maybe reduce the weight if the transaction has a tip?
 		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
@@ -339,13 +342,6 @@ where
 
 		let encoded_len = uxt.encode().len();
 
-		// TODO: use thi(s to tweak `priority` field.
-		let tip = uxt.tip();
-		let _ = match tip {
-			Tip::None => (),
-			_ => (),
-		};
-
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -364,6 +360,19 @@ where
 					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 				}
 
+				// pay and burn the tip if provided.
+				let tip = xt.tip();
+				let tip_value = match tip {
+					Tip::Sender(value) => value,
+					Tip::None => Zero::zero(),
+				};
+
+				if !tip_value.is_zero() {
+					if Payment::make_raw_payment(sender, tip_value).is_err() {
+						return TransactionValidity::Invalid(ApplyError::CantPay as i8)
+					}
+				}
+
 				// check index
 				let expected_index = <system::Module<System>>::account_nonce(sender);
 				if index < &expected_index {
@@ -378,8 +387,11 @@ where
 					vec![]
 				};
 
+				// TODO: this for sure takes tip into account but
+				// - naive addition might not be okay (we want tip to be dominant and it is)
+				// - is `priority` enough?
 				TransactionValidity::Valid {
-					priority: encoded_len as TransactionPriority,
+					priority: (encoded_len as TransactionPriority) + tip_value.saturated_into::<TransactionPriority>(),
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),

@@ -134,6 +134,7 @@ mod tests {
 		sign(CheckedExtrinsic {
 			signed: Some((alice(), 0)),
 			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
+			tip: Tip::default(),
 		})
 	}
 
@@ -460,7 +461,6 @@ mod tests {
 		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
-	/// TODO: refactor these a bit more.
 	fn changes_trie_block() -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, true),
@@ -470,10 +470,12 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+					tip: Tip::default(),
 				},
 			]
 		)
@@ -492,10 +494,12 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+					tip: Tip::default(),
 				},
 			]
 		);
@@ -507,14 +511,17 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(52)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), 0)),
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 1)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
+					tip: Tip::default(),
 				}
 			]
 		);
@@ -536,10 +543,12 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
 					function: Call::System(system::Call::remark(vec![0; 120000])),
+					tip: Tip::default(),
 				}
 			]
 		)
@@ -814,18 +823,21 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
 					function: Call::Contracts(
 						contracts::Call::put_code::<Runtime>(10_000, transfer_code)
 					),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contracts(
 						contracts::Call::create::<Runtime>(10, 10_000, transfer_ch, Vec::new())
 					),
+					tip: Tip::default(),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
@@ -837,6 +849,7 @@ mod tests {
 							vec![0x00, 0x01, 0x02, 0x03]
 						)
 					),
+					tip: Tip::default(),
 				},
 			]
 		);

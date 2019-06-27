@@ -90,16 +90,20 @@ pub enum UpdateBalanceOutcome {
 }
 
 /// Simple trait designed for hooking into a transaction payment.
-///
-/// It operates over a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
+pub trait MakePayment<AccountId, Balance> {
 	/// Make transaction payment from `who` for an extrinsic of encoded length
 	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
 	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
+
+	/// Make a raw transactiona payment from `who` with the value `value`.
+	/// This is most often used to deduct optional fees from a transactor.
+	/// Return `Ok` iff the payment was successful.
+	fn make_raw_payment(who: &AccountId, value: Balance) -> Result<(), &'static str>;
 }
 
-impl<T> MakePayment<T> for () {
+impl<T, B> MakePayment<T, B> for () {
 	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+	fn make_raw_payment(_: &T, _: B) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Handler for when some currency "account" decreased in balance for

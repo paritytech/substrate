@@ -24,7 +24,7 @@ use runtime_io::blake2_256;
 use crate::codec::{Decode, Encode, Input, Compact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
 	Lookup, Checkable, Extrinsic, SaturatedConversion};
-use super::{CheckedExtrinsic, Era, Tip, Tippable};
+use super::{CheckedExtrinsic, Era, Tip};
 
 const TRANSACTION_VERSION: u8 = 1;
 
@@ -62,11 +62,11 @@ impl<Address, Index, Call, Signature, Balance>
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
-	pub fn new_unsigned(function: Call, tip: Tip<Balance>) -> Self {
+	pub fn new_unsigned(function: Call) -> Self {
 		UncheckedMortalCompactExtrinsic {
 			signature: None,
 			function,
-			tip,
+			tip: Tip::None
 		}
 	}
 }
@@ -93,8 +93,9 @@ where
 	Context: Lookup<Source=Address, Target=AccountId>
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
+	Balance: Member + Encode,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -103,7 +104,7 @@ where
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
 					.ok_or("transaction birth block ancient")?;
 				let signed = context.lookup(signed)?;
-				let raw_payload = (index, self.function, era, h);
+				let raw_payload = (index, self.function, self.tip, era, h);
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -116,23 +117,16 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, (raw_payload.0).0)),
 					function: raw_payload.1,
+					tip: raw_payload.2,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
+				// an unsigned transaction cannot have tips.
+				tip: Tip::None,
 			},
 		})
-	}
-}
-
-impl<Address, Index, Signature, Call, Balance> Tippable<Balance>
-	for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature, Balance>
-where
-	Balance: Clone,
-{
-	fn tip(&self) -> Tip<Balance> {
-		self.tip.clone()
 	}
 }
 
@@ -251,22 +245,25 @@ mod tests {
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
-	impl traits::Verify for TestSig {
+	impl traits::Verify for TestSig  {
 		type Signer = u64;
 		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+			println!("Test verify for [self = {:?}] and signer {:?} with message {:?}", self, signer, msg.get());
 			*signer == self.0 && msg.get() == &self.1[..]
 		}
 	}
 
-	const DUMMY_ACCOUNTID: u64 = 0;
 	type Balance = u64;
 
+	const DUMMY_ACCOUNTID: u64 = 0;
+	const TIP: Tip<Balance> = Tip::Sender(66);
+
 	type Ex = UncheckedMortalCompactExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
 
 	#[test]
 	fn unsigned_codec_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0], Tip::default());
+		let ux = Ex::new_unsigned(vec![0u8;0]);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
@@ -277,9 +274,9 @@ mod tests {
 			0,
 			vec![0u8; 0],
 			DUMMY_ACCOUNTID,
-			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()),
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::immortal(), 0u64).encode()),
 			Era::immortal(),
-			Tip::default()
+			TIP
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
@@ -293,10 +290,10 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(DUMMY_ACCOUNTID, vec![0u8; 257], Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()
+				(DUMMY_ACCOUNTID, vec![0u8; 257], TIP, Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()
 			),
 			Era::immortal(),
-			Tip::default()
+			TIP
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
@@ -304,7 +301,7 @@ mod tests {
 
 	#[test]
 	fn unsigned_check_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0], Tip::default());
+		let ux = Ex::new_unsigned(vec![0u8;0]);
 		assert!(!ux.is_signed().unwrap_or(false));
 		assert!(<Ex as Checkable<TestContext>>::check(ux, &TestContext).is_ok());
 	}
@@ -317,7 +314,7 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(DUMMY_ACCOUNTID, vec![0u8]),
 			Era::immortal(),
-			Tip::default(),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
@@ -331,15 +328,15 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::immortal(), 0u64).encode()
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::immortal(), 0u64).encode()
 			),
 			Era::immortal(),
-			Tip::Sender(20),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
 		);
 	}
 
@@ -351,17 +348,15 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(Compact::from(DUMMY_ACCOUNTID),
-				vec![0u8;0],
-				Era::mortal(32, 42), 42u64).encode()
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::mortal(32, 42), 42u64).encode()
 			),
 			Era::mortal(32, 42),
-			Tip::default(),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] }));
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP }));
 	}
 
 	#[test]
@@ -372,15 +367,15 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::mortal(32, 11), 11u64).encode()
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::mortal(32, 11), 11u64).encode()
 			),
 			Era::mortal(32, 11),
-			Tip::default(),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0] })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
 		);
 	}
 
@@ -392,10 +387,10 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()
+				(DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::mortal(32, 10), 10u64).encode()
 			),
 			Era::mortal(32, 10),
-			Tip::default(),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
@@ -409,10 +404,10 @@ mod tests {
 			DUMMY_ACCOUNTID,
 			TestSig(
 				DUMMY_ACCOUNTID,
-				(DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()
+				(DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::mortal(32, 43), 43u64).encode()
 			),
 			Era::mortal(32, 43),
-			Tip::default(),
+			TIP,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
@@ -420,11 +415,47 @@ mod tests {
 
 	#[test]
 	fn encoding_matches_vec() {
-		let ex = Ex::new_unsigned(vec![0u8;0], Tip::Sender(10));
+		let ex = Ex::new_unsigned(vec![0u8;0]);
 		let encoded = ex.encode();
 		let decoded = Ex::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+	#[test]
+	fn missing_tip_in_signature_payload_should_fail() {
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()
+			),
+			Era::immortal(),
+			TIP,
+		);
+		assert!(ux.is_signed().unwrap_or(false));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+	}
+
+	#[test]
+	fn unsigned_cannot_have_tip() {
+		let ux = UncheckedMortalCompactExtrinsic { signature: None, tip: Tip::Sender(100), function: vec![0u8;0]};
+		let xt = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
+		assert_eq!(xt.tip, Tip::None);
+	}
+
+	#[test]
+	fn unprovided_tip_will_not_fail() {
+		// unsigned with no tips
+		let bytes =  vec![40, 1, 32, 8, 8, 8, 8, 8, 8, 8, 8];
+
+		// decoding will yield the default tip
+		let decoded = Ex::decode(&mut bytes.as_slice()).unwrap();
+		assert_eq!(
+			decoded,
+			UncheckedMortalCompactExtrinsic { signature: None, tip: Tip::None, function: vec![8u8;8]})
 	}
 }

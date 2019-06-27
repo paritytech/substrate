@@ -1055,13 +1055,18 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
+impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId, T::Balance> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let encoded_len = T::Balance::from(encoded_len as u32);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
+		Self::make_raw_payment(transactor, transaction_fee)?;
+		Ok(())
+	}
+
+	fn make_raw_payment(transactor: &T::AccountId, value: T::Balance) -> Result {
 		let imbalance = Self::withdraw(
 			transactor,
-			transaction_fee,
+			value,
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive
 		)?;

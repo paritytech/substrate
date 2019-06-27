@@ -118,7 +118,7 @@ fn lock_reasons_should_work() {
 			"account liquidity restrictions prevent withdrawal"
 		);
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+		assert_ok!(<Balances as MakePayment<_, _>>::make_payment(&1, 1));
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -126,13 +126,13 @@ fn lock_reasons_should_work() {
 			<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 			"account liquidity restrictions prevent withdrawal"
 		);
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+		assert_ok!(<Balances as MakePayment<_, _>>::make_payment(&1, 1));
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 		assert_noop!(
-			<Balances as MakePayment<_>>::make_payment(&1, 1),
+			<Balances as MakePayment<_, _>>::make_payment(&1, 1),
 			"account liquidity restrictions prevent withdrawal"
 		);
 	});
