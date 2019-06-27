@@ -23,6 +23,7 @@ use primitives::offchain::{
 	Timestamp, HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKeyId,
+	StorageKind,
 };
 use runtime_primitives::{
 	generic::BlockId,
@@ -49,6 +50,7 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 	Default::default()
 }
 
+const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 const STORAGE_PREFIX: &[u8] = b"storage";
 
 impl<S: OffchainStorage> OffchainExt for Api<S> {
@@ -96,16 +98,33 @@ impl<S: OffchainStorage> OffchainExt for Api<S> {
 		unavailable_yet("random_seed")
 	}
 
-	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) {
-		self.db.set(STORAGE_PREFIX, key, value)
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		match kind {
+			StorageKind::PERSISTENT => self.db.set(STORAGE_PREFIX, key, value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
-	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
-		self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
+		match kind {
+			StorageKind::PERSISTENT => {
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+			},
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
-	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.db.get(STORAGE_PREFIX, key)
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		match kind {
+			StorageKind::PERSISTENT => self.db.get(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
 	fn http_request_start(
@@ -245,30 +264,32 @@ mod tests {
 	#[test]
 	fn should_set_and_get_local_storage() {
 		// given
+		let kind = StorageKind::PERSISTENT;
 		let mut api = offchain_api().0;
 		let key = b"test";
 
 		// when
-		assert_eq!(api.local_storage_get(key), None);
-		api.local_storage_set(key, b"value");
+		assert_eq!(api.local_storage_get(kind, key), None);
+		api.local_storage_set(kind, key, b"value");
 
 		// then
-		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 	}
 
 	#[test]
 	fn should_compare_and_set_local_storage() {
 		// given
+		let kind = StorageKind::PERSISTENT;
 		let mut api = offchain_api().0;
 		let key = b"test";
-		api.local_storage_set(key, b"value");
+		api.local_storage_set(kind, key, b"value");
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(key, b"val", b"xxx"), false);
-		assert_eq!(api.local_storage_get(key), Some(b"value".to_vec()));
+		assert_eq!(api.local_storage_compare_and_set(kind, key, b"val", b"xxx"), false);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(key, b"value", b"xxx"), true);
-		assert_eq!(api.local_storage_get(key), Some(b"xxx".to_vec()));
+		assert_eq!(api.local_storage_compare_and_set(kind, key, b"value", b"xxx"), true);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"xxx".to_vec()));
 	}
 }

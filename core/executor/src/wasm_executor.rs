@@ -857,24 +857,28 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to set value in ext_random_seed")?;
 		Ok(())
 	},
-	ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32) => {
+	ext_local_storage_set(kind: u32, key: *const u8, key_len: u32, value: *const u8, value_len: u32) => {
+		let kind = offchain::StorageKind::try_from(kind)
+				.map_err(|_| "storage kind OOB while ext_local_storage_set: wasm")?;
 		let key = this.memory.get(key, key_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_set: wasm")?;
 		let value = this.memory.get(value, value_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_set: wasm")?;
 
 		this.ext.offchain()
-			.map(|api| api.local_storage_set(&key, &value))
+			.map(|api| api.local_storage_set(kind, &key, &value))
 			.ok_or_else(|| "Calling unavailable API ext_local_storage_set: wasm")?;
 
 		Ok(())
 	},
-	ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
+	ext_local_storage_get(kind: u32, key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
+		let kind = offchain::StorageKind::try_from(kind)
+				.map_err(|_| "storage kind OOB while ext_local_storage_get: wasm")?;
 		let key = this.memory.get(key, key_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_get: wasm")?;
 
 		let maybe_value = this.ext.offchain()
-			.map(|api| api.local_storage_get(&key))
+			.map(|api| api.local_storage_get(kind, &key))
 			.ok_or_else(|| "Calling unavailable API ext_local_storage_get: wasm")?;
 
 		let (offset, len) = if let Some(value) = maybe_value {
@@ -892,6 +896,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(offset)
 	},
 	ext_local_storage_compare_and_set(
+		kind: u32,
 		key: *const u8,
 		key_len: u32,
 		old_value: *const u8,
@@ -899,6 +904,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		new_value: *const u8,
 		new_value_len: u32
 	) -> u32 => {
+		let kind = offchain::StorageKind::try_from(kind)
+				.map_err(|_| "storage kind OOB while ext_local_storage_compare_and_set: wasm")?;
 		let key = this.memory.get(key, key_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 		let old_value = this.memory.get(old_value, old_value_len as usize)
@@ -907,7 +914,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.local_storage_compare_and_set(&key, &old_value, &new_value))
+			.map(|api| api.local_storage_compare_and_set(kind, &key, &old_value, &new_value))
 			.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_andset: wasm")?;
 
 		Ok(if res { 0 } else { 1 })
@@ -1586,7 +1593,7 @@ mod tests {
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
 			vec![0]
 		);
-		assert_eq!(state.read().storage.get(b"", b"test"), Some(vec![]));
+		assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
 	}
 
 	#[test]

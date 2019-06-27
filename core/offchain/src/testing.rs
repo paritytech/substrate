@@ -30,6 +30,7 @@ use primitives::offchain::{
 	Timestamp,
 	CryptoKind,
 	CryptoKeyId,
+	StorageKind,
 };
 
 /// Pending request.
@@ -63,8 +64,10 @@ pub struct State {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
+	/// Persistent local storage
+	pub persistent_storage: client::in_mem::OffchainStorage,
 	/// Local storage
-	pub storage: client::in_mem::OffchainStorage,
+	pub local_storage: client::in_mem::OffchainStorage,
 }
 
 impl State {
@@ -168,24 +171,34 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		let mut state = self.0.write();
-		state.storage.set(b"", key, value);
+		match kind {
+			StorageKind::LOCAL => &mut state.local_storage,
+			StorageKind::PERSISTENT => &mut state.persistent_storage,
+		}.set(b"", key, value);
 	}
 
 	fn local_storage_compare_and_set(
 		&mut self,
+		kind: StorageKind,
 		key: &[u8],
 		old_value: &[u8],
 		new_value: &[u8]
 	) -> bool {
 		let mut state = self.0.write();
-		state.storage.compare_and_set(b"", key, old_value, new_value)
+		match kind {
+			StorageKind::LOCAL => &mut state.local_storage,
+			StorageKind::PERSISTENT => &mut state.persistent_storage,
+		}.compare_and_set(b"", key, old_value, new_value)
 	}
 
-	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let state = self.0.read();
-		state.storage.get(b"", key)
+		match kind {
+			StorageKind::LOCAL => &state.local_storage,
+			StorageKind::PERSISTENT => &state.persistent_storage,
+		}.get(b"", key)
 	}
 
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<RequestId, ()> {

@@ -134,13 +134,14 @@ impl_stubs!(
 		[code].to_vec()
 	},
 	test_offchain_local_storage => |_| {
-		assert_eq!(runtime_io::local_storage_get(b"test"), None);
-		runtime_io::local_storage_set(b"test", b"asd");
-		assert_eq!(runtime_io::local_storage_get(b"test"), Some(b"asd".to_vec()));
+		let kind = substrate_primitives::offchain::StorageKind::PERSISTENT;
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
+		runtime_io::local_storage_set(kind, b"test", b"asd");
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
 
-		let res = runtime_io::local_storage_compare_and_set(b"test", b"asd", b"");
+		let res = runtime_io::local_storage_compare_and_set(kind, b"test", b"asd", b"");
 		assert_eq!(res, true);
-		assert_eq!(runtime_io::local_storage_get(b"test"), Some(b"".to_vec()));
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"".to_vec()));
 
 		[0].to_vec()
 	},
