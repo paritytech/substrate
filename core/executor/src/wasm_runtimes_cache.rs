@@ -239,19 +239,19 @@ impl RuntimesCache {
 		match WasmModule::from_buffer(code)
 			.map_err(|_| Error::InvalidCode(vec![]))
 			.and_then(|module| wasm_executor.prepare_module(ext, heap_pages as usize, &module))
-			{
-				Ok(module) => {
-					let version = wasm_executor.call_in_wasm_module(ext, &module, "Core_version", &[])
-						.ok()
-						.and_then(|v| {
-							RuntimeVersion::decode(&mut v.as_slice())
-						});
-					RuntimePreproc::ValidCode(module, version)
-				},
-				Err(e) => {
-					trace!(target: "runtimes_cache", "Invalid code presented to executor ({:?})", e);
-					RuntimePreproc::InvalidCode
-				},
+		{
+			Ok(module) => {
+				let version = wasm_executor.call_in_wasm_module(ext, &module, "Core_version", &[])
+					.ok()
+					.and_then(|v| {
+						RuntimeVersion::decode(&mut v.as_slice())
+					});
+				RuntimePreproc::ValidCode(module, version)
 			}
+			Err(e) => {
+				trace!(target: "runtimes_cache", "Invalid code presented to executor ({:?})", e);
+				RuntimePreproc::InvalidCode
+			}
+		}
 	}
 }
