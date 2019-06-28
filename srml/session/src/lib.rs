@@ -115,11 +115,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, ops::Rem};
+use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
-use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
+use primitives::traits::{Zero, Member, OpaqueKeys};
 use srml_support::{
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
@@ -136,7 +136,7 @@ pub trait ShouldEndSession<BlockNumber> {
 
 /// Ends the session after a fixed period of blocks.
 ///
-/// The first session will have length of `Period + Offset`, and 
+/// The first session will have length of `Period + Offset`, and
 /// the following sessions will have length of `Period`.
 pub struct PeriodicSessions<
 	Period,
@@ -144,7 +144,7 @@ pub struct PeriodicSessions<
 >(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Saturating + Zero,
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
@@ -594,5 +594,34 @@ mod tests {
 			Session::on_initialize(4);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
 		});
+	}
+
+	#[test]
+	fn periodic_session_works() {
+		struct Period;
+		struct Offset;
+
+		impl Get<u64> for Period {
+			fn get() -> u64 { 10 }
+		}
+
+		impl Get<u64> for Offset {
+			fn get() -> u64 { 3 }
+		}
+
+
+		type P = PeriodicSessions<Period, Offset>;
+
+		for i in 0..13 {
+			assert!(!P::should_end_session(i));
+		}
+
+		assert!(P::should_end_session(13));
+
+		for i in (1..10).map(|i| 13 + i) {
+			assert!(!P::should_end_session(i));
+		}
+
+		assert!(P::should_end_session(23));
 	}
 }
