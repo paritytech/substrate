@@ -269,8 +269,6 @@ where
 
 		// Check the weight of the block if that extrinsic is applied.
 		let weight = xt.weight(encoded_len);
-		let tip = xt.tip();
-		// TODO: maybe reduce the weight if the transaction has a tip?
 		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
@@ -387,9 +385,7 @@ where
 					vec![]
 				};
 
-				// TODO: this for sure takes tip into account but
-				// - naive addition might not be okay (we want tip to be dominant and it is)
-				// - is `priority` enough?
+				// TODO: maximise (fee + tip) per weight unit here.
 				TransactionValidity::Valid {
 					priority: (encoded_len as TransactionPriority) + tip_value.saturated_into::<TransactionPriority>(),
 					requires,

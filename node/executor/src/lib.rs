@@ -107,7 +107,7 @@ mod tests {
 		match xt.signed {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
-				let payload = (index.into(), xt.function, era, GENESIS_HASH);
+				let payload = (index.into(), xt.function, xt.tip, era, GENESIS_HASH);
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -119,13 +119,13 @@ mod tests {
 				UncheckedExtrinsic {
 					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
-					tip: Tip::default(),
+					tip: payload.2,
 				}
 			}
 			None => UncheckedExtrinsic {
 				signature: None,
 				function: xt.function,
-				tip: Tip::default()
+				tip: xt.tip,
 			},
 		}
 	}
