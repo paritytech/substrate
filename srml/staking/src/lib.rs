@@ -290,7 +290,7 @@ use primitives::traits::{
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
 
-use phragmen::{elect, ACCURACY, ExtendedBalance};
+use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -1077,7 +1077,7 @@ impl<T: Trait> Module<T> {
 			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
 
 			// Compute the actual stake from nominator's ratio.
-			let mut assignments_with_stakes = assignments.iter().map(|(n, a)|(
+			let assignments_with_stakes = assignments.iter().map(|(n, a)|(
 				n.clone(),
 				Self::slashable_balance_of(n),
 				a.iter().map(|(acc, r)| (
@@ -1111,17 +1111,22 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			// This optimization will most likely be only applied off-chain.
-			let do_equalize = false;
-			if do_equalize {
-				let tolerance = 10 as u128;
-				let iterations = 10 as usize;
-				phragmen::equalize::<T>(
-					&mut assignments_with_stakes,
-					&mut exposures,
-					tolerance,
-					iterations
-				);
+			if cfg!(feature = "equalize") {
+				let tolerance = 0_u128;
+				let iterations = 2_usize;
+				let mut assignments_with_votes = assignments_with_stakes.iter()
+					.map(|a| (
+						a.0.clone(), a.1,
+						a.2.iter()
+							.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
+							.collect::<Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>>()
+					))
+					.collect::<Vec<(
+						T::AccountId,
+						BalanceOf<T>,
+						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
+					)>>();
+				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}
 
 			// Clear Stakers and reduce their slash_count.
@@ -1141,9 +1146,11 @@ impl<T: Trait> Module<T> {
 				}
 				<Stakers<T>>::insert(c.clone(), e.clone());
 			}
+
+			// Update slot stake.
 			<SlotStake<T>>::put(&slot_stake);
 
-			// Set the new validator set.
+			// Set the new validator set in sessions.
 			<CurrentElected<T>>::put(&elected_stashes);
 			let validators = elected_stashes.into_iter()
 				.map(|s| Self::bonded(s).unwrap_or_default())
