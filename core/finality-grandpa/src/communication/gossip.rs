@@ -865,7 +865,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				return do_rebroadcast;
 			}
 
-			// if the topic is not something we're keeping at the moment,
+			// If the topic is not something we're keeping at the moment,
 			// do not send.
 			let (maybe_round, set_id) = {
 				match inner.peers.peer(who) {
@@ -919,7 +919,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						(per_peer_tally.primary_proposals, per_peer_tally.pre_votes, per_peer_tally.pre_commits)
 					};
 
-					// and check that what we've sent, plus what we've received from a given peer,
+					// Check that what we've sent, plus what we've received from a given peer,
 					// doesn't add up to more than two messages of a any kind
 					// for a given voter/peer combo.
 					if (primary_proposals_to_peer + primary_proposals_from_peer) > 2 ||

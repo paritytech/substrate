@@ -353,12 +353,12 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 
 	let test = make_test_network()
 		.and_then(move |tester| {
-			// register a peer.
+			// Register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
-			// start round.
+			// Start round.
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
 			{
@@ -374,7 +374,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 					_ => panic!("wrong expected outcome from initial commit validation"),
 				}
 			}
-			// start another round, tallies should be reset.
+			// Start another round, tallies should be reset.
 			tester.net_handle.global_communication(SetId(2), voter_set, false);
 
 			{
@@ -464,12 +464,12 @@ fn non_existent_votes_excluded_from_tallies() {
 
 	let test = make_test_network()
 		.and_then(move |tester| {
-			// register a peer.
+			// Register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {
-			// start round,.
+			// Start round.
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
 			{
