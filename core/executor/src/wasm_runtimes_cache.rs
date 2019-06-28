@@ -80,8 +80,8 @@ impl RuntimesCache {
 	/// up an initial runtime instance. The parameter is only needed for calling
 	/// into the Wasm module to find out the `Core_version`.
 	///
-	/// `default_heap_pages` - Default number of 64KB pages to allocate for
-	/// Wasm execution. Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	/// `initial_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
 	/// `maybe_requested_version` - If `Some(RuntimeVersion)` is provided the
 	/// cached instance will be checked for compatibility. In case of incompatibility
@@ -99,13 +99,13 @@ impl RuntimesCache {
 		&mut self,
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		default_heap_pages: Option<u64>,
+		initial_heap_pages: Option<u64>,
 		maybe_requested_version: Option<&RuntimeVersion>,
 	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>)> {
 		if let None = self.runtime_instance {
 			trace!(target: "runtimes_cache",
 				   "no instance found in cache, creating now.");
-			self.create_instance(wasm_executor, ext, default_heap_pages);
+			self.create_instance(wasm_executor, ext, initial_heap_pages);
 		}
 
 		let action = match maybe_requested_version {
@@ -140,7 +140,7 @@ impl RuntimesCache {
 					.expect("this path will only be invoked if instance exists; qed")
 			},
 			Action::CreateNewInstance => {
-				self.create_instance(wasm_executor, ext, default_heap_pages);
+				self.create_instance(wasm_executor, ext, initial_heap_pages);
 				self.runtime_instance.clone()
 					.expect("was created right beforehand; qed")
 			},
@@ -164,10 +164,10 @@ impl RuntimesCache {
 		&mut self,
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		default_heap_pages: Option<u64>,
+		initial_heap_pages: Option<u64>,
 	) {
 		let instance =
-			self.create_wasm_instance(wasm_executor, ext, default_heap_pages);
+			self.create_wasm_instance(wasm_executor, ext, initial_heap_pages);
 		if let RuntimePreproc::ValidCode(ref module, _) = instance {
 			self.preserve_initial_memory(module);
 		}
@@ -224,7 +224,7 @@ impl RuntimesCache {
 		&self,
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		default_heap_pages: Option<u64>,
+		initial_heap_pages: Option<u64>,
 	) -> RuntimePreproc {
 		let code = match ext.original_storage(well_known_keys::CODE) {
 			Some(code) => code,
@@ -233,7 +233,7 @@ impl RuntimesCache {
 
 		let heap_pages = ext.storage(well_known_keys::HEAP_PAGES)
 			.and_then(|pages| u64::decode(&mut &pages[..]))
-			.or(default_heap_pages)
+			.or(initial_heap_pages)
 			.unwrap_or(DEFAULT_HEAP_PAGES);
 
 		match WasmModule::from_buffer(code)
