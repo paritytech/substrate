@@ -27,6 +27,8 @@ use state_machine::Externalities;
 use std::{ops::Deref, result};
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 
+// Contains a preprocessed runtime instance, if it is compatible
+// enough to be run natively.
 #[derive(Clone)]
 enum RuntimePreproc {
 	InvalidCode,
@@ -89,9 +91,9 @@ impl RuntimesCache {
 	///
 	/// # Return value
 	///
-	/// If no error occurred a `RuntimePreproc::ValidCode` is returned, containing
-	/// a wasmi `ModuleRef` with an optional `RuntimeVersion` (if the call
-	/// `Core_version` returned a version).
+	/// If no error occurred a tuple `(wasmi::ModuleRef, Option<RuntimeVersion>)` is
+	/// returned. `RuntimeVersion` is contained if the call to `Core_version` returned
+	/// a version.
 	///
 	/// In case of failure one of two errors can be returned:
 	///
@@ -198,7 +200,10 @@ impl RuntimesCache {
 			})?;
 		match mem {
 			wasmi::ExternVal::Memory(memory_ref) => {
+				// The returned used size is a heuristic which returns one more
+				// than the highest memory address that had been written to.
 				let used_size = memory_ref.used_size().0;
+
 				let data = memory_ref.get(0, used_size)
 					.expect("extracting data will always succeed since requested range is always valid; qed");
 
