@@ -444,6 +444,8 @@ mod tests {
 			RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
 		static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
+		static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+		static TEST_SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
 	}
 
 	pub struct TestShouldEndSession;
@@ -456,7 +458,8 @@ mod tests {
 
 	pub struct TestSessionHandler;
 	impl SessionHandler<u64> for TestSessionHandler {
-		fn on_new_session<T: OpaqueKeys>(_changed: bool, validators: &[(u64, T)]) {
+		fn on_new_session<T: OpaqueKeys>(changed: bool, validators: &[(u64, T)]) {
+			SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
 			AUTHORITIES.with(|l|
 				*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
 			);
@@ -467,7 +470,11 @@ mod tests {
 	pub struct TestOnSessionEnding;
 	impl OnSessionEnding<u64> for TestOnSessionEnding {
 		fn on_session_ending(_: SessionIndex) -> Option<Vec<u64>> {
-			Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
+			if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
+				Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
+			} else {
+				None
+			}
 		}
 	}
 
@@ -481,6 +488,10 @@ mod tests {
 
 	fn set_session_length(x: u64) {
 		SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
+	}
+
+	fn session_changed() -> bool {
+		SESSION_CHANGED.with(|l| *l.borrow())
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -512,6 +523,7 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
@@ -526,6 +538,7 @@ mod tests {
 	}
 
 	fn initialize_block(block: u64) {
+		SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
 		System::set_block_number(block);
 		Session::on_initialize(block);
 	}
@@ -635,6 +648,43 @@ mod tests {
 			// Block 6: Session rollover; authority 2 changes.
 			initialize_block(6);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
+		});
+	}
+
+	#[test]
+	fn session_changed_flag_works() {
+		with_externalities(&mut new_test_ext(), || {
+			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
+
+			force_new_session();
+			initialize_block(1);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(2);
+			assert!(!session_changed());
+
+			Session::disable_index(0);
+			force_new_session();
+			initialize_block(3);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(4);
+			assert!(session_changed());
+
+			force_new_session();
+			initialize_block(5);
+			assert!(!session_changed());
+
+			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
+			force_new_session();
+			initialize_block(6);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(7);
+			assert!(session_changed());
 		});
 	}
 }
