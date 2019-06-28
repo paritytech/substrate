@@ -114,9 +114,7 @@ impl RuntimesCache {
 			self.create_instance(wasm_executor, ext, initial_heap_pages)?;
 
 			match self.runtime_instance.clone() {
-				Some(RuntimePreproc::ValidCode(r, v)) => {
-					return Ok((r, v));
-				},
+				Some(RuntimePreproc::ValidCode(r, v)) => return Ok((r, v)),
 				_ => unreachable!("runtime must exist here, errors would have been returned earlier; qed"),
 			};
 		}
@@ -143,7 +141,7 @@ impl RuntimesCache {
 					},
 					None => unreachable!("instance is created at beginning of function if non-existent; qed"),
 				}
-			},
+			}
 		};
 
 		let runtime_preproc = match action {
@@ -151,15 +149,15 @@ impl RuntimesCache {
 				self.reset_instance();
 				self.runtime_instance.clone()
 					.expect("this path will only be invoked if instance exists; qed")
-			},
+			}
 			Action::CreateNewInstance => {
 				self.create_instance(wasm_executor, ext, initial_heap_pages)?;
 				self.runtime_instance.clone()
 					.expect("was created right beforehand; qed")
-			},
+			}
 			Action::InvalidCode => {
 				RuntimePreproc::InvalidCode
-			},
+			}
 		};
 
 		match runtime_preproc {
@@ -209,11 +207,11 @@ impl RuntimesCache {
 
 				self.initial_memory = Some(data);
 				Ok(())
-			},
+			}
 			_ => {
 				trace!(target: "runtimes_cache", "No export 'memory' found in runtime!");
 				Err(Error::InvalidMemoryReference)
-			},
+			}
 		}
 	}
 
@@ -238,7 +236,7 @@ impl RuntimesCache {
 					}
 				}
 				runtime.clone()
-			},
+			}
 			None => unreachable!("runtime instance is always existent at this point; qed"),
 		}
 	}
