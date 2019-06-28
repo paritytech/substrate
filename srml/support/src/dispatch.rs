@@ -1310,14 +1310,16 @@ macro_rules! __impl_module_constants_metadata {
 			>: $type:ty = $value:expr;
 		)*
 	) => {
-		impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
-			$mod_type<$trait_instance $(, $instance)?>
-		{
-			#[doc(hidden)]
-			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
-				// Create the `ByteGetter`s
-				$crate::paste::expr! {
+		$crate::paste::item! {
+			impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
+				$mod_type<$trait_instance $(, $instance)?>
+			{
+				#[doc(hidden)]
+				pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
+					// Create the `ByteGetter`s
 					$(
+						#[allow(non_upper_case_types)]
+						#[allow(non_camel_case_types)]
 						struct [< $name DefaultByteGetter >]<
 							$const_trait_instance: $const_trait_name $(
 								<I>, $const_instance: $const_instantiable
@@ -1331,7 +1333,8 @@ macro_rules! __impl_module_constants_metadata {
 							for [< $name DefaultByteGetter >]<$const_trait_instance $(, $const_instance)?>
 						{
 							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
-								$crate::dispatch::Encode::encode(&<$type>::from($value))
+								let value: $type = $value;
+								$crate::dispatch::Encode::encode(&value)
 							}
 						}
 					)*
@@ -1342,7 +1345,9 @@ macro_rules! __impl_module_constants_metadata {
 								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
 								value: $crate::dispatch::DecodeDifferent::Encode(
 									$crate::dispatch::DefaultByteGetter(
-										&[< $name DefaultByteGetter >]::<$const_trait_instance $(, $const_instance)?>(
+										&[< $name DefaultByteGetter >]::<
+											$const_trait_instance $(, $const_instance)?
+										>(
 											$crate::dispatch::marker::PhantomData
 										)
 									)

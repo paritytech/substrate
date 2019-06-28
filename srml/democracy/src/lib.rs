@@ -241,7 +241,6 @@ impl<BlockNumber: Parameter, Proposal: Parameter> ReferendumInfo<BlockNumber, Pr
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
-
 		/// The number of (public) proposals that have been made so far.
 		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted.
@@ -318,6 +317,28 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The minimum period of locking and the period between a proposal being approved and enacted.
+		///
+		/// It should generally be a little more than the unstake period to ensure that
+		/// voting stakers have an opportunity to remove themselves from the system in the case where
+		/// they are on the losing side of a vote.
+		const EnactmentPeriod: T::BlockNumber = T::EnactmentPeriod::get();
+
+		/// How often (in blocks) new public referenda are launched.
+		const LaunchPeriod: T::BlockNumber = T::LaunchPeriod::get();
+
+		/// How often (in blocks) to check for new votes.
+		const VotingPeriod: T::BlockNumber = T::VotingPeriod::get();
+
+		/// The minimum amount to be used as a deposit for a public referendum proposal.
+		const MinimumDeposit: BalanceOf<T> = T::MinimumDeposit::get();
+
+		/// Minimum voting period allowed for an emergency referendum.
+		const EmergencyVotingPeriod: T::BlockNumber = T::EmergencyVotingPeriod::get();
+
+		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
+		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Propose a sensitive action to be taken.

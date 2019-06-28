@@ -249,9 +249,9 @@ mod tests {
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				/// Hi, I am a comment.
-				const BlockNumber: T::BlockNumber = 100;
-				const GetType: T::AccountId = T::SomeValue::get();
-				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST;
+				const BlockNumber: T::BlockNumber = 100.into();
+				const GetType: T::AccountId = T::SomeValue::get().into();
+				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
 			}
 		}
 
