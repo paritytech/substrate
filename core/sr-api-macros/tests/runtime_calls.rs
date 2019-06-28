@@ -208,3 +208,22 @@ fn returns_mutable_static() {
 	let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
 	assert_eq!(ret, 33);
 }
+
+// If we didn't restore the wasm instance properly, on a trap the stack pointer would not be
+// returned to its initial value and thus the stack space is going to be leaked.
+//
+// See https://github.com/paritytech/substrate/issues/2967 for details
+#[test]
+fn restoration_of_globals() {
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().chain.best_number);
+
+	// On the first invocation we allocate approx. 75% of stack and then trap.
+	let ret = runtime_api.allocates_stack_alot(&block_id, true);
+	assert!(ret.is_err());
+
+	// On the second invocation we allocate yet another 75% of stack 
+	let ret = runtime_api.allocates_stack_alot(&block_id, false);
+	assert!(ret.is_ok());
+}

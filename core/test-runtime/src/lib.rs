@@ -249,6 +249,7 @@ cfg_if! {
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
+				fn allocates_stack_alot(trap: bool);
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -281,6 +282,7 @@ cfg_if! {
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
+				fn allocates_stack_alot(trap: bool);
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -343,6 +345,7 @@ fn code_using_trie() -> u64 {
 	iter_pairs.len() as u64
 }
 
+#[cfg(not(feature = "std"))]
 /// Mutable static variables should be always observed to have
 /// the initialized value at the start of a runtime call.
 static mut MUTABLE_STATIC: u64 = 32;
@@ -453,10 +456,11 @@ cfg_if! {
 				}
 
 				fn returns_mutable_static() -> u64 {
-					unsafe {
-						MUTABLE_STATIC += 1;
-						MUTABLE_STATIC
-					}
+					unimplemented!("is not expected to be invoked from non-wasm builds");
+				}
+
+				fn allocates_stack_alot(_trap: bool) {
+					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
 
 				fn get_block_number() -> u64 {
@@ -608,6 +612,32 @@ cfg_if! {
 					unsafe {
 						MUTABLE_STATIC += 1;
 						MUTABLE_STATIC
+					}
+				}
+
+				fn allocates_stack_alot(trap: bool) {
+					// Allocate a stack frame that is approx. 75% of the stack (assuming it is 1MB).
+					// This will just decrease (stacks in wasm32-u-u grow downwards) the stack
+					// pointer. This won't trap on the current compilers.
+					let mut data = [0u8; 1024 * 768];
+
+					// Then make sure we actually write something to it.
+					//
+					// If:
+					// 1. the stack area is placed at the beginning of the linear memory space, and
+					// 2. the stack pointer points to out-of-bounds area, and
+					// 3. a write is performed around the current stack pointer.
+					//
+					// then a trap should happen.
+					//
+					for (i, v) in data.iter_mut().enumerate() {
+						*v = i as u8; // deliberate truncation
+					}
+
+					if trap {
+						// There is a small chance of this to be pulled up in theory. In practice
+						// the probability of that is rather low.
+						panic!()
 					}
 				}
 
