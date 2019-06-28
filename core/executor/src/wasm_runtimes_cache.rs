@@ -103,7 +103,7 @@ impl RuntimesCache {
 	///
 	/// In case of failure one of two errors can be returned:
 	///
-	/// `Err::InvalidCode(code)` is returned for runtime code issues.
+	/// `Err::InvalidCode` is returned for runtime code issues.
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
@@ -171,12 +171,7 @@ impl RuntimesCache {
 		};
 
 		match runtime_preproc {
-			RuntimePreproc::InvalidCode => {
-				let code = ext
-					.original_storage(well_known_keys::CODE)
-					.unwrap_or(vec![]);
-				Err(Error::InvalidCode(code))
-			}
+			RuntimePreproc::InvalidCode => Err(Error::InvalidCode),
 			RuntimePreproc::ValidCode(r, v) => Ok((r, v)),
 		}
 	}
@@ -189,12 +184,12 @@ impl RuntimesCache {
 	) -> result::Result<(), Error> {
 		let maybe_instance = self.create_wasm_instance(wasm_executor, ext, initial_heap_pages);
 		match maybe_instance {
-			RuntimePreproc::ValidCode(ref module, _) => {
-				self.initial_state = Some(self.preserve_initial_state(module)?);
+			RuntimePreproc::ValidCode(ref instance, _) => {
+				self.initial_state = Some(self.preserve_initial_state(instance)?);
 				self.runtime_instance = Some(maybe_instance);
 				Ok(())
 			}
-			RuntimePreproc::InvalidCode => Err(Error::InvalidCode(vec![])),
+			RuntimePreproc::InvalidCode => Err(Error::InvalidCode),
 		}
 	}
 
@@ -294,7 +289,7 @@ impl RuntimesCache {
 			.unwrap_or(DEFAULT_HEAP_PAGES);
 
 		match WasmModule::from_buffer(code)
-			.map_err(|_| Error::InvalidCode(vec![]))
+			.map_err(|_| Error::InvalidCode)
 			.and_then(|module| wasm_executor.prepare_module(ext, heap_pages as usize, &module))
 		{
 			Ok(module) => {
