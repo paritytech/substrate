@@ -741,6 +741,22 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 	}
 }
 
+/// An identifier for a type of cryptographic key.
+///
+/// 0-1024 are reserved.
+pub type KeyTypeId = u32;
+
+/// Constant key types.
+pub mod key_types {
+	use super::KeyTypeId;
+
+	/// ED25519 public key.
+	pub const ED25519: KeyTypeId = 10;
+
+	/// SR25519 public key.
+	pub const SR25519: KeyTypeId = 20;
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::codec::{Encode, Decode};

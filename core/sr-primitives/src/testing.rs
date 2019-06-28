@@ -20,7 +20,7 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
-use crate::generic;
+use crate::{generic, KeyTypeId};
 use crate::weights::{Weighable, Weight};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -37,12 +37,18 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
+const TEST_KEY_TYPE: KeyTypeId = 0xdeadbeef;
+
 impl OpaqueKeys for UintAuthorityId {
-	fn count() -> usize { 1 }
+	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
+
+	fn key_ids() -> Self::KeyTypeIds { [TEST_KEY_TYPE].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
-	fn get_raw(&self, _: usize) -> &[u8] { unsafe { &std::mem::transmute::<_, &[u8; 8]>(&self.0)[..] } }
-	fn get<T: Decode>(&self, _: usize) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] { unsafe {
+		std::slice::from_raw_parts(&self.0 as *const _ as *const u8, std::mem::size_of::<u64>())
+	} }
+	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 }
 
 /// Digest item
