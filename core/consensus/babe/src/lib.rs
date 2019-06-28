@@ -868,7 +868,7 @@ mod tests {
 	use super::generic::DigestItem;
 	use client::BlockchainEvents;
 	use test_client;
-	use futures::stream::Stream;
+	use futures::{Async, stream::Stream as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -907,10 +907,9 @@ mod tests {
 	}
 
 	const SLOT_DURATION: u64 = 1;
-	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct BabeTestNet {
-		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
+		peers: Vec<Peer<(), DummySpecialization>>,
 		started: bool,
 	}
 
@@ -956,12 +955,12 @@ mod tests {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
 			trace!(target: "babe", "Retreiving peers");
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(
+		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(
 			&mut self,
 			closure: F,
 		) {
@@ -1045,15 +1044,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| {
-				net.lock().send_import_notifications();
-				net.lock().sync_without_disconnects();
-				Ok(())
-			})
-			.map(drop)
-			.map_err(drop);
-
+		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
 	}
 

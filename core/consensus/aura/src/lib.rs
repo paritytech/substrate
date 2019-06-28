@@ -702,7 +702,7 @@ pub fn import_queue<B, C, P>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::stream::Stream as _;
+	use futures::{Async, stream::Stream as _};
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
@@ -753,10 +753,9 @@ mod tests {
 	}
 
 	const SLOT_DURATION: u64 = 1;
-	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
+		peers: Vec<Peer<(), DummySpecialization>>,
 		started: bool,
 	}
 
@@ -801,11 +800,11 @@ mod tests {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
@@ -877,15 +876,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| {
-				net.lock().send_import_notifications();
-				net.lock().sync_without_disconnects();
-				Ok(())
-			})
-			.map(|_| ())
-			.map_err(|_| ());
-
+		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}
 

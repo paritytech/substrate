@@ -210,6 +210,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	pub data: D,
 	client: PeersClient,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
+	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()>>; 2]>,
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
@@ -394,8 +395,8 @@ pub trait TestNetFactory: Sized {
 
 	/// Get reference to peer.
 	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization>;
-	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>;
-	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F);
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>>;
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);
@@ -468,12 +469,33 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
+		let blocks_notif_future = {
+			let network = Arc::downgrade(&network.service().clone());
+			client.import_notification_stream()
+				.for_each(move |notification| {
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, notification.header);
+					}
+					Ok(())
+				})
+				.then(|_| Ok(()))
+		};
+
 		self.mut_peers(|peers| {
-			peers.push(Arc::new(Peer {
+			for peer in peers.iter_mut() {
+				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+			}
+
+			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
+				to_poll: {
+					let mut sv = smallvec::SmallVec::new();
+					sv.push(Box::new(blocks_notif_future) as Box<_>);
+					sv
+				},
 				network,
-			}));
+			});
 		});
 	}
 
@@ -513,12 +535,29 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
+		let blocks_notif_future = {
+			let network = Arc::downgrade(&network.service().clone());
+			client.import_notification_stream()
+				.for_each(move |notification| {
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, notification.header);
+					}
+					Ok(())
+				})
+				.then(|_| Ok(()))
+		};
+
 		self.mut_peers(|peers| {
-			peers.push(Arc::new(Peer {
+			peers.push(Peer {
 				data,
 				client: PeersClient::Light(client),
+				to_poll: {
+					let mut sv = smallvec::SmallVec::new();
+					sv.push(Box::new(blocks_notif_future) as Box<_>);
+					sv
+				},
 				network,
-			}));
+			});
 		});
 	}
 
@@ -598,10 +637,20 @@ pub trait TestNetFactory: Sized {
 		true
 		// FIXME: self.peers().iter().all(|p| p.is_done())
 	}
+
+	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.
+	fn poll(&mut self) {
+		self.mut_peers(|peers| {
+			for peer in peers {
+				peer.network.poll().unwrap();
+				peer.to_poll.retain(|f| f.poll() == Ok(Async::NotReady));
+			}
+		});
+	}
 }
 
 pub struct TestNet {
-	peers: Vec<Arc<Peer<(), DummySpecialization>>>,
+	peers: Vec<Peer<(), DummySpecialization>>,
 	started: bool,
 }
 
@@ -628,11 +677,11 @@ impl TestNetFactory for TestNet {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<(), Self::Specialization>>> {
+	fn peers(&self) -> &Vec<Peer<(), Self::Specialization>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<(), Self::Specialization>>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::Specialization>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -682,11 +731,11 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>> {
 		self.0.peers()
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(&mut self, closure: F) {
 		self.0.mut_peers(closure)
 	}
 

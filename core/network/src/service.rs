@@ -23,7 +23,7 @@ use std::time::Duration;
 use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::multihash::Multihash;
+use libp2p::{Multiaddr, multihash::Multihash};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use crate::protocol_behaviour::ProtocolBehaviour;
@@ -286,6 +286,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Number of peers participating in syncing.
 	pub fn num_sync_peers(&self) -> u32 {
 		self.network_service.lock().user_protocol_mut().num_sync_peers()
+	}
+
+	/// Adds an address for a node.
+	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		self.network_service.lock().add_known_address(peer_id, addr);
 	}
 
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
