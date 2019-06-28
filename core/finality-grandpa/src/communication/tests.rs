@@ -362,7 +362,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 			tester.net_handle.global_communication(SetId(1), voter_set.clone(), false);
 
 			{
-            	tester.gossip_validator.note_round(Round(1), |_, _| {});
+				tester.gossip_validator.note_round(Round(1), |_, _| {});
 				let (action, _) = tester.gossip_validator.do_validate(&id, &encoded_vote_one[..]);
 				match action {
 					gossip::Action::Keep(_, _) => {},
