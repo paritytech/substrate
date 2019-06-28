@@ -345,10 +345,11 @@ pub struct ModuleMetadata {
 	pub storage: ODFnA<StorageEntryMetadata>,
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
-	pub constants: ODFnA<ModuleConstantMetadata>,
+	pub constants: DFnA<ModuleConstantMetadata>,
 }
 
-type ODFnA<T> = Option<DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>>;
+type ODFnA<T> = Option<DFnA<T>>;
+type DFnA<T> = DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>;
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {

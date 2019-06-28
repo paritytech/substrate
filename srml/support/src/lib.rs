@@ -241,7 +241,7 @@ mod tests {
 	use runtime_io::{with_externalities, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	pub use srml_metadata::{
-		DecodeDifferent, StorageMetadata, StorageEntryMetadata,
+		DecodeDifferent, StorageEntryMetadata,
 		StorageEntryType, StorageEntryModifier,
 		DefaultByte, DefaultByteGetter, StorageHasher
 	};

@@ -63,8 +63,10 @@ macro_rules! __runtime_modules_to_metadata {
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
-				constants: $crate::metadata::FnEncode(
-					$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
+				constants: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode(
+						$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
+					)
 				)
 			};
 			$( $rest )*
@@ -371,76 +373,82 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V5(
-		RuntimeMetadataV5 {
-		modules: DecodeDifferent::Encode(&[
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("system"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"")),
-				storage: None,
-				calls: None,
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("SystemEvent"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[])
-						}
-			 		])
-				)),
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("event_module"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"")),
-				storage: None,
-				calls: Some(
-					DecodeDifferent::Encode(FnEncode(||&[
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_0"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						}
-					]))),
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-						}
-			 		])
-				)),
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("event_module2"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
-				storage: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						StorageEntryMetadata {
-							name: DecodeDifferent::Encode("StorageMethod"),
-							modifier: StorageEntryModifier::Optional,
-							ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-							default: DecodeDifferent::Encode(
-								DefaultByteGetter(
-									&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
-								)
-							),
-							documentation: DecodeDifferent::Encode(&[]),
-						}
-			 		])
-				)),
-				calls: Some(DecodeDifferent::Encode(FnEncode(||&[	]))),
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[])
-						}
-			 		])
-				)),
-			},
-		])}
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V6(
+		RuntimeMetadataV6 {
+			modules: DecodeDifferent::Encode(&[
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("system"),
+					prefix: DecodeDifferent::Encode(FnEncode(|| "")),
+					storage: None,
+					calls: None,
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("SystemEvent"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				},
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("event_module"),
+					prefix: DecodeDifferent::Encode(FnEncode(|| "")),
+					storage: None,
+					calls: Some(
+						DecodeDifferent::Encode(FnEncode(|| &[
+							FunctionMetadata {
+								name: DecodeDifferent::Encode("aux_0"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						]))),
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				},
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("event_module2"),
+					prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
+					storage: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							StorageEntryMetadata {
+								name: DecodeDifferent::Encode("StorageMethod"),
+								modifier: StorageEntryModifier::Optional,
+								ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+								default: DecodeDifferent::Encode(
+									DefaultByteGetter(
+										&event_module2::__GetByteStructStorageMethod(
+											std::marker::PhantomData::<TestRuntime>
+										)
+									)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					)),
+					calls: Some(DecodeDifferent::Encode(FnEncode(|| &[]))),
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				},
+			])
+		}
 	);
 
 	#[test]
