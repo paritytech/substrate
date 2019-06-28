@@ -24,7 +24,7 @@ use primitives::Blake2Hasher;
 use primitives::storage::well_known_keys;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
-use std::ops::Deref;
+use std::{ops::Deref, result};
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 
 #[derive(Clone)]
@@ -93,8 +93,12 @@ impl RuntimesCache {
 	/// a wasmi `ModuleRef` with an optional `RuntimeVersion` (if the call
 	/// `Core_version` returned a version).
 	///
-	/// In case an error occurred `RuntimePreproc::InvalidCode` is returned with an
-	/// appropriate description.
+	/// In case of failure one of two errors can be returned:
+	///
+	/// `Err::InvalidCode(code)` is returned for runtime code issues.
+	///
+	/// `Error::InvalidMemoryReference` is returned if no memory export with the
+	/// identifier `memory` can be found in the runtime.
 	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
 		&mut self,
 		wasm_executor: &WasmExecutor,
@@ -105,7 +109,7 @@ impl RuntimesCache {
 		if let None = self.runtime_instance {
 			trace!(target: "runtimes_cache",
 				   "no instance found in cache, creating now.");
-			self.create_instance(wasm_executor, ext, initial_heap_pages);
+			self.create_instance(wasm_executor, ext, initial_heap_pages)?;
 		}
 
 		let action = match maybe_requested_version {
@@ -140,7 +144,7 @@ impl RuntimesCache {
 					.expect("this path will only be invoked if instance exists; qed")
 			},
 			Action::CreateNewInstance => {
-				self.create_instance(wasm_executor, ext, initial_heap_pages);
+				self.create_instance(wasm_executor, ext, initial_heap_pages)?;
 				self.runtime_instance.clone()
 					.expect("was created right beforehand; qed")
 			},
@@ -165,19 +169,22 @@ impl RuntimesCache {
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		initial_heap_pages: Option<u64>,
-	) {
+	) -> result::Result<(), Error> {
 		let instance =
 			self.create_wasm_instance(wasm_executor, ext, initial_heap_pages);
 		if let RuntimePreproc::ValidCode(ref module, _) = instance {
-			self.preserve_initial_memory(module);
+			self.preserve_initial_memory(module)?;
 		}
 		self.runtime_instance = Some(instance);
 	}
 
-	fn preserve_initial_memory(&mut self, module: &WasmModuleInstanceRef) {
+	fn preserve_initial_memory(&mut self, module: &WasmModuleInstanceRef) -> result::Result<(), Error> {
 		let module_instance = module.deref();
 		let mem = module_instance.export_by_name("memory")
-			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
+			.ok_or_else(|| {
+				trace!(target: "runtimes_cache", "No export 'memory' found in runtime!");
+				Error::InvalidMemoryReference
+			})?;
 		match mem {
 			wasmi::ExternVal::Memory(memory_ref) => {
 				let used_size = memory_ref.used_size().0;
@@ -185,8 +192,12 @@ impl RuntimesCache {
 					.expect("extracting data will always succeed since requested range is always valid; qed");
 
 				self.initial_memory = Some(data);
+				Ok(())
 			},
-			_ => unreachable!("memory export always exists wasm module; qed"),
+			_ => {
+				trace!(target: "runtimes_cache", "No export 'memory' found in runtime!");
+				Err(Error::InvalidMemoryReference)
+			},
 		}
 	}
 
