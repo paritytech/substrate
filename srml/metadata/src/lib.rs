@@ -309,7 +309,7 @@ pub enum RuntimeMetadata {
 	V4(RuntimeMetadataDeprecated),
 	/// Version 5 for runtime metadata. No longer used.
 	V5(RuntimeMetadataDeprecated),
-	/// Version 6 for runtime metadata. No longer used.
+	/// Version 6 for runtime metadata.
 	V6(RuntimeMetadataV6),
 }
 
