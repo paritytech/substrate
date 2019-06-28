@@ -216,7 +216,12 @@ impl RuntimesCache {
 				return Err(Error::InvalidMemoryReference);
 			}
 		};
-		let global_mut_values = module_instance.globals().iter().filter(|g| g.is_mutable()).map(|g| g.get()).collect();
+		let global_mut_values = module_instance
+			.globals()
+			.iter()
+			.filter(|g| g.is_mutable())
+			.map(|g| g.get())
+			.collect();
 
 		Ok(InitialState {
 			memory_contents,
@@ -250,8 +255,11 @@ impl RuntimesCache {
 						}
 
 						// Restore the values of mutable globals.
-						for (global_ref, global_val) in
-							instance.globals().iter().filter(|g| g.is_mutable()).zip(global_mut_values.iter())
+						for (global_ref, global_val) in instance
+							.globals()
+							.iter()
+							.filter(|g| g.is_mutable())
+							.zip(global_mut_values.iter())
 						{
 							// TODO: Can we guarantee that the instance is the same?
 							global_ref.set(*global_val).expect(
@@ -260,7 +268,7 @@ impl RuntimesCache {
 								the types should be the same;
 								all the values are mutable;
 								qed
-								"
+								",
 							);
 						}
 					}
