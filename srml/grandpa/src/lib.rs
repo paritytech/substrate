@@ -52,7 +52,9 @@ use fg_primitives::{
 	Message, PrevoteEquivocation, PrecommitEquivocation, localized_payload, AncestryChain,
 	Chain, validate_commit, VoterSet
 };
-pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
+pub use fg_primitives::{
+	AuthorityId, AuthorityWeight, AuthoritySignature, ChallengedVoteSet, ChallengedVote
+};
 use system::DigestOf;
 use num_traits as num;
 use core::iter::FromIterator;
@@ -161,9 +163,9 @@ pub struct StoredPendingChallenge<H, N, Header, Signature, Id> {
 	/// The delay in blocks until it will expire.
 	pub delay: N,
 	
-	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id>,
+	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id>,
+	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>,
 }
 
 
@@ -175,9 +177,9 @@ pub struct StoredChallengeSession<H, N, Header, Signature, Id> {
 	/// The delay in blocks until it will expire.
 	pub delay: N,
 	
-	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id>,
+	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id>,
+	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>,
 }
 
 decl_event!(
@@ -235,7 +237,9 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_prevotes(
 			_origin,
-			_proof: PrevoteChallenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
+			_proof: PrevoteChallenge<
+				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
+			>
 		) {
 			// Slash?
 		}
@@ -243,7 +247,9 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_precommits(
 			_origin,
-			_proof: PrecommitChallenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
+			_proof: PrecommitChallenge<
+				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
+			>
 		) {
 			// Slash?
 		}
@@ -515,7 +521,9 @@ where
 }
 
 fn handle_unjustified_prevotes<T: Trait>(
-	proof: &PrevoteChallenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
+	proof: &PrevoteChallenge<
+		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
+	>
 ) -> TransactionValidity
 where
 	T: Trait,
@@ -524,29 +532,50 @@ where
 	T::Hash: Ord,
 	T::BlockNumber: num::cast::AsPrimitive<usize>,
 {
-	let round_v = 0;
-	let round_b = 0;
+	let votes_round = 0;
+	let block_round = 0;
 
-	if round_b > round_v {
+	if block_round > votes_round {
 		return TransactionValidity::Invalid(0)
 	}
 
-	let headers: &[T::Header] = proof.block_proof.1.as_slice();
-	let commit = proof.block_proof.0.clone();
+	let headers: &[T::Header] = proof.finalized_block_proof.headers.as_slice();
+	let commit = proof.finalized_block_proof.commit.clone();
 	let ancestry_chain = AncestryChain::<T::Block>::new(headers);
 	let voters = <Module<T>>::grandpa_authorities();
 	let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
 
-	validate_commit(&commit, &voter_set, &ancestry_chain);
+	// Check that block proof contains supermajority of precommits for B
+	if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+		if let Some(ghost) = validation_result.ghost() {
+			if *ghost != proof.finalized_block {
+				return TransactionValidity::Invalid(0)
+			}
+			// FIX: Maybe check equivocations == 0 and other fields of validation_result.
+		}
+	}
 
-	// 1) check all votes are for round_s and that are incompatible with B
-	// 2) check that block proof contains supermajority of precommits for B
-	// 3) if there is a reference to a previous challenge check that is correct.
+	let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
+
+	// Check all votes are for round_s and that are incompatible with B
+	for ChallengedVote { vote, authority, signature } in challenged_votes {
+		let message = Message::Prevote(vote.clone());
+		let payload = localized_payload(round, set_id, &message);
+
+		if !signature.verify(payload.as_slice(),&authority) {
+			return TransactionValidity::Invalid(0)
+		}
+	}
+	
+	// if there is a reference to a previous challenge check that is correct.
+
 	TransactionValidity::Invalid(0)
 }
 
 fn handle_unjustified_precommits<T: Trait>(
-	proof: &PrecommitChallenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
+	proof: &PrecommitChallenge<
+		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
+	>
 ) -> TransactionValidity
 where
 	T: Trait,

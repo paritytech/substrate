@@ -166,21 +166,40 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 /// d) a reference to a previous challenge, if the current tx is an answer to it.
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrevoteChallenge<H, N, Header, S, Id> {
-	pub incompatible_block: (H, N),
+pub struct PrevoteChallenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
-	pub challenged_votes: Vec<Prevote<H, N>>,
-	pub block_proof: (Commit<H, N, S, Id>, Vec<Header>),
+	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
+	pub challenged_votes: ChallengedVoteSet<Vote>,
 	pub previous_challenge: Option<H>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrecommitChallenge<H, N, Header, S, Id> {
-	pub incompatible_block: (H, N),
+pub struct FinalizedBlockProof<H, N, Header, S, Id> {
+	pub commit: Commit<H, N, S, Id>,
+	pub headers: Vec<Header>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct PrecommitChallenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
-	pub challenged_votes: Vec<Precommit<H, N>>,
-	pub block_proof: (Commit<H, N, S, Id>, Vec<Header>),
+	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
+	pub challenged_votes: ChallengedVoteSet<Vote>,
 	pub previous_challenge: Option<H>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct ChallengedVoteSet<Vote> {
+	pub challenged_votes: Vec<ChallengedVote<Vote>>,
+	pub set_id: u64,
+	pub round: u64,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct ChallengedVote<Vote> {
+	// Prevote or Precommit
+	pub vote: Vote,
+	pub authority: AuthorityId,
+	pub signature: AuthoritySignature,
 }
 
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
