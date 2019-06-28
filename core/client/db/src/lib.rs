@@ -440,7 +440,7 @@ where Block: BlockT<Hash=H256>,
 		children: ChildrenStorageOverlay
 	) -> Result<H256, client::error::Error> {
 
-		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		if top.iter().any(|(k, _)| well_known_keys::is_protected_storage_content(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
 		}
 

@@ -360,12 +360,19 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 // see FIXME #2741, third field should be remove and is therefore not documented
 /// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
+///
+/// Corrently inserted prefix is not strong cryptographic hash but a unique encodable/decodable
+/// sequence which ensure content isolation, this is only true if all key uses this scheme.
+/// Since there is no garanties on that, another prefix is use: `CHILD_STORAGE_CONTENT_PREFIX`.
 pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a KeySpace, H::Out);
 /// `HashDBMut` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
+///
+/// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
 pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a KeySpace, H::Out);
-// TODO rem in favor of using underlying Memorydb values
+
 const NULL_NODE: &[u8] = &[0];
+
 impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 {

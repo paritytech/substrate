@@ -20,7 +20,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::iter::FromIterator;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
-use primitives::storage::well_known_keys::is_child_storage_key;
+use primitives::storage::well_known_keys::is_protected_storage_content;
 use crate::changes_trie::{
 	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage,
 	BlockNumber as ChangesTrieBlockNumber,
@@ -180,7 +180,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
-		if is_child_storage_key(&key) {
+		if is_protected_storage_content(&key) {
 			panic!("Refuse to directly set child storage key");
 		}
 
@@ -207,7 +207,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		if is_child_storage_key(prefix) {
+		if is_protected_storage_content(prefix) {
 			panic!("Refuse to directly clear prefix that is part of child storage key");
 		}
 

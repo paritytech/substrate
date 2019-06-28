@@ -23,7 +23,7 @@ use crate::changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_ro
 use crate::{Externalities, OverlayedChanges};
 use hash_db::Hasher;
 use primitives::offchain;
-use primitives::storage::well_known_keys::is_child_storage_key;
+use primitives::storage::well_known_keys::is_protected_storage_content;
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
@@ -226,6 +226,10 @@ where
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		let _guard = panic_handler::AbortGuard::new(true);
+		if is_protected_storage_content(&key) {
+			warn!(target: "trie", "Refuse to directly set child storage key");
+			return;
+		}
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
@@ -271,7 +275,7 @@ where
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		let _guard = panic_handler::AbortGuard::new(true);
-		if is_child_storage_key(prefix) {
+		if is_protected_storage_content(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
 			return;
 		}

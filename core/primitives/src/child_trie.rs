@@ -20,6 +20,7 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use crate::storage::well_known_keys::CHILD_STORAGE_CONTENT_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
@@ -49,8 +50,15 @@ pub type ParentTrie = Vec<u8>;
 /// before calling key value database primitives.
 /// Note that it currently does a costy append operation resulting in bigger
 /// key length but possibly allowing prefix related operation at lower level.
+/// Note that we also append a common prefix to avoid general state key to
+/// conflict (if the KeySpace gets build from a strong cryptographic hash
+/// in the future, or if general state get written with empty keyspace,
+/// this would be useless).
 pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
-	let mut res = rstd::vec![0; ks.len() + prefix.len()];
+	let pre = CHILD_STORAGE_CONTENT_PREFIX;
+	let mut res = rstd::vec![0; pre.len() + ks.len() + prefix.len()];
+	res[..pre.len()].copy_from_slice(&pre);
+	res[..ks.len()].copy_from_slice(&ks);
 	res[..ks.len()].copy_from_slice(&ks);
 	res[ks.len()..].copy_from_slice(prefix);
 	res
