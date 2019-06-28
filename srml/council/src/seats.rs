@@ -329,7 +329,7 @@ decl_module! {
 				candidates[slot] = who;
 			}
 			<Candidates<T>>::put(candidates);
-			<CandidateCount<T>>::put(count as u32 + 1);
+			CandidateCount::put(count as u32 + 1);
 		}
 
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
@@ -409,7 +409,7 @@ decl_module! {
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
 		fn set_desired_seats(#[compact] count: u32) {
-			<DesiredSeats<T>>::put(count);
+			DesiredSeats::put(count);
 		}
 
 		/// Remove a particular member from the council. This is effective immediately.
@@ -613,7 +613,7 @@ impl<T: Trait> Module<T> {
 		let mut set = Self::voters(set_index);
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
-		<VoterCount<T>>::mutate(|c| *c = *c - 1);
+		VoterCount::mutate(|c| *c = *c - 1);
 		Self::remove_all_approvals_of(voter);
 		<VoterInfoOf<T>>::remove(voter);
 	}
@@ -683,7 +683,7 @@ impl<T: Trait> Module<T> {
 			}
 
 			T::Currency::reserve(&who, Self::voting_bond())?;
-			<VoterCount<T>>::mutate(|c| *c = *c + 1);
+			VoterCount::mutate(|c| *c = *c + 1);
 		}
 
 		T::Currency::set_lock(
@@ -802,8 +802,8 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
-		<CandidateCount<T>>::put(count);
-		<VoteCount<T>>::put(Self::vote_index() + 1);
+		CandidateCount::put(count);
+		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
 	}
 
@@ -815,7 +815,7 @@ impl<T: Trait> Module<T> {
 
 		set.push(Some(who));
 		if len + 1 == VOTER_SET_SIZE {
-			<NextVoterSet<T>>::put(index + 1);
+			NextVoterSet::put(index + 1);
 		}
 	}
 
@@ -1356,7 +1356,7 @@ mod tests {
 		let mut t = ExtBuilder::default().build();
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);
-			<CandidateCount<Test>>::put(1);
+			CandidateCount::put(1);
 			<RegisterInfoOf<Test>>::insert(1, (0, 2));
 		});
 		t
