@@ -1265,10 +1265,10 @@ impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 	fn slash<M: Misconduct>(
 		misbehaved: &[T::AccountId],
 		total_validators: u64,
-		era_length: u64,
-		misconduct: &M
+		misconduct: &mut M
 	) -> u8 {
-		let severity = misconduct.severity(misbehaved.len() as u64, total_validators, era_length);
+		misconduct.on_misconduct(misbehaved.len() as u64, total_validators);
+		let severity = misconduct.severity();
 
 		for who in misbehaved {
 			Self::Slash::on_slash::<M>(who, severity);

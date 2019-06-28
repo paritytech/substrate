@@ -49,25 +49,50 @@
 //!		type Currency: Currency<Self::AccountId>;
 //! }
 //!
-//!	struct Unresponsive;
+//! #[derive(Default)]
+//!	struct Unresponsive(Vec<(u64, Fraction<u64>)>);
 //!
 //!	impl Misconduct for Unresponsive {
 //!		type Severity = u64;
 //!
-//!		fn severity(&self, k: u64, n: u64, era_length: u64) -> Fraction<Self::Severity> {
+//!		// Only take the current era into account
+//!		// but an `Era` is 6 sessions
+//!		const WINDOW_SIZE: u32 = 6;
+//!
+//!		fn on_misconduct(&mut self, k: u64, n: u64, session_index: u64) {
+//!			self.0.retain(|&(max_session, _)| max_session > session_index);
+//!
 //!			let numerator = 20 * n;
 //!			let denominator = 3*k - 3;
 //!
-//!			if numerator / n >= 1 {
-//!				Fraction::new(1, 20)
+//!			let severity = if numerator / n >= 1 {
+//!				Fraction::new(1_u64, 20_u64)
 //!			} else {
 //!				Fraction::new(denominator, numerator)
-//!			}
+//!			};
+//!
+//!			self.0.push((session_index + Self::WINDOW_SIZE as u64, severity));
 //!		}
 //!
-//!		// don't do anything
-//!		fn on_misconduct(&mut self) {}
+//!		// This will only slash on in the end of an `Era`
+//!		fn severity(&self) -> Fraction<u64> {
+//!			let min = *self.0.iter().map(|(x, _)| x).min_by(|x, y| x.cmp(y)).unwrap_or(&0);
+//!			let max = *self.0.iter().map(|(x, _)| x).max_by(|x, y| x.cmp(y)).unwrap_or(&u64::max_value());
 //!
+//!			// the biggest session difference is exactly six sessions
+//!			// -> it could only have happend in on era (assumes every era is exactly six sessions)
+//!			if max - min == Self::WINDOW_SIZE as u64 {
+//!				let mut sum = Fraction::zero();
+//!
+//!				for &(_, severity) in &self.0 {
+//!					sum = sum + severity;
+//!				}
+//!
+//!				sum * Fraction::new(1_u64, self.0.len() as u64)
+//!			} else {
+//!				Fraction::zero()
+//!			}
+//!		}
 //!	}
 //!
 //! struct Balance<T>(PhantomData<T>);
@@ -90,10 +115,11 @@
 //!		fn slash<M: Misconduct>(
 //!			misbehaved: &[T::AccountId],
 //!			total_validators: u64,
-//!			era_length: u64,
-//!			misconduct: &M
+//!			misconduct: &mut M,
+//!			session_index: u64,
 //!		) -> u8 {
-//!			let severity = misconduct.severity(misbehaved.len() as u64, total_validators, era_length);
+//!			misconduct.on_misconduct(misbehaved.len() as u64, total_validators, session_index);
+//!			let severity = misconduct.severity();
 //!
 //!			for who in misbehaved {
 //!				Self::Slash::on_slash::<M>(who, severity);
@@ -134,12 +160,20 @@ pub trait Misconduct {
 	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
-	/// Estimate severity based `number of misbehaved validators` and `number of validators`
-	// TODO(niklasad1): shall `num_misbehaved` & `num_validators` be generic?!
-	fn severity(&self, num_misbehaved: u64, num_validators: u64, era_length: u64) -> Fraction<Self::Severity>;
+	/// Valid `Window` size in `Sessions` for the given misconduct
+	// (niklasad1): an `Era` is hard-coded to 6 sessions?!
+	const WINDOW_SIZE: u32;
 
-	/// Increase severity based on previous state
-	fn on_misconduct(&mut self);
+	/// Estimate severity level on the misconduct and store the state
+	///
+	// TODO(niklasad1): shall `num_misbehaved`, `num_validators` and `session_index` be generic?!
+	fn on_misconduct(&mut self, num_misbehaved: u64, num_validators: u64, session_index: u64);
+
+	/// Get severity level
+	///
+	/// Returns `Some(severity)` if at least k samples are received otherwise `None`
+	fn severity(&self) -> Fraction<Self::Severity>;
+
 }
 
 /// Slashing interface
@@ -153,36 +187,42 @@ pub trait Slashing<AccountId> {
 	/// Specify which `OnSlashing` implementation to use
 	type Slash: OnSlashing<AccountId>;
 
-	/// Attempt to slash a list of `misbehaved` validators in the end of era
+	/// Attempt to slash a list of `misbehaved` validators
 	///
 	/// Returns the misconduct level for all misbehaved validators
-	// TODO(niklasad1): shall `total_validators` be generic?!
+	// TODO(niklasad1):
+	//	* This assumes `session_index` is monotonic increasing
+	//	* shall `total_validators` be generic?
+	//	* `session_index` use associated type from Session?!
 	fn slash<M: Misconduct>(
 		misbehaved: &[AccountId],
 		total_validators: u64,
-		era_length: u64,
-		misconduct: &M
+		misconduct: &mut M,
+		session_index: u64,
 	) -> MisconductLevel;
 }
 
 /// Implementation of the `Misconduct` traits for a type `T` with associated type `A
 /// which has a predefined severity level such as slash always 10%
 #[macro_export]
-macro_rules! impl_misconduct_static_severity {
+macro_rules! impl_static_misconduct {
 	($t:ty, $a:ty => $fr:expr) => {
 		impl Misconduct for $t {
 			type Severity = $a;
 
-			fn severity(
-				&self,
+			// not used
+			const WINDOW_SIZE: u32 = 0;
+
+			fn on_misconduct(
+				&mut self,
 				_num_misbehaved: u64,
 				_num_validators: u64,
-				_era_length: u64
-			) -> Fraction<Self::Severity> {
+				_session_idx: u64
+			) {}
+
+			fn severity(&self) -> Fraction<$a> {
 				$fr
 			}
-
-			fn on_misconduct(&mut self) {}
 		}
 	}
 }
