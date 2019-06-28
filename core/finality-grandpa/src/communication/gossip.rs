@@ -794,7 +794,6 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
-
 		let packet = {
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone());
