@@ -17,7 +17,7 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables)]
+#![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
@@ -123,9 +123,9 @@ decl_storage! {
 		/// # Security
 		///
 		/// This MUST NOT be used for gambling, as it can be influenced by a
-		/// malicious validator in the short term.  It MAY be used in many
+		/// malicious validator in the short term. It MAY be used in many
 		/// cryptographic protocols, however, so long as one remembers that this
-		/// (like everything else on-chain) it is public.  For example, it can be
+		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
 		EpochRandomness get(epoch_randomness): [u8; 32];
@@ -144,13 +144,18 @@ decl_storage! {
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Initialization
 		fn on_initialize() {
 			for i in Self::get_inherent_digests()
 				.logs
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(to_babe_pre_digest) {
-				Self::deposit_vrf_output(&i.0);
+				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+					<[u8; VRF_OUTPUT_LENGTH]>::decode(&mut data)
+				} else {
+					None
+				}) {
+				Self::deposit_vrf_output(&i);
 			}
 		}
 	}
@@ -172,28 +177,22 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 	}
 }
 
-/// The data in a BABE pre-runtime digest
-type BabePreRuntimeData = (
-	[u8; VRF_OUTPUT_LENGTH],
-	[u8; VRF_PROOF_LENGTH],
-	BabeKey,
-	u64,
-);
-
-
-pub fn to_babe_pre_digest((engine, mut data): (ConsensusEngineId, &[u8])) -> Option<BabePreRuntimeData> {
-	if engine == BABE_ENGINE_ID { Decode::decode(&mut data) } else { None }
-}
-
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<BabeKey> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<BabeKey> where
+impl<T: Trait> FindAuthor<u64> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u64> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
-		for i in digests.into_iter().filter_map(to_babe_pre_digest) {
-			return Some(i.2)
+		for (id, mut data) in digests.into_iter() {
+			if id == BABE_ENGINE_ID {
+				let (_, _, i): (
+					[u8; VRF_OUTPUT_LENGTH],
+					[u8; VRF_PROOF_LENGTH],
+					u64,
+				) = Decode::decode(&mut data)?;
+				return Some(i)
+			}
 		}
 		return None
 	}
@@ -215,9 +214,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
-		let mut under_construction = UnderConstruction::get();
-		under_construction.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y);
-		UnderConstruction::put(under_construction)
+		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
 	}
 
 	fn get_inherent_digests() -> system::DigestOf<T> {
