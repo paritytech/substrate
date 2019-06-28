@@ -110,6 +110,13 @@ impl RuntimesCache {
 			trace!(target: "runtimes_cache",
 				   "no instance found in cache, creating now.");
 			self.create_instance(wasm_executor, ext, initial_heap_pages)?;
+
+			match self.runtime_instance.clone() {
+				Some(RuntimePreproc::ValidCode(r, v)) => {
+					return Ok((r, v));
+				},
+				_ => unreachable!("runtime must exist here, errors would have been returned earlier; qed"),
+			};
 		}
 
 		let action = match maybe_requested_version {
@@ -170,12 +177,16 @@ impl RuntimesCache {
 		ext: &mut E,
 		initial_heap_pages: Option<u64>,
 	) -> result::Result<(), Error> {
-		let instance =
+		let maybe_instance =
 			self.create_wasm_instance(wasm_executor, ext, initial_heap_pages);
-		if let RuntimePreproc::ValidCode(ref module, _) = instance {
-			self.preserve_initial_memory(module)?;
+		match maybe_instance {
+			RuntimePreproc::ValidCode(ref module, _) => {
+				self.preserve_initial_memory(module)?;
+				self.runtime_instance = Some(maybe_instance);
+				Ok(())
+			},
+			RuntimePreproc::InvalidCode => Err(Error::InvalidCode(vec![])),
 		}
-		self.runtime_instance = Some(instance);
 	}
 
 	fn preserve_initial_memory(&mut self, module: &WasmModuleInstanceRef) -> result::Result<(), Error> {
