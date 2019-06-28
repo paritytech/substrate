@@ -524,9 +524,10 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
+			self.live_topics.push(Round(0), set_id);
 			self.authorities = authorities;
 		}
-		self.note_round(Round(0))
+		self.multicast_neighbor_packet()
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
