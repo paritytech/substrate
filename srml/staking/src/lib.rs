@@ -591,7 +591,7 @@ decl_storage! {
 					let keys = validators.iter().map(|validator| {
 						(
 							validator.to_owned(),
-							<session::NextKeyFor<T>>::get(validator)
+							<session::Module<T>>::next_key_for(validator)
 								.unwrap_or_default()
 						)
 					}).collect::<Vec<_>>();

@@ -236,7 +236,7 @@ decl_storage! {
 		Changed: bool;
 
 		/// The next key for a given validator.
-		pub NextKeyFor build(|config: &GenesisConfig<T>| {
+		NextKeyFor get(next_key_for) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::Keys>;
 
