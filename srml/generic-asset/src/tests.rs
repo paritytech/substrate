@@ -36,7 +36,7 @@ fn issuing_asset_units_to_issuer_should_work() {
 			burn: Owner::Address(1),
 		};
 
-		let expected_balance = balance - GenericAsset::create_asset_stake();
+		let expected_balance = balance;
 
 		assert_ok!(GenericAsset::create(
 			Origin::signed(1),
@@ -539,20 +539,6 @@ fn slash_should_return_slash_reserved_amount() {
 	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::slash(&1, &0, 70), None);
-	});
-}
-
-// Given
-// - Initial free_balance = 100.
-// When
-// - After calling reward function.
-// Then
-// - free_balance should increment by the reward
-#[test]
-fn reward_should_adds_up_to_amount_to_the_free_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
-		assert_ok!(GenericAsset::reward(&1, &0, 70));
-		assert_eq!(GenericAsset::free_balance(&1, &0), 170);
 	});
 }
 
@@ -1179,53 +1165,6 @@ fn create_asset_should_create_a_user_asset() {
 		);
 		assert_eq!(<TotalIssuance<Test>>::get(created_user_asset_id), initial_issuance);
 	});
-}
-
-#[test]
-fn create_should_throw_error_when_initial_issuance_lower_than_free_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((16000, 1, 1)).build(), || {
-		let default_permission = PermissionLatest {
-			update: Owner::Address(1),
-			mint: Owner::Address(1),
-			burn: Owner::Address(1),
-		};
-		assert_noop!(
-			GenericAsset::create(
-				Origin::signed(1),
-				AssetOptions {
-					initial_issuance: 1,
-					permissions: default_permission
-				}
-			),
-			"not enough free funds"
-		);
-	});
-}
-
-#[test]
-fn create_should_reserve_stake_asset() {
-	with_externalities(
-		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
-		|| {
-			let default_permission = PermissionLatest {
-				update: Owner::Address(1),
-				mint: Owner::Address(1),
-				burn: Owner::Address(1),
-			};
-			assert_ok!(GenericAsset::create(
-				Origin::signed(1),
-				AssetOptions {
-					initial_issuance: 100,
-					permissions: default_permission
-				}
-			));
-
-			assert_eq!(
-				GenericAsset::reserved_balance(&GenericAsset::staking_asset_id(), &1),
-				GenericAsset::create_asset_stake()
-			);
-		},
-	);
 }
 
 #[test]

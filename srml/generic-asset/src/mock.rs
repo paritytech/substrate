@@ -23,7 +23,6 @@
 use primitives::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
 };
 use substrate_primitives::{Blake2Hasher, H256};
 use support::{impl_outer_event, impl_outer_origin};
@@ -107,7 +106,7 @@ impl ExtBuilder {
 
 	// builds genesis config
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 
 		t.extend(
 			GenesisConfig::<Test> {
@@ -115,7 +114,6 @@ impl ExtBuilder {
 				endowed_accounts: self.accounts,
 				initial_balance: self.initial_balance,
 				next_asset_id: self.next_asset_id,
-				create_asset_stake: 10,
 				staking_asset_id: 16000,
 				spending_asset_id: 16001,
 			}
@@ -131,8 +129,8 @@ impl ExtBuilder {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::<Test>::default()
-		.build_storage()
+	system::GenesisConfig::default()
+		.build_storage::<Test>()
 		.unwrap()
 		.0
 		.into()
