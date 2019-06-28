@@ -125,8 +125,6 @@ impl Trait for Test {
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	current_era: EraIndex,
-	reward: u64,
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
@@ -138,8 +136,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			current_era: 0,
-			reward: 10,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
@@ -152,10 +148,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn _current_era(mut self, current_era: EraIndex) -> Self {
-		self.current_era = current_era;
 		self
 	}
 	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
@@ -215,6 +207,9 @@ impl ExtBuilder {
 			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+		let _ = timestamp::GenesisConfig::<Test>{
+			minimum_period: 5,
+		}.assimilate_storage(&mut t, &mut c);
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
 		let status_41 = if self.validator_pool {
@@ -224,7 +219,7 @@ impl ExtBuilder {
 		};
 		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
-			current_era: self.current_era,
+			current_era: 0,
 			stakers: vec![
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
@@ -236,12 +231,8 @@ impl ExtBuilder {
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			offline_slash: Perbill::from_percent(5),
-			current_session_reward: self.reward,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
-		let _ = timestamp::GenesisConfig::<Test>{
-			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 		let mut ext = t.into();
 		runtime_io::with_externalities(&mut ext, || {
