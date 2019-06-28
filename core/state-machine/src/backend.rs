@@ -65,16 +65,11 @@ pub trait Backend<H: Hasher> {
 		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
 	}
 
-	/// Get ChildTrie keyspace or `None` if no child trie is defined for this key.
-	fn child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> { unimplemented!("EMCH") }
-
 	/// Get ChildTrie information or `None` if no child trie is defined for this key.
 	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<ChildTrie>, Self::Error> {
-		if let Some(keyspace) = self.child_keyspace(storage_key)? {
-			let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
-			Ok(self.storage(&prefixed_key[..])?
-				.and_then(|n| ChildTrie::decode_node_with_parent(&n[..], prefixed_key, keyspace)))
-		} else { Ok(None) }
+		let prefixed_key = ChildTrie::prefix_parent_key(storage_key);
+		Ok(self.storage(&prefixed_key[..])?
+			.and_then(|n| ChildTrie::decode_node_with_parent(&n[..], prefixed_key)))
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.

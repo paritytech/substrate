@@ -1232,8 +1232,6 @@ mod tests {
 		let child_trie1: ChildTrie = ChildTrie::decode_node_with_parent(
 			&local_result1.unwrap()[..],
 			b"value2".to_vec(),
-			// Proof run on empty keyspace.
-			Default::default(),
 		).unwrap();
 
 		// on child trie

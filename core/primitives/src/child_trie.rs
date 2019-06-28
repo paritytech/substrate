@@ -97,6 +97,8 @@ struct ChildTrieReadEncode<'a> {
 	/// Current codec version
 	#[codec(compact)]
 	version: u16,
+	/// Child trie unique keyspace
+	keyspace: &'a KeySpace,
 	/// Child trie root hash
 	root: &'a [u8],
 }
@@ -105,6 +107,7 @@ struct ChildTrieReadEncode<'a> {
 struct ChildTrieReadDecode {
 	#[codec(compact)]
 	version: u16,
+	keyspace: KeySpace,
 	root: Vec<u8>,
 }
 
@@ -205,10 +208,9 @@ impl ChildTrie {
 	pub fn decode_node_with_parent(
 		encoded_node: &[u8],
 		parent: ParentTrie,
-		keyspace: KeySpace,
 	) -> Option<Self> {
 		let input = &mut &encoded_node[..];
-		ChildTrieReadDecode::decode(input).map(|ChildTrieReadDecode { version, root }| {
+		ChildTrieReadDecode::decode(input).map(|ChildTrieReadDecode { version, keyspace, root }| {
 			debug_assert!(version == LAST_SUBTRIE_CODEC_VERSION);
 			ChildTrie {
 				keyspace,
@@ -247,6 +249,7 @@ impl ChildTrie {
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
 		let mut enc = parity_codec::Encode::encode(&ChildTrieReadEncode{
 			version: LAST_SUBTRIE_CODEC_VERSION,
+			keyspace: &self.keyspace,
 			root: new_root,
 		});
 		enc.extend_from_slice(&self.extension[..]);
