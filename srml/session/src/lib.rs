@@ -235,7 +235,9 @@ decl_storage! {
 		/// True if anything has changed in this session.
 		Changed: bool;
 
-		/// The next key for a given validator.
+		/// The next key to be used for a given validator. At the end of the session, they
+		/// will be moved into the `QueuedKeys` and so changes here will not take effect for
+		/// at least one whole session.
 		NextKeyFor get(next_key_for) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::Keys>;
@@ -243,7 +245,8 @@ decl_storage! {
 		/// Queued keys changed.
 		QueuedChanged: bool;
 
-		/// The queued keys for the next session.
+		/// The queued keys for the next session. When the next session begins, these keys
+		/// will be used to determine the validator's session keys.
 		pub QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): Vec<(T::AccountId, T::Keys)>;
@@ -340,7 +343,9 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Move on to next session: register the new authority set.
+	/// Move on to next session: register the new authority set. The new authority set depends on the
+	/// whether the session is ending. If it is, then the new set is the 
+	/// - 
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
 
@@ -355,13 +360,13 @@ impl<T: Trait> Module<T> {
 		<Validators<T>>::put(validators);
 
 		// Get next validator set.
-		let next_validators = if let Some(validators) =
-			T::OnSessionEnding::on_session_ending(session_index) {
-				next_changed = true;
-				validators
-			} else {
-				<Validators<T>>::get()
-			};
+		let maybe_validators = T::OnSessionEnding::on_session_ending(session_index);
+		let next_validators = if let Some(validators) = maybe_validators {
+			next_changed = true;
+			validators
+		} else {
+			<Validators<T>>::get()
+		};
 
 		// Increment session index.
 		let session_index = session_index + 1;
