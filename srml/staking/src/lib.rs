@@ -916,10 +916,10 @@ decl_module! {
 					<CurrentEraRewards<T>>::mutate(|rewards| {
 						if let Some(new_total) = rewards.total.checked_add(points) {
 							rewards.total = new_total;
-							rewards.rewards.resize(index + 1, 0);
+							rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
 							rewards.rewards[index] += points; // Addition is less than total
 						}
-					})
+					});
 				});
 		}
 	}
