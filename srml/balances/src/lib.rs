@@ -872,7 +872,7 @@ where
 		}
 	}
 
-	fn make_free_balance_be(who: &T::AccountId, balance: T::Balance) -> (
+	fn make_free_balance_be(who: &T::AccountId, balance: Self::Balance) -> (
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome
 	) {
