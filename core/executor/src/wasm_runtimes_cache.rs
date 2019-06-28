@@ -181,12 +181,8 @@ impl RuntimesCache {
 		match mem {
 			wasmi::ExternVal::Memory(memory_ref) => {
 				let used_size = memory_ref.used_size().0;
-
-				let mut data = Vec::new();
-				data.resize(used_size, 0);
-
-				memory_ref.get_into(0, &mut data[..])
-					.expect("extracting data will always succeed since target capacity is same as data; qed");
+				let data = memory_ref.get(0, used_size)
+					.expect("extracting data will always succeed since requested range is always valid; qed");
 
 				self.initial_memory = Some(data);
 			},
