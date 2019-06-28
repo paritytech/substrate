@@ -228,23 +228,31 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 mod tests {
 	use super::*;
 	use srml_metadata::{
-		EventMetadata,
-		StorageEntryModifier, StorageEntryType, FunctionMetadata,
-		StorageEntryMetadata,
-		ModuleMetadata, RuntimeMetadataPrefixed
+		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
+		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
 	};
-	use crate::codec::{Encode, Decode};
+	use codec::{Encode, Decode};
+	use crate::traits::Get;
 
 	mod system {
+		use super::*;
+
 		pub trait Trait {
+			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId>>;
-			type AccountId;
-			type BlockNumber;
+			type AccountId: From<u32> + Encode;
+			type BlockNumber: From<u32> + Encode;
+			type SomeValue: Get<u32>;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				/// Hi, I am a comment.
+				const BlockNumber: T::BlockNumber = 100;
+				const GetType: T::AccountId = T::SomeValue::get();
+				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST;
+			}
 		}
 
 		decl_event!(
@@ -360,10 +368,15 @@ mod tests {
 		type BlockNumber = u32;
 	}
 
+	crate::parameter_types! {
+		pub const SystemValue: u32 = 600;
+	}
+
 	impl system::Trait for TestRuntime {
 		type Origin = Origin;
 		type AccountId = u32;
 		type BlockNumber = u32;
+		type SomeValue = SystemValue;
 	}
 
 	impl_runtime_metadata!(
@@ -372,6 +385,27 @@ mod tests {
 			event_module::Module with Event Call,
 			event_module2::Module with Event Storage Call,
 	);
+
+	struct ConstantBlockNumberByteGetter;
+	impl DefaultByte for ConstantBlockNumberByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			100u32.encode()
+		}
+	}
+
+	struct ConstantGetTypeByteGetter;
+	impl DefaultByte for ConstantGetTypeByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			SystemValue::get().encode()
+		}
+	}
+
+	struct ConstantAssociatedConstByteGetter;
+	impl DefaultByte for ConstantAssociatedConstByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			<TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
+		}
+	}
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V6(
 		RuntimeMetadataV6 {
@@ -390,7 +424,34 @@ mod tests {
 							}
 						])
 					)),
-					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+					constants: DecodeDifferent::Encode(
+						FnEncode(|| &[
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("BlockNumber"),
+								ty: DecodeDifferent::Encode("T :: BlockNumber"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantBlockNumberByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+							},
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("GetType"),
+								ty: DecodeDifferent::Encode("T :: AccountId"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantGetTypeByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							},
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
+								ty: DecodeDifferent::Encode("u64"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantAssociatedConstByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					),
 				},
 				ModuleMetadata {
 					name: DecodeDifferent::Encode("event_module"),
@@ -457,6 +518,6 @@ mod tests {
 		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
 		let expected_metadata: RuntimeMetadataPrefixed = EXPECTED_METADATA.into();
 
-		assert_eq!(expected_metadata, metadata_decoded.unwrap());
+		pretty_assertions::assert_eq!(expected_metadata, metadata_decoded.unwrap());
 	}
 }

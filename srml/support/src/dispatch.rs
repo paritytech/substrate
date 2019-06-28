@@ -17,14 +17,13 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
+pub use crate::rstd::{result, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 #[cfg(feature = "std")]
 pub use std::fmt;
-pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata,
+	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
 
@@ -447,10 +446,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{
 				$( $constants )*
-				$(
-					$( #[doc = $doc_attr ] )*
-					$name: $ty = $value;
-				)*
+				$( #[doc = $doc_attr ] )*
+				$name: $ty = $value;
 			}
 			[ $( $dispatchables )* ]
 			$($rest)*
@@ -1267,28 +1264,100 @@ macro_rules! __dispatch_impl_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __impl_module_constants_metadata {
+	// Without instance
 	(
-		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		$(
 			$( #[doc = $doc_attr:tt] )*
 			$name:ident: $type:ty = $value:expr;
 		)*
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+		impl<$trait_instance: $trait_name + 'static> $mod_type<$trait_instance> {
+			#[doc(hidden)]
+			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
+				// Create the `ByteGetter`s
+				$crate::paste::expr! {
+					$(
+						struct [< $name DefaultByteGetter >]<$trait_instance: $trait_name>(
+							$crate::dispatch::marker::PhantomData<($trait_instance)>
+						);
+						impl<$trait_instance: $trait_name + 'static> $crate::dispatch::DefaultByte
+							for [< $name DefaultByteGetter >]<$trait_instance>
+						{
+							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
+								$crate::dispatch::Encode::encode(&<$type>::from($value))
+							}
+						}
+					)*
+					&[
+						$(
+							$crate::dispatch::ModuleConstantMetadata {
+								name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
+								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
+								value: $crate::dispatch::DecodeDifferent::Encode(
+									$crate::dispatch::DefaultByteGetter(
+										&[< $name DefaultByteGetter >]::<$trait_instance>(
+											$crate::dispatch::marker::PhantomData
+										)
+									)
+								),
+								documentation: $crate::dispatch::DecodeDifferent::Encode(
+									&[ $( $doc_attr ),* ]
+								),
+							}
+						),*
+					]
+				}
+			}
+		}
+	};
+	// With instance
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident<I>, $instance:ident: $instantiable:path>
+		$(
+			$( #[doc = $doc_attr:tt] )*
+			$name:ident: $type:ty = $value:expr;
+		)*
+	) => {
+		impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
 			$mod_type<$trait_instance $(, $instance)?>
 		{
 			#[doc(hidden)]
 			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
-				&[
+				// Create the `ByteGetter`s
+				$crate::paste::expr! {
 					$(
-						$crate::dispatch::ModuleConstantMetadata {
-							name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
-							ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
-							value: $crate::dispatch::Encode::encode(&$type::from($value)),
-							documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $doc_attr ),* ]),
+						struct [< $name DefaultByteGetter >]<
+							$trait_instance: $trait_name<I>, $instance: $instantiable
+						>($crate::dispatch::marker::PhantomData<($trait_instance, $instance)>);
+						impl<$trait_instance: $trait_name<I> + 'static, $instance: $instantiable>
+							$crate::dispatch::DefaultByte
+								for [< $name DefaultByteGetter >]<$trait_instance, $instance>
+						{
+							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
+								$crate::dispatch::Encode::encode(&<$type>::from($value))
+							}
 						}
-					),*
-				]
+					)*
+					&[
+						$(
+							$crate::dispatch::ModuleConstantMetadata {
+								name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
+								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
+								value: $crate::dispatch::DecodeDifferent::Encode(
+									$crate::dispatch::DefaultByteGetter(
+										&[< $name DefaultByteGetter >]::<$trait_instance, $instance>(
+											$crate::dispatch::marker::PhantomData
+										)
+									)
+								),
+								documentation: $crate::dispatch::DecodeDifferent::Encode(
+									&[ $( $doc_attr ),* ]
+								),
+							}
+						),*
+					]
+				}
 			}
 		}
 	}

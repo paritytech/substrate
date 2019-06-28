@@ -201,7 +201,7 @@ pub struct StorageEntryMetadata {
 pub struct ModuleConstantMetadata {
 	pub name: DecodeDifferentStr,
 	pub ty: DecodeDifferentStr,
-	pub value: Vec<u8>,
+	pub value: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
