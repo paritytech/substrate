@@ -951,10 +951,6 @@ mod tests {
 			})
 		}
 
-		fn uses_tokio(&self) -> bool {
-			true
-		}
-
 		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
 			trace!(target: "babe", "Retreiving a peer");
 			&self.peers[i]

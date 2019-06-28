@@ -18,8 +18,8 @@
 
 #[cfg(test)]
 mod block_import;
-/*#[cfg(test)]
-mod sync;*/
+#[cfg(test)]
+mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -239,6 +239,21 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(
 			ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, recipient),
 		);*/
+	}
+
+	/// Returns true if we're major syncing.
+	pub fn is_major_syncing(&self) -> bool {
+		self.network.service().is_major_syncing()
+	}
+
+	/// Returns the number of peers we're connected to.
+	pub fn num_peers(&self) -> usize {
+		self.network.num_active_peers()
+	}
+
+	/// Returns true if we have no peer.
+	pub fn is_offline(&self) -> bool {
+		self.num_peers() == 0
 	}
 
 	/// access the underlying consensus gossip handler

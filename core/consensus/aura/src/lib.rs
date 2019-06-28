@@ -797,10 +797,6 @@ mod tests {
 			}
 		}
 
-		fn uses_tokio(&self) -> bool {
-			true
-		}
-
 		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
 			&self.peers[i]
 		}
