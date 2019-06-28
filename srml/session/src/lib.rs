@@ -134,6 +134,10 @@ pub trait ShouldEndSession<BlockNumber> {
 	fn should_end_session(now: BlockNumber) -> bool;
 }
 
+/// Ends the session after a fixed period of blocks.
+///
+/// The first session will have length of `Period + Offset`, and 
+/// the following sessions will have length of `Period`.
 pub struct PeriodicSessions<
 	Period,
 	Offset,
@@ -145,7 +149,8 @@ impl<
 	Offset: Get<BlockNumber>,
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn should_end_session(now: BlockNumber) -> bool {
-		((now.saturating_sub(Offset::get())) % Period::get()).is_zero()
+		let offset = Offset::get();
+		now > offset && ((now - offset) % Period::get()).is_zero()
 	}
 }
 
