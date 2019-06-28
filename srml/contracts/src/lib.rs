@@ -571,7 +571,7 @@ decl_module! {
 				origin_contract.last_write
 			};
 			if let Some(child_trie) = child::child_trie(
-				&prefixed_child_trie(&origin_contract.trie_id[..])[..]
+				&prefixed_trie_id(&origin_contract.trie_id[..])[..]
 			) {
 	
 				let key_values_taken = delta.iter()
@@ -718,7 +718,7 @@ decl_storage! {
 /// contract uses this prefix
 pub const CHILD_CONTRACT_PREFIX: &'static [u8] = b"default:";
 
-fn prefixed_child_trie(trie_id: &[u8]) -> Vec<u8> {
+fn prefixed_trie_id(trie_id: &[u8]) -> Vec<u8> {
 	let mut res = CHILD_CONTRACT_PREFIX.to_vec();
 	res.extend_from_slice(trie_id);
 	res
@@ -727,7 +727,7 @@ fn prefixed_child_trie(trie_id: &[u8]) -> Vec<u8> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
-			child::child_trie(&prefixed_child_trie(&info.trie_id[..])[..])
+			child::child_trie(&prefixed_trie_id(&info.trie_id[..])[..])
 				.map(|child_trie| child::kill_storage(&child_trie));
 		}
 		<ContractInfoOf<T>>::remove(who);

@@ -25,7 +25,6 @@ pub use substrate_state_machine::{
 	Externalities,
 	BasicExternalities,
 	TestExternalities,
-	ChildStorageKey
 };
 
 use environmental::environmental;
@@ -39,18 +38,6 @@ environmental!(ext: trait Externalities<Blake2Hasher>);
 /// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
 impl<T: Hasher> HasherBounds for T {}
-
-/// Returns a `ChildStorageKey` if the given `storage_key` slice is a valid storage
-/// key or panics otherwise.
-///
-/// Panicking here is aligned with what the `without_std` environment would do
-/// in the case of an invalid child storage key.
-fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey<Blake2Hasher> {
-	match ChildStorageKey::from_slice(storage_key) {
-		Some(storage_key) => storage_key,
-		None => panic!("child storage key is invalid"),
-	}
-}
 
 impl StorageApi for () {
 	fn storage(key: &[u8]) -> Option<Vec<u8>> {

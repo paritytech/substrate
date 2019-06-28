@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo,
-	Trait, prefixed_child_trie};
+	Trait, prefixed_trie_id};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
@@ -160,7 +160,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		if !is_below_subsistence {
 			// The contract has funds above subsistence deposit and that means it can afford to
 			// leave tombstone.
-			let p_key = prefixed_child_trie(&contract.trie_id);
+			let p_key = prefixed_trie_id(&contract.trie_id);
 			let child_trie = child::fetch_or_new(
 				p_key.as_ref(),
 				&current_block_number,

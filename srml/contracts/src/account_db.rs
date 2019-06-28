@@ -18,7 +18,7 @@
 
 use super::{
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Module, Trait, TrieId,
-	TrieIdGenerator, prefixed_child_trie,
+	TrieIdGenerator, prefixed_trie_id,
 };
 use crate::exec::StorageKey;
 use rstd::cell::RefCell;
@@ -83,7 +83,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	) -> Option<Vec<u8>> {
 		// see issue FIXME #2744 to stop querying child trie
 		trie_id.and_then(|id| {
-			child::child_trie(&prefixed_child_trie(&id)[..])
+			child::child_trie(&prefixed_trie_id(&id)[..])
 				.and_then(|child_trie|	child::get_raw(child_trie.node_ref(), &blake2_256(location))
 		)})
 	}
@@ -149,7 +149,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				if let Some(code_hash) = changed.code_hash {
 					new_info.code_hash = code_hash;
 				}
-				let p_key = prefixed_child_trie(&new_info.trie_id);
+				let p_key = prefixed_trie_id(&new_info.trie_id);
 				// see issue FIXME #2744 to only use keyspace generator
 				// and remove trie_id field (replaces parameter by 
 				// `TrieIdFromParentCounter(&address),`).
