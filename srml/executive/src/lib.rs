@@ -479,7 +479,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			vesting: vec![],
@@ -501,7 +501,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}

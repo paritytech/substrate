@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
-codec = { package = "parity-codec", version = "3.2" }
+codec = { package = "parity-codec", version = "4.1.1" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 client = { package = "substrate-client", path = "../../core/client" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }

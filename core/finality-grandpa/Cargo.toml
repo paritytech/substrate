@@ -9,9 +9,10 @@ fork-tree = { path = "../../core/util/fork-tree" }
 futures = "0.1"
 log = "0.4"
 parking_lot = "0.8.0"
-tokio = "0.1.7"
+tokio-executor = "0.1.7"
+tokio-timer = "0.2.11"
 rand = "0.6"
-parity-codec = { version = "3.5.4", features = ["derive"] }
+parity-codec = { version = "4.1.1", features = ["derive"] }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
@@ -23,7 +24,7 @@ network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-grandpa = { package = "finality-grandpa", version = "0.7.2", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.8.0", features = ["derive-codec"], git = "https://github.com/paritytech/finality-grandpa", rev = "f682e3dec54b19c5dd018324028c47f777f3b3a1" }
 
 [dev-dependencies]
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }
@@ -31,6 +32,7 @@ network = { package = "substrate-network", path = "../network", features = ["tes
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 env_logger = "0.6"
+tokio = "0.1.17"
 
 [features]
 default = ["service-integration"]

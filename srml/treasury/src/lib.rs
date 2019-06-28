@@ -142,7 +142,7 @@ decl_module! {
 				.map_err(|_| "Proposer's balance too low")?;
 
 			let c = Self::proposal_count();
-			<ProposalCount<T>>::put(c + 1);
+			ProposalCount::put(c + 1);
 			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
 			Self::deposit_event(RawEvent::Proposed(c));
@@ -183,7 +183,7 @@ decl_module! {
 
 			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
 
-			<Approvals<T>>::mutate(|v| v.push(proposal_id));
+			Approvals::mutate(|v| v.push(proposal_id));
 		}
 
 		fn on_finalize(n: T::BlockNumber) {
@@ -255,7 +255,7 @@ impl<T: Trait> Module<T> {
 
 		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		<Approvals<T>>::mutate(|v| {
+		Approvals::mutate(|v| {
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
@@ -319,9 +319,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
-	use runtime_primitives::testing::Header;
+	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -383,7 +381,7 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],

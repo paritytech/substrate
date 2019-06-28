@@ -41,7 +41,6 @@ mod tests {
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	use srml_support::traits::Get;
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
-	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use {seats, motions};
@@ -226,13 +225,15 @@ mod tests {
 			self.voter_bond = fee;
 			self
 		}
-		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		pub fn set_associated_consts(&self) {
 			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 			PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 			DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
-
-			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		}
+		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+			self.set_associated_consts();
+			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 			t.extend(balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),

@@ -25,7 +25,7 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives" 
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-parity-codec = { version = "3.5.4", features = ["derive"] }
+parity-codec = { version = "4.1.1", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 serde = { version = "1.0.70", features = ["derive"] }
 serde_json = "1.0.24"

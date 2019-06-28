@@ -319,18 +319,22 @@ mod tests {
 
 	#[test]
 	fn median_works() {
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
-			assert!(NOTIFICATIONS.with(|v| v.borrow().is_empty()));
+			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
 		});
 	}
 
 	#[test]
 	fn notifies_when_stalled() {
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			window_size: 11,
+			report_latency: 100
+		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
@@ -342,7 +346,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				NOTIFICATIONS.with(|v| v.borrow().to_vec()),
+				NOTIFICATIONS.with(|n| n.borrow().clone()),
 				vec![StallEvent { at: 105, further_wait: 10 }]
 			)
 		});
@@ -350,7 +354,7 @@ mod tests {
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
@@ -365,7 +369,7 @@ mod tests {
 				parent_hash = hdr.hash();
 			}
 
-			assert!(NOTIFICATIONS.with(|v| v.borrow().is_empty()));
+			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
 		});
 	}
 }

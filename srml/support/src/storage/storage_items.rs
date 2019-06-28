@@ -346,7 +346,7 @@ mod tests {
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
 			GETU32 get(u32_getter): T::Origin;
-			pub PUBGETU32 get(pub_u32_getter) build(|config: &GenesisConfig<T>| config.u32_getter_with_config): u32;
+			pub PUBGETU32 get(pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
 			GETU32WITHCONFIG get(u32_getter_with_config) config(): u32;
 			pub PUBGETU32WITHCONFIG get(pub_u32_getter_with_config) config(): u32;
 			GETU32MYDEF get(u32_getter_mydef): Option<u32> = Some(4);
@@ -716,7 +716,7 @@ mod tests {
 
 	#[test]
 	fn check_genesis_config() {
-		let config = GenesisConfig::<TraitImpl>::default();
+		let config = GenesisConfig::default();
 		assert_eq!(config.u32_getter_with_config, 0u32);
 		assert_eq!(config.pub_u32_getter_with_config, 0u32);
 
@@ -820,13 +820,13 @@ mod test_map_vec_append {
 		use runtime_io::{with_externalities, TestExternalities};
 
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = <MapVec<Test>>::append(1, &[1, 2, 3]);
-			let _ = <MapVec<Test>>::append(1, &[4, 5]);
-			assert_eq!(<MapVec<Test>>::get(1), vec![1, 2, 3, 4, 5]);
+			let _ = MapVec::append(1, &[1, 2, 3]);
+			let _ = MapVec::append(1, &[4, 5]);
+			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = <JustVec<Test>>::append(&[1, 2, 3]);
-			let _ = <JustVec<Test>>::append(&[4, 5]);
-			assert_eq!(<JustVec<Test>>::get(), vec![1, 2, 3, 4, 5]);
+			let _ = JustVec::append(&[1, 2, 3]);
+			let _ = JustVec::append(&[4, 5]);
+			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
 }

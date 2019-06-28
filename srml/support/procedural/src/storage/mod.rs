@@ -67,7 +67,6 @@ struct StorageDefinition {
 	pub crate_ident: Ident,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: ext::Opt<AddExtraGenesis>,
-	pub extra_genesis_skip_phantom_data_field: ext::Opt<ExtraGenesisSkipPhantomDataField>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -80,12 +79,6 @@ struct SpecificHiddenCrate {
 struct AddExtraGenesis {
 	pub extragenesis_keyword: keyword::add_extra_genesis,
 	pub content: ext::Braces<AddExtraGenesisContent>,
-}
-
-#[derive(Parse, ToTokens, Debug)]
-struct ExtraGenesisSkipPhantomDataField {
-	pub genesis_phantom_keyword: keyword::extra_genesis_skip_phantom_data_field,
-	pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]

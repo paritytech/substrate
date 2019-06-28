@@ -257,7 +257,7 @@ where
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| {
+		let new_seed = AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -414,7 +414,7 @@ decl_module! {
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
-			<CurrentSchedule<T>>::put(schedule);
+			CurrentSchedule::put(schedule);
 
 			Ok(())
 		}
@@ -670,7 +670,7 @@ decl_module! {
 		}
 
 		fn on_finalize() {
-			<GasSpent<T>>::kill();
+			GasSpent::kill();
 		}
 	}
 }
