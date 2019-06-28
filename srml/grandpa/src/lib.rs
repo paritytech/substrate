@@ -179,7 +179,7 @@ decl_module! {
 				}
 
 				if block_number == pending_change.scheduled_at + pending_change.delay {
-					<Authorities<T>>::put(&pending_change.next_authorities);
+					Authorities::put(&pending_change.next_authorities);
 					Self::deposit_event(
 						Event::NewAuthorities(pending_change.next_authorities)
 					);
@@ -193,7 +193,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
-		<Authorities<T>>::get()
+		Authorities::get()
 	}
 
 	/// Schedule a change in the authorities.

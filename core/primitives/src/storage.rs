@@ -64,25 +64,16 @@ pub mod well_known_keys {
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
-	/// Prefix of child storage content.
-	const PROTECTED_STORAGE_PREFIX: &'static [u8] = b":child_storage:";
-
 	/// Prefix of child storage keys.
-	/// This contains the `PROTECTED_STORAGE_PREFIX`. Then utf8 encoded 0.
-	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:0";
+	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
-	/// Prefix of child storage keys.
-	/// This contains the `PROTECTED_STORAGE_PREFIX`. Then utf8 encoded 1.
-	pub const CHILD_STORAGE_CONTENT_PREFIX: &'static [u8] = b":child_storage:1";
-
-
-	/// Whether a key is a protected content.
+	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
-	/// with `PROTECTED_STORAGE_PREFIX` and doesn't do anything apart from that.
-	pub fn is_protected_storage_content(key: &[u8]) -> bool {
+	/// with `CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
+	pub fn is_child_storage_key(key: &[u8]) -> bool {
 		// Other code might depend on this, so be careful changing this.
-		key.starts_with(PROTECTED_STORAGE_PREFIX)
+		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
 
 }

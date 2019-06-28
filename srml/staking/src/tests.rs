@@ -257,7 +257,7 @@ fn max_unstake_threshold_works() {
 			validator_payment: 0,
 		});
 
-		<OfflineSlash<Test>>::put(Perbill::from_fraction(0.0001));
+		OfflineSlash::put(Perbill::from_fraction(0.0001));
 
 		// Report each user 1 more than the max_unstake_threshold
 		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
@@ -696,7 +696,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 has not been reported offline
 		assert_eq!(Staking::slash_count(&10), 0);
-		<OfflineSlash<Test>>::put(Perbill::from_percent(12));
+		OfflineSlash::put(Perbill::from_percent(12));
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));

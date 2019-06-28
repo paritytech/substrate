@@ -17,7 +17,6 @@
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
-use srml_support::runtime_primitives::BuildStorage;
 use parity_codec::{Encode, Decode};
 
 pub trait Trait {
@@ -60,37 +59,37 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 #[test]
 fn final_keys() {
 	with_externalities(&mut new_test_ext(), || {
-		<Value<Test>>::put(1);
+		Value::put(1);
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(b"Module Value")), Some(1u32));
 
-		<Map<Test>>::insert(1, 2);
+		Map::insert(1, 2);
 		let mut k = b"Module Map".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
 
-		<Map2<Test>>::insert(1, 2);
+		Map2::insert(1, 2);
 		let mut k = b"Module Map2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
 
-		<LinkedMap<Test>>::insert(1, 2);
+		LinkedMap::insert(1, 2);
 		let mut k = b"Module LinkedMap".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
 
-		<LinkedMap2<Test>>::insert(1, 2);
+		LinkedMap2::insert(1, 2);
 		let mut k = b"Module LinkedMap2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
 
-		<DoubleMap<Test>>::insert(1, 2, 3);
+		DoubleMap::insert(1, 2, 3);
 		let mut k = b"Module DoubleMap".to_vec();
 		k.extend(1u32.encode());
 		let mut k = runtime_io::blake2_256(&k).to_vec();
 		k.extend(&runtime_io::blake2_256(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 
-		<DoubleMap2<Test>>::insert(1, 2, 3);
+		DoubleMap2::insert(1, 2, 3);
 		let mut k = b"Module DoubleMap2".to_vec();
 		k.extend(1u32.encode());
 		let mut k = runtime_io::twox_128(&k).to_vec();

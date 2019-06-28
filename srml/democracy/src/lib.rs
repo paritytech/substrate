@@ -337,7 +337,7 @@ decl_module! {
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
-			<PublicPropCount<T>>::put(index + 1);
+			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
 			let mut props = Self::public_props();
@@ -751,7 +751,7 @@ impl<T: Trait> Module<T> {
 			Err("Cannot inject a referendum that ends earlier than preceeding referendum")?
 		}
 
-		<ReferendumCount<T>>::put(ref_index + 1);
+		ReferendumCount::put(ref_index + 1);
 		let item = ReferendumInfo { end, proposal, threshold, delay };
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
 		Self::deposit_event(RawEvent::Started(ref_index, threshold));
@@ -775,7 +775,7 @@ impl<T: Trait> Module<T> {
 
 	/// Table the next waiting proposal for a vote.
 	fn launch_next(now: T::BlockNumber) -> Result {
-		if <LastTabledWasExternal<T>>::take() {
+		if LastTabledWasExternal::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
 		} else {
 			Self::launch_external(now).or_else(|_| Self::launch_public(now))
@@ -785,7 +785,7 @@ impl<T: Trait> Module<T> {
 	/// Table the waiting external proposal for a vote, if there is one.
 	fn launch_external(now: T::BlockNumber) -> Result {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
-			<LastTabledWasExternal<T>>::put(true);
+			LastTabledWasExternal::put(true);
 			Self::deposit_event(RawEvent::ExternalTabled);
 			Self::inject_referendum(
 				now + T::VotingPeriod::get(),
@@ -875,7 +875,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
 		}
-		<NextTally<T>>::put(index + 1);
+		NextTally::put(index + 1);
 
 		Ok(())
 	}
@@ -917,9 +917,7 @@ mod tests {
 		traits::Contains
 	};
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
-	use primitives::testing::Header;
+	use primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 
@@ -999,7 +997,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
@@ -1009,7 +1007,7 @@ mod tests {
 			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>::default().build_storage().unwrap().0);
+		t.extend(GenesisConfig::default().build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 

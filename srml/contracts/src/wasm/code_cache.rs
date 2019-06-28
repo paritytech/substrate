@@ -26,11 +26,11 @@
 //! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
-use crate::gas::{GasMeter, Token};
+use crate::gas::{Gas, GasMeter, Token};
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 use rstd::prelude::*;
-use runtime_primitives::traits::{CheckedMul, Hash, Bounded};
+use runtime_primitives::traits::{Hash, Bounded};
 use srml_support::StorageMap;
 
 /// Gas metering token that used for charging storing code into the code storage.
@@ -41,12 +41,12 @@ use srml_support::StorageMap;
 pub struct PutCodeToken(u32);
 
 impl<T: Trait> Token<T> for PutCodeToken {
-	type Metadata = Schedule<T::Gas>;
+	type Metadata = Schedule;
 
-	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Schedule) -> Gas {
 		metadata
 			.put_code_per_byte_cost
-			.checked_mul(&self.0.into())
+			.checked_mul(self.0.into())
 			.unwrap_or_else(|| Bounded::max_value())
 	}
 }
@@ -58,7 +58,7 @@ impl<T: Trait> Token<T> for PutCodeToken {
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	gas_meter: &mut GasMeter<T>,
-	schedule: &Schedule<T::Gas>,
+	schedule: &Schedule,
 ) -> Result<CodeHash<T>, &'static str> {
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
@@ -69,7 +69,7 @@ pub fn save<T: Trait>(
 		return Err("there is not enough gas for storing the code");
 	}
 
-	let prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
+	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
@@ -85,7 +85,7 @@ pub fn save<T: Trait>(
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
-	schedule: &Schedule<T::Gas>,
+	schedule: &Schedule,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
@@ -97,7 +97,7 @@ pub fn load<T: Trait>(
 		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
+		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
 		<CodeStorage<T>>::insert(code_hash, prefab_module.clone());
 	}
 	Ok(prefab_module)

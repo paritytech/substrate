@@ -757,12 +757,12 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
-	if top.iter().any(|(k, _)| well_known_keys::is_protected_storage_content(k)) {
+	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 		return Err(error::Error::GenesisInvalid.into());
 	}
 
 	debug_assert!(!children.iter()
-		.any(|(_, (_, subtrie))| !well_known_keys::is_protected_storage_content(&subtrie.parent_trie()[..])));
+		.any(|(_, (_, subtrie))| !well_known_keys::is_child_storage_key(&subtrie.parent_trie()[..])));
 
 	Ok(())
 }

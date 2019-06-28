@@ -28,6 +28,9 @@ pub use serde;
 #[doc(hidden)]
 pub use rstd;
 
+#[doc(hidden)]
+pub use paste;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
@@ -101,7 +104,22 @@ pub trait BuildStorage: Sized {
 		Ok((storage, child_storage))
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
+}
+
+/// Somethig that can build the genesis storage of a module.
+#[cfg(feature = "std")]
+pub trait BuildModuleGenesisStorage<T, I>: Sized {
+	/// Create the module genesis storage into the given `storage` and `child_storage`.
+	fn build_module_genesis_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
@@ -585,26 +603,32 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 /// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
+	// Generic + Instance
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// Generic
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// No Generic and maybe Instance
 	(
-		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
 	($concrete:ident) => ()
 }
@@ -619,30 +643,76 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
+			$( $config:ident =>
+				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
-		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		pub struct $main {
-			$(
-				pub $snake: Option<$config>,
-			)*
+		$crate::__impl_outer_config_types! {
+			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
 		}
-		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildStorage for $main {
-			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+
+		$crate::paste::item! {
+			#[cfg(any(feature = "std", test))]
+			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+			#[serde(rename_all = "camelCase")]
+			#[serde(deny_unknown_fields)]
+			pub struct $main {
 				$(
-					if let Some(extra) = self.$snake {
-						extra.assimilate_storage(top, children)?;
-					}
+					pub [< $snake $(_ $instance )? >]: Option<$config>,
 				)*
-				Ok(())
+			}
+			#[cfg(any(feature = "std", test))]
+			impl $crate::BuildStorage for $main {
+				fn assimilate_storage(
+					self,
+					top: &mut $crate::StorageOverlay,
+					children: &mut $crate::ChildrenStorageOverlay
+				) -> std::result::Result<(), String> {
+					$(
+						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
+							$crate::impl_outer_config! {
+								@CALL_FN
+								$concrete;
+								$snake;
+								$( $instance )?;
+								extra;
+								top;
+								children;
+							}
+						}
+					)*
+					Ok(())
+				}
 			}
 		}
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		$instance:ident;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
 	}
 }
 

@@ -24,8 +24,10 @@ mod node_codec;
 mod trie_stream;
 
 use substrate_primitives::child_trie::{ChildTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
+use substrate_primitives::child_trie::{NO_CHILD_KEYSPACE};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
+use rstd::marker::PhantomData;
 use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -36,7 +38,10 @@ pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
-pub use memory_db::{KeyFunction, prefixed_key};
+pub use memory_db::KeyFunction;
+
+#[cfg(feature = "legacy-trie")]
+pub use memory_db::prefixed_key;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -48,7 +53,7 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
-pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, PrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
@@ -333,23 +338,45 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 /// Corrently inserted prefix is not strong cryptographic hash but a unique encodable/decodable
 /// sequence which ensure content isolation, this is only true if all key uses this scheme.
 /// Since there is no garanties on that, another prefix is use: `CHILD_STORAGE_CONTENT_PREFIX`.
-pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a KeySpace, H::Out);
+pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a KeySpace, PhantomData<H>);
 /// `HashDBMut` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
 ///
 /// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
-pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a KeySpace, H::Out);
+pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a KeySpace, PhantomData<H>);
 
-const NULL_NODE: &[u8] = &[0];
+#[cfg(not(feature = "legacy-trie"))]
+/// Make database key from hash and prefix.
+/// Include NoChild prefix.
+pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
+	let mut prefixed_key =
+		Vec::with_capacity(NO_CHILD_KEYSPACE.len() + key.as_ref().len() + prefix.len());
+	prefixed_key.extend_from_slice(&NO_CHILD_KEYSPACE[..]);
+	prefixed_key.extend_from_slice(prefix);
+	prefixed_key.extend_from_slice(key.as_ref());
+	prefixed_key
+}
+
+#[derive(Clone,Debug)]
+/// Key function that concatenates prefix and hash.
+/// This is doing useless computation and should only be
+/// used for legacy purpose.
+pub struct PrefixedKey<H: Hasher>(PhantomData<H>);
+
+impl<H: Hasher> KeyFunction<H> for PrefixedKey<H> {
+	type Key = Vec<u8>;
+
+	fn key(hash: &H::Out, prefix: &[u8]) -> Vec<u8> {
+		prefixed_key::<H>(hash, prefix)
+	}
+}
 
 impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
-		// see FIXME #2741 for removal of this calculation
-		let null_node_data = H::hash(NULL_NODE);
-		KeySpacedDB(db, ks, null_node_data)
+		KeySpacedDB(db, ks, PhantomData)
 	}
 }
 impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
@@ -357,9 +384,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
-		// see FIXME #2741 for removal of this calculation
-		let null_node_data = H::hash(&[0]);
-		KeySpacedDBMut(db, ks, null_node_data)
+		KeySpacedDBMut(db, ks, PhantomData)
 	}
 }
 
@@ -369,19 +394,11 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 	T: From<&'static [u8]>,
 {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<T> {
-		if key == &self.2 {
-			return Some(NULL_NODE.into());
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool {
-		if key == &self.2 {
-			return true;
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, &derived_prefix)
 	}
@@ -393,47 +410,27 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<T> {
-		if key == &self.2 {
-			return Some(NULL_NODE.into());
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool {
-		if key == &self.2 {
-			return true;
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, &derived_prefix)
 	}
 
 	fn insert(&mut self, prefix: &[u8], value: &[u8]) -> H::Out {
-		if value == NULL_NODE {
-			return self.2.clone();
-		}
-
 		let key = H::hash(value);
 		Self::emplace(self, key.clone(), prefix, value.into());
 		key
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: &[u8], value: T) {
-		if key == self.2 {
-			return;
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.emplace(key, &derived_prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: &[u8]) {
-		if key == &self.2 {
-			return;
-		}
-
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.remove(key, &derived_prefix)
 	}

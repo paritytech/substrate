@@ -18,7 +18,7 @@ use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractIn
 	Trait, prefixed_trie_id};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
+use srml_support::traits::{Currency, ExistenceRequirement, WithdrawReason};
 use srml_support::{storage::child, StorageMap};
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -96,14 +96,31 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	// The minimal amount of funds required for a contract not to be evicted.
 	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 
+	if balance < subsistence_threshold {
+		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
+		<ContractInfoOf<T>>::remove(account);
+		let p_key = prefixed_trie_id(&contract.trie_id);
+		let child_trie = child::fetch_or_new(
+			p_key.as_ref(),
+			&current_block_number,
+		);
+		runtime_io::kill_child_storage(&child_trie);
+		return RentOutcome::Evicted;
+	}
+
 	let dues = fee_per_block
 		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
 		.unwrap_or(<BalanceOf<T>>::max_value());
+	let rent_budget = contract.rent_allowance.min(balance - subsistence_threshold);
+	let insufficient_rent = rent_budget < dues;
 
-	let dues_limited = dues.min(contract.rent_allowance);
-	let rent_allowance_exceeded = dues > contract.rent_allowance;
-	let is_below_subsistence = balance < subsistence_threshold;
-	let go_below_subsistence = balance.saturating_sub(dues_limited) < subsistence_threshold;
+	// If the rent payment cannot be withdrawn due to locks on the account balance, then evict the
+	// account.
+	//
+	// NOTE: This seems problematic because it provides a way to tombstone an account while
+	// avoiding the last rent payment. In effect, someone could retroactively set rent_allowance
+	// for their contract to 0.
+	let dues_limited = dues.min(rent_budget);
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
 		account,
 		dues_limited,
@@ -112,73 +129,57 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	)
 	.is_ok();
 
-	if !rent_allowance_exceeded && can_withdraw_rent && !go_below_subsistence {
-		// Collect dues
-
-		if pay_rent {
-			let imbalance = T::Currency::withdraw(
-				account,
-				dues,
-				WithdrawReason::Fee,
-				ExistenceRequirement::KeepAlive,
-			)
-			.expect(
-				"Withdraw has been checked above;
-				go_below_subsistence is false and subsistence > existencial_deposit;
-				qed",
-			);
-
-			<ContractInfoOf<T>>::mutate(account, |contract| {
-				let contract = contract
-					.as_mut()
-					.and_then(|c| c.as_alive_mut())
-					.expect("Dead or inexistent account has been exempt above; qed");
-
-				contract.rent_allowance -= imbalance.peek(); // rent_allowance is not exceeded
-				contract.deduct_block = current_block_number;
-			})
-		}
-
-		RentOutcome::Ok
-	} else {
-		// Evict
-
-		if can_withdraw_rent && !go_below_subsistence {
-			T::Currency::withdraw(
-				account,
-				dues,
-				WithdrawReason::Fee,
-				ExistenceRequirement::KeepAlive,
-			)
-			.expect("Can withdraw and don't go below subsistence");
-		} else if !is_below_subsistence {
-			T::Currency::make_free_balance_be(account, subsistence_threshold);
-		} else {
-			T::Currency::make_free_balance_be(account, <BalanceOf<T>>::zero());
-		}
-
-		if !is_below_subsistence {
-			// The contract has funds above subsistence deposit and that means it can afford to
-			// leave tombstone.
-			let p_key = prefixed_trie_id(&contract.trie_id);
-			let child_trie = child::fetch_or_new(
-				p_key.as_ref(),
-				&current_block_number,
-			);
-
-			// Note: this operation is heavy.
-			let child_storage_root = runtime_io::child_storage_root(&child_trie);
-
-			let tombstone = <TombstoneContractInfo<T>>::new(
-				&child_storage_root[..],
-				contract.code_hash,
-			);
-			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
-			runtime_io::kill_child_storage(&child_trie);
-		}
-
-		RentOutcome::Evicted
+	if can_withdraw_rent && (insufficient_rent || pay_rent) {
+		// Collect dues.
+		let _ = T::Currency::withdraw(
+			account,
+			dues_limited,
+			WithdrawReason::Fee,
+			ExistenceRequirement::KeepAlive,
+		)
+		.expect(
+			"Withdraw has been checked above;
+			dues_limited < rent_budget < balance - subsistence < balance - existential_deposit;
+			qed",
+		);
 	}
+
+	if insufficient_rent || !can_withdraw_rent {
+		// The contract cannot afford the rent payment and has a balance above the subsistence
+		// threshold, so it leaves a tombstone.
+
+		let p_key = prefixed_trie_id(&contract.trie_id);
+		let child_trie = child::fetch_or_new(
+			p_key.as_ref(),
+			&current_block_number,
+		);
+
+		// Note: this operation is heavy.
+		let child_storage_root = runtime_io::child_storage_root(&child_trie);
+
+		let tombstone = <TombstoneContractInfo<T>>::new(
+			&child_storage_root[..],
+			contract.code_hash,
+		);
+		<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
+		runtime_io::kill_child_storage(&child_trie);
+
+		return RentOutcome::Evicted;
+	}
+
+	if pay_rent {
+		<ContractInfoOf<T>>::mutate(account, |contract| {
+			let contract = contract
+				.as_mut()
+				.and_then(|c| c.as_alive_mut())
+				.expect("Dead or nonexistent account has been exempt above; qed");
+
+			contract.rent_allowance -= dues; // rent_allowance is not exceeded
+			contract.deduct_block = current_block_number;
+		})
+	}
+
+	RentOutcome::Ok
 }
 
 /// Make account paying the rent for the current block number

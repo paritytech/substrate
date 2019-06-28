@@ -440,7 +440,7 @@ where Block: BlockT<Hash=H256>,
 		children: ChildrenStorageOverlay
 	) -> Result<H256, client::error::Error> {
 
-		if top.iter().any(|(k, _)| well_known_keys::is_protected_storage_content(k)) {
+		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
 		}
 
@@ -1404,7 +1404,7 @@ where Block: BlockT<Hash=H256> {}
 
 #[cfg(test)]
 mod tests {
-	use hash_db::HashDB;
+	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
 	use client::backend::Backend as BTrait;
@@ -1640,7 +1640,10 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1674,8 +1677,10 @@ mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1708,8 +1713,10 @@ mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_some());
+			assert!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().is_some());
 			hash
 		};
 
@@ -1740,14 +1747,19 @@ mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
+			assert!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().is_none())
 		}
 
 		backend.finalize_block(BlockId::Number(1), None).unwrap();
 		backend.finalize_block(BlockId::Number(2), None).unwrap();
 		backend.finalize_block(BlockId::Number(3), None).unwrap();
-		assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
+		assert!(backend.storage.db.get(
+			columns::STATE,
+			&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+		).unwrap().is_none());
 	}
 
 	#[test]

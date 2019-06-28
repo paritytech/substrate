@@ -645,7 +645,9 @@ where
 		None => Box::new(stdin()),
 	};
 
-	service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file).map_err(Into::into)
+	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+	tokio::run(fut);
+	Ok(())
 }
 
 fn revert_chain<F, S>(

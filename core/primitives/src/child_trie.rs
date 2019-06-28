@@ -20,7 +20,6 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
-use crate::storage::well_known_keys::CHILD_STORAGE_CONTENT_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
@@ -31,12 +30,46 @@ pub use impl_serde::serialize as bytes;
 /// this child trie.
 /// The `KeySpace` of a child trie must be unique for the canonical chain
 /// in order to avoid key collision at a key value database level.
-/// This is currently build by using the `ParentTrie` path of the child trie
-/// at its creation and the block number at its creation (a child trie
-/// when new if moved must therefore update its keyspace).
+/// Child trie variant (start with 1u8), is currently build by using the `ParentTrie`
+/// path of the child trie at its creation and the block number at its creation
+/// (only child trie in their creation block need to update this value when moved).
+/// No keyspace variant is only 0u8.
 /// This id is unique as for a block number state we cannot have
 /// two created child trie with the same `ParentTrie`.
 pub type KeySpace = Vec<u8>;
+
+
+/// Keyspace to use for the parent trie key.
+pub const NO_CHILD_KEYSPACE: [u8;1] = [0u8];
+const CHILD_KEYSPACE_HEAD: u8 = 1;
+
+// see FIXME #2741 for removal of this allocation on every operation.
+// (the PrefixedDB one is enough). Method could be to pass mutable
+// vector to `KeyFunction` and have an new key function to estimate
+// required additional allocation size.
+/// Generate a new keyspace for a child trie.
+pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8> {
+	// using 9 for block number and additional encoding targeting ~u64
+	let mut result = Vec::with_capacity(parent_trie.len() + 9);
+	result.push(CHILD_KEYSPACE_HEAD); // 1 first value if there is a keyspace (
+	parity_codec::Encode::encode_to(ChildTrie::parent_key_slice(parent_trie), &mut result);
+	parity_codec::Encode::encode_to(block_nb, &mut result);
+	result
+}
+
+/// Utility function used for merging `KeySpace` data and `prefix` data
+/// before calling key value database primitives.
+/// Note that it currently does a costy append operation resulting in bigger
+/// key length but possibly allowing prefix related operation at lower level.
+pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
+	let n_pre_len = NO_CHILD_KEYSPACE.len();
+	// only use on prefixed db where NO_CHILD_KEYSPACE is added.
+	debug_assert!(prefix.len() >= n_pre_len);
+	let mut res = rstd::vec![0; ks.len() + prefix.len() - n_pre_len];
+	res[..ks.len()].copy_from_slice(&ks);
+	res[ks.len()..].copy_from_slice(&prefix[n_pre_len..]);
+	res
+}
 
 /// Parent trie origin. This type contains all information
 /// needed to access a parent trie.
@@ -45,23 +78,6 @@ pub type KeySpace = Vec<u8>;
 /// Internally this contains a full path key (with
 /// `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
 pub type ParentTrie = Vec<u8>;
-
-/// Utility function used for merging `KeySpace` data and `prefix` data
-/// before calling key value database primitives.
-/// Note that it currently does a costy append operation resulting in bigger
-/// key length but possibly allowing prefix related operation at lower level.
-/// Note that we also append a common prefix to avoid general state key to
-/// conflict (if the KeySpace gets build from a strong cryptographic hash
-/// in the future, or if general state get written with empty keyspace,
-/// this would be useless).
-pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
-	let pre = CHILD_STORAGE_CONTENT_PREFIX;
-	let mut res = rstd::vec![0; pre.len() + ks.len() + prefix.len()];
-	res[..pre.len()].copy_from_slice(&pre);
-	res[pre.len()..pre.len() + ks.len()].copy_from_slice(&ks);
-	res[pre.len() + ks.len()..].copy_from_slice(prefix);
-	res
-}
 
 /// `ChildTrieReadRef` contains a reference to information
 /// needed to access a child trie content.
@@ -338,13 +354,4 @@ impl AsRef<ChildTrie> for ChildTrie {
 	fn as_ref(&self) -> &ChildTrie {
 		self
 	}
-}
-
-/// generate a new keyspace
-pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8> {
-	// using 8 for block number and additianal encoding targeting ~u64
-	let mut result = Vec::with_capacity(parent_trie.len() + 8);
-	parity_codec::Encode::encode_to(ChildTrie::parent_key_slice(parent_trie), &mut result);
-	parity_codec::Encode::encode_to(block_nb, &mut result);
-	result
 }
