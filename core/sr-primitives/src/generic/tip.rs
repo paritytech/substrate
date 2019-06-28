@@ -39,7 +39,7 @@ impl<Balance> Default for Tip<Balance> {
     }
 }
 
-/// A trait for a generic transaction that contains a tip. The tip itself migth yeild something
+/// A trait for a generic transaction that contains a tip. The tip itself might yield something
 /// that translates to "no tip" but this trait must always be implemented for `UncheckedExtrinsic`.
 pub trait Tippable<Balance> {
     /// Return the tip associated with this transaction.
