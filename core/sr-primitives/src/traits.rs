@@ -596,7 +596,7 @@ impl<T> MaybeHash for T {}
 
 /// A type that provides a randomness beacon.
 pub trait RandomnessBeacon {
-	/// Returns 32 bytes of random data.  The output will change eventually, but
+	/// Returns 32 bytes of random data. The output will change eventually, but
 	/// is not guaranteed to be different between any two calls.
 	///
 	/// Unless specified otherwise, the value this function returns is not
