@@ -448,7 +448,7 @@ where
 pub mod child {
 	use super::{runtime_io, Codec, Encode, Decode, Vec, IncrementalChildInput, ChildTrie,
 		ChildTrieReadRef};
-	
+
 	/// Method for fetching or initiating a new child trie.
 	pub fn fetch_or_new<N: Encode>(
 		parent: &[u8],

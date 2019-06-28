@@ -527,9 +527,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		value_offset: u32
 	) -> u32 => {
 		let keyspace = &this.memory.get(
-      keyspace_data,
-      keyspace_len as usize,
-    ).map_err(|_| "Invalid attempt to determine storage_key in ext_get_allocated_child_storage")?;
+			keyspace_data,
+			keyspace_len as usize,
+		).map_err(|_| "Invalid attempt to determine storage_key in ext_get_allocated_child_storage")?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_child_storage")?;
 		let root;

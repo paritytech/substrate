@@ -150,9 +150,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.code_hash = code_hash;
 				}
 				let p_key = prefixed_trie_id(&new_info.trie_id);
-				// see issue FIXME #2744 to only use keyspace generator
-				// and remove trie_id field (replaces parameter by 
-				// `TrieIdFromParentCounter(&address),`).
+				// see issue FIXME #2744 to avoid this fetch
 				let child_trie = child::fetch_or_new(
 					p_key.as_ref(),
 					&block_number,

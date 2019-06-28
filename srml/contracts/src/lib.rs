@@ -229,8 +229,8 @@ where
 	}
 }
 
-// see FIXME #2744 (should result in removing this trait
-// by fusing chiltrie node and accountinfo node)
+// See FIXME #2744 (should result in removing this trait
+// by fusing chiltrie node and accountinfo node).
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
 /// Note that it is different than encode because trie id should be collision resistant
 /// (being a proper unique identifier).
@@ -248,13 +248,8 @@ pub trait TrieIdGenerator<AccountId> {
 }
 
 /// Get trie id from `account_id`.
-// see FIXME #2744 (temporar glue)
+// see FIXME #2744 this trie id could be remove if fusing nodes.
 pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
-
-/// Get trie id from `account_id`.
-// see FIXME #2744 (for using this instead of `TrieIdFromParentCounter`)
-pub struct TrieIdFromParentCounterNew<'a, T: Trait>(pub &'a T::AccountId);
-
 
 /// This generator uses inner counter for account id and applies a hash over
 /// `AccountId`++ `accountid_counter`.
@@ -571,7 +566,7 @@ decl_module! {
 			if let Some(child_trie) = child::child_trie(
 				&prefixed_trie_id(&origin_contract.trie_id[..])[..]
 			) {
-	
+
 				let key_values_taken = delta.iter()
 					.filter_map(|key| {
 						child::get_raw(child_trie.node_ref(), &blake2_256(key)).map(|value| {

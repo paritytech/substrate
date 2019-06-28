@@ -389,7 +389,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// the prototype (having a function for calculating root on reference and
 		// one for getting transaction while dropping value.
 		let existing_pairs = self.inner.1.get(
-		 child_trie.keyspace()
+			child_trie.keyspace()
 		).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 		let root = child_trie_root::<H, _, _, _>(
 			existing_pairs.chain(transaction.iter().cloned())
@@ -420,7 +420,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// the memorydb gets incorectly use to fead keyvalue database.
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();
-    let (root_map, child_map) = std::mem::replace(&mut self.inner, Default::default());
+		let (root_map, child_map) = std::mem::replace(&mut self.inner, Default::default());
 
 		for (_k, (map, child_trie)) in child_map.into_iter() {
 			let ch = insert_into_memory_db::<H, _>(

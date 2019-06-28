@@ -331,13 +331,8 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
-// see FIXME #2741, third field should be remove and is therefore not documented
 /// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
-///
-/// Corrently inserted prefix is not strong cryptographic hash but a unique encodable/decodable
-/// sequence which ensure content isolation, this is only true if all key uses this scheme.
-/// Since there is no garanties on that, another prefix is use: `CHILD_STORAGE_CONTENT_PREFIX`.
 pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a KeySpace, PhantomData<H>);
 /// `HashDBMut` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
@@ -347,7 +342,7 @@ pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a KeySpace, PhantomData<H>);
 
 #[cfg(not(feature = "legacy-trie"))]
 /// Make database key from hash and prefix.
-/// Include NoChild prefix.
+/// Include `NO_CHILD_KEYSPACE` prefix.
 pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
 	let mut prefixed_key =
 		Vec::with_capacity(NO_CHILD_KEYSPACE.len() + key.as_ref().len() + prefix.len());
@@ -358,9 +353,10 @@ pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
 }
 
 #[derive(Clone,Debug)]
-/// Key function that concatenates prefix and hash.
-/// This is doing useless computation and should only be
-/// used for legacy purpose.
+/// Key function that concatenates no child trie byte,
+/// Also include `NO_CHILD_KEYSPACE` prefix to avoid
+/// conflict with child trie keyspace (it is easy to
+/// change prefix to match the child trie one).
 pub struct PrefixedKey<H: Hasher>(PhantomData<H>);
 
 impl<H: Hasher> KeyFunction<H> for PrefixedKey<H> {

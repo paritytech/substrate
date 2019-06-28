@@ -1168,7 +1168,7 @@ mod tests {
 			remote_proof.clone(),
 			&[0xff]
 		).is_ok();
- 		// check that results are correct
+		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 
@@ -1184,7 +1184,7 @@ mod tests {
 			remote_proof.clone(),
 			&pr_sub1,
 		).unwrap();
-	
+
 		let child_trie1: ChildTrie = ChildTrie::decode_node_with_parent(
 			&local_result1.unwrap()[..],
 			b"value2".to_vec(),
@@ -1279,7 +1279,7 @@ mod tests {
 			ext.storage_root();
 			ext.transaction().0
 		};
- 
+
 		let mut set1 = HashSet::new();
 		tr1.0.drain().into_iter().for_each(|(i, (_,rc))| if rc == -1i32 {
 			set1.remove(&i);
@@ -1348,8 +1348,8 @@ mod tests {
 		});
 		assert!(set1.len() != 0);
 		assert!(set2.len() != 0);
- 
-		// assert no duplicate new key (removal is fine)
+
+		// Assert there is no duplicated new key (removal is fine).
 		for k in set1.iter() {
 			assert!(!set2.contains(k));
 		}
