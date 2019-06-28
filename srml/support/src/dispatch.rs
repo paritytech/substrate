@@ -1272,43 +1272,13 @@ macro_rules! __impl_module_constants_metadata {
 			$name:ident: $type:ty = $value:expr;
 		)*
 	) => {
-		impl<$trait_instance: $trait_name + 'static> $mod_type<$trait_instance> {
-			#[doc(hidden)]
-			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
-				// Create the `ByteGetter`s
-				$crate::paste::expr! {
-					$(
-						struct [< $name DefaultByteGetter >]<$trait_instance: $trait_name>(
-							$crate::dispatch::marker::PhantomData<($trait_instance)>
-						);
-						impl<$trait_instance: $trait_name + 'static> $crate::dispatch::DefaultByte
-							for [< $name DefaultByteGetter >]<$trait_instance>
-						{
-							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
-								$crate::dispatch::Encode::encode(&<$type>::from($value))
-							}
-						}
-					)*
-					&[
-						$(
-							$crate::dispatch::ModuleConstantMetadata {
-								name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
-								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
-								value: $crate::dispatch::DecodeDifferent::Encode(
-									$crate::dispatch::DefaultByteGetter(
-										&[< $name DefaultByteGetter >]::<$trait_instance>(
-											$crate::dispatch::marker::PhantomData
-										)
-									)
-								),
-								documentation: $crate::dispatch::DecodeDifferent::Encode(
-									&[ $( $doc_attr ),* ]
-								),
-							}
-						),*
-					]
-				}
-			}
+		$crate::__impl_module_constants_metadata! {
+			GENERATE_CODE
+			$mod_type<$trait_instance: $trait_name>
+			$(
+				$( #[doc = $doc_attr] )*
+				$name<$trait_instance: $trait_name>: $type = $value;
+			)*
 		}
 	};
 	// With instance
@@ -1317,6 +1287,27 @@ macro_rules! __impl_module_constants_metadata {
 		$(
 			$( #[doc = $doc_attr:tt] )*
 			$name:ident: $type:ty = $value:expr;
+		)*
+	) => {
+		$crate::__impl_module_constants_metadata! {
+			GENERATE_CODE
+			$mod_type<$trait_instance: $trait_name<I>, $instance: $instantiable>
+			$(
+				$( #[doc = $doc_attr] )*
+				$name<$trait_instance: $trait_name<I>, $instance: $instantiable>: $type = $value;
+			)*
+		}
+	};
+	// Do the code generation
+	(GENERATE_CODE
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident $(<I>, $instance:ident: $instantiable:path)?>
+		$(
+			$( #[doc = $doc_attr:tt] )*
+			$name:ident<
+				$const_trait_instance:ident: $const_trait_name:ident $(
+					<I>, $const_instance:ident: $const_instantiable:path
+				)*
+			>: $type:ty = $value:expr;
 		)*
 	) => {
 		impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
@@ -1328,11 +1319,16 @@ macro_rules! __impl_module_constants_metadata {
 				$crate::paste::expr! {
 					$(
 						struct [< $name DefaultByteGetter >]<
-							$trait_instance: $trait_name<I>, $instance: $instantiable
-						>($crate::dispatch::marker::PhantomData<($trait_instance, $instance)>);
-						impl<$trait_instance: $trait_name<I> + 'static, $instance: $instantiable>
-							$crate::dispatch::DefaultByte
-								for [< $name DefaultByteGetter >]<$trait_instance, $instance>
+							$const_trait_instance: $const_trait_name $(
+								<I>, $const_instance: $const_instantiable
+							)?
+						>($crate::dispatch::marker::PhantomData<
+							($const_trait_instance $(, $const_instance)?)
+						>);
+						impl<$const_trait_instance: 'static + $const_trait_name $(
+							<I>, $const_instance: $const_instantiable)?
+						> $crate::dispatch::DefaultByte
+							for [< $name DefaultByteGetter >]<$const_trait_instance $(, $const_instance)?>
 						{
 							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
 								$crate::dispatch::Encode::encode(&<$type>::from($value))
@@ -1346,7 +1342,7 @@ macro_rules! __impl_module_constants_metadata {
 								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
 								value: $crate::dispatch::DecodeDifferent::Encode(
 									$crate::dispatch::DefaultByteGetter(
-										&[< $name DefaultByteGetter >]::<$trait_instance, $instance>(
+										&[< $name DefaultByteGetter >]::<$const_trait_instance $(, $const_instance)?>(
 											$crate::dispatch::marker::PhantomData
 										)
 									)
