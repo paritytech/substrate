@@ -520,6 +520,11 @@ mod tests {
 		runtime_io::TestExternalities::new(t)
 	}
 
+	fn initialize_block(block: u64) {
+		System::set_block_number(block);
+		Session::on_initialize(block);
+	}
+
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
@@ -534,8 +539,7 @@ mod tests {
 			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2]);
 
 			force_new_session();
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			initialize_block(1);
 			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
@@ -544,8 +548,7 @@ mod tests {
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			force_new_session();
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(2);
 			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
@@ -556,8 +559,7 @@ mod tests {
 			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 4]);
 			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4), vec![]));
 			force_new_session();
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(3);
 			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
@@ -567,8 +569,7 @@ mod tests {
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 
 			force_new_session();
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(4);
 			assert_eq!(Session::queued_keys(), vec![
 				(1, UintAuthorityId(1)),
 				(2, UintAuthorityId(2)),
@@ -584,25 +585,20 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			set_session_length(10);
 
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			initialize_block(1);
 			assert_eq!(Session::current_index(), 0);
 
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(2);
 			assert_eq!(Session::current_index(), 0);
+
 			force_new_session();
-
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(3);
 			assert_eq!(Session::current_index(), 1);
 
-			System::set_block_number(9);
-			Session::on_initialize(9);
+			initialize_block(9);
 			assert_eq!(Session::current_index(), 1);
 
-			System::set_block_number(10);
-			Session::on_initialize(10);
+			initialize_block(10);
 			assert_eq!(Session::current_index(), 2);
 		});
 	}
@@ -611,34 +607,28 @@ mod tests {
 	fn session_change_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: No change
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			initialize_block(1);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 2: Session rollover, but no change.
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(2);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 3: Set new key for validator 2; no visible change.
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(3);
 			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 4: Session rollover; no visible change.
-			System::set_block_number(4);
-			Session::on_initialize(4);
+			initialize_block(4);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 5: No change.
-			System::set_block_number(5);
-			Session::on_initialize(5);
+			initialize_block(5);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 6: Session rollover; authority 2 changes.
-			System::set_block_number(6);
-			Session::on_initialize(6);
+			initialize_block(6);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
 		});
 	}
