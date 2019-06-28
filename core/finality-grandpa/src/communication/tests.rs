@@ -320,7 +320,7 @@ fn tallies_for_multiple_rounds_do_not_interfere() {
 	};
 
 	let encoded_vote_two = {
-		let round = 2;
+		let round = 1;
 		let set_id = 2;
 
 		let signed = {
