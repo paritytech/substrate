@@ -33,7 +33,7 @@ use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
-	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
+	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
 	traits::Currency, StorageMap, StorageValue
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -93,7 +93,6 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type Currency = Balances;
 	type Call = Call;
-	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
@@ -117,7 +116,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
 		use substrate_primitives::storage::well_known_keys;
 
-		let new_seed = <super::AccountCounter<Test>>::mutate(|v| {
+		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -184,10 +183,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default()
-			.build_storage()
-			.unwrap()
-			.0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				transaction_base_fee: 0,
@@ -215,8 +211,6 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				contract_fee: 21,
-				call_base_fee: 135,
-				create_base_fee: 175,
 				gas_price: self.gas_price,
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
@@ -230,14 +224,17 @@ impl ExtBuilder {
 	}
 }
 
+// Perform a simple transfer to a non-existent account supplying way more gas than needed.
+// Then we check that the all unused gas is refunded.
 #[test]
 fn refunds_unused_gas() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::deposit_creating(&0, 100_000_000);
+	with_externalities(&mut ExtBuilder::default().gas_price(2).build(), || {
+		Balances::deposit_creating(&ALICE, 100_000_000);
 
-		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 
-		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
+		// 2 * 135 - gas price multiplied by the call base fee.
+		assert_eq!(Balances::free_balance(&ALICE), 100_000_000 - (2 * 135));
 	});
 }
 
@@ -522,6 +519,110 @@ fn dispatch_call() {
 	);
 }
 
+const CODE_DISPATCH_CALL_THEN_TRAP: &str = r#"
+(module
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_dispatch_call
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 11) ;; Length of the buffer
+		)
+		(unreachable) ;; trap so that the top level transaction fails
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
+)
+"#;
+const HASH_DISPATCH_CALL_THEN_TRAP: [u8; 32] = hex!("55fe5c142dfe2519ca76c7c9b9f05012bd2624b7dcc128d2ce5a7af9d2da1846");
+
+#[test]
+fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
+	// This test can fail due to the encoding changes. In case it becomes too annoying
+	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
+
+	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+			// Let's keep this assert even though it's redundant. If you ever need to update the
+			// wasm source this test will fail and will show you the actual hash.
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					topics: vec![],
+				},
+			]);
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000,
+				HASH_DISPATCH_CALL_THEN_TRAP.into(),
+				vec![],
+			));
+
+			// Call the newly created contract. The contract is expected to dispatch a call
+			// and then trap.
+			assert_err!(
+				Contract::call(
+					Origin::signed(ALICE),
+					BOB, // newly created account
+					0,
+					100_000,
+					vec![],
+				),
+				"during execution"
+			);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(BOB, 100)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
+				},
+				// ABSENCE of events which would be caused by dispatched Balances::transfer call
+			]);
+		},
+	);
+}
+
 const CODE_SET_RENT: &str = r#"
 (module
 	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
@@ -641,7 +742,7 @@ mod call {
 	pub fn null() -> Vec<u8> { vec![0, 0, 0] }
 }
 
-/// Test correspondance of set_rent code and its hash.
+/// Test correspondence of set_rent code and its hash.
 /// Also test that encoded extrinsic in code correspond to the correct transfer
 #[test]
 fn test_set_rent_code_and_hash() {
@@ -853,9 +954,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
+			let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
+
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 100);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -863,6 +967,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -870,6 +975,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 		}
 	);
 
@@ -890,6 +996,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
+			assert_eq!(Balances::free_balance(&BOB), 1_000);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -897,6 +1004,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			// Balance should be initial balance - initial rent_allowance
+			assert_eq!(Balances::free_balance(&BOB), 900);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -904,6 +1013,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), 900);
 		}
 	);
 
@@ -924,10 +1034,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 50 + Balances::minimum_balance());
 
 			// Transfer funds
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -935,6 +1047,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -942,6 +1055,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 		}
 	);
 }

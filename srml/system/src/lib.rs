@@ -357,7 +357,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -485,14 +485,14 @@ impl<T: Trait> Module<T> {
 
 		// Index of the to be added event.
 		let event_idx = {
-			let old_event_count = <EventCount<T>>::get();
+			let old_event_count = EventCount::get();
 			let new_event_count = match old_event_count.checked_add(1) {
 				// We've reached the maximum number of events at this block, just
 				// don't do anything and leave the event_count unaltered.
 				None => return,
 				Some(nc) => nc,
 			};
-			<EventCount<T>>::put(new_event_count);
+			EventCount::put(new_event_count);
 			old_event_count
 		};
 
@@ -524,12 +524,12 @@ impl<T: Trait> Module<T> {
 
 	/// Gets extrinsics count.
 	pub fn extrinsic_count() -> u32 {
-		<ExtrinsicCount<T>>::get().unwrap_or_default()
+		ExtrinsicCount::get().unwrap_or_default()
 	}
 
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> u32 {
-		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
+		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
@@ -553,14 +553,14 @@ impl<T: Trait> Module<T> {
 			*index = (*index + 1) % 81;
 		});
 		<Events<T>>::kill();
-		<EventCount<T>>::kill();
+		EventCount::kill();
 		<EventTopics<T>>::remove_prefix(&());
 	}
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
-		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsWeight<T>>::kill();
+		ExtrinsicCount::kill();
+		AllExtrinsicsWeight::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -699,7 +699,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This function is called only when the block is being constructed locally.
 	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
+		ExtrinsicData::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
@@ -713,19 +713,19 @@ impl<T: Trait> Module<T> {
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsWeight<T>>::put(&total_length);
+		AllExtrinsicsWeight::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
-		<ExtrinsicCount<T>>::put(extrinsic_index);
+		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -766,9 +766,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::Header;
+	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use srml_support::impl_outer_origin;
 
 	impl_outer_origin!{
@@ -801,7 +799,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]
