@@ -221,7 +221,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				),
 				parent.clone(),
 				block.clone(),
-				value.or(cache.value_at_block(&parent)?),
+				value,
 				entry_type,
 			)?;
 			if let Some(op) = op {
