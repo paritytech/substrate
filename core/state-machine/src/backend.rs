@@ -444,8 +444,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 }
 
 /// Insert input pairs into memory db.
-/// TODO EMCH the use case of this method should allow running
-/// without child trie.
 pub(crate) fn insert_into_memory_db<H, I>(
 	mdb: &mut MemoryDB<H>,
 	input: I,
