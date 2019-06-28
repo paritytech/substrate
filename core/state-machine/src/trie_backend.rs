@@ -226,6 +226,20 @@ pub mod tests {
 	}
 
 	#[test]
+	fn read_from_child_storage_returns_some() {
+		let test_trie = test_trie();
+		let child_trie = test_trie.child_trie(b"sub1");
+		if let Ok(Some(child_trie)) = child_trie {
+			assert_eq!(
+				test_trie.child_storage(child_trie.node_ref(), b"value3").unwrap(),
+				Some(vec![142u8]),
+			);
+		} else {
+			assert!(false; "cannot fetch child trie");
+		}
+	}
+
+	#[test]
 	fn read_from_storage_returns_none() {
 		assert_eq!(test_trie().storage(b"non-existing-key").unwrap(), None);
 	}

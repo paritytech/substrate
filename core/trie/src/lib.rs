@@ -183,37 +183,25 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let process = |trie: &mut TrieDBMut<H>| -> Result<(), Box<TrieError<H::Out>>> { 
+
+	let (root, keyspace) = match child_trie {
+		ChildTrieReadRef::Existing(root, keyspace) => (root, keyspace),
+		ChildTrieReadRef::New(keyspace) => (&default_root[..], keyspace),
+	};
+	// keyspaced is needed (db can be init from this operation, this is not only root calculation)
+	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
+	let mut root = child_trie_root_as_hash::<H,_>(root);
+	{
+		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
 				None => trie.remove(key.as_ref())?,
 			};
 		}
-		Ok(())
-	};
-
-	match child_trie {
-		ChildTrieReadRef::Existing(root, keyspace) => {
-			let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-			let mut root = child_trie_root_as_hash::<H,_>(root);
-			{
-				let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
-				process(&mut trie)?;
-			}
-			Ok(root.as_ref().to_vec())
-		},
-		ChildTrieReadRef::New(_keyspace) => {
-			let mut db = MemoryDB::default();
-			let mut root = child_trie_root_as_hash::<H,_>(default_root);
-			{
-				// No need for keyspace as we do not build transaction here
-				let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
-				process(&mut trie)?;
-			}
-			Ok(root.as_ref().to_vec())
-		},
 	}
+	Ok(root.as_ref().to_vec())
+
 }
 
 /// Call `f` for all keys in a child trie.

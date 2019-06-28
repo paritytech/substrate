@@ -58,9 +58,8 @@ pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
 	let pre = CHILD_STORAGE_CONTENT_PREFIX;
 	let mut res = rstd::vec![0; pre.len() + ks.len() + prefix.len()];
 	res[..pre.len()].copy_from_slice(&pre);
-	res[..ks.len()].copy_from_slice(&ks);
-	res[..ks.len()].copy_from_slice(&ks);
-	res[ks.len()..].copy_from_slice(prefix);
+	res[pre.len()..pre.len() + ks.len()].copy_from_slice(&ks);
+	res[pre.len() + ks.len()..].copy_from_slice(prefix);
 	res
 }
 

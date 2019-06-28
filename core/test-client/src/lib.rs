@@ -171,8 +171,8 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 				let child_trie = ChildTrie::fetch_or_new(
 					// warning current implementation expect empty state
 					|_| None,
-					// warning current implementation relies on key
-					// insertion for creation of the child trie,
+					// warning current implementation relies on direct key
+					// insertion in overlay for creation of the child trie,
 					// this can break in the future and require an
 					// actual backend update here.
 					|_| (),
