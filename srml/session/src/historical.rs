@@ -19,7 +19,8 @@
 //! This is generally useful when implementing blockchains that require accountable
 //! safety where validators from some amount f prior sessions must remain slashable.
 //!
-//! Rather than store the full session data for any given session,
+//! Rather than store the full session data for any given session, we instead commit
+//! to the roots of merkle tries containing the session data.
 
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
@@ -32,6 +33,7 @@ use srml_support::{
 };
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
+use substrate_trie::{MemoryDB, TrieMut, TrieDBMut, TrieDB};
 
 use super::{Trait, SessionIndex, OnSessionEnding, Module as SessionModule};
 
@@ -76,6 +78,15 @@ impl<T: Trait> Module<T> {
 			}
 		})
 	}
+
+	/// Generate a session-trie for the current session. This is used for proving
+	/// membership of voters.
+	///
+	/// In general, this should not be used on-chain and instead only in runtime APIs
+	/// that need to prove membership of a validator in the current set.
+	pub fn generate_proving_trie() -> Result<ProvingTrie<T>, &'static str> {
+		ProvingTrie::generate()
+	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
@@ -87,5 +98,34 @@ impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
 		unimplemented!();
 
 		None
+	}
+}
+
+/// useful for constructing proofs.
+pub struct ProvingTrie<T: SessionTrait> {
+	db: MemoryDB<T::Hash>,
+	root: T::Hash,
+}
+
+impl<T: SessionTrait> ProvingTrie<T> {
+	fn generate() -> Result<Self, &'static str> {
+		let validators = <SessionModule<T>>::validators();
+		let n = validators.len();
+		ensure!(n <= u32::max_value() as usize, "2^32 or more validators is unsupported");
+
+		let n = n as u32;
+
+		let mut db = MemoryDB::new();
+		let mut root: T::Hash = Default::default();
+		{
+			let mut db = TrieDBMut::new();
+
+			unimplemented!();
+		}
+	}
+
+	/// Access the underlying trie root.
+	pub fn root(&self) -> &T::Hash {
+		&self.root
 	}
 }

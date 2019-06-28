@@ -31,7 +31,7 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, generic, create_runtime_str};
+use runtime_primitives::{ApplyResult, generic, create_runtime_str, key_types};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
@@ -49,7 +49,7 @@ use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 pub use runtime_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use runtime_primitives::{Permill, Perbill, impl_opaque_keys};
+pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 99,
-	impl_version: 104,
+	spec_version: 100,
+	impl_version: 105,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -131,8 +131,12 @@ parameter_types! {
 }
 
 type SessionHandlers = (Grandpa, Aura);
+
 impl_opaque_keys! {
-	pub struct SessionKeys(grandpa::AuthorityId, AuraId);
+	pub struct SessionKeys {
+		#[id(key_types::ED25519)]
+		pub ed25519: GrandpaId,
+	}
 }
 
 // NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
