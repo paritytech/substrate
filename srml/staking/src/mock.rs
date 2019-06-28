@@ -23,7 +23,10 @@ use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency};
-use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination};
+use crate::{
+	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
+	inflation,
+};
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
@@ -199,6 +202,8 @@ impl ExtBuilder {
 					(41, balance_factor * 2000),
 					(100, 2000 * balance_factor),
 					(101, 2000 * balance_factor),
+					// This allow us to have a total_payout different from 0.
+					(999, 1_000_000_000_000),
 			],
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
@@ -282,8 +287,9 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 }
 
 pub fn start_session(session_index: session::SessionIndex) {
-	for i in 0..(session_index - Session::current_index()) {
+	for i in Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
+		Timestamp::set_timestamp(System::block_number());
 		Session::on_initialize(System::block_number());
 	}
 	assert_eq!(Session::current_index(), session_index);
@@ -292,4 +298,20 @@ pub fn start_session(session_index: session::SessionIndex) {
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
 	assert_eq!(Staking::current_era(), era_index);
+}
+
+pub fn current_total_payout_for_duration(duration: u64) -> u64 {
+	let res = inflation::compute_total_payout(
+		<Module<Test>>::slot_stake()*2,
+		Balances::total_issuance(),
+		duration,
+	);
+
+	res
+}
+
+pub fn add_reward_points_to_all_elected() {
+	for v in <Module<Test>>::current_elected() {
+		<Module<Test>>::add_reward_points_to_validator(v, 1).unwrap();
+	}
 }
