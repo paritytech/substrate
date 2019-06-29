@@ -37,6 +37,11 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 /// Enabling this option will just provide `&[]` as WASM binary.
 const DUMMY_WASM_BINARY_ENV: &str = "BUILD_DUMMY_WASM_BINARY";
 
+/// Replace all backslashes with slashes.
+fn replace_back_slashes<T: ToString>(path: T) -> String {
+	path.to_string().replace("\\", "/")
+}
+
 /// The `wasm-builder` dependency source.
 pub enum WasmBuilderSource {
 	/// The relative path to the source code from the current manifest dir.
@@ -58,7 +63,7 @@ impl WasmBuilderSource {
 	fn to_cargo_source(&self, manifest_dir: &Path) -> String {
 		match self {
 			WasmBuilderSource::Path(path) => {
-				format!("path = \"{}\"", manifest_dir.join(path).display()).replace("\\", "/")
+				replace_back_slashes(format!("path = \"{}\"", manifest_dir.join(path).display()))
 			}
 			WasmBuilderSource::Git { repo, rev } => {
 				format!("git = \"{}\", rev=\"{}\"", repo, rev)
@@ -139,8 +144,8 @@ fn create_project(
 					substrate_wasm_builder::build_project("{file_path}", "{cargo_toml_path}")
 				}}
 			"#,
-			file_path = file_path.display(),
-			cargo_toml_path = cargo_toml_path.display(),
+			file_path = replace_back_slashes(file_path.display()),
+			cargo_toml_path = replace_back_slashes(cargo_toml_path.display()),
 		)
 	).expect("WASM build runner `main.rs` writing can not fail; qed");
 }
