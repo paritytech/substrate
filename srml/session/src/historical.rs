@@ -26,7 +26,7 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
-use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
+use primitives::traits::{Zero, Saturating, Member, OpaqueKeys, Header as HeaderT, Hash as HashT};
 use srml_support::{
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
@@ -101,13 +101,15 @@ impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
 	}
 }
 
+type HasherOf<T> = <<T as system::Trait>::Hashing as HashT>::Hasher;
+
 /// useful for constructing proofs.
-pub struct ProvingTrie<T: SessionTrait> {
-	db: MemoryDB<T::Hash>,
+pub struct ProvingTrie<T: Trait> {
+	db: MemoryDB<HasherOf<T>>,
 	root: T::Hash,
 }
 
-impl<T: SessionTrait> ProvingTrie<T> {
+impl<T: Trait> ProvingTrie<T> {
 	fn generate() -> Result<Self, &'static str> {
 		let validators = <SessionModule<T>>::validators();
 		let n = validators.len();

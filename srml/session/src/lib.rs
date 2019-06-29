@@ -119,7 +119,7 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
-use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
+use primitives::{KeyTypeId, traits::{Zero, Saturating, Member, OpaqueKeys}};
 use srml_support::{
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
@@ -127,8 +127,8 @@ use srml_support::{
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
 
-#[cfg(feature = "historical")]
-pub mod historical;
+//#[cfg(feature = "historical")]
+//pub mod historical;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
@@ -176,6 +176,8 @@ pub trait SessionHandler<AccountId> {
 
 pub trait OneSessionHandler<AccountId> {
 	type Key: Decode + Default;
+	type KeyId: Get<KeyTypeId>;
+
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
 		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a;
 	fn on_disabled(i: usize);
@@ -192,11 +194,10 @@ macro_rules! impl_session_handlers {
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
 			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
-				let mut i: usize = 0;
 				$(
-					i += 1;
+					let id = $t::KeyId::get();
 					let our_keys = validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(i - 1).unwrap_or_default()));
+						.map(|k| (&k.0, k.1.get::<$t::Key>(id).unwrap_or_default()));
 					$t::on_new_session(changed, our_keys);
 				)*
 			}
@@ -249,13 +250,20 @@ decl_storage! {
 
 		/// The keys that are currently active.
 		Active build(|config: &GenesisConfig<T>| {
-			(0..T::Keys::count()).map(|i| (
-				i as u32,
-				config.keys.iter()
-					.map(|x| x.1.get_raw(i).to_vec())
-					.collect::<Vec<OpaqueKey>>(),
-			)).collect::<Vec<(u32, Vec<OpaqueKey>)>>()
-		}): map u32 => Vec<OpaqueKey>;
+			T::Keys::key_ids().into_iter().map(|id| (
+				id,
+				{
+					let mut v = config.keys.iter()
+						.map(|x| x.1.get_raw(id).to_vec())
+						.collect::<Vec<OpaqueKey>>();
+
+					// ensure sorted so we can search for
+					// duplicates.
+					v.sort();
+					v
+				}
+			)).collect::<Vec<(KeyTypeId, Vec<OpaqueKey>)>>()
+		}): map KeyTypeId => Vec<OpaqueKey>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::Keys)>;
@@ -292,15 +300,15 @@ decl_module! {
 			let old_keys = <NextKeyFor<T>>::get(&who);
 			let mut updates = vec![];
 
-			for i in 0..T::Keys::count() {
-				let new_key = keys.get_raw(i);
-				let maybe_old_key = old_keys.as_ref().map(|o| o.get_raw(i));
+			for id in T::Keys::key_ids() {
+				let new_key = keys.get_raw(id);
+				let maybe_old_key = old_keys.as_ref().map(|o| o.get_raw(id));
 				if maybe_old_key == Some(new_key) {
 					// no change.
 					updates.push(None);
 					continue;
 				}
-				let mut active = Active::get(i as u32);
+				let mut active = Active::get(id);
 				match active.binary_search_by(|k| k[..].cmp(&new_key)) {
 					Ok(_) => return Err("duplicate key provided"),
 					Err(pos) => active.insert(pos, new_key.to_owned()),
@@ -315,12 +323,12 @@ decl_module! {
 						}
 					}
 				}
-				updates.push(Some((i, active)));
+				updates.push(Some((id, active)));
 			}
 
 			// Update the active sets.
-			for (i, active) in updates.into_iter().filter_map(|x| x) {
-				Active::insert(i as u32, active);
+			for (id, active) in updates.into_iter().filter_map(|x| x) {
+				Active::insert(id, active);
 			}
 			// Set new keys value for next session.
 			<NextKeyFor<T>>::insert(who, keys);
