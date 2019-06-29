@@ -136,6 +136,7 @@ macro_rules! decl_event {
 		}
 		impl Event {
 			#[allow(dead_code)]
+			#[doc(hidden)]
 			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
