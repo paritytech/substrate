@@ -484,6 +484,49 @@ pub trait TestNetFactory: Sized {
 				.then(|_| Ok(()))
 		};
 
+		let finality_notif_future = {
+			let network = Arc::downgrade(&network.service().clone());
+
+			// A utility stream that drops all ready items and only returns the last one.
+			// This is used to only keep the last finality notification and avoid
+			// overloading the sync module with notifications.
+			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+
+			impl<B: BlockT> Stream for MostRecentNotification<B> {
+				type Item = <FinalityNotifications<B> as Stream>::Item;
+				type Error = <FinalityNotifications<B> as Stream>::Error;
+
+				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+					let mut last = None;
+					let last = loop {
+						match self.0.poll()? {
+							Async::Ready(Some(item)) => { last = Some(item) }
+							Async::Ready(None) => match last {
+								None => return Ok(Async::Ready(None)),
+								Some(last) => break last,
+							},
+							Async::NotReady => match last {
+								None => return Ok(Async::NotReady),
+								Some(last) => break last,
+							},
+						}
+					};
+
+					Ok(Async::Ready(Some(last)))
+				}
+			}
+
+			MostRecentNotification(client.finality_notification_stream().fuse())
+				.for_each(move |notification| {
+					println!("finality notify from client");
+					if let Some(network) = network.upgrade() {
+						network.on_block_finalized(notification.hash, notification.header);
+					}
+					Ok(())
+				})
+				.then(|_| Ok(()))
+		};
+
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
@@ -496,6 +539,7 @@ pub trait TestNetFactory: Sized {
 				to_poll: {
 					let mut sv = smallvec::SmallVec::new();
 					sv.push(Box::new(blocks_notif_future) as Box<_>);
+					sv.push(Box::new(finality_notif_future) as Box<_>);
 					sv
 				},
 				network,
@@ -591,14 +635,22 @@ pub trait TestNetFactory: Sized {
 		// FIXME: self.route_single(true, None, &|_| true);
 	}
 
-	/// Deliver pending messages until there are no more.
-	fn sync(&mut self) {
-		self.sync_with(true, None)
-	}
+	/// Polls the testnet until all nodes are in sync.
+	///
+	/// Must be executed in a task context.
+	fn poll_until_sync(&mut self) -> Async<()> {
+		self.poll();
 
-	/// Deliver pending messages until there are no more. Do not disconnect nodes.
-	fn sync_without_disconnects(&mut self) {
-		self.sync_with(false, None)
+		// Return `NotReady` if there's a mismatch in the highest block number.
+		let mut highest = None;
+		for peer in self.peers().iter() {
+			match (highest, peer.client.info().chain.best_number) {
+				(None, b) => highest = Some(b),
+				(Some(ref a), ref b) if a == b => {},
+				(Some(ref a), ref b) => return Async::NotReady,
+			}
+		}
+		Async::Ready(())
 	}
 
 	/// Whether all peers have no pending outgoing messages.
