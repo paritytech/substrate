@@ -910,7 +910,6 @@ mod tests {
 
 	pub struct BabeTestNet {
 		peers: Vec<Peer<(), DummySpecialization>>,
-		started: bool,
 	}
 
 	impl TestNetFactory for BabeTestNet {
@@ -923,7 +922,6 @@ mod tests {
 			debug!(target: "babe", "Creating test network from config");
 			BabeTestNet {
 				peers: Vec::new(),
-				started: false,
 			}
 		}
 
@@ -966,14 +964,6 @@ mod tests {
 		) {
 			closure(&mut self.peers);
 		}
-
-		fn started(&self) -> bool {
-			self.started
-		}
-
-		fn set_started(&mut self, new: bool) {
-			self.started = new;
-		}
 	}
 
 	#[test]
@@ -986,10 +976,9 @@ mod tests {
 	fn authoring_blocks() {
 		drop(env_logger::try_init());
 		debug!(target: "babe", "checkpoint 1");
-		let mut net = BabeTestNet::new(3);
+		let net = BabeTestNet::new(3);
 		debug!(target: "babe", "checkpoint 2");
 
-		net.start();
 		debug!(target: "babe", "checkpoint 3");
 
 		let peers = &[

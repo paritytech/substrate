@@ -62,16 +62,14 @@ type PeerData =
 type GrandpaPeer = Peer<PeerData, DummySpecialization>;
 
 struct GrandpaTestNet {
-	peers: Vec<Arc<GrandpaPeer>>,
+	peers: Vec<GrandpaPeer>,
 	test_config: TestApi,
-	started: bool,
 }
 
 impl GrandpaTestNet {
 	fn new(test_config: TestApi, n_peers: usize) -> Self {
 		let mut net = GrandpaTestNet {
 			peers: Vec::with_capacity(n_peers),
-			started: false,
 			test_config,
 		};
 		let config = Self::default_config();
@@ -92,7 +90,6 @@ impl TestNetFactory for GrandpaTestNet {
 		GrandpaTestNet {
 			peers: Vec::new(),
 			test_config: Default::default(),
-			started: false,
 		}
 	}
 
@@ -167,20 +164,12 @@ impl TestNetFactory for GrandpaTestNet {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<GrandpaPeer>> {
+	fn peers(&self) -> &Vec<GrandpaPeer> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
-	}
-
-	fn started(&self) -> bool {
-		self.started
-	}
-
-	fn set_started(&mut self, new: bool) {
-		self.started = new;
 	}
 }
 
@@ -436,7 +425,6 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 }
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
-const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
@@ -465,6 +453,8 @@ fn run_to_completion_with<F>(
 	if let Some(f) = (with)(runtime.handle()) {
 		wait_for.push(f);
 	};
+
+	wait_for.push(Box::new(tokio_timer::Delay::new(std::time::Instant::now() + std::time::Duration::from_secs(15)).map_err(|_| ())));
 
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
@@ -520,16 +510,7 @@ fn run_to_completion_with<F>(
 		.map(|_| ())
 		.map_err(|_| ());
 
-	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| {
-			net.lock().send_import_notifications();
-			net.lock().send_finality_notifications();
-			net.lock().sync_without_disconnects();
-			Ok(())
-		})
-		.map(|_| ())
-		.map_err(|_| ());
-
+	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
@@ -619,11 +600,7 @@ fn finalize_3_voters_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().sync_without_disconnects(); Ok(()) })
-		.map(|_| ())
-		.map_err(|_| ());
-
+	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
@@ -788,16 +765,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		.map(|_| ())
 		.map_err(|_| ());
 
-	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| {
-			net.lock().send_import_notifications();
-			net.lock().send_finality_notifications();
-			net.lock().sync_without_disconnects();
-			Ok(())
-		})
-		.map(|_| ())
-		.map_err(|_| ());
-
+	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
@@ -1329,17 +1297,7 @@ fn voter_persists_its_votes() {
 		}).map_err(|_| ()));
 	}
 
-	let net = net.clone();
-	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| {
-			net.lock().send_import_notifications();
-			net.lock().send_finality_notifications();
-			net.lock().sync_without_disconnects();
-			Ok(())
-		})
-		.map(|_| ())
-		.map_err(|_| ());
-
+	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let exit = exit_rx.into_future().map(|_| ()).map_err(|_| ());
 
 	runtime.block_on(drive_to_completion.select(exit).map(|_| ()).map_err(|_| ())).unwrap();
@@ -1403,8 +1361,8 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// check that the block#1 is finalized on light client
 	while net.lock().peer(1).client().info().chain.finalized_number != 1 {
-		net.lock().tick_peer(1);
-		net.lock().sync_without_disconnects();
+		// TODO: must be in tokio runtime
+		net.lock().poll();
 	}
 }
 

@@ -756,7 +756,6 @@ mod tests {
 
 	pub struct AuraTestNet {
 		peers: Vec<Peer<(), DummySpecialization>>,
-		started: bool,
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -768,7 +767,6 @@ mod tests {
 		fn from_config(_config: &ProtocolConfig) -> Self {
 			AuraTestNet {
 				peers: Vec::new(),
-				started: false,
 			}
 		}
 
@@ -807,23 +805,13 @@ mod tests {
 		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
-
-		fn started(&self) -> bool {
-			self.started
-		}
-
-		fn set_started(&mut self, new: bool) {
-			self.started = new;
-		}
 	}
 
 	#[test]
 	#[allow(deprecated)]
 	fn authoring_blocks() {
 		let _ = ::env_logger::try_init();
-		let mut net = AuraTestNet::new(3);
-
-		net.start();
+		let net = AuraTestNet::new(3);
 
 		let peers = &[
 			(0, Keyring::Alice),

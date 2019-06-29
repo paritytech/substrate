@@ -37,6 +37,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
+use consensus::block_import::BlockImport;
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
@@ -209,19 +210,14 @@ impl PeersClient {
 pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	pub data: D,
 	client: PeersClient,
+	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
+	/// instead of going through the import queue.
+	verifier: Arc<dyn Verifier<Block>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
-	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()>>; 2]>,
+	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send + Sync>; 2]>,		// TODO: remove Sync
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
-	/// Synchronize with import queue.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn import_queue_sync(&self) {
-		// FIXME:
-		/*self.import_queue.lock().synchronize();
-		let _ = self.net_proto_channel.wait_sync();*/
-	}
-
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(
@@ -231,6 +227,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		data: Vec<u8>,
 		force: bool,
 	) {
+		panic!()
 		// FIXME:
 		/*let recipient = if force {
 			GossipMessageRecipient::BroadcastToAll
@@ -310,11 +307,20 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				block.header.parent_hash
 			);
 			let header = block.header.clone();
+			let (import_block, cache) = self.verifier.verify(
+				BlockOrigin::Own,
+				header.clone(),
+				None,
+				Some(block.extrinsics)
+			).unwrap();
+			let cache = if let Some(cache) = cache {
+				cache.into_iter().collect()
+			} else {
+				Default::default()
+			};
+			full_client.import_block(import_block, cache).unwrap();
 			self.network.service().on_block_imported(hash.clone(), header);
 			at = hash;
-
-			// make sure block import has completed
-			self.import_queue_sync();
 		}
 
 		at
@@ -398,9 +404,6 @@ pub trait TestNetFactory: Sized {
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>>;
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(&mut self, closure: F);
 
-	fn started(&self) -> bool;
-	fn set_started(&mut self, now: bool);
-
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: PeersClient)
 		-> (
@@ -444,7 +447,7 @@ pub trait TestNetFactory: Sized {
 			= self.make_block_import(PeersClient::Full(client.clone()));
 
 		let import_queue = Box::new(BasicQueue::new(
-			verifier,
+			verifier.clone(),
 			block_import,
 			justification_import,
 			finality_proof_import,
@@ -489,6 +492,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
+				verifier,
 				to_poll: {
 					let mut sv = smallvec::SmallVec::new();
 					sv.push(Box::new(blocks_notif_future) as Box<_>);
@@ -510,7 +514,7 @@ pub trait TestNetFactory: Sized {
 			= self.make_block_import(PeersClient::Light(client.clone()));
 
 		let import_queue = Box::new(BasicQueue::new(
-			verifier,
+			verifier.clone(),
 			block_import,
 			justification_import,
 			finality_proof_import,
@@ -550,6 +554,7 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			peers.push(Peer {
 				data,
+				verifier,
 				client: PeersClient::Light(client),
 				to_poll: {
 					let mut sv = smallvec::SmallVec::new();
@@ -559,37 +564,6 @@ pub trait TestNetFactory: Sized {
 				network,
 			});
 		});
-	}
-
-	/// Start network.
-	fn start(&mut self) {
-		// FIXME:
-		/*if self.started() {
-			return;
-		}
-		for peer in self.peers() {
-			peer.start();
-			for client in self.peers() {
-				if peer.peer_id != client.peer_id {
-					peer.on_connect(client);
-				}
-			}
-		}
-
-		loop {
-			// we only deliver Status messages during start
-			let need_continue = self.route_single(true, None, &|msg| match *msg {
-				NetworkMsg::Outgoing(_, crate::message::generic::Message::Status(_)) => true,
-				NetworkMsg::Outgoing(_, _) => false,
-				NetworkMsg::DisconnectPeer(_) |
-				NetworkMsg::ReportPeer(_, _) | NetworkMsg::Synchronized => true,
-			});
-			if !need_continue {
-				break;
-			}
-		}
-
-		self.set_started(true);*/
 	}
 
 	/// Send block import notifications for all peers.
@@ -617,11 +591,6 @@ pub trait TestNetFactory: Sized {
 		// FIXME: self.route_single(true, None, &|_| true);
 	}
 
-	/// Maintain sync for a peer.
-	fn tick_peer(&mut self, i: usize) {
-		// FIXME: self.peers()[i].sync_step();
-	}
-
 	/// Deliver pending messages until there are no more.
 	fn sync(&mut self) {
 		self.sync_with(true, None)
@@ -634,7 +603,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Whether all peers have no pending outgoing messages.
 	fn done(&self) -> bool {
-		true
+		panic!()
 		// FIXME: self.peers().iter().all(|p| p.is_done())
 	}
 
@@ -651,7 +620,6 @@ pub trait TestNetFactory: Sized {
 
 pub struct TestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
-	started: bool,
 }
 
 impl TestNetFactory for TestNet {
@@ -663,7 +631,6 @@ impl TestNetFactory for TestNet {
 	fn from_config(_config: &ProtocolConfig) -> Self {
 		TestNet {
 			peers: Vec::new(),
-			started: false
 		}
 	}
 
@@ -683,14 +650,6 @@ impl TestNetFactory for TestNet {
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::Specialization>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
-	}
-
-	fn started(&self) -> bool {
-		self.started
-	}
-
-	fn set_started(&mut self, new: bool) {
-		self.started = new;
 	}
 }
 
@@ -737,14 +696,6 @@ impl TestNetFactory for JustificationTestNet {
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(&mut self, closure: F) {
 		self.0.mut_peers(closure)
-	}
-
-	fn started(&self) -> bool {
-		self.0.started()
-	}
-
-	fn set_started(&mut self, new: bool) {
-		self.0.set_started(new)
 	}
 
 	fn make_block_import(&self, client: PeersClient)
