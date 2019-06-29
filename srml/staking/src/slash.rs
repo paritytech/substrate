@@ -59,24 +59,23 @@ mod tests {
 			assert_eq!(Staking::bonded(&31), Some(30));
 			assert_eq!(Staking::bonded(&41), Some(40));
 
-			assert_eq!(1125, Staking::slashable_balance(&11));
+			assert_eq!(1250, Staking::slashable_balance(&11));
 			assert_eq!(1000, Balances::free_balance(&11));
 
 			// Slash 1.5%
 			//
-			// Slashable balance: 1125
+			// Slashable balance: 1250
 			//
 			// 0.015 -> Fraction { denominator: 3 / numerator: 200)
-			// (1125 * 3) / 200  = 16
-			// (1125 * 0.015) = 16.875
+			// (1250 * 3) / 200  = 18
+			// (1125 * 0.015) = 18.75
 			//
 			// Illustration that we loose accurancy representing it as a `Fraction`
 
 			let misbehaved = [11, 21, 31, 41];
 			let validator_len = 30;
-			let mut ur = misconduct::Unresponsive::default();
-			assert_eq!(Staking::slash(&misbehaved, validator_len, &mut ur), 3);
-			assert_eq!(984, Balances::free_balance(&11));
+			assert_eq!(Staking::slash_end_of_era(&misbehaved, validator_len, &misconduct::Unresponsive), 3);
+			assert_eq!(982, Balances::free_balance(&11));
 		});
 	}
 }

@@ -279,7 +279,7 @@ mod benches;
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
-use srml_slashing::{Misconduct, OnSlashing, Slashing};
+use srml_slashing::{EraMisconduct, OnSlashing, RollingMisconduct, Slashing};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
@@ -1262,16 +1262,31 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 	type Slash = StakingSlasher<T>;
 
-	fn slash<M: Misconduct>(
+	fn slash<RM: RollingMisconduct>(
 		misbehaved: &[T::AccountId],
 		total_validators: u64,
-		misconduct: &mut M
+		misconduct: &mut RM,
+		session_index: u64
 	) -> u8 {
-		misconduct.on_misconduct(misbehaved.len() as u64, total_validators);
+		misconduct.on_misconduct(misbehaved.len() as u64, total_validators, session_index);
 		let severity = misconduct.severity();
 
 		for who in misbehaved {
-			Self::Slash::on_slash::<M>(who, severity);
+			Self::Slash::on_slash::<RM>(who, severity);
+		}
+
+		severity.as_misconduct_level()
+	}
+
+	fn slash_end_of_era<EM: EraMisconduct>(
+		misbehaved: &[T::AccountId],
+		total_validators: u64,
+		misconduct: &EM,
+	) -> u8 {
+		let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
+
+		for who in misbehaved {
+			Self::Slash::on_slash::<EM>(who, severity);
 		}
 
 		severity.as_misconduct_level()

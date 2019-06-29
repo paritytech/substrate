@@ -41,7 +41,7 @@
 //!	### Example
 //!
 //! ```
-//!	use srml_slashing::{Fraction, Misconduct, OnSlashing, Slashing};
+//!	use srml_slashing::{Fraction, EraMisconduct, Misconduct, RollingMisconduct, OnSlashing, Slashing};
 //!	use srml_support::traits::Currency;
 //!	use rstd::{cmp, marker::PhantomData};
 //!
@@ -50,47 +50,21 @@
 //! }
 //!
 //! #[derive(Default)]
-//!	struct Unresponsive(Vec<(u64, Fraction<u64>)>);
+//!	struct Unresponsive;
 //!
 //!	impl Misconduct for Unresponsive {
 //!		type Severity = u64;
+//! }
 //!
-//!		// Only take the current era into account
-//!		// but an `Era` is 6 sessions
-//!		const WINDOW_SIZE: u32 = 6;
-//!
-//!		fn on_misconduct(&mut self, k: u64, n: u64, session_index: u64) {
-//!			self.0.retain(|&(max_session, _)| max_session > session_index);
-//!
+//! impl EraMisconduct for Unresponsive {
+//!		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
 //!			let numerator = 20 * n;
 //!			let denominator = 3*k - 3;
 //!
-//!			let severity = if numerator / n >= 1 {
+//!			if numerator / n >= 1 {
 //!				Fraction::new(1_u64, 20_u64)
 //!			} else {
 //!				Fraction::new(denominator, numerator)
-//!			};
-//!
-//!			self.0.push((session_index + Self::WINDOW_SIZE as u64, severity));
-//!		}
-//!
-//!		// This will only slash on in the end of an `Era`
-//!		fn severity(&self) -> Fraction<u64> {
-//!			let min = *self.0.iter().map(|(x, _)| x).min_by(|x, y| x.cmp(y)).unwrap_or(&0);
-//!			let max = *self.0.iter().map(|(x, _)| x).max_by(|x, y| x.cmp(y)).unwrap_or(&u64::max_value());
-//!
-//!			// the biggest session difference is exactly six sessions
-//!			// -> it could only have happend in on era (assumes every era is exactly six sessions)
-//!			if max - min == Self::WINDOW_SIZE as u64 {
-//!				let mut sum = Fraction::zero();
-//!
-//!				for &(_, severity) in &self.0 {
-//!					sum = sum + severity;
-//!				}
-//!
-//!				sum * Fraction::new(1_u64, self.0.len() as u64)
-//!			} else {
-//!				Fraction::zero()
 //!			}
 //!		}
 //!	}
@@ -112,17 +86,31 @@
 //!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
-//!		fn slash<M: Misconduct>(
+//!		fn slash<RM: RollingMisconduct>(
 //!			misbehaved: &[T::AccountId],
 //!			total_validators: u64,
-//!			misconduct: &mut M,
+//!			misconduct: &mut RM,
 //!			session_index: u64,
 //!		) -> u8 {
 //!			misconduct.on_misconduct(misbehaved.len() as u64, total_validators, session_index);
 //!			let severity = misconduct.severity();
 //!
 //!			for who in misbehaved {
-//!				Self::Slash::on_slash::<M>(who, severity);
+//!				Self::Slash::on_slash::<RM>(who, severity);
+//!			}
+//!
+//!			severity.as_misconduct_level()
+//!		}
+//!
+//!		fn slash_end_of_era<EM: EraMisconduct>(
+//!			misbehaved: &[T::AccountId],
+//!			total_validators: u64,
+//!			misconduct: &EM,
+//!		) -> u8 {
+//!			let severity = misconduct.severity(misbehaved.len() as u64, total_validators);
+//!
+//!			for who in misbehaved {
+//!				Self::Slash::on_slash::<EM>(who, severity);
 //!			}
 //!
 //!			severity.as_misconduct_level()
@@ -159,22 +147,30 @@ type MisconductLevel = u8;
 pub trait Misconduct {
 	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+}
 
-	/// Valid `Window` size in `Sessions` for the given misconduct
-	// (niklasad1): an `Era` is hard-coded to 6 sessions?!
-	const WINDOW_SIZE: u32;
 
-	/// Estimate severity level on the misconduct and store the state
-	///
-	// TODO(niklasad1): shall `num_misbehaved`, `num_validators` and `session_index` be generic?!
-	fn on_misconduct(&mut self, num_misbehaved: u64, num_validators: u64, session_index: u64);
-
-	/// Get severity level
-	///
-	/// Returns `Some(severity)` if at least k samples are received otherwise `None`
-	fn severity(&self) -> Fraction<Self::Severity>;
+/// Misconduct that only takes culprits in the current era into account
+pub trait EraMisconduct: Misconduct {
+	/// Estimates severity based on only culprits the current era
+	/// Must only be called in the end of era.
+	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity>;
 
 }
+
+/// Misconduct that runs over a `rolling window` of sessions
+pub trait RollingMisconduct: Misconduct {
+
+	/// Window size in sessions
+	const WINDOW_SIZE: u32;
+
+	/// Report a misconduct and register it in the underlying type
+	fn on_misconduct(&mut self, num_misbehaved: u64, total_validators: u64, session_index: u64);
+
+	/// Estimate severity
+	fn severity(&self) -> Fraction<Self::Severity>;
+}
+
 
 /// Slashing interface
 pub trait OnSlashing<AccountId> {
@@ -187,6 +183,14 @@ pub trait Slashing<AccountId> {
 	/// Specify which `OnSlashing` implementation to use
 	type Slash: OnSlashing<AccountId>;
 
+
+	/// Slash a list of `misbehaved` on the end of an era
+	fn slash_end_of_era<EM: EraMisconduct>(
+		misbehaved: &[AccountId],
+		total_validators: u64,
+		misconduct: &EM,
+	) -> MisconductLevel;
+
 	/// Attempt to slash a list of `misbehaved` validators
 	///
 	/// Returns the misconduct level for all misbehaved validators
@@ -194,22 +198,24 @@ pub trait Slashing<AccountId> {
 	//	* This assumes `session_index` is monotonic increasing
 	//	* shall `total_validators` be generic?
 	//	* `session_index` use associated type from Session?!
-	fn slash<M: Misconduct>(
+	fn slash<RM: RollingMisconduct>(
 		misbehaved: &[AccountId],
 		total_validators: u64,
-		misconduct: &mut M,
+		misconduct: &mut RM,
 		session_index: u64,
 	) -> MisconductLevel;
 }
 
-/// Implementation of the `Misconduct` traits for a type `T` with associated type `A
+/// Implementation of the `Misconduct` trait for a type `T` with associated type `A
 /// which has a predefined severity level such as slash always 10%
 #[macro_export]
 macro_rules! impl_static_misconduct {
 	($t:ty, $a:ty => $fr:expr) => {
 		impl Misconduct for $t {
 			type Severity = $a;
+		}
 
+		impl crate::RollingMisconduct for $t {
 			// not used
 			const WINDOW_SIZE: u32 = 0;
 
