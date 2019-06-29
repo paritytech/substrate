@@ -246,12 +246,17 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_peers(&self) -> usize {
-		self.network.num_active_peers()
+		self.network.num_connected_peers()
 	}
 
 	/// Returns true if we have no peer.
 	pub fn is_offline(&self) -> bool {
 		self.num_peers() == 0
+	}
+
+	/// Request a justification for the given block.
+	pub fn request_justification(&self, hash: &<Block as BlockT>::Hash, number: NumberFor<Block>) {
+		self.network.service().request_justification(hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding

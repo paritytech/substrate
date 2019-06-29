@@ -361,6 +361,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self.network_chan.unbounded_send(NetworkMsg::DisconnectPeer(who));
 	}
 
+	/// Request a justification for the given block.
+	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::RequestJustification(hash.clone(), number));
+	}
+
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F>(&self, f: F)
 		where F: FnOnce(&mut S, &mut dyn Context<B>) + Send + 'static
