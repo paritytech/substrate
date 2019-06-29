@@ -584,6 +584,10 @@ pub trait TestNetFactory: Sized {
 		};
 
 		self.mut_peers(|peers| {
+			for peer in peers.iter_mut() {
+				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+			}
+
 			peers.push(Peer {
 				data,
 				verifier,

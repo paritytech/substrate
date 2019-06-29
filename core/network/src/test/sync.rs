@@ -18,7 +18,7 @@ use client::{backend::Backend, blockchain::HeaderBackend};
 use crate::config::Roles;
 use crate::message;
 use consensus::BlockOrigin;
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration, time::Instant};
 use tokio::runtime::current_thread;
 use super::*;
 
@@ -364,8 +364,6 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.add_full_peer(&ProtocolConfig::default());
 
 	net.peer(0).push_blocks(1, false);
-	// TODO: net.peer(0).on_connect(net.peer(1));
-	// TODO: net.peer(1).on_connect(net.peer(2));
 
 	// Only sync between 0 -> 1, and 1 -> 2
 	let mut disconnected = HashSet::new();
@@ -434,7 +432,6 @@ fn can_not_sync_from_light_peer() {
 	net.peer(0).push_blocks(1, false);
 
 	// and let the light client sync from this node
-	// (mind the #1 is disconnected && not syncing)
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
 
 	// ensure #0 && #1 have the same best block
@@ -444,35 +441,16 @@ fn can_not_sync_from_light_peer() {
 	assert_eq!(light_info.best_number, 1);
 	assert_eq!(light_info.best_hash, full0_info.best_hash);
 
-	// add new full client (#2) && sync without #0
+	// add new full client (#2) && remove #0
 	net.add_full_peer(&Default::default());
-	// TODO: net.peer(1).on_connect(net.peer(2));
-	// TODO: net.peer(2).on_connect(net.peer(1));
-	// TODO: net.peer(1).announce_block(light_info.best_hash);
-	net.sync_with(true, Some(vec![0].into_iter().collect()));
+	net.peers.remove(0);
 
-	// ensure that the #2 has failed to sync block #1
-	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
-	// and that the #1 is still connected to #2
-	// (because #2 has not tried to fetch block data from the #1 light node)
-	assert_eq!(net.peer(1).num_peers(), 2);
-
-	// and now try to fetch block data from light peer #1
-	// (this should result in disconnect)
-	/* // TODO: net.peer(1).receive_message(
-		&net.peer(2).peer_id,
-		message::generic::Message::BlockRequest(message::generic::BlockRequest {
-			id: 0,
-			fields: message::BlockAttributes::HEADER,
-			from: message::FromBlock::Hash(light_info.best_hash),
-			to: None,
-			direction: message::Direction::Ascending,
-			max: Some(1),
-		}),
-	);*/
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
-	// check that light #1 has disconnected from #2
-	assert_eq!(net.peer(1).num_peers(), 1);
+	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
+	let mut test_finished = tokio_timer::Delay::new(Instant::now() + Duration::from_secs(5));
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		test_finished.poll().map_err(|_| ())
+	})).unwrap();
 }
 
 #[test]
