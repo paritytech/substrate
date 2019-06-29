@@ -395,7 +395,10 @@ macro_rules! decl_module {
 	};
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -409,7 +412,7 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
@@ -424,8 +427,10 @@ macro_rules! decl_module {
 	// This puts a constant in the parsed constants list.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -438,7 +443,7 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
