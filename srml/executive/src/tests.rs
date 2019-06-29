@@ -249,8 +249,6 @@ fn validate_unsigned() {
 
 #[test]
 fn stateful_weight_fee_range() {
-    // show (1) difference in fee exists as block weight increases
-    //      (2) difference is consistent with poc
     let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 1000), (2, 1000), (3, 1000)],
@@ -267,41 +265,27 @@ fn stateful_weight_fee_range() {
     let xt3 = primitives::testing::TestXt(Some(3), 0, Call::transfer(33, 69));
     let t3 = xt3.encode();
     // length is constant to test fee variation as block weight increases
-    let const_len = 300 as usize; // largest size afforded
+    let const_len = 300 as usize; // largest usize allowed for apply_extrinsic_with_len
     with_externalities(&mut t, || {
         Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
     								[69u8; 32].into(), Digest::default()));
     	assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
-        // TRYING TO DO
-        // let mut sum = 0;
-        // assert_eq!(DummyFeeHandler::convert(some_length), poc(some_length, sum));
-        // let res = Executive::apply_extrinsic_with_len(tx, some_length, tx.encode());
-        // sum += some_length;
-        // assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), sum);
-        // //...repeat until difference in block size influences fee
-        // //...demonstrate that for (1) poc + dummyHandler (2) dummyHandler vs dummyHandler
+
         assert_eq!(DummyFeeHandler::convert(300), poc(300, 0));
         assert_eq!(DummyFeeHandler::convert(300), 299);
         let res = Executive::apply_extrinsic_with_len(xt1, const_len, Some(t1));
         assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 300);
-        println!("weight: {}", <system::Module<Runtime>>::all_extrinsics_weight());
-        // fees should cost more for DummyFeeHandler (difference too negligible...)
-        // assert!(DummyFeeHandler::convert(300) > poc(300, 0));
 
         assert_eq!(DummyFeeHandler::convert(300), poc(300, 300));
         assert_eq!(DummyFeeHandler::convert(300), 299);
         let res = Executive::apply_extrinsic_with_len(xt2, const_len, Some(t2));
         assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 600);
-        println!("weight: {}", <system::Module<Runtime>>::all_extrinsics_weight());
-        // assert!(DummyFeeHandler::convert(600) > poc(600, 0));
 
         assert_eq!(DummyFeeHandler::convert(300), poc(300, 600));
         assert_eq!(DummyFeeHandler::convert(300), 299);
         let res = Executive::apply_extrinsic_with_len(xt3, const_len, Some(t3));
         assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 900);
-        println!("weight: {}", <system::Module<Runtime>>::all_extrinsics_weight());
 
-        // there is a difference...hard to get there with `apply_extrinsic_with_len` acting up
-        assert_ne!(DummyFeeHandler::convert(300), poc(300, 100000000));
+        assert_ne!(DummyFeeHandler::convert(300), poc(300, 10000000));
     });
 }

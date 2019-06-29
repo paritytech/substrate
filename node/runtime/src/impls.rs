@@ -149,7 +149,6 @@ mod tests {
 
     #[test]
 	fn stateless_weight_fee_range() {
-        // as input grows, python reference impl becomes less precise? (see comments)
         with_externalities(&mut new_test_ext(), || {
             let mut inputs = Vec::new();
             // (1) Typical low-cost transaction
@@ -160,16 +159,9 @@ mod tests {
             inputs.push(IDEAL_TRANSACTIONS_WEIGHT/2 + 5_000);
             // (4) 5 above the ideal
             inputs.push(IDEAL_TRANSACTIONS_WEIGHT + 10_000);
-            // (6) last number that seems to work
+            // (6) largest number allowed (note: max weight is 4194304)
             inputs.push(1_129_826);
-            // (7) first number that doesn't work
-            // inputs.push(1_129_827);
-            // (8) maximum weight = 4194304
-            // python returns fee = 4194430.83108
-            // poc gives something similar...
-            // inputs.push(4 * 1024 * 1024);
 
-            // test equality
             inputs.into_iter().for_each(|i| { assert_eq!(WeightToFeeHandler::convert(i), poc(i, 0))});
         })
 	}
