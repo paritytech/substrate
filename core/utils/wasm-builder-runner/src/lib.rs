@@ -16,12 +16,12 @@
 
 //! WASM builder runner
 //!
-//! As cargo just contains millions of bugs, when it comes to correct dependency and feature
+//! As cargo just contains millions of bugs when it comes to correct dependency and feature
 //! resolution, we need this little tool. See https://github.com/rust-lang/cargo/issues/5730 for
 //! more information.
 //!
-//! It will create a project that itself will call `wasm-builder` to not let any dependencies
-//! from `wasm-builder` to influence the main project dependencies...
+//! It will create a project that itself will call `wasm-builder` to not let any dependency
+//! from `wasm-builder` influence the main project's dependencies.
 
 use std::{env, process::Command, fs, path::{PathBuf, Path}};
 
@@ -77,7 +77,7 @@ impl WasmBuilderSource {
 
 /// Build the currently build project as WASM binary.
 ///
-/// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
+/// The current project is determined using the `CARGO_MANIFEST_DIR` environment variable.
 ///
 /// `file_name` - The name of the file being generated in the `OUT_DIR`. The file contains the
 ///               constant `WASM_BINARY` which contains the build wasm binary.
