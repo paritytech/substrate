@@ -353,7 +353,6 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
 	}
-	extra_genesis_skip_phantom_data_field;
 }
 
 decl_module! {
@@ -895,7 +894,7 @@ where
 		}
 	}
 
-	fn make_free_balance_be(who: &T::AccountId, balance: T::Balance) -> (
+	fn make_free_balance_be(who: &T::AccountId, balance: Self::Balance) -> (
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome
 	) {

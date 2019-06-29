@@ -103,7 +103,6 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type Currency = Balances;
 	type Call = Call;
-	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
@@ -127,7 +126,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
 		use substrate_primitives::storage::well_known_keys;
 
-		let new_seed = <super::AccountCounter<Test>>::mutate(|v| {
+		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -194,10 +193,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default()
-			.build_storage()
-			.unwrap()
-			.0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				transaction_base_fee: 0,
@@ -225,8 +221,6 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				contract_fee: 21,
-				call_base_fee: 135,
-				create_base_fee: 175,
 				gas_price: self.gas_price,
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
@@ -758,7 +752,7 @@ mod call {
 	pub fn null() -> Vec<u8> { vec![0, 0, 0] }
 }
 
-/// Test correspondance of set_rent code and its hash.
+/// Test correspondence of set_rent code and its hash.
 /// Also test that encoded extrinsic in code correspond to the correct transfer
 #[test]
 fn test_set_rent_code_and_hash() {
@@ -970,9 +964,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
+			let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
+
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 100);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -980,6 +977,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -987,6 +985,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), subsistence_threshold);
 		}
 	);
 
@@ -1007,6 +1006,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
+			assert_eq!(Balances::free_balance(&BOB), 1_000);
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1014,6 +1014,8 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			// Balance should be initial balance - initial rent_allowance
+			assert_eq!(Balances::free_balance(&BOB), 900);
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1021,6 +1023,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			assert_eq!(Balances::free_balance(&BOB), 900);
 		}
 	);
 
@@ -1041,10 +1044,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), 50 + Balances::minimum_balance());
 
 			// Transfer funds
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
 			assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1052,6 +1057,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 
 			// Advance blocks
 			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1059,6 +1065,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+			assert_eq!(Balances::free_balance(&BOB), Balances::minimum_balance());
 		}
 	);
 }

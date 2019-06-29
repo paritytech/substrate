@@ -34,7 +34,9 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
+pub use self::storage::hashed::generator::{
+	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
+};
 pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
@@ -66,6 +68,7 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root, Printable};
+pub use runtime_primitives::ConsensusEngineId;
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -240,7 +243,6 @@ mod tests {
 	use super::*;
 	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 		StorageFunctionType, StorageFunctionModifier,
@@ -259,9 +261,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-
-			}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 	}
 	use self::module::Module;
@@ -287,10 +287,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage().unwrap().0.into()
 	}
 
-	type Map = Data<Test>;
+	type Map = Data;
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
@@ -373,7 +373,7 @@ mod tests {
 	#[test]
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			type DoubleMap = DataDM<Test>;
+			type DoubleMap = DataDM;
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 

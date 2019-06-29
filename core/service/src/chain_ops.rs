@@ -116,12 +116,12 @@ impl<B: Block> Link<B> for WaitLink {
 	}
 }
 
-/// Import blocks from a binary stream.
+/// Returns a future that import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
 	mut config: FactoryFullConfiguration<F>,
 	exit: E,
 	mut input: R
-) -> error::Result<()>
+) -> error::Result<impl Future<Item = (), Error = ()>>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
 	let client = new_client::<F>(&config)?;
@@ -175,7 +175,7 @@ pub fn import_blocks<F, E, R>(
 	}
 
 	let mut link = WaitLink::new();
-	tokio::run(futures::future::poll_fn(move || {
+	Ok(futures::future::poll_fn(move || {
 		let blocks_before = link.imported_blocks;
 		queue.poll_actions(&mut link);
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
@@ -186,15 +186,12 @@ pub fn import_blocks<F, E, R>(
 			);
 		}
 		if link.imported_blocks >= count {
+			info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
 			Ok(Async::Ready(()))
 		} else {
 			Ok(Async::NotReady)
 		}
-	}));
-
-	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
-
-	Ok(())
+	}))
 }
 
 /// Revert the chain.

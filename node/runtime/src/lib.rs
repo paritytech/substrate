@@ -223,7 +223,6 @@ impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Call = Call;
 	type Event = Event;
-	type Gas = u64;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
@@ -249,19 +248,19 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system,
+		System: system::{Module, Call, Storage, Config, Event},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Indices: indices,
 		Balances: balances::{default, Error},
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
-		Democracy: democracy,
+		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
 		CouncilSeats: council_seats::{Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
-		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Event},
+		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury,
 		Contracts: contracts,
 		Sudo: sudo,
