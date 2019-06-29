@@ -1040,7 +1040,7 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(client.backend().clone());
 
-			let babe = start_babe(BabeParams {
+			runtime.spawn(start_babe(BabeParams {
 				config,
 				local_key: Arc::new(key.clone().into()),
 				block_import: client.clone(),
@@ -1050,9 +1050,8 @@ mod tests {
 				sync_oracle: DummyOracle,
 				inherent_data_providers,
 				force_authoring: false,
-			}).expect("Starts babe");
-
-			runtime.spawn(babe);
+			    time_source: Default::default(),
+			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");
 
