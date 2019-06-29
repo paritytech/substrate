@@ -42,7 +42,7 @@ use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as Cac
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
-use crate::{NetworkWorker, ProtocolId};
+use crate::{NetworkWorker, NetworkService, ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
 use primitives::{H256, Blake2Hasher};
@@ -254,27 +254,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.num_peers() == 0
 	}
 
-	/// access the underlying consensus gossip handler
-	pub fn consensus_gossip_messages_for(
-		&self,
-		engine_id: ConsensusEngineId,
-		topic: <Block as BlockT>::Hash,
-	) -> mpsc::UnboundedReceiver<TopicNotification> {
-		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(engine_id, topic);
-			let _ = tx.send(inner_rx);
-		});
-		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
-	}
-
-	/// Execute a closure with the consensus gossip.
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<Block>, &mut dyn Context<Block>) + Send + 'static
-	{
-		self.network.service().with_gossip(f);
-	}
-
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
@@ -363,6 +342,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Get a reference to the client.
 	pub fn client(&self) -> &PeersClient {
 		&self.client
+	}
+
+	/// Get a reference to the network service.
+	pub fn network_service(&self) -> &Arc<NetworkService<Block, S, <Block as BlockT>::Hash>> {
+		&self.network.service()
 	}
 }
 
@@ -518,7 +502,6 @@ pub trait TestNetFactory: Sized {
 
 			MostRecentNotification(client.finality_notification_stream().fuse())
 				.for_each(move |notification| {
-					println!("finality notify from client");
 					if let Some(network) = network.upgrade() {
 						network.on_block_finalized(notification.hash, notification.header);
 					}

@@ -20,7 +20,6 @@ use super::*;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
-use network::consensus_gossip as network_gossip;
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::ed25519::{Keyring as AuthorityKeyring};
@@ -44,7 +43,6 @@ use fg_primitives::AuthorityId;
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
-use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -170,89 +168,6 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
-	}
-}
-
-#[derive(Clone)]
-struct MessageRouting {
-	inner: Arc<Mutex<GrandpaTestNet>>,
-	peer_id: usize,
-}
-
-impl MessageRouting {
-	fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
-		MessageRouting {
-			inner,
-			peer_id,
-		}
-	}
-}
-
-impl Network<Block> for MessageRouting {
-	type In = Box<dyn Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
-
-	/// Get a stream of messages for a specific gossip topic.
-	fn messages_for(&self, topic: Hash) -> Self::In {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-
-		let messages = peer.consensus_gossip_messages_for(
-			GRANDPA_ENGINE_ID,
-			topic,
-		);
-
-		let messages = messages.map_err(
-			move |_| panic!("Messages for topic {} dropped too early", topic)
-		);
-
-		Box::new(messages)
-	}
-
-	fn register_validator(&self, v: Arc<dyn network_gossip::Validator<Block>>) {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-		peer.with_gossip(move |gossip, context| {
-			gossip.register_validator(context, GRANDPA_ENGINE_ID, v);
-		});
-	}
-
-	fn gossip_message(&self, topic: Hash, data: Vec<u8>, force: bool) {
-		let inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(
-			topic,
-			GRANDPA_ENGINE_ID,
-			data,
-			force,
-		);
-	}
-
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-
-		peer.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(
-				ctx,
-				who,
-				network_gossip::ConsensusMessage {
-					engine_id: GRANDPA_ENGINE_ID,
-					data: data.clone(),
-				}
-			)
-		})
-	}
-
-	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
-		// NOTE: only required to restore previous state on startup
-		//       not required for tests currently
-	}
-
-	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
-
-	}
-
-	fn announce(&self, _block: Hash) {
-
 	}
 }
 
@@ -456,12 +371,13 @@ fn run_to_completion_with<F>(
 
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
-		let (client, link) = {
+		let (client, net_service, link) = {
 			let net = net.lock();
 			// temporary needed for some reason
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
+				net.peers[peer_id].network_service().clone(),
 				link,
 			)
 		};
@@ -470,7 +386,6 @@ fn run_to_completion_with<F>(
 			Box::new(
 				client.finality_notification_stream()
 					.take_while(move |n| {
-						println!("called notif stream");
 						let mut highest_finalized = highest_finalized.write();
 						if *n.header.number() > *highest_finalized {
 							*highest_finalized = *n.header.number();
@@ -492,7 +407,7 @@ fn run_to_completion_with<F>(
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
-			network: MessageRouting::new(net.clone(), peer_id),
+			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
@@ -569,11 +484,12 @@ fn finalize_3_voters_1_full_observer() {
 		.chain(::std::iter::once(None));
 
 	for (peer_id, local_key) in all_peers.enumerate() {
-		let (client, link) = {
+		let (client, net_service, link) = {
 			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
+				net.peers[peer_id].network_service().clone(),
 				link,
 			)
 		};
@@ -591,7 +507,7 @@ fn finalize_3_voters_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
-			network: MessageRouting::new(net.clone(), peer_id),
+			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
@@ -724,11 +640,12 @@ fn transition_3_voters_twice_1_full_observer() {
 		.enumerate();
 
 	for (peer_id, local_key) in all_peers {
-		let (client, link) = {
+		let (client, net_service, link) = {
 			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
+				net.peers[peer_id].network_service().clone(),
 				link,
 			)
 		};
@@ -756,7 +673,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
-			network: MessageRouting::new(net.clone(), peer_id),
+			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
@@ -1171,7 +1088,7 @@ fn voter_persists_its_votes() {
 					name: Some(format!("peer#{}", 0)),
 				},
 				link: link,
-				network: MessageRouting::new(net.clone(), 0),
+				network: net.lock().peers[0].network_service().clone(),
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
 				telemetry_on_connect: None,
@@ -1221,9 +1138,8 @@ fn voter_persists_its_votes() {
 			local_key: Some(Arc::new(peers[1].clone().into())),
 			name: Some(format!("peer#{}", 1)),
 		};
-		let routing = MessageRouting::new(net.clone(), 1);
 		let (network, routing_work) = communication::NetworkBridge::new(
-			routing,
+			net.lock().peers[1].network_service().clone(),
 			config.clone(),
 			None,
 			Exit,
@@ -1350,7 +1266,7 @@ fn finalize_3_voters_1_light_observer() {
 					name: Some("observer".to_string()),
 				},
 				link,
-				MessageRouting::new(net.clone(), 3),
+				net.lock().peers[3].network_service().clone(),
 				Exit,
 			).unwrap()
 		).unwrap();
