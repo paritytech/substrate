@@ -18,7 +18,11 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use primitives::{
+	KeyTypeId,
+	traits::IdentityLookup,
+	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId},
+};
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
@@ -52,6 +56,7 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type HandleReport = ();
 	type AuthorityId = UintAuthorityId;
+	const KEY_ID: KeyTypeId = UINT_DUMMY_KEY;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {

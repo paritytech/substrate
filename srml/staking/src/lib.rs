@@ -1032,11 +1032,11 @@ impl<T: Trait> Module<T> {
 		if current_era > bonding_duration {
 			let first_kept = current_era - bonding_duration;
 			BondedEras::mutate(|bonded| {
-				bonded.push(current_era, start_session_index);
+				bonded.push((current_era, start_session_index));
 
 				// prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
-					.take_while(|&&(ref era_idx, _)| era_idx < first_kept)
+					.take_while(|&&(era_idx, _)| era_idx < first_kept)
 					.count();
 
 				bonded.drain(..n_to_prune);

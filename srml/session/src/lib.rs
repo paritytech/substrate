@@ -127,8 +127,8 @@ use srml_support::{
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
 
-//#[cfg(feature = "historical")]
-//pub mod historical;
+#[cfg(feature = "historical")]
+pub mod historical;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
@@ -174,9 +174,12 @@ pub trait SessionHandler<AccountId> {
 	fn on_disabled(validator_index: usize);
 }
 
+/// One session-key type handler.
 pub trait OneSessionHandler<AccountId> {
+	/// The key type expected.
 	type Key: Decode + Default;
-	type KeyId: Get<KeyTypeId>;
+	/// The identifier of the key type.
+	const KEY_ID: KeyTypeId;
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
 		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a;
@@ -195,9 +198,8 @@ macro_rules! impl_session_handlers {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
 			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
 				$(
-					let id = $t::KeyId::get();
 					let our_keys = validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(id).unwrap_or_default()));
+						.map(|k| (&k.0, k.1.get::<$t::Key>($t::KEY_ID).unwrap_or_default()));
 					$t::on_new_session(changed, our_keys);
 				)*
 			}

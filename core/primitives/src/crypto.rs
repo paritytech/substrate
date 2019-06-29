@@ -414,6 +414,28 @@ pub trait Pair: Sized + 'static {
 	}
 }
 
+/// An identifier for a type of cryptographic key.
+///
+/// 0-1024 are reserved.
+pub type KeyTypeId = u32;
+
+/// Constant key types.
+pub mod key_types {
+	use super::KeyTypeId;
+
+	/// ED25519 public key.
+	pub const ED25519: KeyTypeId = 10;
+
+	/// SR25519 public key.
+	pub const SR25519: KeyTypeId = 20;
+}
+
+/// A trait for something that has a key type ID.
+pub trait TypedKey {
+	/// The type ID of this key.
+	const KEY_TYPE: KeyTypeId;
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;

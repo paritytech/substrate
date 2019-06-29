@@ -117,13 +117,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 		let n = n as u32;
 
-		let mut db = MemoryDB::new();
-		let mut root: T::Hash = Default::default();
-		{
-			let mut db = TrieDBMut::new();
-
-			unimplemented!();
-		}
+		unimplemented!()
 	}
 
 	/// Access the underlying trie root.

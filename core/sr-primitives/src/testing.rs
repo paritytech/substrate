@@ -19,7 +19,7 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey};
 use crate::{generic, KeyTypeId};
 use crate::weights::{Weighable, Weight};
 pub use substrate_primitives::H256;
@@ -37,12 +37,17 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
-const TEST_KEY_TYPE: KeyTypeId = 0xdeadbeef;
+/// The key-type of the `UintAuthorityId`
+pub const UINT_DUMMY_KEY: KeyTypeId = 0xdeadbeef;
+
+impl TypedKey for UintAuthorityId {
+	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
+}
 
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [TEST_KEY_TYPE].iter().cloned() }
+	fn key_ids() -> Self::KeyTypeIds { [UINT_DUMMY_KEY].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] { unsafe {

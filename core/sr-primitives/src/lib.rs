@@ -51,6 +51,9 @@ pub mod transaction_validity;
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
+/// Re-export this since it's part of the API of this crate.
+pub use substrate_primitives::crypto::{key_types, KeyTypeId};
+
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
 
@@ -739,22 +742,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
-}
-
-/// An identifier for a type of cryptographic key.
-///
-/// 0-1024 are reserved.
-pub type KeyTypeId = u32;
-
-/// Constant key types.
-pub mod key_types {
-	use super::KeyTypeId;
-
-	/// ED25519 public key.
-	pub const ED25519: KeyTypeId = 10;
-
-	/// SR25519 public key.
-	pub const SR25519: KeyTypeId = 20;
 }
 
 #[cfg(test)]
