@@ -105,7 +105,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
-			_genesis_phantom_data: Default::default(),
 			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
@@ -193,7 +192,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -276,7 +274,6 @@ pub fn testnet_genesis(
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
-			_genesis_phantom_data: Default::default(),
 			changes_trie_config: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
@@ -360,7 +357,6 @@ pub fn testnet_genesis(
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }

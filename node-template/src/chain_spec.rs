@@ -93,7 +93,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
