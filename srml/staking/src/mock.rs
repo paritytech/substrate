@@ -22,7 +22,9 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_error, parameter_types, assert_ok, traits::Currency, EnumerableStorageMap};
+use srml_support::{
+	impl_outer_origin, impl_outer_error, parameter_types, assert_ok, traits::Currency, EnumerableStorageMap
+};
 use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
 	ValidatorPrefs, RewardDestination, Nominators
 };
