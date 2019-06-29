@@ -219,7 +219,9 @@ macro_rules! construct_runtime {
 		$crate::__decl_outer_error!(
 			$runtime;
 			$(
-				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
+				$name: $module:: $( < $module_instance >:: )? {
+					$( $modules $( <$modules_generic> )* ),*
+				}
 			),*
 		);
 		$crate::__decl_all_modules!(

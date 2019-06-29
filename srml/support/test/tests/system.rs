@@ -8,6 +8,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + Decode;
 	type Event: From<Event>;
+	type Error: From<Error> + From<&'static str>;
 }
 
 srml_support::decl_module! {
@@ -23,6 +24,11 @@ srml_support::decl_event!(
 		ExtrinsicFailed,
 	}
 );
+
+srml_support::decl_error! {
+	pub enum Error {
+	}
+}
 
 /// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]
