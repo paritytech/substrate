@@ -428,7 +428,7 @@ mod tests {
 						FnEncode(|| &[
 							ModuleConstantMetadata {
 								name: DecodeDifferent::Encode("BlockNumber"),
-								ty: DecodeDifferent::Encode("T :: BlockNumber"),
+								ty: DecodeDifferent::Encode("T::BlockNumber"),
 								value: DecodeDifferent::Encode(
 									DefaultByteGetter(&ConstantBlockNumberByteGetter)
 								),
@@ -436,7 +436,7 @@ mod tests {
 							},
 							ModuleConstantMetadata {
 								name: DecodeDifferent::Encode("GetType"),
-								ty: DecodeDifferent::Encode("T :: AccountId"),
+								ty: DecodeDifferent::Encode("T::AccountId"),
 								value: DecodeDifferent::Encode(
 									DefaultByteGetter(&ConstantGetTypeByteGetter)
 								),

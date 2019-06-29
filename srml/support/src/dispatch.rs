@@ -1272,13 +1272,16 @@ macro_rules! __impl_module_constants_metadata {
 			$name:ident: $type:ty = $value:expr;
 		)*
 	) => {
-		$crate::__impl_module_constants_metadata! {
-			GENERATE_CODE
-			$mod_type<$trait_instance: $trait_name>
-			$(
-				$( #[doc = $doc_attr] )*
-				$name<$trait_instance: $trait_name>: $type = $value;
-			)*
+		$crate::paste::item! {
+			$crate::__impl_module_constants_metadata! {
+				GENERATE_CODE
+				$mod_type<$trait_instance: $trait_name>
+				$(
+					$( #[doc = $doc_attr] )*
+					[< $name DefaultByteGetter >]
+					$name<$trait_instance: $trait_name>: $type = $value;
+				)*
+			}
 		}
 	};
 	// With instance
@@ -1289,13 +1292,16 @@ macro_rules! __impl_module_constants_metadata {
 			$name:ident: $type:ty = $value:expr;
 		)*
 	) => {
-		$crate::__impl_module_constants_metadata! {
-			GENERATE_CODE
-			$mod_type<$trait_instance: $trait_name<I>, $instance: $instantiable>
-			$(
-				$( #[doc = $doc_attr] )*
-				$name<$trait_instance: $trait_name<I>, $instance: $instantiable>: $type = $value;
-			)*
+		$crate::paste::item! {
+			$crate::__impl_module_constants_metadata! {
+				GENERATE_CODE
+				$mod_type<$trait_instance: $trait_name<I>, $instance: $instantiable>
+				$(
+					$( #[doc = $doc_attr] )*
+					[< $name DefaultByteGetter >]
+					$name<$trait_instance: $trait_name<I>, $instance: $instantiable>: $type = $value;
+				)*
+			}
 		}
 	};
 	// Do the code generation
@@ -1303,6 +1309,7 @@ macro_rules! __impl_module_constants_metadata {
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident $(<I>, $instance:ident: $instantiable:path)?>
 		$(
 			$( #[doc = $doc_attr:tt] )*
+			$default_byte_name:ident
 			$name:ident<
 				$const_trait_instance:ident: $const_trait_name:ident $(
 					<I>, $const_instance:ident: $const_instantiable:path
@@ -1310,55 +1317,53 @@ macro_rules! __impl_module_constants_metadata {
 			>: $type:ty = $value:expr;
 		)*
 	) => {
-		$crate::paste::item! {
-			impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
-				$mod_type<$trait_instance $(, $instance)?>
-			{
-				#[doc(hidden)]
-				pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
-					// Create the `ByteGetter`s
-					$(
-						#[allow(non_upper_case_types)]
-						#[allow(non_camel_case_types)]
-						struct [< $name DefaultByteGetter >]<
-							$const_trait_instance: $const_trait_name $(
-								<I>, $const_instance: $const_instantiable
-							)?
-						>($crate::dispatch::marker::PhantomData<
-							($const_trait_instance $(, $const_instance)?)
-						>);
-						impl<$const_trait_instance: 'static + $const_trait_name $(
-							<I>, $const_instance: $const_instantiable)?
-						> $crate::dispatch::DefaultByte
-							for [< $name DefaultByteGetter >]<$const_trait_instance $(, $const_instance)?>
-						{
-							fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
-								let value: $type = $value;
-								$crate::dispatch::Encode::encode(&value)
-							}
+		impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
+			$mod_type<$trait_instance $(, $instance)?>
+		{
+			#[doc(hidden)]
+			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
+				// Create the `ByteGetter`s
+				$(
+					#[allow(non_upper_case_types)]
+					#[allow(non_camel_case_types)]
+					struct $default_byte_name<
+						$const_trait_instance: $const_trait_name $(
+							<I>, $const_instance: $const_instantiable
+						)?
+					>($crate::dispatch::marker::PhantomData<
+						($const_trait_instance $(, $const_instance)?)
+					>);
+					impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> $crate::dispatch::DefaultByte
+						for $default_byte_name <$const_trait_instance $(, $const_instance)?>
+					{
+						fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
+							let value: $type = $value;
+							$crate::dispatch::Encode::encode(&value)
 						}
-					)*
-					&[
-						$(
-							$crate::dispatch::ModuleConstantMetadata {
-								name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
-								ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
-								value: $crate::dispatch::DecodeDifferent::Encode(
-									$crate::dispatch::DefaultByteGetter(
-										&[< $name DefaultByteGetter >]::<
-											$const_trait_instance $(, $const_instance)?
-										>(
-											$crate::dispatch::marker::PhantomData
-										)
+					}
+				)*
+				&[
+					$(
+						$crate::dispatch::ModuleConstantMetadata {
+							name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
+							ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
+							value: $crate::dispatch::DecodeDifferent::Encode(
+								$crate::dispatch::DefaultByteGetter(
+									&$default_byte_name::<
+										$const_trait_instance $(, $const_instance)?
+									>(
+										$crate::dispatch::marker::PhantomData
 									)
-								),
-								documentation: $crate::dispatch::DecodeDifferent::Encode(
-									&[ $( $doc_attr ),* ]
-								),
-							}
-						),*
-					]
-				}
+								)
+							),
+							documentation: $crate::dispatch::DecodeDifferent::Encode(
+								&[ $( $doc_attr ),* ]
+							),
+						}
+					),*
+				]
 			}
 		}
 	}
