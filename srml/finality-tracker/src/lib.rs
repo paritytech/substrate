@@ -294,6 +294,7 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
+		type Error = Error;
 	}
 
 	type System = system::Module<Test>;
