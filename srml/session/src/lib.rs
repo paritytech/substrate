@@ -343,9 +343,9 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Move on to next session: register the new authority set. The new authority set depends on the
-	/// whether the session is ending. If it is, then the new set is the 
-	/// - 
+	/// Move on to next session. Register new validator set and session keys. Changes
+	/// to the validator set have a session of delay to take effect. This allows for
+	/// equivocation punishment after a fork.
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
 
