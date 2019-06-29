@@ -151,7 +151,8 @@ fn create_project(
 }
 
 fn run_project(project_folder: &Path) {
-	let mut cmd = Command::new("cargo");
+	let cargo = env::var("CARGO").expect("`CARGO` env variable is always set when executing `build.rs`.");
+	let mut cmd = Command::new(cargo);
 	cmd.arg("run").arg(format!("--manifest-path={}", project_folder.join("Cargo.toml").display()));
 
 	if env::var("DEBUG") != Ok(String::from("true")) {
