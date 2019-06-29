@@ -793,10 +793,14 @@ fn sync_justifications_on_change_blocks() {
 	}
 
 	// the last peer should get the justification by syncing from other peers
-	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
-		// TODO: net.lock().sync_without_disconnects();
-	}
+	runtime.block_on(futures::future::poll_fn(move || -> std::result::Result<_, ()> {
+		if net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
+			net.lock().poll();
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap()
 }
 
 #[test]
@@ -1290,13 +1294,16 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 1, net.clone(), peers);
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
-	// TODO: net.lock().sync_without_disconnects();
 
 	// check that the block#1 is finalized on light client
-	while net.lock().peer(1).client().info().chain.finalized_number != 1 {
-		// TODO: must be in tokio runtime
-		net.lock().poll();
-	}
+	runtime.block_on(futures::future::poll_fn(move || -> std::result::Result<_, ()> {
+		if net.lock().peer(1).client().info().chain.finalized_number == 1 {
+			Ok(Async::Ready(()))
+		} else {
+			net.lock().poll();
+			Ok(Async::NotReady)
+		}
+	})).unwrap()
 }
 
 #[test]
