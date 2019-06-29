@@ -243,7 +243,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let rho = UnderConstruction::get();
 		UnderConstruction::put([0; 32]);
 		let last_epoch_randomness = EpochRandomness::get();
-		let epoch_index = EpochIndex::get().wrapping_add(1);
+		let epoch_index = EpochIndex::get()
+			.checked_add(1)
+			.expect("epoch indexes will never reach 2^64; qed");
 		EpochIndex::put(epoch_index);
 		EpochRandomness::put(NextEpochRandomness::get());
 		let mut s = [0; 72];
