@@ -174,6 +174,12 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<Discover
 	where TBehaviour: DiscoveryNetBehaviour {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
+			DiscoveryOut::UnroutablePeer(_peer_id) => {
+				// Obtaining and reporting listen addresses for unroutable peers back
+				// to Kademlia is handled by the `Identify` protocol, part of the
+				// `DebugInfoBehaviour`. See the `NetworkBehaviourEventProcess`
+				// implementation for `DebugInfoEvent`.
+			}
 			DiscoveryOut::Discovered(peer_id) => {
 				self.user_protocol.0.add_discovered_nodes(iter::once(peer_id));
 			}
