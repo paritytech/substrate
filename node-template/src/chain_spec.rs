@@ -1,6 +1,6 @@
 use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
-	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
+	AccountId, GenesisConfig, AuraConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY,
 };
 use substrate_service;
