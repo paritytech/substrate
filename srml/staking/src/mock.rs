@@ -22,12 +22,15 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency};
-use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination};
+use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency, EnumerableStorageMap};
+use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
+	ValidatorPrefs, RewardDestination, Nominators
+};
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
 pub type BlockNumber = u64;
+pub type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
@@ -261,18 +264,50 @@ pub type Session = session::Module<Test>;
 pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub fn check_exposure(acc: u64) {
-	let expo = Staking::stakers(&acc);
-	assert_eq!(expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>());
-}
-
 pub fn check_exposure_all() {
 	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
 }
 
-pub fn assert_total_expo(acc: u64, val: u64) {
-	let expo = Staking::stakers(&acc);
+pub fn check_nominator_all() {
+	<Nominators<Test>>::enumerate().for_each(|(acc, _)| check_nominator_exposure(acc));
+}
+
+/// Check for each selected validator: expo.total = Sum(expo.other) + expo.own
+pub fn check_exposure(stash: u64) {
+	assert_is_stash(stash);
+	let expo = Staking::stakers(&stash);
+	assert_eq!(
+		expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
+		"wrong total exposure for {:?}: {:?}", stash, expo,
+	);
+}
+
+/// Check that for each nominator: slashable_balance > sum(used_balance)
+/// Note: we might not consume all of a nominator's balance, but we MUST NOT over spend it.
+pub fn check_nominator_exposure(stash: u64) {
+	assert_is_stash(stash);
+	let mut sum = 0;
+	Staking::current_elected()
+		.iter()
+		.map(|v| Staking::stakers(v))
+		.for_each(|e| e.others.iter()
+			.filter(|i| i.who == stash)
+			.for_each(|i| sum += i.value));
+	let nominator_stake = Staking::slashable_balance_of(&stash);
+	// a nominator cannot over-spend.
+	assert!(
+		nominator_stake >= sum,
+		"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
+	);
+}
+
+pub fn assert_total_expo(stash: u64, val: u64) {
+	let expo = Staking::stakers(&stash);
 	assert_eq!(expo.total, val);
+}
+
+pub fn assert_is_stash(acc: u64) {
+	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
 pub fn bond_validator(acc: u64, val: u64) {

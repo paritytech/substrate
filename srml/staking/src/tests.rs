@@ -52,10 +52,30 @@ fn basic_setup_works() {
 		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
-		// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-		assert_eq!(Staking::stakers(11), Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] });
-		// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
-		assert_eq!(Staking::stakers(21), Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] });
+		if cfg!(feature = "equalize") {
+			assert_eq!(
+				Staking::stakers(11),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+			);
+			assert_eq!(
+				Staking::stakers(21),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+			);
+			// initial slot_stake
+			assert_eq!(Staking::slot_stake(),  1250);
+		} else {
+			assert_eq!(
+				Staking::stakers(11),
+				Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] }
+			);
+			assert_eq!(
+				Staking::stakers(21),
+				Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] }
+			);
+			// initial slot_stake
+			assert_eq!(Staking::slot_stake(),  1125);
+		}
+
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
@@ -67,8 +87,6 @@ fn basic_setup_works() {
 		// initial rewards
 		assert_eq!(Staking::current_session_reward(), 10);
 
-		// initial slot_stake
-		assert_eq!(Staking::slot_stake(),  1125); // Naive
 
 		// initial slash_count of validators
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -76,6 +94,7 @@ fn basic_setup_works() {
 
 		// All exposures must be correct.
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -199,7 +218,10 @@ fn offline_grace_should_delay_slashing() {
 
 		// Check unstake_threshold is 3 (default)
 		let default_unstake_threshold = 3;
-		assert_eq!(Staking::validators(&11), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
+		assert_eq!(
+			Staking::validators(&11),
+			ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 }
+		);
 
 		// Check slash count is zero
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -499,7 +521,10 @@ fn staking_should_work() {
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Note: the stashed value of 4 is still lock
-		assert_eq!(Staking::ledger(&4), Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] }));
+		assert_eq!(
+			Staking::ledger(&4),
+			Some(StakingLedger { stash: 3, total: 1500, active: 1500, unlocking: vec![] })
+		);
 		// e.g. it cannot spend more than 500 that it has free from the total 2000
 		assert_noop!(Balances::reserve(&3, 501), "account liquidity restrictions prevent withdrawal");
 		assert_ok!(Balances::reserve(&3, 409));
@@ -528,6 +553,7 @@ fn less_than_needed_candidates_works() {
 		assert_eq!(Staking::stakers(20).others.len(), 0);
 		assert_eq!(Staking::stakers(30).others.len(), 0);
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -597,7 +623,6 @@ fn nominating_and_rewards_should_work() {
 	// 10  with stake  400.0 20  with stake  600.0 30  with stake  0
 	// 4  has load  0.0005555555555555556 and supported
 	// 10  with stake  600.0 20  with stake  400.0 40  with stake  0.0
-
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
@@ -641,18 +666,57 @@ fn nominating_and_rewards_should_work() {
 
 		// ------ check the staked value of all parties.
 
-		// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
-		assert_eq!(Staking::stakers(11).own, 1000);
-		assert_eq!(Staking::stakers(11).total, 1000 + 800);
-		// 2 and 4 supported 10, each with stake 600, according to phragmen.
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 400]);
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
-		// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
-		assert_eq!(Staking::stakers(21).own, 1000);
-		assert_eq!(Staking::stakers(21).total, 1000 + 1198);
-		// 2 and 4 supported 20, each with stake 250, according to phragmen.
-		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![599, 599]);
-		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
+		if cfg!(feature = "equalize") {
+			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(11).own, 1000);
+			assert_eq!(Staking::stakers(11).total, 1000 + 999);
+			// 2 and 4 supported 10, each with stake 600, according to phragmen.
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![599, 400]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
+			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(21).own, 1000);
+			assert_eq!(Staking::stakers(21).total, 1000 + 999);
+			// 2 and 4 supported 20, each with stake 250, according to phragmen.
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![400, 599]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
+		} else {
+			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(11).own, 1000);
+			assert_eq!(Staking::stakers(11).total, 1000 + 800);
+			// 2 and 4 supported 10, each with stake 600, according to phragmen.
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![400, 400]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
+			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
+			assert_eq!(Staking::stakers(21).own, 1000);
+			assert_eq!(Staking::stakers(21).total, 1000 + 1198);
+			// 2 and 4 supported 20, each with stake 250, according to phragmen.
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![599, 599]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
+				vec![3, 1]
+			);
+		}
 
 		// They are not chosen anymore
 		assert_eq!(Staking::stakers(31).total, 0);
@@ -662,28 +726,35 @@ fn nominating_and_rewards_should_work() {
 		start_era(2);
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
-		// nothing else will happen, era ends and rewards are paid again,
-		// it is expected that nominators will also be paid. See below
 
-		// Approximation resulting from Perbill conversion
-		let approximation = 1;
-		// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(
-			Balances::total_balance(&2),
-			initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation
-		);
-		// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-		assert_eq!(
-			Balances::total_balance(&4),
-			initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 1 - approximation
-		);
+		let approximation = 3;
+		if cfg!(feature = "equalize") {
+			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
+			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - approximation);
+			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - approximation);
+			// Rest for validators.
+			assert_eq!(Balances::total_balance(&10), initial_balance + new_session_reward/2 + 1);
+			assert_eq!(Balances::total_balance(&20), initial_balance + new_session_reward/2 + 1);
+		} else {
+			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq!(
+				Balances::total_balance(&2),
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+			);
+			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			assert_eq!(
+				Balances::total_balance(&4),
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+			);
 
-		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - approximation);
-		// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11+ 2);
+			// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
+			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
+			// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
+			assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11 + 2);
+		}
 
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -730,6 +801,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&10), initial_balance + 30 - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
+		check_nominator_all();
 		// Because slashing happened.
 		assert!(is_disabled(10));
 	});
@@ -746,9 +818,15 @@ fn double_staking_should_fail() {
 		|| {
 			let arbitrary_value = 5;
 			// 2 = controller, 1 stashed => ok
-			assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
+			assert_ok!(
+				Staking::bond(Origin::signed(1), 2, arbitrary_value,
+				RewardDestination::default())
+			);
 			// 4 = not used so far, 1 stashed => not allowed.
-			assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::default()), "stash already bonded");
+			assert_noop!(
+				Staking::bond(Origin::signed(1), 4, arbitrary_value,
+				RewardDestination::default()), "stash already bonded"
+			);
 			// 1 = stashed => attempting to nominate should fail.
 			assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
 			// 2 = controller  => nominating should work.
@@ -1033,6 +1111,7 @@ fn validator_payment_prefs_work() {
 		assert_eq!(Balances::total_balance(&2), 500 + shared_cut/2);
 
 		check_exposure_all();
+		check_nominator_all();
 	});
 
 }
@@ -1248,6 +1327,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		assert_eq!(Balances::free_balance(&11), 1000 + 30 - 51 /*5% of 1030*/ * 8 /*2**3*/);
 
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -1411,8 +1491,6 @@ fn phragmen_poc_works() {
 	// 10  with stake  166.66666666666674 20  with stake  333.33333333333326 30  with stake  0
 	// 4  has load  0.00075 and supported
 	// 10  with stake  333.3333333333333 20  with stake  166.66666666666666 40  with stake  0.0
-
-
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
@@ -1445,21 +1523,58 @@ fn phragmen_poc_works() {
 
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
-		// with stake 1666 and 1333 respectively
 		assert_eq!(Staking::stakers(11).own, 1000);
-		assert_eq!(Staking::stakers(11).total, 1000 + 332);
 		assert_eq!(Staking::stakers(21).own, 1000);
-		assert_eq!(Staking::stakers(21).total, 1000 + 666);
+
+		if cfg!(feature = "equalize") {
+			assert_eq!(Staking::stakers(11).total, 1000 + 499);
+			assert_eq!(Staking::stakers(21).total, 1000 + 499);
+		} else {
+			assert_eq!(Staking::stakers(11).total, 1000 + 332);
+			assert_eq!(Staking::stakers(21).total, 1000 + 666);
+		}
 
 		// Nominator's stake distribution.
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![166, 166]);
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 332);
 		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
-
-		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 333]);
-		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 666);
 		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
+
+		if cfg!(feature = "equalize") {
+			assert_eq_uvec!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 166]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				499
+			);
+			assert_eq_uvec!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 166]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				499
+			);
+		} else {
+			assert_eq_uvec!(
+				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![166, 166]
+			);
+			assert_eq!(
+				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				332
+			);
+			assert_eq_uvec!(
+				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
+				vec![333, 333]
+			);
+			assert_eq!(
+				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
+				666
+			);
+		}
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -1510,6 +1625,7 @@ fn phragmen_poc_2_works() {
 			(1, vec![(11, 4294967296)]),
 		]);
 		check_exposure_all();
+		check_nominator_all();
 	})
 }
 
@@ -1564,9 +1680,9 @@ fn switching_roles() {
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 		// new stakes:
 		// 10: 1000 self vote
-		// 20: 1000 self vote + 500 vote
+		// 20: 1000 self vote + 250 vote
 		// 6 : 1000 self vote
-		// 2 : 2000 self vote + 500 vote.
+		// 2 : 2000 self vote + 250 vote.
 		// Winners: 20 and 2
 
 		System::set_block_number(4);
@@ -1581,7 +1697,9 @@ fn switching_roles() {
 		System::set_block_number(6);
 		Session::on_initialize(System::block_number());
 		assert_eq_uvec!(Session::validators(), vec![2, 20]);
+
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
@@ -1717,12 +1835,13 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		// same for 10
 		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 30 + reward.max(3));
 		check_exposure_all();
+		check_nominator_all();
 	});
 }
 
 
+#[cfg(feature = "equalize")]
 #[test]
-#[ignore] // Enable this once post-processing is on.
 fn phragmen_linear_worse_case_equalize() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
@@ -1730,7 +1849,6 @@ fn phragmen_linear_worse_case_equalize() {
 		.fair(true)
 		.build(),
 	|| {
-		for i in &[10, 20, 30, 40] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller)); }
 
 		bond_validator(50, 1000);
 		bond_validator(60, 1000);
@@ -1744,32 +1862,27 @@ fn phragmen_linear_worse_case_equalize() {
 		bond_nominator(120, 1000, vec![51, 61]);
 		bond_nominator(130, 1000, vec![61, 71]);
 
+		for i in &[10, 20, 30, 40, 50, 60, 70] {
+			assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller));
+		}
+
 		assert_eq_uvec!(Session::validators(), vec![40, 30]);
 		assert_ok!(Staking::set_validator_count(7));
 
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_era(1);
 
 		assert_eq_uvec!(Session::validators(), vec![10, 60, 40, 20, 50, 30, 70]);
 
-		// Sequential Phragmén with post processing gives
-		// 10  is elected with stake  3000.0 and score  0.00025
-		// 20  is elected with stake  2017.7421569824219 and score  0.0005277777777777777
-		// 30  is elected with stake  2008.8712884829595 and score  0.0003333333333333333
-		// 40  is elected with stake  2000.0001049958742 and score  0.0005555555555555556
-		// 50  is elected with stake  2000.0001049958742 and score  0.0003333333333333333
-		// 60  is elected with stake  1991.128921508789 and score  0.0004444444444444444
-		// 70  is elected with stake  1982.2574230340813 and score  0.0007222222222222222
+		assert_eq!(Staking::stakers(11).total, 3000);
+		assert_eq!(Staking::stakers(21).total, 2254);
+		assert_eq!(Staking::stakers(31).total, 2254);
+		assert_eq!(Staking::stakers(41).total, 1926);
+		assert_eq!(Staking::stakers(51).total, 1871);
+		assert_eq!(Staking::stakers(61).total, 1892);
+		assert_eq!(Staking::stakers(71).total, 1799);
 
 		check_exposure_all();
-
-		assert_eq!(Staking::stakers(11).total, 3000);
-		assert_eq!(Staking::stakers(21).total, 2209);
-		assert_eq!(Staking::stakers(31).total, 2027);
-		assert_eq!(Staking::stakers(41).total, 2010);
-		assert_eq!(Staking::stakers(51).total, 2010);
-		assert_eq!(Staking::stakers(61).total, 1998);
-		assert_eq!(Staking::stakers(71).total, 1983);
+		check_nominator_all();
 	})
 }
 
@@ -1790,6 +1903,7 @@ fn phragmen_chooses_correct_number_of_validators() {
 
 		assert_eq!(Session::validators().len(), 1);
 		check_exposure_all();
+		check_nominator_all();
 	})
 }
 
@@ -1809,6 +1923,7 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 
 		assert_eq!(Session::validators(), vec![4, 2]);
 		check_exposure_all();
+		check_nominator_all();
 	})
 }
 
@@ -1929,32 +2044,8 @@ fn phragmen_large_scale_test() {
 
 		start_era(1);
 
-		// For manual inspection
-		println!("Validators are {:?}", Session::validators());
-		println!("Validators are {:#?}",
-			Session::validators()
-				.iter()
-				.map(|v| (v.clone(), Staking::stakers(v+1)))
-				.collect::<Vec<(u64, Exposure<u64, u64>)>>()
-		);
-
-		// Each exposure => total == own + sum(others)
 		check_exposure_all();
-
-		// aside from some error, stake must be divided correctly
-		let individual_expo_sum: u128 = Session::validators()
-			.iter()
-			.map(|v| Staking::stakers(v+1))
-			.fold(0u128, |s, v| if v.others.len() > 0 { s + v.others[0].value as u128 } else { s });
-		assert!(
-			990000000000000000 - individual_expo_sum < 100,
-			format!(
-				"Nominator stake = {} / SUM(individual expo) = {} / diff = {}",
-				990000000000000000u64,
-				individual_expo_sum,
-				990000000000000000 - individual_expo_sum
-			)
-		);
+		check_nominator_all();
 	})
 }
 
@@ -1980,6 +2071,7 @@ fn phragmen_large_scale_test_2() {
 
 		// Each exposure => total == own + sum(others)
 		check_exposure_all();
+		check_nominator_all();
 
 		assert_total_expo(3, nom_budget / 2 + c_budget);
 		assert_total_expo(5, nom_budget / 2 + c_budget);

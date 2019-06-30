@@ -340,7 +340,7 @@ impl<Components: components::Components> Service<Components> {
 		let client_ = client.clone();
 		let network_ = network.clone();
 		let mut sys = System::new();
-		let self_pid = get_current_pid();
+		let self_pid = get_current_pid().ok();
 		let (netstat_tx, netstat_rx) = mpsc::unbounded();
 		network_status_sinks.lock().push(netstat_tx);
 		let tel_task = netstat_rx.for_each(move |net_status| {
@@ -361,9 +361,12 @@ impl<Components: components::Components> Service<Components> {
 			};
 
 			// get cpu usage and memory usage of this process
-			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
-				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
-				(proc.cpu_usage(), proc.memory())
+			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
+				if sys.refresh_process(self_pid) {
+					let proc = sys.get_process(self_pid)
+						.expect("Above refresh_process succeeds, this should be Some(), qed");
+					(proc.cpu_usage(), proc.memory())
+				} else { (0.0, 0) }
 			} else { (0.0, 0) };
 
 			let network_state = network_.network_state();
