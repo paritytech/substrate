@@ -49,7 +49,6 @@
 //!		type Currency: Currency<Self::AccountId>;
 //! }
 //!
-//! #[derive(Default)]
 //!	struct Unresponsive;
 //!
 //!	impl Misconduct for Unresponsive {
@@ -57,14 +56,14 @@
 //! }
 //!
 //! impl EraMisconduct for Unresponsive {
-//!		fn severity(&self, k: u64, n: u64) -> Fraction<Self::Severity> {
-//!			let numerator = 20 * n;
-//!			let denominator = 3*k - 3;
+//!		fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity> {
+//!			let numerator = num_validators;
+//!			let denominator = 3 * num_misbehaved - 3;
 //!
-//!			if numerator / n >= 1 {
-//!				Fraction::new(1_u64, 20_u64)
+//!			if denominator / numerator >= 1 {
+//!				Fraction::new(1, 20)
 //!			} else {
-//!				Fraction::new(denominator, numerator)
+//!				Fraction::new(denominator, numerator) * Fraction::new(1, 20)
 //!			}
 //!		}
 //!	}
@@ -86,20 +85,13 @@
 //!	impl<T: Trait> Slashing<T::AccountId> for SlashingWrapper<T> {
 //!		type Slash = Balance<T>;
 //!
-//!		fn slash<RM: RollingMisconduct>(
-//!			misbehaved: &[T::AccountId],
+//!		fn slash<RM: RollingMisconduct<T::AccountId>>(
+//!			who: &T::AccountId,
 //!			total_validators: u64,
 //!			misconduct: &mut RM,
 //!			session_index: u64,
 //!		) -> u8 {
-//!			misconduct.on_misconduct(misbehaved.len() as u64, total_validators, session_index);
-//!			let severity = misconduct.severity();
-//!
-//!			for who in misbehaved {
-//!				Self::Slash::on_slash::<RM>(who, severity);
-//!			}
-//!
-//!			severity.as_misconduct_level()
+//!			misconduct.severity(who, total_validators, session_index).as_misconduct_level()
 //!		}
 //!
 //!		fn slash_end_of_era<EM: EraMisconduct>(
@@ -122,7 +114,7 @@
 //!		let misbehaved_validators = vec![1, 2, 3, 4, 5, 6];
 //!		let total_validators = 100;
 //!		// MyModule is type that implements `Trait`
-//!		// SlashingWrapper::<MyModule>::slash_on_checkpoint(&misbehaved_validators, total_validators, &unresponsive);
+//!		// SlashingWrapper::<MyModule>::slash_end_of_era(&misbehaved_validators, total_validators, &unresponsive);
 //! }
 //! ```
 
@@ -149,28 +141,28 @@ pub trait Misconduct {
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 }
 
-
 /// Misconduct that only takes culprits in the current era into account
 pub trait EraMisconduct: Misconduct {
-	/// Estimates severity based on only culprits the current era
+	/// Estimates severity based on only culprits in the current era
 	/// Must only be called in the end of era.
 	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity>;
 
 }
 
-/// Misconduct that runs over a `rolling window` of sessions
-pub trait RollingMisconduct: Misconduct {
+/// Misconduct that runs over a `window` of sessions
+pub trait RollingMisconduct<AccountId>: Misconduct {
 
-	/// Window size in sessions
-	const WINDOW_SIZE: u32;
+	/// Window length in number of sessions
+	const WINDOW_LENGTH: u32;
 
-	/// Report a misconduct and register it in the underlying type
-	fn on_misconduct(&mut self, num_misbehaved: u64, total_validators: u64, session_index: u64);
-
-	/// Estimate severity
-	fn severity(&self) -> Fraction<Self::Severity>;
+	/// Estimate severity level based on misconduct from `who` and the previous state in the window
+	fn severity(
+		&mut self,
+		who: &AccountId,
+		total_validators: u64,
+		session_index: u64
+	) -> Fraction<Self::Severity>;
 }
-
 
 /// Slashing interface
 pub trait OnSlashing<AccountId> {
@@ -198,8 +190,8 @@ pub trait Slashing<AccountId> {
 	//	* This assumes `session_index` is monotonic increasing
 	//	* shall `total_validators` be generic?
 	//	* `session_index` use associated type from Session?!
-	fn slash<RM: RollingMisconduct>(
-		misbehaved: &[AccountId],
+	fn slash<RM: RollingMisconduct<AccountId>>(
+		who: &AccountId,
 		total_validators: u64,
 		misconduct: &mut RM,
 		session_index: u64,
@@ -209,7 +201,7 @@ pub trait Slashing<AccountId> {
 /// Implementation of the `Misconduct` trait for a type `T` with associated type `A
 /// which has a predefined severity level such as slash always 10%
 #[macro_export]
-macro_rules! impl_static_misconduct {
+macro_rules! impl_static_rolling_misconduct {
 	($t:ty, $a:ty => $fr:expr) => {
 		impl Misconduct for $t {
 			type Severity = $a;
@@ -221,12 +213,32 @@ macro_rules! impl_static_misconduct {
 
 			fn on_misconduct(
 				&mut self,
-				_num_misbehaved: u64,
+				who: u64,
 				_num_validators: u64,
 				_session_idx: u64
 			) {}
 
 			fn severity(&self) -> Fraction<$a> {
+				$fr
+			}
+		}
+	}
+}
+
+/// Implementation of the `Misconduct` trait for a type `T` with associated type `A
+/// which has a predefined severity level such as slash always 10%
+#[macro_export]
+macro_rules! impl_static_era_misconduct {
+	($t:ty, $a:ty => $fr:expr) => {
+		impl Misconduct for $t {
+			type Severity = $a;
+		}
+
+		impl crate::RollingMisconduct for $t {
+			// not used
+			const WINDOW_LENGTH: u32 = 0;
+
+			fn severity(&self, _: u64, _: u64) -> Fraction<$a> {
 				$fr
 			}
 		}

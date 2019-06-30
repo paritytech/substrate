@@ -1262,20 +1262,13 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 	type Slash = StakingSlasher<T>;
 
-	fn slash<RM: RollingMisconduct>(
-		misbehaved: &[T::AccountId],
+	fn slash<RM: RollingMisconduct<T::AccountId>>(
+		who: &T::AccountId,
 		total_validators: u64,
 		misconduct: &mut RM,
 		session_index: u64
 	) -> u8 {
-		misconduct.on_misconduct(misbehaved.len() as u64, total_validators, session_index);
-		let severity = misconduct.severity();
-
-		for who in misbehaved {
-			Self::Slash::on_slash::<RM>(who, severity);
-		}
-
-		severity.as_misconduct_level()
+		misconduct.severity(who, total_validators, session_index).as_misconduct_level()
 	}
 
 	fn slash_end_of_era<EM: EraMisconduct>(
