@@ -217,7 +217,7 @@ mod tests {
 	use std::sync::Arc;
 	use consensus::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
-	use node_primitives::DigestItem;
+	use node_primitives::{DigestItem, Balance};
 	use node_runtime::{Call, BalancesCall, UncheckedExtrinsic};
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
@@ -269,6 +269,7 @@ mod tests {
 			let payload = (
 				0,
 				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
+				Tip::default(),
 				Era::immortal(),
 				service.client().genesis_hash()
 			);
@@ -359,7 +360,7 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+			let raw_payload = (Compact(index), function, Tip::<Balance>::default(), era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {

@@ -360,6 +360,7 @@ where
 
 				// pay and burn the tip if provided.
 				let tip = xt.tip().value();
+				let weight = xt.weight(encoded_len);
 
 				if !tip.is_zero() {
 					if Payment::make_raw_payment(sender, tip).is_err() {
