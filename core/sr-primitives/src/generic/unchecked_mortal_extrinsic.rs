@@ -134,11 +134,15 @@ where
 					tip: raw_payload.2,
 				}
 			}
-			None => CheckedExtrinsic {
-				signed: None,
-				function: self.function,
-				// an unsigned transaction cannot have tips.
-				tip: Tip::None,
+			None => {
+				// An unsigned transaction cannot have a tip. The decode code should replace it with
+				// None always and ignore the input bytes.
+				debug_assert!(self.tip == Tip::None, "{}", crate::UNSIGNED_TIP);
+				CheckedExtrinsic {
+					signed: None,
+					function: self.function,
+					tip: self.tip
+				}
 			},
 		})
 	}
@@ -171,7 +175,7 @@ where
 		Some(UncheckedMortalExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
-			tip: Decode::decode(input).unwrap_or_default(),
+			tip: if is_signed { Decode::decode(input).unwrap_or_default() } else { Tip::None },
 		})
 	}
 }
@@ -198,7 +202,9 @@ where
 				}
 			}
 			self.function.encode_to(v);
-			self.tip.encode_to(v);
+			if self.signature.is_some() {
+				self.tip.encode_to(v);
+			}
 		})
 	}
 }
@@ -439,10 +445,10 @@ mod tests {
 	}
 
 	#[test]
+	#[should_panic]
 	fn unsigned_cannot_have_tip() {
 		let ux = UncheckedMortalExtrinsic { signature: None, tip: Tip::Sender(100), function: vec![0u8;0]};
-		let xt = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
-		assert_eq!(xt.tip, Tip::None);
+		let _ = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
 	}
 
 	#[test]

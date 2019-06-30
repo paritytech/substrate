@@ -104,18 +104,21 @@ where
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err(crate::BAD_SIGNATURE)
 				}
-				// TODO: maybe add tip to checked as well? hmm..
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
 					function: payload.1,
 					tip: payload.2,
 				}
 			}
-			None => CheckedExtrinsic {
-				signed: None,
-				function: self.function,
-				// an unsigned transaction cannot have tips.
-				tip: Tip::None,
+			None => {
+				if self.tip == Tip::None {
+					return Err(crate::UNSIGNED_TIP);
+				}
+				CheckedExtrinsic {
+					signed: None,
+					function: self.function,
+					tip: self.tip,
+				}
 			},
 		})
 	}

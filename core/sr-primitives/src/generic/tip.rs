@@ -17,6 +17,7 @@
 //! Tip structure for a transaction.
 
 use crate::codec::{Encode, Decode};
+use crate::traits::Zero;
 
 /// Representation of a transaction tip.
 ///
@@ -30,6 +31,17 @@ pub enum Tip<Balance> {
     None,
     /// The sender of the transaction has included some tip.
     Sender(Balance),
+}
+
+impl<Balance: Zero + Copy> Tip<Balance> {
+    /// Return the raw value of the tip (to be burned or consumed) regardless of any logic that the
+    /// Tip enum variant might embody.
+    pub fn value(&self) -> Balance {
+        match *self {
+            Tip::Sender(value) => value,
+            Tip::None => Zero::zero(),
+        }
+    }
 }
 
 /// Default implementation for tip.

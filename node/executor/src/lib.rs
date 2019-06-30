@@ -125,7 +125,7 @@ mod tests {
 			None => UncheckedExtrinsic {
 				signature: None,
 				function: xt.function,
-				tip: xt.tip,
+				tip: Tip::None,
 			},
 		}
 	}
@@ -469,7 +469,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
-					tip: Tip::default(),
+					tip: Tip::None,
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -493,7 +493,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
-					tip: Tip::default(),
+					tip: Tip::None,
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -542,7 +542,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
-					tip: Tip::default(),
+					tip: Tip::None,
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -822,7 +822,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: None,
 					function: Call::Timestamp(timestamp::Call::set(42)),
-					tip: Tip::default(),
+					tip: Tip::None,
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
@@ -887,14 +887,17 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
-
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let block = big_block().0;
+		println!("Shit will get real here");
+		let r = Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&big_block().0,
+			&block,
 			true,
 			None,
-		).0.unwrap();
+		);
+		println!("R = {:?}", r);
+		r.0.unwrap();
 	}
 
 	#[test]

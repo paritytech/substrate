@@ -64,6 +64,9 @@ pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
 /// Example: block gas limit is reached (the transaction can be retried in the next block though).
 pub const BLOCK_FULL: &str = "block size limit is reached";
 
+/// Unsigned message containing tip error message.
+pub const UNSIGNED_TIP: &str = "unsigned message with tip not allowed";
+
 /// Justification type.
 pub type Justification = Vec<u8>;
 
@@ -111,7 +114,7 @@ pub trait BuildStorage: Sized {
 	) -> Result<(), String>;
 }
 
-/// Somethig that can build the genesis storage of a module.
+/// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.

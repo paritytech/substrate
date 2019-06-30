@@ -76,7 +76,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, result};
 use primitives::{ApplyOutcome, ApplyError,
-	generic::{Digest, Tip, Tippable},
+	generic::{Digest, Tippable},
 	weights::Weighable,
 	transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity},
 	traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
@@ -359,14 +359,10 @@ where
 				}
 
 				// pay and burn the tip if provided.
-				let tip = xt.tip();
-				let tip_value = match tip {
-					Tip::Sender(value) => value,
-					Tip::None => Zero::zero(),
-				};
+				let tip = xt.tip().value();
 
-				if !tip_value.is_zero() {
-					if Payment::make_raw_payment(sender, tip_value).is_err() {
+				if !tip.is_zero() {
+					if Payment::make_raw_payment(sender, tip).is_err() {
 						return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 					}
 				}
@@ -387,7 +383,7 @@ where
 
 				// TODO: maximise (fee + tip) per weight unit here.
 				TransactionValidity::Valid {
-					priority: (encoded_len as TransactionPriority) + tip_value.saturated_into::<TransactionPriority>(),
+					priority: (encoded_len as TransactionPriority) + tip.saturated_into::<TransactionPriority>(),
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),
