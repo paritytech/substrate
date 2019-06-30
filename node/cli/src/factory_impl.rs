@@ -23,7 +23,7 @@ use rand::rngs::StdRng;
 
 use parity_codec::Decode;
 use keyring::sr25519::Keyring;
-use node_primitives::Hash;
+use node_primitives::{Hash, Balance};
 use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
 use primitives::sr25519;
 use primitives::crypto::Pair;
@@ -236,7 +236,7 @@ fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 	let s = match xt.signed {
 		Some((signed, index)) => {
 			let era = Era::mortal(256, phase);
-			let payload = (index.into(), xt.function, era, prior_block_hash);
+			let payload = (index.into(), xt.function, Tip::<Balance>::default(), era, prior_block_hash);
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
 					key.sign(&sr_io::blake2_256(b))
