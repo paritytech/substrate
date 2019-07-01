@@ -290,7 +290,7 @@ use primitives::traits::{
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
 
-use phragmen::{elect, ACCURACY, ExtendedBalance};
+use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -607,6 +607,12 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Number of sessions per era.
+		const SessionsPerEra: SessionIndex = T::SessionsPerEra::get();
+
+		/// Number of eras that staked funds must remain bonded for.
+		const BondingDuration: EraIndex = T::BondingDuration::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -866,7 +872,7 @@ decl_module! {
 
 		/// The ideal number of validators.
 		fn set_validator_count(#[compact] new: u32) {
-			<ValidatorCount<T>>::put(new);
+			ValidatorCount::put(new);
 		}
 
 		// ----- Root calls.
@@ -885,7 +891,7 @@ decl_module! {
 
 		/// Set the offline slash grace period.
 		fn set_offline_slash_grace(#[compact] new: u32) {
-			<OfflineSlashGrace<T>>::put(new);
+			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
@@ -940,11 +946,10 @@ impl<T: Trait> Module<T> {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				// FIXME #1572 avoid overflow
-				let safe_mul_rational = |b| b * rest_slash / total;
 				for i in exposure.others.iter() {
+					let per_u64 = Perbill::from_rational_approximation(i.value, total);
 					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
+					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
 				}
 			}
 		}
@@ -986,13 +991,14 @@ impl<T: Trait> Module<T> {
 		} else {
 			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
-			// FIXME #1572:  avoid overflow
-			let safe_mul_rational = |b| b * reward / total;
+
 			for i in &exposure.others {
-				let nom_payout = safe_mul_rational(i.value);
-				imbalance.maybe_subsume(Self::make_payout(&i.who, nom_payout));
+				let per_u64 = Perbill::from_rational_approximation(i.value, total);
+				imbalance.maybe_subsume(Self::make_payout(&i.who, per_u64 * reward));
 			}
-			safe_mul_rational(exposure.own)
+
+			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
+			per_u64 * reward
 		};
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);
@@ -1004,7 +1010,7 @@ impl<T: Trait> Module<T> {
 		let reward = Self::current_session_reward();
 		<CurrentEraReward<T>>::mutate(|r| *r += reward);
 
-		if <ForceNewEra<T>>::take() || session_index % T::SessionsPerEra::get() == 0 {
+		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
 			Self::new_era()
 		} else {
 			None
@@ -1032,7 +1038,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		<CurrentEra<T>>::mutate(|s| *s += 1);
+		CurrentEra::mutate(|s| *s += 1);
 
 		// Reassign all Stakers.
 		let (slot_stake, maybe_new_validators) = Self::select_validators();
@@ -1077,7 +1083,7 @@ impl<T: Trait> Module<T> {
 			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
 
 			// Compute the actual stake from nominator's ratio.
-			let mut assignments_with_stakes = assignments.iter().map(|(n, a)|(
+			let assignments_with_stakes = assignments.iter().map(|(n, a)|(
 				n.clone(),
 				Self::slashable_balance_of(n),
 				a.iter().map(|(acc, r)| (
@@ -1111,17 +1117,22 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			// This optimization will most likely be only applied off-chain.
-			let do_equalize = false;
-			if do_equalize {
-				let tolerance = 10 as u128;
-				let iterations = 10 as usize;
-				phragmen::equalize::<T>(
-					&mut assignments_with_stakes,
-					&mut exposures,
-					tolerance,
-					iterations
-				);
+			if cfg!(feature = "equalize") {
+				let tolerance = 0_u128;
+				let iterations = 2_usize;
+				let mut assignments_with_votes = assignments_with_stakes.iter()
+					.map(|a| (
+						a.0.clone(), a.1,
+						a.2.iter()
+							.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
+							.collect::<Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>>()
+					))
+					.collect::<Vec<(
+						T::AccountId,
+						BalanceOf<T>,
+						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
+					)>>();
+				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}
 
 			// Clear Stakers and reduce their slash_count.
@@ -1141,9 +1152,11 @@ impl<T: Trait> Module<T> {
 				}
 				<Stakers<T>>::insert(c.clone(), e.clone());
 			}
+
+			// Update slot stake.
 			<SlotStake<T>>::put(&slot_stake);
 
-			// Set the new validator set.
+			// Set the new validator set in sessions.
 			<CurrentElected<T>>::put(&elected_stashes);
 			let validators = elected_stashes.into_iter()
 				.map(|s| Self::bonded(s).unwrap_or_default())
@@ -1161,7 +1174,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn apply_force_new_era() {
-		<ForceNewEra<T>>::put(true);
+		ForceNewEra::put(true);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
