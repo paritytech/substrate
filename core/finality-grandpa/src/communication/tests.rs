@@ -305,14 +305,7 @@ fn good_commit_leads_to_relay() {
 				.map(|(item, _)| {
 					match item.unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
-							// NOTE: the type is opaque and there's no way to
-							// create it outside of the `finality-grandpa`
-							// crate. currently we don't do anything with it so
-							// it's safe to keep it uninitialized
-							let data: grandpa::voter::GoodCommit = unsafe {
-								std::mem::uninitialized()
-							};
-							callback.run(grandpa::voter::CommitProcessingOutcome::Good(data));
+							callback.run(grandpa::voter::CommitProcessingOutcome::good());
 						},
 						_ => panic!("commit expected"),
 					}
@@ -427,14 +420,7 @@ fn bad_commit_leads_to_report() {
 				.map(|(item, _)| {
 					match item.unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
-							// NOTE: the type is opaque and there's no way to
-							// create it outside of the `finality-grandpa`
-							// crate. currently we don't do anything with it so
-							// it's safe to keep it uninitialized
-							let data: grandpa::voter::BadCommit = unsafe {
-								std::mem::uninitialized()
-							};
-							callback.run(grandpa::voter::CommitProcessingOutcome::Bad(data));
+							callback.run(grandpa::voter::CommitProcessingOutcome::bad());
 						},
 						_ => panic!("commit expected"),
 					}
