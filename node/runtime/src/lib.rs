@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 99,
-	impl_version: 99,
+	spec_version: 100,
+	impl_version: 100,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -80,9 +80,7 @@ pub struct Author;
 
 impl OnUnbalanced<NegativeImbalance> for Author {
 	fn on_unbalanced(amount: NegativeImbalance) {
-		// TODO: figure out who the author is and correct the account id. #2918
-		let author = AccountId::default();
-		Balances::resolve_creating(&author, amount);
+		Balances::resolve_creating(&Authorship::author(), amount);
 	}
 }
 
@@ -147,6 +145,18 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
+	pub const UncleGenerations: u64 = 0;
+}
+
+// TODO: #2941 implement this properly
+impl authorship::Trait for Runtime {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ();
+}
+
+parameter_types! {
 	pub const Period: BlockNumber = 10 * MINUTES;
 	pub const Offset: BlockNumber = 0;
 }
@@ -197,6 +207,7 @@ parameter_types! {
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
+
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
@@ -242,7 +253,6 @@ impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Call = Call;
 	type Event = Event;
-	type Gas = u64;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
@@ -268,19 +278,20 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system,
+		System: system::{Module, Call, Storage, Config, Event},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
 		Balances: balances,
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
-		Democracy: democracy,
+		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
 		CouncilSeats: council_seats::{Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
-		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Event},
+		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury,
 		Contracts: contracts,
 		Sudo: sudo,

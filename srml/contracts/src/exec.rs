@@ -17,7 +17,7 @@
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfoOf};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use crate::gas::{GasMeter, Token, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
@@ -239,10 +239,10 @@ pub enum ExecFeeToken {
 impl<T: Trait> Token<T> for ExecFeeToken {
 	type Metadata = Config<T>;
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		match *self {
-			ExecFeeToken::Call => metadata.call_base_fee,
-			ExecFeeToken::Instantiate => metadata.instantiate_base_fee,
+			ExecFeeToken::Call => metadata.schedule.call_base_cost,
+			ExecFeeToken::Instantiate => metadata.schedule.instantiate_base_cost,
 		}
 	}
 }
@@ -465,13 +465,13 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 	type Metadata = Config<T>;
 
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => metadata.transfer_fee,
 		};
-		approx_gas_for_balance::<T>(self.gas_price, balance_fee)
+		approx_gas_for_balance(self.gas_price, balance_fee)
 	}
 }
 
@@ -491,7 +491,7 @@ enum TransferCause {
 /// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
-/// charged in `T::Gas` from the provided `gas_meter`. This means
+/// charged in `Gas` from the provided `gas_meter`. This means
 /// that the actual amount charged might differ.
 ///
 /// NOTE: that we allow for draining all funds of the contract so it

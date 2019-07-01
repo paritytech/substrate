@@ -34,6 +34,7 @@ use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
+use tokio_executor::Executor;
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
@@ -291,8 +292,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
-			tokio::spawn(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(())));
-			tokio::spawn(reporting_job.select(on_exit.clone()).then(|_| Ok(())));
+			let mut executor = tokio_executor::DefaultExecutor::current();
+			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa rebroadcast job task");
+			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});
 
