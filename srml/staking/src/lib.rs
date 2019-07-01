@@ -444,9 +444,37 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub trait Trait: system::Trait + session::Trait<
-	ValidatorId = <Self as system::Trait>::AccountId,
-> {
+pub trait SessionInterface<AccountId>: system::Trait {
+	fn put_validators(validators: &Vec<AccountId>);
+	fn disable_validator(validator: &AccountId);
+	fn validators() -> Vec<AccountId>;
+	fn prune_up_to(up_to: session::SessionIndex);
+}
+
+impl<T> SessionInterface<<T as system::Trait>::AccountId> for T where
+	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
+	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
+	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
+{
+	fn put_validators(validators: &Vec<<T as system::Trait>::AccountId>) {
+		<session::Validators<T>>::put(validators);
+	}
+
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) {
+		<session::Module<T>>::disable(validator);
+	}
+
+	fn validators() -> Vec<<T as system::Trait>::AccountId> {
+		<session::Module<T>>::validators()
+	}
+
+	fn prune_up_to(up_to: session::SessionIndex) {
+		<session::historical::Module<T>>::prune_up_to(up_to);
+	}
+}
+
+pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -474,6 +502,8 @@ pub trait Trait: system::Trait + session::Trait<
 
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
+
+	type SessionInterface: self::SessionInterface<Self::AccountId>;
 }
 
 decl_storage! {
@@ -584,7 +614,7 @@ decl_storage! {
 				}
 
 				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					<session::Validators<T>>::put(&validators);
+					T::SessionInterface::put_validators(&validators);
 				}
 			});
 		});
@@ -1046,7 +1076,7 @@ impl<T: Trait> Module<T> {
 				bonded.drain(..n_to_prune);
 
 				if let Some(&(_, first_session)) = bonded.first() {
-					<session::historical::Module<T>>::prune_up_to(first_session);
+					T::SessionInterface::prune_up_to(first_session);
 				}
 			})
 		}
@@ -1225,7 +1255,7 @@ impl<T: Trait> Module<T> {
 					.map(|x| x.min(slash_exposure))
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
-				let _ = <session::Module<T>>::disable(&stash);
+				let _ = T::SessionInterface::disable_validator(&stash);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {

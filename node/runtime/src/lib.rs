@@ -151,6 +151,8 @@ impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
 	type Keys = SessionKeys;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = staking::StashOf<Self>;
 }
 
 parameter_types! {
@@ -167,6 +169,7 @@ impl staking::Trait for Runtime {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
 }
 
 const MINUTES: BlockNumber = 6;
