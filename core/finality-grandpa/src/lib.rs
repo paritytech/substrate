@@ -157,7 +157,7 @@ type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 
 /// Global communication input stream for commits and catch up messages, with
@@ -167,7 +167,7 @@ type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
 	H,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 
 /// A global communication sink for commits. Not exposed publicly, used
@@ -176,7 +176,7 @@ type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 
 /// Global communication sink for commits with the hash type not being derived
@@ -186,7 +186,7 @@ type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
 	H,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 
 /// Configuration for the GRANDPA service.

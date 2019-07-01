@@ -56,7 +56,7 @@ type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 
 /// Data about a completed round.
