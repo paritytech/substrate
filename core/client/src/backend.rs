@@ -209,7 +209,13 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	/// Replace the value in storage if given old_value matches the current one.
 	///
 	/// Returns `true` if the value has been set and false otherwise.
-	fn compare_and_set(&mut self, prefix: &[u8], key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool;
 }
 
 /// Changes trie storage that supports pruning.

@@ -790,7 +790,13 @@ impl backend::OffchainStorage for OffchainStorage {
 		self.storage.get(&key).cloned()
 	}
 
-	fn compare_and_set(&mut self, prefix: &[u8], key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		let key = prefix.iter().chain(key).cloned().collect();
 
 		let mut set = false;

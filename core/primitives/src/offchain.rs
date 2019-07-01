@@ -391,7 +391,13 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).local_storage_set(kind, key, value)
 	}
 
-	fn local_storage_compare_and_set(&mut self, kind: StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 

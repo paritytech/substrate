@@ -75,7 +75,13 @@ impl client::backend::OffchainStorage for LocalStorage {
 			.map(|v| v.to_vec())
 	}
 
-	fn compare_and_set(&mut self, prefix: &[u8], item_key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		item_key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
 		let key_lock = {
 			let mut locks = self.locks.lock();

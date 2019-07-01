@@ -256,7 +256,9 @@ mod tests {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
+		let pool = Arc::new(
+			Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone()))
+		);
 
 		AsyncApi::new(pool, db, BlockId::Number(0))
 	}
