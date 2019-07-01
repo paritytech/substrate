@@ -227,7 +227,9 @@ type OpaqueKey = Vec<u8>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		pub Validators get(validators) config(): Vec<T::AccountId>;
+		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
+			config.keys.iter().map(|(validator, _)| validator.to_owned()).collect()
+		}): Vec<T::AccountId>;
 
 		/// Current index of the session.
 		pub CurrentIndex get(current_index): SessionIndex;
@@ -529,7 +531,6 @@ mod tests {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test> {
-			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),

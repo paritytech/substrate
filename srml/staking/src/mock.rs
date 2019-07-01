@@ -194,7 +194,6 @@ impl ExtBuilder {
 			.map(|x| ((x + 1) * 10) as u64)
 			.collect::<Vec<_>>();
 		let _ = session::GenesisConfig::<Test> {
-			validators: validators.clone(),
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut t, &mut c);
 
