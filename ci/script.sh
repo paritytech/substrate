@@ -21,6 +21,9 @@ case $TARGET in
 		sudo apt-get install -y cmake pkg-config libssl-dev
 
 		cargo test --all --release --locked "$@"
+
+		# Test for staking without `equalize` default feature
+		(cd srml/staking/; cargo test --tests tests --no-default-features --features std)
 		;;
 
 	"wasm")
