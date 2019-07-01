@@ -42,6 +42,9 @@ enum Action {
 	CreateNewInstance,
 }
 
+/// A state snapshot of an instance taken just after instantiation.
+///
+/// It is used for restoring the state of the module after execution.
 struct InitialState {
 	memory_contents: Vec<u8>,
 	/// The list of all global variables of the module in their sequential order.
