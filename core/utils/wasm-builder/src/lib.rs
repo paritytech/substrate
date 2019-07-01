@@ -105,9 +105,11 @@ fn create_out_file(file_name: &str, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> Command {
-	if Command::new("cargo").arg("+nightly").status().map(|s| s.success()).unwrap_or(false) {
-		let mut cmd = Command::new("cargo");
-		cmd.arg("+nightly");
+	if Command::new("rustup").args(&["run", "nightly", "cargo"])
+		.status().map(|s| s.success()).unwrap_or(false)
+	{
+		let mut cmd = Command::new("rustup");
+		cmd.args(&["run", "nightly", "cargo"]);
 		cmd
 	} else {
 		Command::new("cargo")

@@ -39,20 +39,19 @@ pub fn check() -> Option<&'static str> {
 }
 
 fn check_nightly_installed() -> bool {
-	let version = String::from_utf8(
-		Command::new("cargo")
-			.arg("--version")
-			.output()
-			.expect("`cargo --version` never fails; qed")
-			.stdout
-	).unwrap_or_default();
-	let version2 = String::from_utf8(
-		Command::new("cargo")
-			.args(&["+nightly", "--version"])
-			.output()
-			.expect("`cargo --version` never fails; qed")
-			.stdout
-	).unwrap_or_default();
+	let version = Command::new("cargo")
+		.arg("--version")
+		.output()
+		.map_err(|_| ())
+		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+		.unwrap_or_default();
+
+	let version2 = Command::new("rustup")
+		.args(&["run", "nightly", "cargo", "--version"])
+		.output()
+		.map_err(|_| ())
+		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+		.unwrap_or_default();
 
 	version.contains("-nightly") || version2.contains("-nightly")
 }
