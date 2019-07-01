@@ -118,6 +118,8 @@
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
+#[cfg(feature = "std")]
+use runtime_io::with_storage;
 use parity_codec::Decode;
 use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
 use srml_support::{
@@ -204,6 +206,16 @@ macro_rules! impl_session_handlers {
 
 for_each_tuple!(impl_session_handlers);
 
+pub trait SelectInitialValidators<T: Trait> {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>>;
+}
+
+pub struct AllValidators;
+impl<T: Trait> SelectInitialValidators<T> for AllValidators {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
+		None
+	}
+}
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -220,6 +232,9 @@ pub trait Trait: system::Trait {
 
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
+
+	/// Select initial validators.
+	type SelectInitialValidators: SelectInitialValidators<Self>;
 }
 
 type OpaqueKey = Vec<u8>;
@@ -227,9 +242,7 @@ type OpaqueKey = Vec<u8>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
-			config.keys.iter().map(|(validator, _)| validator.to_owned()).collect()
-		}): Vec<T::AccountId>;
+		pub Validators get(validators): Vec<T::AccountId>;
 
 		/// Current index of the session.
 		pub CurrentIndex get(current_index): SessionIndex;
@@ -240,31 +253,53 @@ decl_storage! {
 		/// The next key to be used for a given validator. At the end of the session, they
 		/// will be moved into the `QueuedKeys` and so changes here will not take effect for
 		/// at least one whole session.
-		NextKeyFor get(next_key_for) build(|config: &GenesisConfig<T>| {
-			config.keys.clone()
-		}): map T::AccountId => Option<T::Keys>;
+		NextKeyFor get(next_key_for): map T::AccountId => Option<T::Keys>;
 
 		/// Queued keys changed.
 		QueuedChanged: bool;
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		pub QueuedKeys get(queued_keys) build(|config: &GenesisConfig<T>| {
-			config.keys.clone()
-		}): Vec<(T::AccountId, T::Keys)>;
+		pub QueuedKeys get(queued_keys): Vec<(T::AccountId, T::Keys)>;
 
 		/// The keys that are currently active.
-		Active build(|config: &GenesisConfig<T>| {
-			(0..T::Keys::count()).map(|i| (
-				i as u32,
-				config.keys.iter()
-					.map(|x| x.1.get_raw(i).to_vec())
-					.collect::<Vec<OpaqueKey>>(),
-			)).collect::<Vec<(u32, Vec<OpaqueKey>)>>()
-		}): map u32 => Vec<OpaqueKey>;
+		Active: map u32 => Vec<OpaqueKey>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::Keys)>;
+		build(|storage, _, config: &GenesisConfig<T>| {
+			with_storage(storage, || {
+				let all_validators = config.keys.iter()
+					.map(|(validator, _)| validator.to_owned())
+					.collect::<Vec<_>>();
+				let all_keys = (0..T::Keys::count()).map(|i| (
+					i as u32,
+					config.keys.iter()
+						.map(|x| x.1.get_raw(i).to_vec())
+						.collect::<Vec<OpaqueKey>>(),
+				)).collect::<Vec<(u32, Vec<OpaqueKey>)>>();
+				<Validators<T>>::put(all_validators.clone());
+				for (v, sk) in config.keys.clone() {
+					<NextKeyFor<T>>::insert(v, sk);
+				}
+				for (i, keys) in all_keys {
+					Active::insert(i, keys);
+				}
+
+				let selected_validators =
+					T::SelectInitialValidators::select_initial_validators()
+					.unwrap_or(all_validators);
+				let selected_keys = selected_validators.iter().map(|validator| {
+					(
+						validator.to_owned(),
+						<NextKeyFor<T>>::get(validator)
+							.unwrap_or_default()
+					)
+				}).collect::<Vec<_>>();
+				<Validators<T>>::put(selected_validators);
+				<QueuedKeys<T>>::put(selected_keys);
+			})
+		})
 	}
 }
 
@@ -345,19 +380,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Initialize the session genesis block.
-	pub fn initialize_genesis(validators: Vec<T::AccountId>) {
-		let keys = validators.iter().map(|validator| {
-			(
-				validator.to_owned(),
-				Self::next_key_for(validator)
-					.unwrap_or_default()
-			)
-		}).collect::<Vec<_>>();
-		<Validators<T>>::put(validators);
-		<QueuedKeys<T>>::put(keys);
-	}
-
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
@@ -532,6 +554,7 @@ mod tests {
 		type SessionHandler = TestSessionHandler;
 		type Keys = UintAuthorityId;
 		type Event = ();
+		type SelectInitialValidators = AllValidators;
 	}
 
 	type System = system::Module<Test>;

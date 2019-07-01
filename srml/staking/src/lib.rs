@@ -281,7 +281,7 @@ use srml_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get
 	}
 };
-use session::{OnSessionEnding, SessionIndex};
+use session::{OnSessionEnding, SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded
@@ -583,12 +583,6 @@ decl_storage! {
 							)
 						}, _ => Ok(())
 					};
-				}
-
-				// Make sure the genesis state of the session module is consistent
-				// with the genesis state of the staking module.
-				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					<session::Module<T>>::initialize_genesis(validators);
 				}
 			});
 		});
@@ -1246,5 +1240,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+}
+
+impl<T: Trait> SelectInitialValidators<T> for Module<T> {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
+		<Module<T>>::select_validators().1
 	}
 }

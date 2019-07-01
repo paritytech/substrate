@@ -106,6 +106,7 @@ impl session::Trait for Test {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type SelectInitialValidators = Staking;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
