@@ -194,9 +194,6 @@ impl ExtBuilder {
 		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10) as u64)
 			.collect::<Vec<_>>();
-		let _ = session::GenesisConfig::<Test> {
-			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut t, &mut c);
 
 		let _ = balances::GenesisConfig::<Test>{
 			balances: vec![
@@ -222,6 +219,7 @@ impl ExtBuilder {
 			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
 		let status_41 = if self.validator_pool {
@@ -248,9 +246,15 @@ impl ExtBuilder {
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+
 		let _ = timestamp::GenesisConfig::<Test>{
 			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
+
+		let _ = session::GenesisConfig::<Test> {
+			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
+		}.assimilate_storage(&mut t, &mut c);
+
 		let mut ext = t.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
