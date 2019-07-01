@@ -345,6 +345,19 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Initialize the session genesis block.
+	pub fn initialize_genesis(validators: Vec<T::AccountId>) {
+		let keys = validators.iter().map(|validator| {
+			(
+				validator.to_owned(),
+				Self::next_key_for(validator)
+					.unwrap_or_default()
+			)
+		}).collect::<Vec<_>>();
+		<Validators<T>>::put(validators);
+		<QueuedKeys<T>>::put(keys);
+	}
+
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
