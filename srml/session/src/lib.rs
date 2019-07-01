@@ -29,13 +29,17 @@
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
 //! - **Session:** A session is a period of time that has a constant set of validators. Validators can only join
-//! or exit the validator set at a session change. It is measured in block numbers and set with `set_length`
-//! during a session for use in subsequent sessions.
+//! or exit the validator set at a session change. It is measured in block numbers. The block where a session is
+//! ended is determined by the `ShouldSessionEnd` trait. When the session is ending, a new validator set
+//! can be chosen by `OnSessionEnding` implementations.
 //! - **Session key:** A session key is actually several keys kept together that provide the various signing
 //! functions required by network authorities/validators in pursuit of their duties.
+//! - **Validator ID:** Every account has an associated validator ID. For some simple staking systems, this
+//! may just be the same as the account ID. For staking systems using a stash/controller model,
+//! the validator ID would be the stash account ID of the controller.
 //! - **Session key configuration process:** A session key is set using `set_key` for use in the
-//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountId` and the session
-//! key provided. `set_key` allows users to set their session key prior to becoming a validator.
+//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `ValidatorId` and the session
+//! keys provided. `set_key` allows users to set their session key prior to being selected as validator.
 //! It is a public call since it uses `ensure_signed`, which checks that the origin is a signed account.
 //! As such, the account ID of the origin stored in in `NextKeyFor` may not necessarily be associated with
 //! a block author or a validator. The session keys of accounts are removed once their account balance is zero.
@@ -119,7 +123,7 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
-use primitives::{KeyTypeId, traits::{Zero, Saturating, Member, OpaqueKeys}};
+use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey};
 use srml_support::{
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
@@ -156,9 +160,9 @@ impl<
 }
 
 /// An event handler for when the session is ending.
-pub trait OnSessionEnding<AccountId> {
+pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
-	fn on_session_ending(i: SessionIndex) -> Option<Vec<AccountId>>;
+	fn on_session_ending(i: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
 impl<A> OnSessionEnding<A> for () {
@@ -166,23 +170,21 @@ impl<A> OnSessionEnding<A> for () {
 }
 
 /// Handler for when a session keys set changes.
-pub trait SessionHandler<AccountId> {
+pub trait SessionHandler<ValidatorId> {
 	/// Session set has changed; act appropriately.
-	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AccountId, Ks)]);
+	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(ValidatorId, Ks)]);
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
 
 /// One session-key type handler.
-pub trait OneSessionHandler<AccountId> {
+pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
-	type Key: Decode + Default;
-	/// The identifier of the key type.
-	const KEY_ID: KeyTypeId;
+	type Key: Decode + Default + TypedKey;
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a;
+		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 	fn on_disabled(i: usize);
 }
 
@@ -199,7 +201,8 @@ macro_rules! impl_session_handlers {
 			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
 				$(
 					let our_keys = validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>($t::KEY_ID).unwrap_or_default()));
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
+							.unwrap_or_default()));
 					$t::on_new_session(changed, our_keys);
 				)*
 			}
@@ -219,14 +222,20 @@ pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
+	/// A stable ID for a validator.
+	type ValidatorId: Member + Parameter;
+
+	/// A conversion to validator ID to account ID.
+	type ValidatorIdOf: Convert<Self::AccountId, Self::ValidatorId>;
+
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
 	/// Handler for when a session is about to end.
-	type OnSessionEnding: OnSessionEnding<Self::AccountId>;
+	type OnSessionEnding: OnSessionEnding<Self::ValidatorId>;
 
 	/// Handler when a session has changed.
-	type SessionHandler: SessionHandler<Self::AccountId>;
+	type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
@@ -237,7 +246,7 @@ type OpaqueKey = Vec<u8>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		pub Validators get(validators) config(): Vec<T::AccountId>;
+		pub Validators get(validators) config(): Vec<T::ValidatorId>;
 
 		/// Current index of the session.
 		pub CurrentIndex get(current_index): SessionIndex;
@@ -248,27 +257,10 @@ decl_storage! {
 		/// The next key for a given validator.
 		NextKeyFor build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
-		}): map T::AccountId => Option<T::Keys>;
-
-		/// The keys that are currently active.
-		Active build(|config: &GenesisConfig<T>| {
-			T::Keys::key_ids().into_iter().map(|id| (
-				id,
-				{
-					let mut v = config.keys.iter()
-						.map(|x| x.1.get_raw(id).to_vec())
-						.collect::<Vec<OpaqueKey>>();
-
-					// ensure sorted so we can search for
-					// duplicates.
-					v.sort();
-					v
-				}
-			)).collect::<Vec<(KeyTypeId, Vec<OpaqueKey>)>>()
-		}): map KeyTypeId => Vec<OpaqueKey>;
+		}): map T::ValidatorId => Option<T::Keys>;
 	}
 	add_extra_genesis {
-		config(keys): Vec<(T::AccountId, T::Keys)>;
+		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 	}
 }
 
@@ -299,39 +291,9 @@ decl_module! {
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
 
+			let who = T::ValidatorIdOf::convert(who);
 			let old_keys = <NextKeyFor<T>>::get(&who);
-			let mut updates = vec![];
 
-			for id in T::Keys::key_ids() {
-				let new_key = keys.get_raw(id);
-				let maybe_old_key = old_keys.as_ref().map(|o| o.get_raw(id));
-				if maybe_old_key == Some(new_key) {
-					// no change.
-					updates.push(None);
-					continue;
-				}
-				let mut active = Active::get(id);
-				match active.binary_search_by(|k| k[..].cmp(&new_key)) {
-					Ok(_) => return Err("duplicate key provided"),
-					Err(pos) => active.insert(pos, new_key.to_owned()),
-				}
-				if let Some(old_key) = maybe_old_key {
-					match active.binary_search_by(|k| k[..].cmp(&old_key)) {
-						Ok(pos) => { active.remove(pos); }
-						Err(_) => {
-							// unreachable as long as our state is valid. we don't want to panic if
-							// it isn't, though.
-							print("ERROR: active doesn't contain outgoing key");
-						}
-					}
-				}
-				updates.push(Some((id, active)));
-			}
-
-			// Update the active sets.
-			for (id, active) in updates.into_iter().filter_map(|x| x) {
-				Active::insert(id, active);
-			}
 			// Set new keys value for next session.
 			<NextKeyFor<T>>::insert(who, keys);
 			// Something changed.
@@ -375,6 +337,7 @@ impl<T: Trait> Module<T> {
 		let amalgamated = validators.into_iter()
 			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
+
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &amalgamated);
 	}
 
@@ -385,14 +348,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking module, this would be
-	/// their *controller* account.)
-	pub fn disable(c: &T::AccountId) -> rstd::result::Result<(), ()> {
+	/// their *stash* account.)
+	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<(), ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
+impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
+	fn on_free_balance_zero(who: &T::ValidatorId) {
 		<NextKeyFor<T>>::remove(who);
 	}
 }
@@ -402,10 +365,10 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// registering account-ID of that session key index.
 pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
 
-impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AccountId>
+impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
-	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
+	fn find_author<'a, I>(digests: I) -> Option<T::ValidatorId>
 		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		let i = Inner::find_author(digests)?;
@@ -423,7 +386,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, OnInitialize}, testing::{Header, UintAuthorityId}
+		traits::{BlakeTwo256, IdentityLookup, OnInitialize, Identity}, testing::{Header, UintAuthorityId}
 	};
 
 	impl_outer_origin!{
@@ -496,6 +459,8 @@ mod tests {
 		type ShouldEndSession = TestShouldEndSession;
 		type OnSessionEnding = TestOnSessionEnding;
 		type SessionHandler = TestSessionHandler;
+		type ValidatorId = u64;
+		type ValidatorIdOf = Identity;
 		type Keys = UintAuthorityId;
 		type Event = ();
 	}
