@@ -59,7 +59,8 @@ type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	AuthorityId,
 >;
 
-/// Data about a completed round.
+/// Data about a completed round. The set of votes that is stored must be
+/// minimal, i.e. at most one equivocation is stored per voter.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
 	/// The round number.
@@ -667,7 +668,7 @@ where
 		self.update_voter_set_state(|voter_set_state| {
 			let mut completed_rounds = voter_set_state.completed_rounds();
 
-			// NOTE: future integration will store the prevote and precommit index
+			// TODO: Future integration will store the prevote and precommit index. See #2611.
 			let votes = historical_votes.seen().clone();
 
 			// NOTE: the Environment assumes that rounds are *always* completed in-order.
