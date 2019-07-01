@@ -177,6 +177,7 @@ parameter_types! {
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
+
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;

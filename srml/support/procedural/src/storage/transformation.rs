@@ -162,13 +162,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #module_ident<#traitinstance, #instance> {
 			#impl_store_fns
 			#[doc(hidden)]
-			pub fn store_metadata() -> #scrate::metadata::StorageMetadata {
-				#scrate::metadata::StorageMetadata {
-					functions: #scrate::metadata::DecodeDifferent::Encode(#store_functions_to_metadata) ,
-				}
-			}
-			#[doc(hidden)]
-			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageFunctionMetadata] {
+			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageEntryMetadata] {
 				#store_functions_to_metadata
 			}
 			#[doc(hidden)]
@@ -934,7 +928,7 @@ fn store_functions_to_metadata (
 		let stype = match type_infos.kind {
 			DeclStorageTypeInfosKind::Simple => {
 				quote!{
-					#scrate::metadata::StorageFunctionType::Plain(
+					#scrate::metadata::StorageEntryType::Plain(
 						#scrate::metadata::DecodeDifferent::Encode(#styp),
 					)
 				}
@@ -943,7 +937,7 @@ fn store_functions_to_metadata (
 				let hasher = hasher.into_metadata();
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
-					#scrate::metadata::StorageFunctionType::Map {
+					#scrate::metadata::StorageEntryType::Map {
 						hasher: #scrate::metadata::#hasher,
 						key: #scrate::metadata::DecodeDifferent::Encode(#kty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
@@ -957,7 +951,7 @@ fn store_functions_to_metadata (
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
 				let k2_hasher = key2_hasher.into_metadata();
 				quote!{
-					#scrate::metadata::StorageFunctionType::DoubleMap {
+					#scrate::metadata::StorageEntryType::DoubleMap {
 						hasher: #scrate::metadata::#hasher,
 						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
@@ -969,11 +963,11 @@ fn store_functions_to_metadata (
 		};
 		let modifier = if type_infos.is_option {
 			quote!{
-				#scrate::metadata::StorageFunctionModifier::Optional
+				#scrate::metadata::StorageEntryModifier::Optional
 			}
 		} else {
 			quote!{
-				#scrate::metadata::StorageFunctionModifier::Default
+				#scrate::metadata::StorageEntryModifier::Default
 			}
 		};
 		let default = default_value.inner.as_ref().map(|d| &d.expr)
@@ -998,7 +992,7 @@ fn store_functions_to_metadata (
 		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 
 		let item = quote! {
-			#scrate::metadata::StorageFunctionMetadata {
+			#scrate::metadata::StorageEntryMetadata {
 				name: #scrate::metadata::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,

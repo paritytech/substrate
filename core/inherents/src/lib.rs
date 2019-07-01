@@ -16,8 +16,8 @@
 
 //! Provides types and traits for creating and checking inherents.
 //!
-//! Each inherent is added to a produced block. Each runtime decides on which inherents its
-//! want to attach to its blocks. All data that is required for the runtime to create the inherents
+//! Each inherent is added to a produced block. Each runtime decides on which inherents it
+//! wants to attach to its blocks. All data that is required for the runtime to create the inherents
 //! is stored in the `InherentData`. This `InherentData` is constructed by the node and given to
 //! the runtime.
 //!
@@ -124,8 +124,8 @@ impl InherentData {
 ///
 /// It either returns okay for all checks, stores all occurred errors or just one fatal error.
 ///
-/// When a fatal error occurres, all other errors are removed and the implementation needs to
-/// abbort checking inherents.
+/// When a fatal error occurs, all other errors are removed and the implementation needs to
+/// abort checking inherents.
 #[derive(Encode, Decode, Clone)]
 pub struct CheckInherentsResult {
 	/// Did the check succeed?
