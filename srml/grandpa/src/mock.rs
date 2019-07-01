@@ -19,21 +19,24 @@
 #![cfg(test)]
 
 use primitives::{
-	BuildStorage, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}
+	BuildStorage, DigestItem, traits::IdentityLookup,
+	testing::{Header, Block, UintAuthorityId, TestXt}
 };
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Signal};
+use crate::{
+	AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Signal, Call
+};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<Signal<u64>> for DigestItem<H256> {
-	fn from(log: Signal<u64>) -> DigestItem<H256> {
+impl From<Signal<u64, u64, Header, AuthoritySignature, AuthorityId>> for DigestItem<H256> {
+	fn from(log: Signal<u64, u64, Header, AuthoritySignature, AuthorityId>) -> DigestItem<H256> {
 		DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 	}
 }
@@ -44,6 +47,7 @@ pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
 	type Signature = AuthoritySignature;
+	type Block = Block<TestXt<Call<Test>>>;
 }
 impl system::Trait for Test {
 	type Origin = Origin;

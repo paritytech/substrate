@@ -40,7 +40,7 @@ use num_traits as num;
 
 pub use grandpa_primitives::{
 	Precommit, Prevote, Equivocation, Message, Error as GrandpaError, Chain,
-	validate_commit, Commit, VoterSet
+	validate_commit, Commit, VoterSet, SignedPrecommit
 };
 
 /// The grandpa crypto scheme defined via the keypair type.

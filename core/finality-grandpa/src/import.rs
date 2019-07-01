@@ -377,15 +377,25 @@ where
 		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
 
-	fn answer_misbehaviour_reports(&self, header: &Block::Header, hash: Block::Hash)
-		-> Result<(), ConsensusError> {
+	fn answer_misbehaviour_reports(&self, block: &mut ImportBlock<Block>, hash: Block::Hash)
+		-> Result<Option<()>, ConsensusError> {
+		let header = &block.header;
 		let at = BlockId::<Block>::hash(*header.parent_hash());
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
 		let maybe_challenge = api.grandpa_challenge(&at, digest);
-		Ok(())
+
+		match maybe_challenge {
+			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
+			Ok(Some(challenge)) => {
+				// do something with it
+				println!("got a challenge!");
+				Ok(Some(()))
+			},
+			Ok(None) => Ok(None),
+		}
 	}
 }
 
@@ -416,7 +426,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		// self.answer_misbehaviour_reports()?;
+		self.answer_misbehaviour_reports(&mut block, hash)?;
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
