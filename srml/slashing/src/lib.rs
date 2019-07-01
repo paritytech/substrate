@@ -124,9 +124,9 @@ use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 /// Pre-defined types
 pub mod misconduct;
 
-mod types;
+mod fraction;
 
-pub use types::Fraction;
+pub use fraction::Fraction;
 
 // The specification specifices four different misconduct levels:
 //		1) Slashing: 0 <= x <= 0.001

@@ -70,7 +70,7 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 
 	/// Check if the `Fraction` is zero
 	pub fn is_zero(&self) -> bool {
-		self.numerator == Zero::zero() && self.denominator == Zero::zero()
+		self.denominator.is_zero()
 	}
 
 	/// Get denominator
@@ -82,46 +82,43 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 	pub fn numerator(&self) -> N {
 		self.numerator
 	}
-
-	/// Convert fraction into severity level
-	// TODO: extract into default trait impl
-	pub fn as_misconduct_level(&self) -> u8 {
-		if self.denominator.saturating_mul(10_u32.into()) > self.numerator {
-			4
-		} else if self.denominator.saturating_mul(100_u32.into()) > self.numerator {
-			3
-		} else if self.denominator.saturating_mul(1000_u32.into()) > self.numerator {
-			2
-		} else {
-			1
-		}
-	}
 }
 
-
-/// Temp naive gcd algorithm
-// TODO(niklasad1): move this or use `num-integer::Integer::gcd`
+// Computes the greatest common divisor of `x` and `y`
+// Panics if x or y is zero
+// TODO(niklasad1): remove or optimize
 fn naive_gcd<N: SimpleArithmetic + Copy>(mut x: N, mut y: N) -> N {
-    while y != Zero::zero() {
-        let tmp = x;
-        x = y;
-        y = tmp % y;
-    }
+	assert!(!x.is_zero() && !y.is_zero());
+	while y != Zero::zero() {
+		let tmp = x;
+		x = y;
+		y = tmp % y;
+	}
 	x
 }
 
-/// lowest common multiple
+// Computes the lowest common multiple of `x` and `y`
+// Panics if x or y is zero
+// TODO(niklasad1): remove or optimize
 fn lcm<N: SimpleArithmetic + Copy>(x: N, y: N) -> N {
+	assert!(!x.is_zero() && !y.is_zero());
 	let gcd = naive_gcd(x, y);
-    let product = x * y;
+	let product = x * y;
 
-    product / gcd
+	product / gcd
 }
 
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn zero() {
+		assert_eq!(Fraction::new(0_u64, 0_u64).is_zero(), true);
+		assert_eq!(Fraction::new(0_u64, 1200120).is_zero(), true);
+		assert_eq!(Fraction::new(129291_u64, 0).is_zero(), false);
+	}
 
 	#[test]
 	fn add() {
@@ -154,16 +151,5 @@ mod tests {
 		let f1 = Fraction::zero();
 		let f2 = Fraction::new(1_u32, 4_u32);
 		assert_eq!(f1 * f2, Fraction::zero());
-	}
-
-	#[test]
-	fn misconduct_level() {
-		assert_eq!(4, Fraction::new(10_u32, 10_u32).as_misconduct_level(), "100% should be severity level 4");
-		assert_eq!(4, Fraction::new(2_u32, 10_u32).as_misconduct_level(), "20% should be severity level 4");
-		assert_eq!(3, Fraction::new(5_u32, 100_u32).as_misconduct_level(), "5% should be severity level 3");
-		assert_eq!(3, Fraction::new(2_u32, 100_u32).as_misconduct_level(), "2% should be severity level 3");
-		assert_eq!(2, Fraction::new(1_u32, 100_u32).as_misconduct_level(), "1% should be severity level 2");
-		assert_eq!(2, Fraction::new(2_u32, 1000_u32).as_misconduct_level(), "0.2% should be severity level 2");
-		assert_eq!(1, Fraction::new(1_u32, 1000_u32).as_misconduct_level(), "0.1% should be severity level 1");
 	}
 }
