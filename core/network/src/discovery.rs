@@ -182,21 +182,24 @@ where
 		>,
 	> {
 		// Poll the stream that fires when we need to start a random Kademlia query.
-		match self.next_kad_random_query.poll() {
-			Ok(Async::NotReady) => {},
-			Ok(Async::Ready(_)) => {
-				let random_peer_id = PeerId::random();
-				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-					{:?}", random_peer_id);
-				self.kademlia.find_node(random_peer_id);
+		loop {
+			match self.next_kad_random_query.poll() {
+				Ok(Async::NotReady) => break,
+				Ok(Async::Ready(_)) => {
+					let random_peer_id = PeerId::random();
+					debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
+						{:?}", random_peer_id);
+					self.kademlia.find_node(random_peer_id);
 
-				// Reset the `Delay` to the next random.
-				self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
-				self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
-					Duration::from_secs(60));
-			},
-			Err(err) => {
-				warn!(target: "sub-libp2p", "Kademlia query timer errored: {:?}", err);
+					// Reset the `Delay` to the next random.
+					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
+					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
+						Duration::from_secs(60));
+				},
+				Err(err) => {
+					warn!(target: "sub-libp2p", "Kademlia query timer errored: {:?}", err);
+					break
+				}
 			}
 		}
 
