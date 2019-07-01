@@ -18,6 +18,8 @@
 //!
 //! This tracks the current author of the block and recent uncles.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use rstd::prelude::*;
 use rstd::collections::btree_set::BTreeSet;
 use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
