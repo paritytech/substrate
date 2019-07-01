@@ -723,6 +723,14 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		if request.set_id != local_view.set_id {
+			// NOTE: When we're close to a set change there is potentially a
+			// race where the peer sent us the request before it observed that
+			// we had transitioned to a new set. In this case we charge a lower
+			// cost.
+			if local_view.round.0.saturating_sub(CATCH_UP_THRESHOLD) == 0 {
+				return (None, Action::Discard(cost::HONEST_OUT_OF_SCOPE_CATCH_UP));
+			}
+
 			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
 		}
 

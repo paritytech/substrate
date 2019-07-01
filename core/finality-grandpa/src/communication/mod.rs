@@ -79,6 +79,7 @@ mod cost {
 
 	// cost of answering a catch up request
 	pub(super) const CATCH_UP_REPLY: i32 = -200;
+	pub(super) const HONEST_OUT_OF_SCOPE_CATCH_UP: i32 = -200;
 }
 
 // benefit scalars for reporting peers.
