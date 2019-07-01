@@ -6,6 +6,14 @@ pub struct Unresponsive;
 
 impl Misconduct for Unresponsive {
 	type Severity = u64;
+
+	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8 {
+		if severity.denominator().saturating_mul(100_u32.into()) > severity.numerator() {
+			3
+		} else {
+			1
+		}
+	}
 }
 
 impl EraMisconduct for Unresponsive {
@@ -35,6 +43,10 @@ struct Rolling(rstd::vec::Vec<MisconductEntry<u64>>);
 
 impl Misconduct for Rolling {
 	type Severity = u64;
+
+	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
+		unimplemented!()
+	}
 }
 
 impl RollingMisconduct<u64> for Rolling {

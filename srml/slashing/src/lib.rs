@@ -53,6 +53,14 @@
 //!
 //!	impl Misconduct for Unresponsive {
 //!		type Severity = u64;
+//!
+//!		fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8 {
+//!			if severity.denominator().saturating_mul(100_u32.into()) > severity.numerator() {
+//!				3
+//!			} else {
+//!				1
+//!			}
+//!		}
 //! }
 //!
 //! impl EraMisconduct for Unresponsive {
@@ -91,7 +99,9 @@
 //!			misconduct: &mut RM,
 //!			session_index: u64,
 //!		) -> u8 {
-//!			misconduct.severity(who, total_validators, session_index).as_misconduct_level()
+//!			let severity = misconduct.severity(who, total_validators, session_index);
+//!			Self::Slash::on_slash::<RM>(who, severity);
+//!			misconduct.as_misconduct_level(severity)
 //!		}
 //!
 //!		fn slash_end_of_era<EM: EraMisconduct>(
@@ -105,7 +115,7 @@
 //!				Self::Slash::on_slash::<EM>(who, severity);
 //!			}
 //!
-//!			severity.as_misconduct_level()
+//!			misconduct.as_misconduct_level(severity)
 //!		}
 //!	}
 //!
@@ -139,6 +149,9 @@ type MisconductLevel = u8;
 pub trait Misconduct {
 	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+
+	/// Estimate misconduct level (1, 2, 3 or 4) based on `severity`
+	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 }
 
 /// Misconduct that only takes culprits in the current era into account
@@ -201,10 +214,14 @@ pub trait Slashing<AccountId> {
 /// Implementation of the `Misconduct` trait for a type `T` with associated type `A
 /// which has a predefined severity level such as slash always 10%
 #[macro_export]
-macro_rules! impl_static_rolling_misconduct {
+macro_rules! impl_static_misconduct {
 	($t:ty, $a:ty => $fr:expr) => {
 		impl Misconduct for $t {
 			type Severity = $a;
+
+			fn as_misconduct_level(&self, _: Fraction<$a>) -> u8 {
+				unimplemented!()
+			}
 		}
 
 		impl crate::RollingMisconduct for $t {
@@ -219,26 +236,6 @@ macro_rules! impl_static_rolling_misconduct {
 			) {}
 
 			fn severity(&self) -> Fraction<$a> {
-				$fr
-			}
-		}
-	}
-}
-
-/// Implementation of the `Misconduct` trait for a type `T` with associated type `A
-/// which has a predefined severity level such as slash always 10%
-#[macro_export]
-macro_rules! impl_static_era_misconduct {
-	($t:ty, $a:ty => $fr:expr) => {
-		impl Misconduct for $t {
-			type Severity = $a;
-		}
-
-		impl crate::RollingMisconduct for $t {
-			// not used
-			const WINDOW_LENGTH: u32 = 0;
-
-			fn severity(&self, _: u64, _: u64) -> Fraction<$a> {
 				$fr
 			}
 		}

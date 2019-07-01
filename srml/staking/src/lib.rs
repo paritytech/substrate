@@ -1268,7 +1268,9 @@ impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 		misconduct: &mut RM,
 		session_index: u64
 	) -> u8 {
-		misconduct.severity(who, total_validators, session_index).as_misconduct_level()
+		let severity = misconduct.severity(who, total_validators, session_index);
+		Self::Slash::on_slash::<RM>(who, severity);
+		misconduct.as_misconduct_level(severity)
 	}
 
 	fn slash_end_of_era<EM: EraMisconduct>(
@@ -1282,6 +1284,6 @@ impl<T: Trait> Slashing<T::AccountId> for Module<T> {
 			Self::Slash::on_slash::<EM>(who, severity);
 		}
 
-		severity.as_misconduct_level()
+		misconduct.as_misconduct_level(severity)
 	}
 }
