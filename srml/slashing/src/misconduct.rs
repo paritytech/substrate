@@ -29,6 +29,29 @@ impl EraMisconduct for Unresponsive {
 	}
 }
 
+mod grandpa {
+	use super::*;
+
+	/// Unjustified vote from only one validator in the same era then slash 10%
+	// assumption: this is called in the end of the era otherwise it would be impossible to know
+	// that only one validator had performed a culprit in the era.
+	pub struct UnjustifiedVote;
+
+	impl Misconduct for UnjustifiedVote {
+		type Severity = u32;
+
+		fn as_misconduct_level(&self, _: Fraction<Self::Severity>) -> u8 {
+			3
+		}
+	}
+
+	impl EraMisconduct for UnjustifiedVote {
+		fn severity(&self, _k: u64, _n: u64) -> Fraction<Self::Severity> {
+			Fraction::new(1, 10)
+		}
+	}
+}
+
 
 #[derive(Default)]
 struct MisconductEntry<T: Default> {
@@ -38,7 +61,7 @@ struct MisconductEntry<T: Default> {
 }
 
 #[derive(Default)]
-// very inefficient
+// inefficient, either sort it by session_index or use btreemap
 struct Rolling(rstd::vec::Vec<MisconductEntry<u64>>);
 
 impl Misconduct for Rolling {
@@ -131,5 +154,12 @@ mod tests {
 		// only the misconducts in session 4 should be taken into account
 		let seve = RollingMisconduct::severity(&mut rolling, &1, validator_len, 5);
 		assert_eq!(seve.denominator() as f64 / seve.numerator() as f64, 0.04);
+	}
+
+	#[test]
+	fn grandpa_unjustified_vote() {
+		let s = EraMisconduct::severity(&grandpa::UnjustifiedVote, 0, 0);
+		let rate = s.denominator() as f64 / s.numerator() as f64;
+		assert_eq!(rate, 0.10);
 	}
 }

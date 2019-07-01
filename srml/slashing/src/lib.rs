@@ -138,13 +138,6 @@ mod fraction;
 
 pub use fraction::Fraction;
 
-// The specification specifices four different misconduct levels:
-//		1) Slashing: 0 <= x <= 0.001
-//		2) Slashing: 0.001 < x <= 0.01
-//		3) Slashing: 0.01 < x <= 0.1
-//		4) Slashing: 0.1 < x <= 1.0
-type MisconductLevel = u8;
-
 /// Base trait for representing misconducts
 pub trait Misconduct {
 	/// Severity represented as a fraction
@@ -159,12 +152,10 @@ pub trait EraMisconduct: Misconduct {
 	/// Estimates severity based on only culprits in the current era
 	/// Must only be called in the end of era.
 	fn severity(&self, num_misbehaved: u64, num_validators: u64) -> Fraction<Self::Severity>;
-
 }
 
 /// Misconduct that runs over a `window` of sessions
 pub trait RollingMisconduct<AccountId>: Misconduct {
-
 	/// Window length in number of sessions
 	const WINDOW_LENGTH: u32;
 
@@ -190,15 +181,17 @@ pub trait Slashing<AccountId> {
 
 
 	/// Slash a list of `misbehaved` on the end of an era
+	///
+	/// Returns the misconduct level (1, 2, 3, or 4)
 	fn slash_end_of_era<EM: EraMisconduct>(
 		misbehaved: &[AccountId],
 		total_validators: u64,
 		misconduct: &EM,
-	) -> MisconductLevel;
+	) -> u8;
 
-	/// Attempt to slash a list of `misbehaved` validators
+	/// Slash a misbehaved validator, based on the current misconduct and the previous state.
 	///
-	/// Returns the misconduct level for all misbehaved validators
+	/// Returns the misconduct level (1, 2, 3, or 4)
 	// TODO(niklasad1):
 	//	* This assumes `session_index` is monotonic increasing
 	//	* shall `total_validators` be generic?
@@ -208,36 +201,5 @@ pub trait Slashing<AccountId> {
 		total_validators: u64,
 		misconduct: &mut RM,
 		session_index: u64,
-	) -> MisconductLevel;
-}
-
-/// Implementation of the `Misconduct` trait for a type `T` with associated type `A
-/// which has a predefined severity level such as slash always 10%
-#[macro_export]
-macro_rules! impl_static_misconduct {
-	($t:ty, $a:ty => $fr:expr) => {
-		impl Misconduct for $t {
-			type Severity = $a;
-
-			fn as_misconduct_level(&self, _: Fraction<$a>) -> u8 {
-				unimplemented!()
-			}
-		}
-
-		impl crate::RollingMisconduct for $t {
-			// not used
-			const WINDOW_SIZE: u32 = 0;
-
-			fn on_misconduct(
-				&mut self,
-				who: u64,
-				_num_validators: u64,
-				_session_idx: u64
-			) {}
-
-			fn severity(&self) -> Fraction<$a> {
-				$fr
-			}
-		}
-	}
+	) -> u8;
 }
