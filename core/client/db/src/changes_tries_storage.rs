@@ -16,17 +16,30 @@
 
 //! DB-backed changes tries storage.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use kvdb::{KeyValueDB, DBTransaction};
+use parity_codec::Encode;
 use parking_lot::RwLock;
+use client::error::Result as ClientResult;
 use trie::MemoryDB;
+use client::blockchain::{Cache, well_known_cache_keys};
+use parity_codec::Decode;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
 };
-use runtime_primitives::generic::{BlockId, DigestItem};
+use runtime_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use state_machine::DBValue;
 use crate::utils::{self, Meta};
+use crate::cache::{DbCacheSync, DbCache, DbCacheTransactionOps, ComplexBlockId, EntryType as CacheEntryType};
+
+/// Extract new changes trie configuration (if available) from the header.
+pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Option<ChangesTrieConfiguration>> {
+	header.digest()
+		.log(DigestItem::as_changes_trie_signal)
+		.and_then(ChangesTrieSignal::as_new_configuration)
+}
 
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
@@ -35,6 +48,7 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	header_column: Option<u32>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	min_blocks_to_keep: Option<u32>,
+	cache: DbCacheSync<Block>,
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
@@ -45,24 +59,82 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		changes_tries_column: Option<u32>,
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
+		cache_column: Option<u32>,
 		meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 		min_blocks_to_keep: Option<u32>,
 	) -> Self {
+		let (finalized_hash, finalized_number, genesis_hash) = {
+			let meta = meta.read();
+			(meta.finalized_hash, meta.finalized_number, meta.genesis_hash)
+		};
 		Self {
-			db,
+			db: db.clone(),
 			changes_tries_column,
 			key_lookup_column,
 			header_column,
 			meta,
 			min_blocks_to_keep,
+			cache: DbCacheSync(RwLock::new(DbCache::new(
+				db.clone(),
+				key_lookup_column,
+				header_column,
+				cache_column,
+				genesis_hash,
+				ComplexBlockId::new(finalized_hash, finalized_number),
+			))),
 			_phantom: Default::default(),
 		}
 	}
 
+	/// Get configuration at given block.
+	pub fn configuration_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Option<ChangesTrieConfiguration> {
+		let maybe_encoded: Option<Vec<u8>> = self.cache.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at);
+		let maybe_config: Option<Option<ChangesTrieConfiguration>> =
+			maybe_encoded.and_then(|config| Decode::decode(&mut &config[..]));
+		maybe_config.and_then(|v| v)
+	}
+
 	/// Commit new changes trie.
-	pub fn commit(&self, tx: &mut DBTransaction, mut changes_trie: MemoryDB<Blake2Hasher>) {
+	pub fn commit(
+		&self,
+		tx: &mut DBTransaction,
+		mut changes_trie: MemoryDB<Blake2Hasher>,
+		parent_block: ComplexBlockId<Block>,
+		block: ComplexBlockId<Block>,
+		finalized: bool,
+		new_configuration: Option<Option<ChangesTrieConfiguration>>,
+	) -> ClientResult<Option<DbCacheTransactionOps<Block>>> {
+		// insert changes trie, associated with block, into DB
 		for (key, (val, _)) in changes_trie.drain() {
 			tx.put(self.changes_tries_column, &key[..], &val);
+		}
+
+		// if configuration has been changed, we need to update configuration cache as well
+		let new_configuration = match new_configuration {
+			Some(new_configuration) => new_configuration,
+			None => return Ok(None),
+		};
+
+		let mut cache_at = HashMap::new();
+		cache_at.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_configuration.encode());
+
+		Ok(Some(self.cache.0.write().transaction(tx)
+			.on_block_insert(
+				parent_block,
+				block,
+				cache_at,
+				if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
+			)?
+			.into_ops()))
+	}
+
+	/// When transaction has been committed.
+	pub fn post_commit(&self, cache_ops: Option<DbCacheTransactionOps<Block>>) {
+		if let Some(cache_ops) = cache_ops {
+			self.cache.0.write().commit(cache_ops);
 		}
 	}
 
@@ -195,8 +267,10 @@ where
 
 #[cfg(test)]
 mod tests {
-	use client::backend::Backend as ClientBackend;
+	use client::backend::{Backend as ClientBackend, NewBlockState, BlockImportOperation};
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
+	use runtime_primitives::testing::Header;
+	use runtime_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
 	use crate::Backend;
 	use crate::tests::{Block, insert_header, prepare_changes};
@@ -418,5 +492,105 @@ mod tests {
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3, &[]).unwrap().is_some());
+	}
+
+	#[test]
+	fn changes_tries_configuration_is_updated_on_block_insert() {
+		fn insert_header_with_configuration_change(
+			backend: &Backend<Block>,
+			number: u64,
+			parent_hash: H256,
+			changes: Vec<(Vec<u8>, Vec<u8>)>,
+			new_configuration: Option<ChangesTrieConfiguration>,
+		) -> H256 {
+			use runtime_primitives::testing::Digest;
+
+			let (changes_root, changes_trie_update) = prepare_changes(changes);
+			let digest = Digest {
+				logs: vec![
+					DigestItem::ChangesTrieRoot(changes_root),
+					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(new_configuration)),
+				],
+			};
+			let header = Header {
+				number,
+				parent_hash,
+				state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+				digest,
+				extrinsics_root: Default::default(),
+			};
+			let header_hash = header.hash();
+
+			let block_id = if number == 0 {
+				BlockId::Hash(Default::default())
+			} else {
+				BlockId::Number(number - 1)
+			};
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, block_id).unwrap();
+			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+			op.update_changes_trie(changes_trie_update).unwrap();
+			backend.commit_operation(op).unwrap();
+
+			header_hash
+		}
+
+		let backend = Backend::<Block>::new_test(1000, 100);
+
+		// configurations at blocks
+		let config_at_1 = Some(ChangesTrieConfiguration {
+			digest_interval: 4,
+			digest_levels: 2,
+		});
+		let config_at_3 = Some(ChangesTrieConfiguration {
+			digest_interval: 8,
+			digest_levels: 1,
+		});
+		let config_at_5 = None;
+		let config_at_7 = Some(ChangesTrieConfiguration {
+			digest_interval: 8,
+			digest_levels: 1,
+		});
+
+		// insert some blocks
+		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+		let block1 = insert_header_with_configuration_change(&backend, 1, block0, Vec::new(), config_at_1.clone());
+		let block2 = insert_header(&backend, 2, block1, Vec::new(), Default::default());
+		let block3 = insert_header_with_configuration_change(&backend, 3, block2, Vec::new(), config_at_3.clone());
+		let block4 = insert_header(&backend, 4, block3, Vec::new(), Default::default());
+		let block5 = insert_header_with_configuration_change(&backend, 5, block4, Vec::new(), config_at_5.clone());
+		let block6 = insert_header(&backend, 6, block5, Vec::new(), Default::default());
+		let block7 = insert_header_with_configuration_change(&backend, 7, block6, Vec::new(), config_at_7.clone());
+
+		// test configuration cache
+		let storage = backend.changes_trie_storage().unwrap();
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block1)),
+			config_at_1.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block2)),
+			config_at_1.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block3)),
+			config_at_3.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block4)),
+			config_at_3.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block5)),
+			config_at_5.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block6)),
+			config_at_5.clone(),
+		);
+		assert_eq!(
+			storage.configuration_at(&BlockId::Hash(block7)),
+			config_at_7.clone(),
+		);
 	}
 }

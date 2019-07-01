@@ -214,6 +214,7 @@ mod columns {
 	pub const JUSTIFICATION: Option<u32> = Some(6);
 	pub const CHANGES_TRIE: Option<u32> = Some(7);
 	pub const AUX: Option<u32> = Some(8);
+	pub const CACHE: Option<u32> = Some(9);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -377,6 +378,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
+	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
@@ -412,6 +414,7 @@ where Block: BlockT<Hash=H256>,
 		leaf_state: NewBlockState,
 	) -> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
+		self.changes_trie_config_update = changes_tries_storage::extract_new_configuration(&header).cloned();
 		self.pending_block = Some(PendingBlock {
 			header,
 			body,
@@ -611,6 +614,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			columns::CHANGES_TRIE,
 			columns::KEY_LOOKUP,
 			columns::HEADER,
+			columns::CACHE,
 			meta,
 			if is_archive_pruning { None } else { Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR) },
 		);
@@ -920,10 +924,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
-
-			self.changes_tries_storage.commit(&mut transaction, changes_trie_updates);
+			let changes_trie_config_update = operation.changes_trie_config_update;
+			let changes_trie_cache_ops = self.changes_tries_storage.commit(
+				&mut transaction,
+				changes_trie_updates,
+				cache::ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
+				cache::ComplexBlockId::new(hash, number),
+				finalized,
+				changes_trie_config_update,
+			)?;
 			let cache = operation.old_state.release(); // release state reference so that it can be finalized
-
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
@@ -955,7 +965,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache, changes_trie_cache_ops))
 		} else {
 			None
 		};
@@ -977,7 +987,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
-		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best, mut cache)) = imported {
+		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best, mut cache, changes_trie_cache_ops)) = imported {
 			if let Err(e) = write_result {
 				let mut leaves = self.blockchain.leaves.write();
 				let mut undo = leaves.undo();
@@ -991,6 +1001,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 				return Err(e)
 			}
+
+			self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 
 			cache.sync_cache(
 				&enacted,
@@ -1104,6 +1116,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
+			changes_trie_config_update: None,
 			changes_trie_updates: MemoryDB::default(),
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),

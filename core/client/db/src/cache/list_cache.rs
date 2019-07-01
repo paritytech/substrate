@@ -184,6 +184,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		debug_assert!(entry_type != EntryType::Final || self.best_finalized_block.hash == parent.hash);
 
 		// we do not store any values behind finalized
+// TODO: how this works with CT configuration???
 		if block.number != Zero::zero() && self.best_finalized_block.number >= block.number {
 			return Ok(None);
 		}
@@ -359,6 +360,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		tx: &mut Tx,
 		block: &ComplexBlockId<Block>
 	) {
+// TODO: do not finalize CT configuration
 		let mut do_pruning = || -> ClientResult<()> {
 			// calculate last ancient block number
 			let ancient_block = match block.number.checked_sub(&self.prune_depth) {
