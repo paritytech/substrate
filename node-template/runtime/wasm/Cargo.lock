@@ -2489,6 +2489,7 @@ dependencies = [
  "srml-session 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
+ "srml-timestamp 2.0.0",
  "substrate-keyring 2.0.0",
 ]
 
