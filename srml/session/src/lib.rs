@@ -122,10 +122,12 @@
 use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
-use parity_codec::Decode;
+use parity_codec::{Decode, Encode};
+use primitives::KeyTypeId;
 use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey};
 use srml_support::{
 	dispatch::Result,
+	storage::child as child_storage,
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
 };
@@ -243,6 +245,7 @@ pub trait Trait: system::Trait {
 }
 
 type OpaqueKey = Vec<u8>;
+const CHILD_TRIE_KEY: &[u8] = b":child_storage:default:session_keys" as _;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -255,10 +258,10 @@ decl_storage! {
 		/// True if anything has changed in this session.
 		Changed: bool;
 
-		/// The next key for a given validator.
-		NextKeyFor build(|config: &GenesisConfig<T>| {
-			config.keys.clone()
-		}): map T::ValidatorId => Option<T::Keys>;
+		// The next key for a given validator.
+		// NextKeyFor build(|config: &GenesisConfig<T>| {
+		// 	config.keys.clone()
+		// }): map T::ValidatorId => Option<T::Keys>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -296,10 +299,30 @@ decl_module! {
 				Some(val_id) => val_id,
 				None => return Err("no associated validator ID for account."),
 			};
-			let old_keys = <NextKeyFor<T>>::get(&who);
+			let old_keys = Self::load_keys(&who);
 
-			// Set new keys value for next session.
-			<NextKeyFor<T>>::insert(who, keys);
+			for id in T::Keys::key_ids() {
+				let key = keys.get_raw(id);
+
+				ensure!(
+					Self::key_owner(id, key).map_or(true, |owner| owner == who),
+					"registered duplicate key"
+				);
+
+				// ensure keys are without duplication.
+				if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
+					if key == old {
+						continue;
+					}
+
+					Self::clear_key_owner(id, old);
+				}
+
+				Self::put_key_owner(id, key, &who);
+			}
+
+			Self::put_keys(&who, &keys);
+
 			// Something changed.
 			Changed::put(true);
 
@@ -341,7 +364,7 @@ impl<T: Trait> Module<T> {
 
 		// Tell everyone about the new session keys.
 		let amalgamated = validators.into_iter()
-			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
+			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
 
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &amalgamated);
@@ -358,11 +381,33 @@ impl<T: Trait> Module<T> {
 	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<(), ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
+
+	// Child trie storage.
+
+	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+		v.using_encoded(|s| child_storage::get(CHILD_TRIE_KEY, s))
+	}
+
+	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
+		v.using_encoded(|s| child_storage::put(CHILD_TRIE_KEY, s, keys));
+	}
+
+	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+		(id, key_data).using_encoded(|s| child_storage::get(CHILD_TRIE_KEY, s))
+	}
+
+	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
+		(id, key_data).using_encoded(|s| child_storage::put(CHILD_TRIE_KEY, s, v));
+	}
+
+	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
+		(id, key_data).using_encoded(|s| child_storage::kill(CHILD_TRIE_KEY, s));
+	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 	fn on_free_balance_zero(who: &T::ValidatorId) {
-		<NextKeyFor<T>>::remove(who);
+		unimplemented!()
 	}
 }
 
