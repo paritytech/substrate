@@ -112,7 +112,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	) -> Option<RuntimeVersion> {
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
-			cache.fetch_runtime(&self.fallback, ext, self.initial_heap_pages, None)
+			cache.fetch_runtime(&self.fallback, ext, self.initial_heap_pages)
 				.ok()?.1.clone()
 		})
 	}
@@ -138,7 +138,6 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 			let cache = &mut cache.borrow_mut();
 			let (module, onchain_version) = match cache.fetch_runtime(
 				&self.fallback, ext, self.initial_heap_pages,
-				Some(&self.native_version.runtime_version)
 			) {
 				Ok((module, onchain_version)) => (module, onchain_version),
 				Err(e) => return (Err(e), false),
