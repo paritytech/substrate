@@ -276,7 +276,6 @@ use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
-	dispatch::Parameter,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get
@@ -286,7 +285,6 @@ use session::{OnSessionEnding, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
-	OpaqueKeys, Member,
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -444,9 +442,7 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub trait Trait: system::Trait + session::Trait<
-	ValidatorId = <Self as system::Trait>::AccountId,
-> {
+pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -474,6 +470,14 @@ pub trait Trait: system::Trait + session::Trait<
 
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
+
+	/// Convert a stash ID into a session validator ID. This should typically
+	/// be an identity conversion.
+	//
+	// This is working around a weakness in the SRML. Ideally we could express
+	// a `where` clause on this trait which forced unification of `system::Trait::AccountId`
+	// and `session::Trait::ValidatorId`. But we can't use where clauses in the `decl_module!` macro.
+	type AsValidatorId: Convert<Self::AccountId, Self::ValidatorId>;
 }
 
 decl_storage! {
@@ -581,10 +585,6 @@ decl_storage! {
 							)
 						}, _ => Ok(())
 					};
-				}
-
-				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					<session::Validators<T>>::put(&validators);
 				}
 			});
 		});
@@ -1225,7 +1225,10 @@ impl<T: Trait> Module<T> {
 					.map(|x| x.min(slash_exposure))
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
-				let _ = <session::Module<T>>::disable(&stash);
+
+				// hopefully monomorphisation & inlining makes this a no-op.
+				let stash_id = T::AsValidatorId::convert(stash.clone());
+				let _ = <session::Module<T>>::disable(&stash_id);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
