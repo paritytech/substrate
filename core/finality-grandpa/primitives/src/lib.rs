@@ -24,6 +24,7 @@ extern crate num_traits;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+
 use parity_codec::{Encode, Decode};
 use sr_primitives::{
 	ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT, Hash, Header},
@@ -31,7 +32,10 @@ use sr_primitives::{
 };
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap;
+#[cfg(feature = "std")]
+use std::collections::BTreeMap;
 use num_traits as num;
 
 pub use grandpa_primitives::{
@@ -165,6 +169,8 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 ///    and thus proving that B was indeed finalized in round r_B, and
 /// d) a reference to a previous challenge, if the current tx is an answer to it.
 
+
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PrevoteChallenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
@@ -173,12 +179,15 @@ pub struct PrevoteChallenge<H, N, Header, S, Id, Vote> {
 	pub previous_challenge: Option<H>,
 }
 
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct FinalizedBlockProof<H, N, Header, S, Id> {
 	pub commit: Commit<H, N, S, Id>,
 	pub headers: Vec<Header>,
 }
 
+
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PrecommitChallenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
@@ -187,6 +196,8 @@ pub struct PrecommitChallenge<H, N, Header, S, Id, Vote> {
 	pub previous_challenge: Option<H>,
 }
 
+
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct ChallengedVoteSet<Vote> {
 	pub challenged_votes: Vec<ChallengedVote<Vote>>,
@@ -194,6 +205,8 @@ pub struct ChallengedVoteSet<Vote> {
 	pub round: u64,
 }
 
+
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct ChallengedVote<Vote> {
 	// Prevote or Precommit

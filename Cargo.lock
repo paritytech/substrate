@@ -863,6 +863,7 @@ version = "0.8.0"
 dependencies = [
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3627,6 +3628,7 @@ dependencies = [
 name = "srml-grandpa"
 version = "2.0.0"
 dependencies = [
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -4251,7 +4253,7 @@ version = "2.0.0"
 dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "finality-grandpa 0.8.0 (git+https://github.com/paritytech/finality-grandpa/?branch=mod-equivocation-reports)",
- "finality-grandpa-primitives 0.8.0 (git+https://github.com/paritytech/finality-grandpa/?branch=mod-equivocation-reports)",
+ "finality-grandpa-primitives 0.8.0",
  "fork-tree 2.0.0",
  "futures 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4281,6 +4283,7 @@ name = "substrate-finality-grandpa-primitives"
 version = "2.0.0"
 dependencies = [
  "finality-grandpa-primitives 0.8.0",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",

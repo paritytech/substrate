@@ -41,7 +41,7 @@ use crate::crypto::UncheckedFrom;
 type Seed = [u8; 32];
 
 /// A public key.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -151,7 +151,14 @@ impl ::std::hash::Hash for Public {
 	}
 }
 
-/// A signature (a 512-bit value).
+#[cfg(not(feature = "std"))]
+impl core::hash::Hash for Public {
+	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
+
+/// A signature (a 512-bit value)
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
 
@@ -176,6 +183,20 @@ impl PartialEq for Signature {
 }
 
 impl Eq for Signature {}
+
+#[cfg(not(feature = "std"))]
+impl core::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "Signature")
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for Signature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_bytes(&self.0[..])
+	}
+}
 
 impl From<Signature> for H512 {
 	fn from(v: Signature) -> H512 {

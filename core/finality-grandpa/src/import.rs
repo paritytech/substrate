@@ -30,12 +30,12 @@ use consensus_common::{
 	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
 	SelectChain,
 };
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, AncestryChain};
 use runtime_primitives::Justification;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
 	Block as BlockT, DigestFor,
-	Header as HeaderT, NumberFor, ProvideRuntimeApi,
+	Header as HeaderT, NumberFor, ProvideRuntimeApi
 };
 use substrate_primitives::{H256, Blake2Hasher};
 
@@ -373,6 +373,19 @@ where
 
 		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
+
+	fn answer_misbehaviour_reports(&self, header: &Block::Header, hash: Block::Hash)
+		-> Result<(), ConsensusError> {
+		let at = BlockId::hash(*header.parent_hash());
+		let digest = header.digest();
+
+		let api = self.api.runtime_api();
+		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
+		digest.convert_first(|l| l.try_to::<
+			Signal<Block::Hash, NumberFor<Block>, Block::Header, AuthoritySignature, AuthorityId>
+		>(id));
+		Ok(())
+	}
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
@@ -401,6 +414,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 			Ok(blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
+
+		self.check_for_misbehaviour_reports()?;
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 

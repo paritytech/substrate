@@ -62,15 +62,18 @@ use core::iter::FromIterator;
 mod mock;
 mod tests;
 
+/// Length of a challenge session in blocks.
+const CHALLENGE_SESSION_LENGTH: u32 = 8;
+
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Challenge<H, N, Header, Signature, Id> {
 	challenge: StoredPendingChallenge<H, N, Header, Signature, Id>,
 }
 
 /// Consensus log type of this module.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum Signal<H, N, Header, Signature, Id> {
 	/// Authorities set change has been signaled. Contains the new set of authorities
@@ -109,7 +112,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The signature of the authority.
-	type Signature: Verify<Signer=AuthorityId> + Codec + Clone + Eq;
+	type Signature: Verify<Signer=AuthorityId> + Codec + Clone + Eq + core::fmt::Debug;
 
 	type Block: BlockT<Hash=<Self as system::Trait>::Hash, Header=<Self as system::Trait>::Header>;
 }
@@ -156,16 +159,19 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 }
 
 /// A stored pending change.
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct StoredPendingChallenge<H, N, Header, Signature, Id> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
-	
-	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>,
+	pub parent_hash: H,
+	
+	pub prevote_challenge: Option<PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
+
+	pub precommit_challenge: Option<PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
 }
 
 
@@ -176,10 +182,12 @@ pub struct StoredChallengeSession<H, N, Header, Signature, Id> {
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
-	
-	pub prevote_challenge: PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>,
 
-	pub precommit_challenge: PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>,
+	pub parent_hash: H,
+	
+	pub prevote_challenge: Option<PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
+
+	pub precommit_challenge: Option<PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
 }
 
 decl_event!(
@@ -237,11 +245,29 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_prevotes(
 			_origin,
-			_proof: PrevoteChallenge<
+			proof: PrevoteChallenge<
 				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
 			>
 		) {
-			// Slash?
+			// Check that is a new report: ???
+
+			// I guess there should be some mechanism to manage the pending challenge in case
+			// of new challenges being pushed by the tx. Leaving it like this for now.
+			if !<PendingChallenge<T>>::exists() {
+				// Need to create session
+				let parent_hash = <system::Module<T>>::parent_hash();
+				let current_height = <system::ChainContext::<T>>::default().current_height();
+
+				let challenge_session = StoredPendingChallenge {
+					scheduled_at: current_height,
+					delay: CHALLENGE_SESSION_LENGTH.into(),
+					parent_hash,
+					prevote_challenge: Some(proof),
+					precommit_challenge: None,
+				};
+
+				<PendingChallenge<T>>::put(challenge_session);
+			}
 		}
 
 		/// Report unjustified precommit votes.
@@ -532,6 +558,8 @@ where
 	T::Hash: Ord,
 	T::BlockNumber: num::cast::AsPrimitive<usize>,
 {
+	// FIXME: How to check that is a new proof?
+
 	let votes_round = 0;
 	let block_round = 0;
 
