@@ -362,7 +362,6 @@ mod tests {
 				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
-				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
 					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
 					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
