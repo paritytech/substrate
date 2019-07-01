@@ -349,7 +349,7 @@ impl<T: Trait> Module<T> {
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
 
-		let changed = QueuedChanged::take();
+		let changed = QueuedChanged::get();
 		let mut next_changed = Changed::take();
 
 		// Get queued session keys and validators.
