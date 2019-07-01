@@ -62,7 +62,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, Header as HeaderT
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
@@ -72,15 +72,19 @@ use consensus_accountable_safety::SubmitReport;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
+use num_traits as num;
 
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
+use grandpa::{
+	voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet, Chain
+};
 
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use std::collections::HashMap;
 
 mod authorities;
 mod aux_schema;
@@ -166,6 +170,58 @@ pub struct Config {
 impl Config {
 	fn name(&self) -> &str {
 		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+	}
+}
+
+
+/// A utility trait implementing `grandpa::Chain` using a given set of headers.
+/// This is useful when validating commits, using the given set of headers to
+/// verify a valid ancestry route to the target commit block.
+pub struct AncestryChain<Block: BlockT> {
+	ancestry: HashMap<Block::Hash, Block::Header>,
+}
+
+impl<Block: BlockT> AncestryChain<Block> 
+where
+	<Block as BlockT>::Hash: Ord
+{
+	pub fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
+		let ancestry: HashMap<_, _> = ancestry
+			.iter()
+			.cloned()
+			.map(|h: Block::Header| (h.hash(), h))
+			.collect();
+
+		AncestryChain { ancestry }
+	}
+}
+
+
+impl<Block: BlockT> Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block>
+where
+	<Block as BlockT>::Hash: Ord,
+	<<Block as BlockT>::Header as HeaderT>::Number: num::cast::AsPrimitive<usize>,
+{
+	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+		let mut route = Vec::new();
+		let mut current_hash = block;
+		loop {
+			if current_hash == base { break; }
+			match self.ancestry.get(&current_hash) {
+				Some(current_header) => {
+					current_hash = *current_header.parent_hash();
+					route.push(current_hash);
+				},
+				_ => return Err(GrandpaError::NotDescendent),
+			}
+		}
+		route.pop(); // remove the base
+
+		Ok(route)
+	}
+
+	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+		None
 	}
 }
 

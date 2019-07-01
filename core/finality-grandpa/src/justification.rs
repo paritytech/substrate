@@ -22,13 +22,13 @@ use client::blockchain::HeaderBackend;
 use client::error::Error as ClientError;
 use parity_codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
-use grandpa::{Error as GrandpaError};
+use grandpa::{Error as GrandpaError, Chain};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use substrate_primitives::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 
-use crate::{Commit, Error};
+use crate::{Commit, Error, AncestryChain};
 use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
@@ -119,8 +119,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
-		use grandpa::Chain;
-
 		let ancestry_chain = AncestryChain::<Block>::new(&self.votes_ancestries);
 
 		match grandpa::validate_commit(

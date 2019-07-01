@@ -30,7 +30,10 @@ use consensus_common::{
 	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
 	SelectChain,
 };
-use fg_primitives::{GrandpaApi, AncestryChain};
+use fg_primitives::{
+	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId
+};
+use srml_grandpa::Signal;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
@@ -376,7 +379,7 @@ where
 
 	fn answer_misbehaviour_reports(&self, header: &Block::Header, hash: Block::Hash)
 		-> Result<(), ConsensusError> {
-		let at = BlockId::hash(*header.parent_hash());
+		let at = BlockId::<Block>::hash(*header.parent_hash());
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
@@ -415,7 +418,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		self.check_for_misbehaviour_reports()?;
+		// self.answer_misbehaviour_reports()?;
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 

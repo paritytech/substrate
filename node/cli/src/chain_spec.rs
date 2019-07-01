@@ -186,6 +186,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
@@ -355,6 +356,7 @@ pub fn testnet_genesis(
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),

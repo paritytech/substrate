@@ -97,6 +97,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
+			_genesis_phantom_data: Default::default(),
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 5, // 10 second block time.
