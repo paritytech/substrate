@@ -16,15 +16,14 @@
 
 //! Test utilities
 
-use std::{collections::HashSet, cell::RefCell};
+use std::{collections::HashSet, cell::RefCell, marker::PhantomData};
 use primitives::Perbill;
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{
-	impl_outer_origin, parameter_types, assert_ok, traits::Currency, EnumerableStorageMap
-};
+use srml_support::{impl_outer_origin, parameter_types, assert_ok, EnumerableStorageMap};
+use srml_support::traits::{Currency, FindAuthor};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -76,6 +75,27 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
+/// Author of block is always 11
+pub struct Author11;
+impl FindAuthor<u64> for Author11 {
+	fn find_author<'a, I>(_digests: I) -> Option<u64>
+		where I: 'a + IntoIterator<Item=(srml_support::ConsensusEngineId, &'a [u8])>
+	{
+		Some(11)
+	}
+}
+pub struct NoFilter<P>(PhantomData<P>);
+impl<Header, Author> authorship::FilterUncle<Header, Author> for NoFilter<(Header, Author)> {
+	type Accumulator = ();
+
+	fn filter_uncle(_header: &Header, _acc: ()) -> Result<(Option<Author>, ()), &'static str> {
+		unimplemented!();
+	}
+}
+pub type TestNoFilter = NoFilter<
+	(<Test as system::Trait>::Header, <Test as system::Trait>::AccountId)
+>;
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -102,6 +122,7 @@ impl balances::Trait for Test {
 parameter_types! {
 	pub const Period: BlockNumber = 1;
 	pub const Offset: BlockNumber = 0;
+	pub const UncleGenerations: u64 = 0;
 }
 impl session::Trait for Test {
 	type OnSessionEnding = Staking;
@@ -109,6 +130,12 @@ impl session::Trait for Test {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+}
+impl authorship::Trait for Test {
+	type FindAuthor = Author11;
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = TestNoFilter;
+	type EventHandler = Module<Test>;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;

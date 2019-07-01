@@ -2116,3 +2116,28 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
+
+#[test]
+fn reward_from_authorship_event_handler_works() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+		use authorship::EventHandler;
+
+		assert_eq!(<authorship::Module<Test>>::author(), 11);
+
+		<Module<Test>>::note_author(11);
+		<Module<Test>>::note_uncle(21, 1);
+		// An uncle author that is not currently elected doesn't get rewards,
+		// but the block producer does get reward for referencing it.
+		<Module<Test>>::note_uncle(31, 1);
+
+		// Not mandatory but must be coherent with rewards
+		assert_eq!(<CurrentElected<Test>>::get(), vec![21, 11]);
+
+		// 21 is rewarded as an uncle procuder
+		// 11 is rewarded as a block procuder and unclde referencer
+		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*2]);
+		assert_eq!(CurrentEraRewards::get().total, 25);
+	})
+}

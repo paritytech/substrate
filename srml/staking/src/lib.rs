@@ -454,7 +454,7 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub trait Trait: system::Trait + session::Trait + timestamp::Trait {
+pub trait Trait: system::Trait + session::Trait + timestamp::Trait + authorship::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -1296,6 +1296,20 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+}
+
+/// Add reward points to block authors:
+/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
+/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
+/// * 1 point to the producer of each referenced uncle block.
+impl<T: Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
+	fn note_author(author: T::AccountId) {
+		let _ = Self::add_reward_points_to_validator(author, 20);
+	}
+	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
+		let _ = Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
+		let _ = Self::add_reward_points_to_validator(author, 1);
 	}
 }
 

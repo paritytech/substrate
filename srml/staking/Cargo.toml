@@ -16,6 +16,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
+authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives" }
@@ -37,4 +38,6 @@ std = [
 	"primitives/std",
 	"session/std",
 	"system/std",
+	"timestamp/std",
+	"authorship/std",
 ]
