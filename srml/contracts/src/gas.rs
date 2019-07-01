@@ -15,12 +15,17 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
+use rstd::convert::TryFrom;
 use runtime_primitives::BLOCK_FULL;
-use runtime_primitives::traits::{CheckedMul, CheckedSub, Zero, SaturatedConversion};
+use runtime_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
 use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
+
+// Gas units are chosen to be represented by u64 so that gas metering instructions can operate on
+// them efficiently.
+pub type Gas = u64;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -68,7 +73,7 @@ pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 	/// That said, implementors of this function still can run into overflows
 	/// while calculating the amount. In this case it is ok to use saturating operations
 	/// since on overflow they will return `max_value` which should consume all gas.
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> Gas;
 }
 
 /// A wrapper around a type-erased trait object of what used to be a `Token`.
@@ -79,17 +84,16 @@ pub struct ErasedToken {
 }
 
 pub struct GasMeter<T: Trait> {
-	limit: T::Gas,
+	limit: Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
-	gas_left: T::Gas,
+	gas_left: Gas,
 	gas_price: BalanceOf<T>,
 
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
-	#[cfg(test)]
-	pub fn with_limit(gas_limit: T::Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
+	pub fn with_limit(gas_limit: Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
 		GasMeter {
 			limit: gas_limit,
 			gas_left: gas_limit,
@@ -125,9 +129,8 @@ impl<T: Trait> GasMeter<T> {
 		}
 
 		let amount = token.calculate_amount(metadata);
-		let new_value = match self.gas_left.checked_sub(&amount) {
+		let new_value = match self.gas_left.checked_sub(amount) {
 			None => None,
-			Some(val) if val.is_zero() => None,
 			Some(val) => Some(val),
 		};
 
@@ -149,7 +152,7 @@ impl<T: Trait> GasMeter<T> {
 	/// All unused gas in the nested gas meter is returned to this gas meter.
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
-		amount: T::Gas,
+		amount: Gas,
 		f: F,
 	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
@@ -158,13 +161,7 @@ impl<T: Trait> GasMeter<T> {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter {
-				limit: amount,
-				gas_left: amount,
-				gas_price: self.gas_price,
-				#[cfg(test)]
-				tokens: Vec::new(),
-			};
+			let mut nested = GasMeter::with_limit(amount, self.gas_price);
 
 			let r = f(Some(&mut nested));
 
@@ -179,12 +176,12 @@ impl<T: Trait> GasMeter<T> {
 	}
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> T::Gas {
+	pub fn gas_left(&self) -> Gas {
 		self.gas_left
 	}
 
 	/// Returns how much gas was spent.
-	fn spent(&self) -> T::Gas {
+	fn spent(&self) -> Gas {
 		self.limit - self.gas_left
 	}
 
@@ -200,7 +197,7 @@ impl<T: Trait> GasMeter<T> {
 /// The funds are deducted from `transactor`.
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
-	gas_limit: T::Gas,
+	gas_limit: Gas,
 ) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
 	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
@@ -212,9 +209,13 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let cost = gas_limit.clone().into()
-		.checked_mul(&gas_price)
-		.ok_or("overflow multiplying gas limit by price")?;
+	let cost = if gas_price.is_zero() {
+		<BalanceOf<T>>::zero()
+	} else {
+		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit).ok()
+			.and_then(|gas_limit| gas_price.checked_mul(&gas_limit))
+			.ok_or("overflow multiplying gas limit by price")?
+	};
 
 	let imbalance = T::Currency::withdraw(
 		transactor,
@@ -223,14 +224,7 @@ pub fn buy_gas<T: Trait>(
 		ExistenceRequirement::KeepAlive
 	)?;
 
-	Ok((GasMeter {
-		limit: gas_limit,
-		gas_left: gas_limit,
-		gas_price,
-
-		#[cfg(test)]
-		tokens: Vec::new(),
-	}, imbalance))
+	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
 }
 
 /// Refund the unused gas.
@@ -244,11 +238,11 @@ pub fn refund_unused_gas<T: Trait>(
 
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
-	// also has T::Gas type.
-	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+	// also has Gas type.
+	GasSpent::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought at.
-	let refund = gas_left.into() * gas_meter.gas_price;
+	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();
 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
 		T::GasPayment::on_unbalanced(imbalance);
@@ -257,8 +251,10 @@ pub fn refund_unused_gas<T: Trait>(
 
 /// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
-pub fn approx_gas_for_balance<T: Trait>(gas_price: BalanceOf<T>, balance: BalanceOf<T>) -> T::Gas {
-	(balance / gas_price).saturated_into::<T::Gas>()
+pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
+	where Balance: SimpleArithmetic
+{
+	(balance / gas_price).saturated_into::<Gas>()
 }
 
 /// A simple utility macro that helps to match against a
@@ -304,25 +300,25 @@ mod tests {
 	use super::{GasMeter, Token};
 	use crate::tests::Test;
 
-	/// A trivial token that charges 1 unit of gas.
+	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-	struct UnitToken;
-	impl Token<Test> for UnitToken {
+	struct SimpleToken(u64);
+	impl Token<Test> for SimpleToken {
 		type Metadata = ();
-		fn calculate_amount(&self, _metadata: &()) -> u64 { 1 }
+		fn calculate_amount(&self, _metadata: &()) -> u64 { self.0 }
 	}
 
-	struct DoubleTokenMetadata {
+	struct MultiplierTokenMetadata {
 		multiplier: u64,
 	}
 	/// A simple token that charges for the given amount multiplied to
 	/// a multiplier taken from a given metadata.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-	struct DoubleToken(u64);
+	struct MultiplierToken(u64);
 
-	impl Token<Test> for DoubleToken {
-		type Metadata = DoubleTokenMetadata;
-		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
+	impl Token<Test> for MultiplierToken {
+		type Metadata = MultiplierTokenMetadata;
+		fn calculate_amount(&self, metadata: &MultiplierTokenMetadata) -> u64 {
 			// Probably you want to use saturating mul in production code.
 			self.0 * metadata.multiplier
 		}
@@ -338,7 +334,8 @@ mod tests {
 	fn simple() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
-		let result = gas_meter.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10));
+		let result = gas_meter
+			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
 		assert!(!result.is_out_of_gas());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
@@ -349,12 +346,44 @@ mod tests {
 	#[test]
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
-		assert!(!gas_meter.charge(&(), UnitToken).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 		assert!(!gas_meter
-			.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10))
+			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
 			.is_out_of_gas());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
-		match_tokens!(tokens, UnitToken, DoubleToken(10),);
+		match_tokens!(tokens, SimpleToken(1), MultiplierToken(10),);
+	}
+
+	// This test makes sure that nothing can be executed if there is no gas.
+	#[test]
+	fn refuse_to_execute_anything_if_zero() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(0, 10);
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+	}
+
+	// Make sure that if the gas meter is charged by exceeding amount then not only an error
+	// returned for that charge, but also for all consequent charges.
+	//
+	// This is not striclty necessary, because the execution should be interrupred immediatelly
+	// if the gas meter runs out of gas. However, this is just a nice property to have.
+	#[test]
+	fn overcharge_is_unrecoverable() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(200, 10);
+
+		// The first charge is should lead to OOG.
+		assert!(gas_meter.charge(&(), SimpleToken(300)).is_out_of_gas());
+
+		// The gas meter is emptied at this moment, so this should also fail.
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+	}
+
+
+	// Charging the exact amount that the user paid for should be
+	// possible.
+	#[test]
+	fn charge_exact_amount() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(25, 10);
+		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
 	}
 }

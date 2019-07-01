@@ -525,6 +525,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
 	/// Works only for runtimes that are supporting changes tries.
+	///
+	/// Changes are returned in descending order (i.e. last block comes first).
 	pub fn key_changes(
 		&self,
 		first: NumberFor<Block>,
@@ -1025,7 +1027,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				let (top, children) = overlay.into_committed();
 				let children = children.map(|(sk, it)| (sk, it.collect())).collect();
-				Ok((Some(storage_update), Some(changes_update), Some((top.collect(), children))))
+				if import_headers.post().state_root() != &storage_update.1 {
+					return Err(error::Error::InvalidStateRoot);
+				}
+
+				Ok((Some(storage_update.0), Some(changes_update), Some((top.collect(), children))))
 			},
 			None => Ok((None, None, None))
 		}

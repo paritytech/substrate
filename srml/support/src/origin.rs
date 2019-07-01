@@ -24,24 +24,24 @@ macro_rules! impl_outer_origin {
 
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
 	// form)
-
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
-			$( $module:ident $( <$generic:ident $(, $instance:path )? > )? ),* $(,)?
+			$( $rest_without_system:tt )*
 		}
 	) => {
 		$crate::impl_outer_origin! {
 			$(#[$attr])*
 			pub enum $name for $runtime where system = system {
-				$( $module $( <$generic $(, $instance )? > )?, )*
+				$( $rest_without_system )*
 			}
 		}
 	};
+
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident where system = $system:ident {
-			$( $module:ident $( <$generic:ident $(, $instance:path )?> )? ),* $(,)?
+			$( $rest_with_system:tt )*
 		}
 	) => {
 		$crate::impl_outer_origin!(
@@ -49,20 +49,41 @@ macro_rules! impl_outer_origin {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $module $( <$generic $(, $instance )? > )*, )* };
+			Modules { $( $rest_with_system )* };
 		);
 	};
 
-	// Replace generic param with runtime
-
+	// Generic + Instance
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident $( <T $(,  $instance:path )? > )?,
-			$( $rest_module:tt )*
+			$module:ident $instance:ident <T>
+			$(, $( $rest_module:tt )* )?
+		};
+		$( $parsed:tt )*
+	) => {
+		$crate::impl_outer_origin!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { $( $( $rest_module )* )? };
+			$( $parsed )* $module <$runtime> { $instance },
+		);
+	};
+
+	// Instance
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		$system:ident;
+		Modules {
+			$module:ident $instance:ident
+			$(, $rest_module:tt )*
 		};
 		$( $parsed:tt )*
 	) => {
@@ -72,33 +93,80 @@ macro_rules! impl_outer_origin {
 			$runtime;
 			$system;
 			Modules { $( $rest_module )* };
-			$( $parsed )* $module $( <$runtime $(, $instance )? > )?,
+			$( $parsed )* $module { $instance },
+		);
+	};
+
+	// Generic
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		$system:ident;
+		Modules {
+			$module:ident <T>
+			$(, $( $rest_module:tt )* )?
+		};
+		$( $parsed:tt )*
+	) => {
+		$crate::impl_outer_origin!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { $( $( $rest_module )* )? };
+			$( $parsed )* $module <$runtime>,
+		);
+	};
+
+	// No Generic and no Instance
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		$system:ident;
+		Modules {
+			$module:ident
+			$(, $( $rest_module:tt )* )?
+		};
+		$( $parsed:tt )*
+	) => {
+		$crate::impl_outer_origin!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { $( $( $rest_module )* )? };
+			$( $parsed )* $module,
 		);
 	};
 
 	// The main macro expansion that actually renders the Origin enum code.
-
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules { };
-		$( $module:ident $( <$generic_param:ident $(, $generic_instance:path )? > )* ,)*
+		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
 	) => {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum $name {
-			system($system::Origin<$runtime>),
-			$(
-				$module($module::Origin $( <$generic_param $(, $generic_instance )? > )* ),
-			)*
-			#[allow(dead_code)]
-			Void($crate::Void)
+		$crate::paste::item! {
+			// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+			#[derive(Clone, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Debug))]
+			$(#[$attr])*
+			#[allow(non_camel_case_types)]
+			pub enum $name {
+				system($system::Origin<$runtime>),
+				$(
+					[< $module $( _ $generic_instance )? >]
+					($module::Origin < $( $generic, )? $( $module::$generic_instance )? > ),
+				)*
+				#[allow(dead_code)]
+				Void($crate::Void)
+			}
 		}
+
 		#[allow(dead_code)]
 		impl $name {
 			pub const NONE: Self = $name::system($system::RawOrigin::None);
@@ -127,23 +195,27 @@ macro_rules! impl_outer_origin {
 			}
 		}
 		$(
-			impl From<$module::Origin $( <$generic_param $(, $generic_instance )? > )*> for $name {
-				fn from(x: $module::Origin $( <$generic_param $(, $generic_instance )? > )*) -> Self {
-					$name::$module(x)
+			$crate::paste::item! {
+				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $name {
+					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
+						$name::[< $module $( _ $generic_instance )? >](x)
+					}
 				}
-			}
-			impl Into<$crate::rstd::result::Result<
-				$module::Origin $( <$generic_param $(, $generic_instance )? > )*,
-				$name
-			>> for $name {
-				fn into(self) -> $crate::rstd::result::Result<
-					$module::Origin $( <$generic_param $(, $generic_instance )? > )*,
-					Self
-				> {
-					if let $name::$module(l) = self {
-						Ok(l)
-					} else {
-						Err(self)
+				impl Into<
+					$crate::rstd::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
+						$name,
+					>>
+				for $name {
+					fn into(self) -> $crate::rstd::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
+						Self,
+					> {
+						if let $name::[< $module $( _ $generic_instance )? >](l) = self {
+							Ok(l)
+						} else {
+							Err(self)
+						}
 					}
 				}
 			}
