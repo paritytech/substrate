@@ -24,7 +24,7 @@ use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 /// A runtime along with its version and initial state.
@@ -54,10 +54,7 @@ struct StateSnapshot {
 }
 
 impl StateSnapshot {
-	fn take(module: &WasmModuleInstanceRef) -> Option<Self> {
-		// TODO: deref?
-		let module_instance = module.deref();
-
+	fn take(module_instance: &WasmModuleInstanceRef) -> Option<Self> {
 		// TODO: Write in trace if the `memory` export is not found.
 		let mem = module_instance.export_by_name("memory")?;
 		let memory_contents = match mem {
@@ -90,10 +87,7 @@ impl StateSnapshot {
 
 	/// Reset the runtime instance to the initial version by restoring
 	/// the preserved memory and globals.
-	fn apply(&self, module: &WasmModuleInstanceRef) {
-		// Restore the memory contents.
-		// TODO: deref?
-		let instance: &wasmi::ModuleInstance = module.deref();
+	fn apply(&self, instance: &WasmModuleInstanceRef) {
 		let mem = instance
 			.export_by_name("memory")
 			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
