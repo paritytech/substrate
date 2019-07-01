@@ -17,7 +17,7 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 pub use timestamp;
 
 use rstd::{result, prelude::*, marker::PhantomData};

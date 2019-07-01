@@ -76,9 +76,10 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
+use primitives::weights::Weight;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup,
 };
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
@@ -316,7 +317,7 @@ decl_storage! {
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
-		AllExtrinsicsWeight: Option<u32>;
+		AllExtrinsicsWeight: Option<Weight>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -531,7 +532,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Gets a total weight of all executed extrinsics.
-	pub fn all_extrinsics_weight() -> u32 {
+	pub fn all_extrinsics_weight() -> Weight {
 		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
 	}
 
@@ -707,17 +708,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, weight: Weight) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
+		let total_weight = weight.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsWeight<T>>::put(&total_length);
+		<AllExtrinsicsWeight<T>>::put(&total_weight);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block

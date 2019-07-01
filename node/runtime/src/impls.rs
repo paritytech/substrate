@@ -18,7 +18,7 @@
 
 use node_primitives::Balance;
 use runtime_primitives::weights::{Weight, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
-use runtime_primitives::traits::Convert;
+use runtime_primitives::traits::{Convert, Zero};
 use crate::{Runtime, Perbill, Balances};
 
 /// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
@@ -41,16 +41,40 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// This is used in the balances module.
 ///
 /// This assumes that weight is a numeric value in the u32 range.
+///
+/// Formula:
+///   diff = (ideal_weight - current_block_weight)
+///   v = 0.00004
+///   fee = weight * (1 + (v . diff) + v^2 (v . d)^2 / 2)
+///
+/// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
 pub struct WeightToFeeHandler;
 impl Convert<Weight, Balance> for WeightToFeeHandler {
 	fn convert(weight: Weight) -> Balance {
-		let billion = 1_000_000_000_u128;
+		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
-        let max = MAX_TRANSACTIONS_WEIGHT as u128;
+		let max = MAX_TRANSACTIONS_WEIGHT as u128;
 		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
-		let from_max_to_per_bill = |x| { x * billion / max };
 
-		// determines if the first_term is positive and compute diff.
+		let from_max_to_per_fraction = |x: u128| {
+            if let Some(x_fraction) = x.checked_mul(max_fraction) {
+                x_fraction / max
+            } else {
+                max_fraction
+            }
+        };
+
+        let collapse_mul = |a: u128, b| {
+            if let Some(v) = a.checked_mul(b) {
+                v
+            } else {
+                // collapse to zero if it overflow. For now we don't have the accuracy needed to
+                // compute this trivially with u128.
+                Zero::zero()
+            }
+        };
+
+		// determines if the first_term is positive
 		let mut positive = false;
 		let diff = match ideal.checked_sub(all) {
 			Some(d) => d,
@@ -62,107 +86,118 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		// 0.00004^2 = 16/10^10 ~= 2/10^9
 		let v_squared = 2;
 
-		let mut first_term = v * from_max_to_per_bill(diff);
-		first_term = first_term / billion;
+		let mut first_term = v;
+        first_term = collapse_mul(first_term, from_max_to_per_fraction(diff));
+		first_term = first_term / max_fraction;
 
-		let mut second_term = v_squared * from_max_to_per_bill(diff) * from_max_to_per_bill(diff) / 2;
-		second_term = second_term / billion;
-		second_term = second_term / billion;
+        // It is very unlikely that this will exist (in our poor perbill estimate) but we are giving it
+        // a shot.
+		let mut second_term = v_squared;
+        second_term = collapse_mul(second_term, from_max_to_per_fraction(diff));
+        second_term = collapse_mul(second_term, from_max_to_per_fraction(diff) / 2);
+		second_term = second_term / max_fraction;
+		second_term = second_term / max_fraction;
 
-		//					   = 1		+ second_term
-		let mut fee_multiplier = billion + second_term;
-		fee_multiplier = if positive { fee_multiplier + first_term } else { fee_multiplier - first_term};
-
-        // useful for testing
-        //println!("Fee Multiplier: {}", fee_multiplier);
-		let p = Perbill::from_parts(fee_multiplier.min(billion) as u32);
-		let transaction_fee: u32 = p * weight;
-		transaction_fee.into()
+        if positive {
+            let excess = first_term.saturating_add(second_term);
+            let p = Perbill::from_parts(excess.min(max_fraction) as u32);
+            weight + (p * weight)
+        } else {
+            // first_term > second_term
+            let negative = first_term - second_term;
+            let p = Perbill::from_parts((max_fraction - negative) as u32);
+            p * weight
+        }.into()
 	}
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use runtime_primitives::{
-        weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
-        traits::{IdentityLookup, Convert, BlakeTwo256},
-        testing::{Digest, DigestItem, Header},
-        BuildStorage,
-    };
-    use support::impl_outer_origin;
-    use substrate_primitives::{H256, Blake2Hasher};
-    use runtime_io::with_externalities;
+	use super::*;
+	use runtime_primitives::{
+		weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
+		traits::{IdentityLookup, Convert, BlakeTwo256},
+		testing::{Digest, DigestItem, Header},
+		BuildStorage,
+	};
+	use support::impl_outer_origin;
+	use substrate_primitives::{H256, Blake2Hasher};
+	use runtime_io::with_externalities;
 
-    impl_outer_origin!{
-        pub enum Origin for Runtime {}
-    }
-
-    // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-    #[derive(Clone, PartialEq, Eq, Debug)]
-    pub struct Runtime;
-    impl system::Trait for Runtime {
-        type Origin = Origin;
-        type Index = u64;
-        type BlockNumber = u64;
-        type Hash = H256;
-        type Hashing = BlakeTwo256;
-        type Digest = Digest;
-        type AccountId = u64;
-        type Lookup = IdentityLookup<Self::AccountId>;
-        type Header = Header;
-        type Event = ();
-        type Log = DigestItem;
-    }
-    impl balances::Trait for Runtime {
-        type Balance = u128;
-        type WeightToFee = WeightToFeeHandler;
-        type OnFreeBalanceZero = ();
-        type OnNewAccount = ();
-        type Event = ();
-        type TransactionPayment = ();
-        type DustRemoval = ();
-        type TransferPayment = ();
-    }
-
-    fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
-		t.into()
+	impl_outer_origin!{
+		pub enum Origin for Runtime {}
 	}
 
-    fn poc(weight: Weight, already_existing_weight: Weight) -> Balance  {
-        let weight = weight as f32;
-        let already_existing_weight = already_existing_weight as f32;
-        let v = 0.00004;
+	// needed because WeightToFeeHandler uses system module internally.
+	#[derive(Clone, PartialEq, Eq, Debug)]
+	pub struct Runtime;
+	impl system::Trait for Runtime {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = ();
+		type Log = DigestItem;
+	}
 
-        // maximum tx weight
-        let m = MAX_TRANSACTIONS_WEIGHT as f32;
-        // Ideal saturation in terms of weight
-        let ss = IDEAL_TRANSACTIONS_WEIGHT as f32;
-        // Current saturation in terms of weight
-        let s = already_existing_weight + weight;
+    type System = system::Module<Runtime>;
 
-        let fm = 1.0 + (v * (s/m - ss/m)) + (v.powi(2) * (s/m - ss/m).powi(2)) / 2.0;
-        (weight * fm) as Balance
-    }
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0.into()
+	}
+
+	fn weight_to_fee(weight: Weight, already_existing_weight: Weight) -> Balance  {
+		let weight = weight as f32;
+		let already_existing_weight = already_existing_weight as f32;
+		let v = 0.00004;
+
+		// maximum tx weight
+		let m = MAX_TRANSACTIONS_WEIGHT as f32;
+		// Ideal saturation in terms of weight
+		let ss = IDEAL_TRANSACTIONS_WEIGHT as f32;
+		// Current saturation in terms of weight
+		let s = already_existing_weight + weight;
+
+		let fm = 1.0 + (v * (s/m - ss/m)) + (v.powi(2) * (s/m - ss/m).powi(2)) / 2.0;
+		(weight * fm) as Balance
+	}
+
+	#[test]
+	fn stateless_weight_fee() {
+		with_externalities(&mut new_test_ext(), || {
+            let ideal = IDEAL_TRANSACTIONS_WEIGHT;
+            let max = MAX_TRANSACTIONS_WEIGHT;
+            // NOTE: this is now accurate enough for weights below 4194304. Might need change later
+            // on with new weight values
+			// (1) Typical low-cost transaction
+			// (2) Close to ideal. Fee is less than size.
+			// (3) 5 below the ideal, Less fee.
+			// (4) 5 above the ideal
+			// (6) largest number allowed (note: max weight is 4194304)
+			let inputs = vec![28, ideal/2, ideal/2 + 5_000, ideal/2 + 10_000, ideal, ideal + 1000, max / 2, max];
+			inputs.into_iter().for_each(|i| {
+                let diff = WeightToFeeHandler::convert(i) as i64 - weight_to_fee(i, 0) as i64;
+                assert!(diff < 4)
+            });
+		})
+	}
 
     #[test]
-	fn stateless_weight_fee_range() {
+    fn stateful_weight_to_fee() {
         with_externalities(&mut new_test_ext(), || {
-            let mut inputs = Vec::new();
-            // (1) Typical low-cost transaction
-            inputs.push(28);
-            // (2) Close to ideal. Fee is less than size.
-            inputs.push(IDEAL_TRANSACTIONS_WEIGHT/2);
-            // (3) 5 below the ideal, Less fee.
-            inputs.push(IDEAL_TRANSACTIONS_WEIGHT/2 + 5_000);
-            // (4) 5 above the ideal
-            inputs.push(IDEAL_TRANSACTIONS_WEIGHT + 10_000);
-            // (6) largest number allowed (note: max weight is 4194304)
-            inputs.push(1_129_826);
+            // below ideal: we charge a bit less.
+            assert!(WeightToFeeHandler::convert(1_000_000) < 1_000_000);
 
-            inputs.into_iter().for_each(|i| { assert_eq!(WeightToFeeHandler::convert(i), poc(i, 0))});
+            System::note_applied_extrinsic(&Ok(()), IDEAL_TRANSACTIONS_WEIGHT * 3);
+            assert_eq!(System::all_extrinsics_weight(), 3 * IDEAL_TRANSACTIONS_WEIGHT);
+
+            // above ideal: we charge a bit more.
+            assert!(WeightToFeeHandler::convert(1_000_000) > 1_000_000);
         })
-	}
+    }
 }

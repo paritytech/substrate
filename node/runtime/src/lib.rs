@@ -53,8 +53,9 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
-/// Runtime implementations
-mod impls;
+/// Implementations for `Convert` and other helper structs passed into runtime modules as associated
+/// types.
+pub mod impls;
 use impls::{CurrencyToVoteHandler, WeightToFeeHandler};
 
 /// Runtime version.

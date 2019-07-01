@@ -18,11 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{
-	traits::{IdentityLookup, Convert},
-	testing::{Digest, DigestItem, Header},
-	Perbill, BuildStorage,
-};
+use primitives::{traits::IdentityLookup, testing::{Digest, DigestItem, Header}, BuildStorage};
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait};

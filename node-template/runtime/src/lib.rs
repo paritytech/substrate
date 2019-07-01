@@ -11,9 +11,9 @@ use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
-use runtime_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+use sr_primitives::{
+	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str, weights,
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, Convert, Zero}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -25,11 +25,11 @@ use version::NativeVersion;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use sr_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use runtime_primitives::{Permill, Perbill};
+pub use sr_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
@@ -53,6 +53,9 @@ pub type BlockNumber = u64;
 
 /// Index of an account's extrinsic in the chain.
 pub type Nonce = u64;
+
+/// Balance type for the node.
+pub type Balance = u128;
 
 /// Used for the module template in `./template.rs`
 mod template;
@@ -165,11 +168,20 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
+/// A weight to fee handler that sets the fee for all transactions to zero.
+/// You probably want to change this based on your needs.
+pub struct FreeWeightToFeeHandler;
+impl Convert<weights::Weight, Balance> for FreeWeightToFeeHandler {
+	fn convert(_: weights::Weight) -> Balance {
+		Zero::zero()
+	}
+}
+
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
-	type Balance = u128;
-	/// To convert transaction weight to fee
-	type WeightToFee = ();
+	type Balance = Balance;
+	/// To convert transaction weight to fee.
+	type WeightToFee = FreeWeightToFeeHandler;
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.

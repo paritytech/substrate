@@ -18,6 +18,8 @@ hex-literal = "0.2.0"
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }
+consensus = { package = "srml-consensus", path = "../consensus" }
+node-runtime = { package = "node-runtime", path = "../../node/runtime" }
 
 [features]
 default = ["std"]
