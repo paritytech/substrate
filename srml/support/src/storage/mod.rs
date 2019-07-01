@@ -446,14 +446,22 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Encode, Decode, Vec, IncrementalChildInput, ChildTrie,
+	use sr_std::ops::Sub;
+	use sr_std::convert::{TryInto, TryFrom};
+	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, ChildTrie,
 		ChildTrieReadRef};
 
 	/// Method for fetching or initiating a new child trie.
-	pub fn fetch_or_new<N: Encode>(
+	pub fn fetch_or_new<N>(
 		parent: &[u8],
 		block_nb: &N,
-	) -> ChildTrie {
+	) -> ChildTrie
+		where
+			N: TryInto<u128>,
+			N: Sub<N, Output = N>,
+			N: TryFrom<u128>,
+			N: Clone,
+	{
 		ChildTrie::fetch_or_new(
 			|pk| { child_trie(pk) },
 			|ct| {
