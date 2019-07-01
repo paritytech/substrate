@@ -134,21 +134,21 @@ pub type CatchUp<Block> = grandpa::CatchUp<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 /// A commit message for this chain's block type.
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 /// A global communication input stream for commits and catch up messages. Not
 /// exposed publicly, used internally to simplify types in the communication
