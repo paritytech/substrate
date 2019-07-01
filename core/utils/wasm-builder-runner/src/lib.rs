@@ -53,7 +53,6 @@ pub enum WasmBuilderSource {
 	},
 	/// Use the source code from crates.io for the given version.
 	Crates(&'static str),
-
 }
 
 impl WasmBuilderSource {
@@ -159,15 +158,22 @@ fn run_project(project_folder: &Path) {
 		cmd.arg("--release");
 	}
 
-	match cmd.status().map(|s| s.success()) {
-		Ok(true) => {},
-		_ => panic!("Running WASM build runner failed!"),
+	if !cmd.status().map(|s| s.success()).unwrap_or(false) {
+		panic!("Running WASM build runner failed!");
 	}
+}
+
+/// Generate the name of the skip build environment variable for the current crate.
+fn generate_crate_skip_build_env_name() -> String {
+	format!(
+		"SKIP_{}_WASM_BUILD",
+		env::var("CARGO_PKG_NAME").expect("Package name is set").to_uppercase().replace('-', "_"),
+	)
 }
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(SKIP_BUILD_ENV).is_ok()
+	env::var(SKIP_BUILD_ENV).is_ok() || env::var(generate_crate_skip_build_env_name()).is_ok()
 }
 
 /// Check if we should provide a dummy WASM binary.
@@ -179,7 +185,7 @@ fn check_provide_dummy_wasm_binary() -> bool {
 fn provide_dummy_wasm_binary(file_path: &Path) {
 	fs::write(
 		file_path,
-		format!("pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];")
+		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];"
 	).expect("Writing dummy WASM binary should not fail");
 }
 
@@ -189,4 +195,5 @@ fn generate_rerun_if_changed_instructions() {
 	// Make sure that the `build.rs` is called again if one of the following env variables changes.
 	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
+	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
 }
