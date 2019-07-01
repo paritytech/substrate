@@ -1795,6 +1795,57 @@ fn bond_with_no_staked_value() {
 	});
 }
 
+#[test]
+fn bond_with_little_staked_value_bounded_by_slot_stake() {
+	// Behavior when someone bonds with little staked value.
+	// Particularly when she votes and the candidate is elected.
+	with_externalities(&mut ExtBuilder::default()
+		.validator_count(3)
+		.nominate(false)
+		.minimum_validator_count(1)
+		.build(),
+	|| {
+
+		// setup
+		assert_ok!(Staking::chill(Origin::signed(30)));
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		let init_balance_2 = Balances::free_balance(&2);
+		let init_balance_10 = Balances::free_balance(&10);
+
+		// Stingy validator.
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
+		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		add_reward_points_to_all_elected();
+		start_era(1);
+
+		// 2 is elected.
+		// and fucks up the slot stake.
+		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
+		assert_eq!(Staking::slot_stake(), 1);
+
+		// Old ones are rewarded.
+		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3);
+		// no rewards paid to 2. This was initial election.
+		assert_eq!(Balances::free_balance(&2), init_balance_2);
+
+		let total_payout_1 = current_total_payout_for_duration(3);
+		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		add_reward_points_to_all_elected();
+		start_era(2);
+
+		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
+		assert_eq!(Staking::slot_stake(), 1);
+
+		assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1/3);
+		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3 + total_payout_1/3);
+		check_exposure_all();
+		check_nominator_all();
+	});
+}
+
 #[cfg(feature = "equalize")]
 #[test]
 fn phragmen_linear_worse_case_equalize() {
