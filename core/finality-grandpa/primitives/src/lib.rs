@@ -83,6 +83,16 @@ pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
+/// Length of a challenge session in blocks.
+pub const CHALLENGE_SESSION_LENGTH: u32 = 8;
+
+/// A scheduled change of authority set.
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+pub struct Challenge<H, N, Header, Signature, Id> {
+	pub phantom_data: core::marker::PhantomData<(H, N, Header, Signature, Id)>,
+}
+
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
@@ -149,6 +159,9 @@ decl_runtime_apis! {
 		fn construct_precommit_equivocation_report_call(
 			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8>;
+
+		fn grandpa_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>>;
 	}
 }
 

@@ -29,7 +29,7 @@ use node_primitives::{
 };
 use grandpa::fg_primitives::{
 	self, ScheduledChange, GrandpaEquivocationProof, AuthoritySignature,
-	PrevoteEquivocation, PrecommitEquivocation
+	AuthorityId, PrevoteEquivocation, PrecommitEquivocation, Challenge
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -381,6 +381,11 @@ impl_runtime_apis! {
 			let report_call = Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
+		}
+
+		fn grandpa_challenge(digest: &DigestFor<Block>) 
+		-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>> {
+			Grandpa::grandpa_challenge(digest)
 		}
 	}
 

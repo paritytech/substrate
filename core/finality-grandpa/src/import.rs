@@ -384,9 +384,7 @@ where
 
 		let api = self.api.runtime_api();
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<
-			Signal<Block::Hash, NumberFor<Block>, Block::Header, AuthoritySignature, AuthorityId>
-		>(id));
+		let maybe_challenge = api.grandpa_challenge(&at, digest);
 		Ok(())
 	}
 }

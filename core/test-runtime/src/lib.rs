@@ -46,7 +46,8 @@ use runtime_primitives::{
 use consensus_aura::AuraEquivocationProof;
 use consensus_grandpa::{
 	AuthorityId as GrandpaAuthorityId, GrandpaEquivocationProof, AuthorityWeight,
-	ScheduledChange, PrevoteEquivocation, PrecommitEquivocation
+	ScheduledChange, PrevoteEquivocation, PrecommitEquivocation, Challenge,
+	AuthoritySignature as GrandpaAuthoritySignature
 };
 
 use runtime_version::RuntimeVersion;
@@ -700,6 +701,13 @@ cfg_if! {
 					>
 				) -> Vec<u8> {
 					vec![]
+				}
+
+				fn grandpa_challenge(digest: &DigestFor<Block>) 
+				-> Option<Challenge<
+						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId
+					>> {
+					unimplemented!()
 				}
 			}
 

@@ -53,7 +53,8 @@ use fg_primitives::{
 	Chain, validate_commit, VoterSet
 };
 pub use fg_primitives::{
-	AuthorityId, AuthorityWeight, AuthoritySignature, ChallengedVoteSet, ChallengedVote
+	AuthorityId, AuthorityWeight, AuthoritySignature, ChallengedVoteSet,
+	ChallengedVote, Challenge, CHALLENGE_SESSION_LENGTH
 };
 use system::DigestOf;
 use num_traits as num;
@@ -61,16 +62,6 @@ use core::iter::FromIterator;
 
 mod mock;
 mod tests;
-
-/// Length of a challenge session in blocks.
-const CHALLENGE_SESSION_LENGTH: u32 = 8;
-
-/// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Challenge<H, N, Header, Signature, Id> {
-	challenge: StoredPendingChallenge<H, N, Header, Signature, Id>,
-}
 
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize))]
@@ -102,6 +93,13 @@ impl<H, N, Header, Signature, Id> Signal<H, N, Header, Signature, Id> {
 		match self {
 			Signal::ForcedAuthoritiesChange(median, change) => Some((median, change)),
 			Signal::AuthoritiesChange(_) => None,
+			_ => None,
+		}
+	}
+
+	pub fn try_into_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id>> {
+		match self {
+			Signal::Challenge(challenge) => Some(challenge),
 			_ => None,
 		}
 	}
@@ -311,7 +309,7 @@ decl_module! {
 			}
 
 			if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
-				Self::deposit_log(Signal::Challenge(Challenge { challenge: pending_challenge }))
+				Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
 			}
 		}
 	}
@@ -395,6 +393,12 @@ impl<T: Trait> Module<T> {
 		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
+	}
+
+	pub fn grandpa_challenge(digest: &DigestOf<T>)
+		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
 	}
 }
 
