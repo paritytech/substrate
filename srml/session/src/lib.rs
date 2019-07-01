@@ -242,10 +242,10 @@ type OpaqueKey = Vec<u8>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		pub Validators get(validators): Vec<T::AccountId>;
+		Validators get(validators): Vec<T::AccountId>;
 
 		/// Current index of the session.
-		pub CurrentIndex get(current_index): SessionIndex;
+		CurrentIndex get(current_index): SessionIndex;
 
 		/// True if anything has changed in this session.
 		Changed: bool;
@@ -260,7 +260,7 @@ decl_storage! {
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		pub QueuedKeys get(queued_keys): Vec<(T::AccountId, T::Keys)>;
+		QueuedKeys get(queued_keys): Vec<(T::AccountId, T::Keys)>;
 
 		/// The keys that are currently active.
 		Active: map u32 => Vec<OpaqueKey>;
