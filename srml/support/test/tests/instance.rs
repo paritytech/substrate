@@ -17,7 +17,7 @@
 
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
-	Parameter,
+	Parameter, traits::Get, parameter_types,
 	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 };
 use inherents::{
@@ -40,10 +40,13 @@ mod module1 {
 	pub trait Trait<I>: system::Trait {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
+		type SomeParameter: Get<u32>;
 	}
 
 	srml_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
+			fn offchain_worker() {}
+
 			fn deposit_event<T, I>() = default;
 
 			fn one() {
@@ -165,13 +168,19 @@ mod module3 {
 	}
 }
 
+parameter_types! {
+	pub const SomeValue: u32 = 100;
+}
+
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type SomeParameter = SomeValue;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type SomeParameter = SomeValue;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
