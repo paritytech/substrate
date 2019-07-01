@@ -276,6 +276,7 @@ use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
+	dispatch::Parameter,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get
@@ -284,7 +285,8 @@ use srml_support::{
 use session::{OnSessionEnding, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
+	OpaqueKeys, Member,
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -442,7 +444,9 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait + session::Trait<
+	ValidatorId = <Self as system::Trait>::AccountId,
+> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -1062,7 +1066,7 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// Returns the new `SlotStake` value.
+	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
 		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
@@ -1158,10 +1162,8 @@ impl<T: Trait> Module<T> {
 
 			// Set the new validator set.
 			<CurrentElected<T>>::put(&elected_stashes);
-			let validators = elected_stashes.into_iter()
-				.map(|s| Self::bonded(s).unwrap_or_default())
-				.collect::<Vec<_>>();
-			(slot_stake, Some(validators))
+
+			(slot_stake, Some(elected_stashes))
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
 			// This is bad.
@@ -1223,7 +1225,7 @@ impl<T: Trait> Module<T> {
 					.map(|x| x.min(slash_exposure))
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
-				let _ = <session::Module<T>>::disable(&controller);
+				let _ = <session::Module<T>>::disable(&stash);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
@@ -1250,5 +1252,15 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+}
+
+/// A `Convert` implementation that finds the stash of the given controller account,
+/// if any.
+pub struct StashOf<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
+	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
+		<Module<T>>::ledger(&controller).map(|l| l.stash)
 	}
 }

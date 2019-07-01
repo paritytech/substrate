@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, cell::RefCell};
 use primitives::Perbill;
-use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
+use primitives::traits::{IdentityLookup, Convert, Identity, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -103,6 +103,8 @@ impl session::Trait for Test {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = crate::StashOf<Test>;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
@@ -121,6 +123,7 @@ impl Trait for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type AsValidatorId = Identity;
 }
 
 pub struct ExtBuilder {

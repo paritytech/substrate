@@ -163,6 +163,13 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct ConvertInto;
+
+impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+	fn convert(a: A) -> B { a.into() }
+}
+
 /// A meta trait for arithmetic.
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to

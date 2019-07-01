@@ -125,6 +125,7 @@ use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
 use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey};
 use srml_support::{
+	dispatch::Result,
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
 };
@@ -226,7 +227,7 @@ pub trait Trait: system::Trait {
 	type ValidatorId: Member + Parameter;
 
 	/// A conversion to validator ID to account ID.
-	type ValidatorIdOf: Convert<Self::AccountId, Self::ValidatorId>;
+	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
@@ -286,18 +287,23 @@ decl_module! {
 		/// - O(1).
 		/// - One extra DB entry.
 		/// # </weight>
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) {
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
 
-			let who = T::ValidatorIdOf::convert(who);
+			let who = match T::ValidatorIdOf::convert(who) {
+				Some(val_id) => val_id,
+				None => return Err("no associated validator ID for account."),
+			};
 			let old_keys = <NextKeyFor<T>>::get(&who);
 
 			// Set new keys value for next session.
 			<NextKeyFor<T>>::insert(who, keys);
 			// Something changed.
 			Changed::put(true);
+
+			Ok(())
 		}
 
 		/// Called when a block is finalized. Will rotate session if it is the last
@@ -386,7 +392,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, OnInitialize, Identity}, testing::{Header, UintAuthorityId}
+		traits::{BlakeTwo256, IdentityLookup, OnInitialize, ConvertInto}, testing::{Header, UintAuthorityId}
 	};
 
 	impl_outer_origin!{
@@ -460,7 +466,7 @@ mod tests {
 		type OnSessionEnding = TestOnSessionEnding;
 		type SessionHandler = TestSessionHandler;
 		type ValidatorId = u64;
-		type ValidatorIdOf = Identity;
+		type ValidatorIdOf = ConvertInto;
 		type Keys = UintAuthorityId;
 		type Event = ();
 	}
