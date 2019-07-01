@@ -258,7 +258,7 @@ impl<T: Trait> Module<T> {
 
 	/// The account ID of the treasury pot.
 	///
-	/// This actually does compmutation. If you need to keep using it, then make sure you cache the
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
 		MODULE_ID.into_account()
