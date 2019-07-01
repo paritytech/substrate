@@ -27,7 +27,7 @@ use state_machine::Externalities;
 use std::collections::HashMap;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
-/// A runtime along with its version and initial state.
+/// A runtime along with its version and initial state snapshot.
 #[derive(Clone)]
 enum RuntimePreproc {
 	InvalidCode,
@@ -164,10 +164,6 @@ impl RuntimesCache {
 	///
 	/// `initial_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	///
-	/// `maybe_requested_version` - If `Some(RuntimeVersion)` is provided the
-	/// cached instance will be checked for compatibility. In case of incompatibility
-	/// the instance will be reset and a new one will be created synchronously.
 	///
 	/// # Return value
 	///
