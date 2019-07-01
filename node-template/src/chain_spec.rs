@@ -1,7 +1,7 @@
 use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, AuraConfig, TimestampConfig, BalancesConfig,
-	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY,
+	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, AuraId
 };
 use substrate_service;
 
@@ -22,7 +22,7 @@ pub enum Alternative {
 	LocalTestnet,
 }
 
-fn authority_key(s: &str) -> AuthorityId {
+fn authority_key(s: &str) -> AuraId {
 	ed25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
@@ -88,7 +88,7 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
+fn testnet_genesis(initial_authorities: Vec<AuraId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
