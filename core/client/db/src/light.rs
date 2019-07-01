@@ -597,10 +597,10 @@ pub(crate) mod tests {
 		header
 	}
 
-	pub fn insert_block<F: Fn() -> Header>(
+	pub fn insert_block<F: FnMut() -> Header>(
 		db: &LightStorage<Block>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
-		header: F,
+		mut header: F,
 	) -> Hash {
 		let header = header();
 		let hash = header.hash();
@@ -884,7 +884,7 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|(_, val)| Decode::decode(&mut &val[..]))
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);
@@ -1094,7 +1094,12 @@ pub(crate) mod tests {
 		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
 
 		// insert genesis block (no value for cache is provided)
-		insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+		let mut genesis_hash = None;
+		insert_block(&db, HashMap::new(), || {
+			let header = default_header(&Default::default(), 0);
+			genesis_hash = Some(header.hash());
+			header
+		});
 
 		// after genesis is inserted => None
 		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
@@ -1103,6 +1108,6 @@ pub(crate) mod tests {
 		db.cache().initialize(b"test", vec![42]).unwrap();
 
 		// after genesis is inserted + cache is initialized => Some
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), Some(vec![42]));
+		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), Some((genesis_hash.unwrap(), vec![42])));
 	}
 }

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use kvdb::{KeyValueDB, DBTransaction};
 use parity_codec::Encode;
 use parking_lot::RwLock;
-use client::error::Result as ClientResult;
+use client::error::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
 use client::blockchain::{Cache, well_known_cache_keys};
 use parity_codec::Decode;
@@ -90,11 +90,15 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	pub fn configuration_at(
 		&self,
 		at: &BlockId<Block>,
-	) -> Option<ChangesTrieConfiguration> {
-		let maybe_encoded: Option<Vec<u8>> = self.cache.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at);
-		let maybe_config: Option<Option<ChangesTrieConfiguration>> =
-			maybe_encoded.and_then(|config| Decode::decode(&mut &config[..]));
-		maybe_config.and_then(|v| v)
+	) -> ClientResult<Option<ChangesTrieConfiguration>> {
+		// TODO: deal with errors here - whenever cache have no value for block, or we unable to decode it - return error
+		let encoded = self.cache
+			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
+			.map(|block_and_value| block_and_value.1)
+			.ok_or_else(|| ClientError::Backend("TODO".into()))?; // TODO: specific error
+		let maybe_config = Decode::decode(&mut &encoded[..])
+			.ok_or_else(|| ClientError::Backend("TODO".into()))?; // TODO: specific error
+		Ok(maybe_config)
 	}
 
 	/// Commit new changes trie.
@@ -280,7 +284,6 @@ mod tests {
 	fn changes_trie_storage_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
 		backend.changes_tries_storage.meta.write().finalized_number = 1000;
-
 
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
@@ -565,31 +568,31 @@ mod tests {
 		// test configuration cache
 		let storage = backend.changes_trie_storage().unwrap();
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block1)),
+			storage.configuration_at(&BlockId::Hash(block1)).unwrap(),
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block2)),
+			storage.configuration_at(&BlockId::Hash(block2)).unwrap(),
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block3)),
+			storage.configuration_at(&BlockId::Hash(block3)).unwrap(),
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block4)),
+			storage.configuration_at(&BlockId::Hash(block4)).unwrap(),
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block5)),
+			storage.configuration_at(&BlockId::Hash(block5)).unwrap(),
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block6)),
+			storage.configuration_at(&BlockId::Hash(block6)).unwrap(),
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block7)),
+			storage.configuration_at(&BlockId::Hash(block7)).unwrap(),
 			config_at_7.clone(),
 		);
 	}

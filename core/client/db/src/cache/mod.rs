@@ -294,7 +294,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		Ok(())
 	}
 
-	fn get_at(&self, key: &CacheKeyId, at: &BlockId<Block>) -> Option<Vec<u8>> {
+	fn get_at(&self, key: &CacheKeyId, at: &BlockId<Block>) -> Option<(Block::Hash, Vec<u8>)> {
 		let cache = self.0.read();
 		let storage = cache.cache_at.get(key)?.storage();
 		let db = storage.db();
@@ -318,7 +318,10 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			},
 		};
 
-		cache.cache_at.get(key)?.value_at_block(&at).ok()?
+		cache.cache_at.get(key)?
+			.value_at_block(&at)
+			.map(|block_and_value| block_and_value.map(|(block, value)| (block.hash, value)))
+			.ok()?
 	}
 }
 

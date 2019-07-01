@@ -414,7 +414,9 @@ where Block: BlockT<Hash=H256>,
 		leaf_state: NewBlockState,
 	) -> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
-		self.changes_trie_config_update = changes_tries_storage::extract_new_configuration(&header).cloned();
+		if let Some(changes_trie_config_update) = changes_tries_storage::extract_new_configuration(&header) {
+			self.changes_trie_config_update = Some(changes_trie_config_update.clone());
+		}
 		self.pending_block = Some(PendingBlock {
 			header,
 			body,
@@ -453,12 +455,20 @@ where Block: BlockT<Hash=H256>,
 			.map(|(storage_key, child_overlay)|
 				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
+		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction) = self.old_state.full_storage_root(
-			top.into_iter().map(|(k, v)| (k, Some(v))),
+			top.into_iter().map(|(k, v)| {
+				if k == well_known_keys::CHANGES_TRIE_CONFIG {
+					changes_trie_config = Decode::decode(&mut &v[..]);
+				}
+				(k, Some(v))
+			}),
 			child_delta
 		);
 
 		self.db_updates = transaction;
+		self.changes_trie_config_update = Some(changes_trie_config);
+
 		Ok(root)
 	}
 
@@ -540,9 +550,6 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
-	/// None<*> means that the value hasn't been cached yet. Some(*) means that the value (either None or
-	/// Some(*)) has been cached and is valid.
-	changes_trie_config: Mutex<Option<Option<ChangesTrieConfiguration>>>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
@@ -622,7 +629,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			changes_tries_storage,
-			changes_trie_config: Mutex::new(None),
 			blockchain,
 			canonicalization_delay,
 			shared_cache: new_shared_cache(
@@ -679,26 +685,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		inmem.finalize_block(BlockId::Hash(info.finalized_hash), None).unwrap();
 
 		inmem
-	}
-
-	/// Read (from storage or cache) changes trie config.
-	///
-	/// Currently changes tries configuration is set up once (at genesis) and could not
-	/// be changed. Thus, we'll actually read value once and then just use cached value.
-	fn changes_trie_config(&self, block: Block::Hash) -> Result<Option<ChangesTrieConfiguration>, client::error::Error> {
-		let mut cached_changes_trie_config = self.changes_trie_config.lock();
-		match cached_changes_trie_config.clone() {
-			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
-			None => {
-				use client::backend::Backend;
-				let changes_trie_config = self
-					.state_at(BlockId::Hash(block))?
-					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
-					.and_then(|v| Decode::decode(&mut &*v));
-				*cached_changes_trie_config = Some(changes_trie_config.clone());
-				Ok(changes_trie_config)
-			},
-		}
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -903,6 +889,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			if number.is_zero() {
 				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
+
+				// for tests, because config is set from within the reset_storage
+				if operation.changes_trie_config_update.is_none() {
+					operation.changes_trie_config_update = Some(None);
+				}
 			}
 
 			let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
@@ -1047,9 +1038,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 
-			let changes_trie_config = self.changes_trie_config(parent_hash)?;
-			if let Some(changes_trie_config) = changes_trie_config {
-				self.changes_tries_storage.prune(&changes_trie_config, transaction, f_hash, f_num);
+			if !f_num.is_zero() {
+				let changes_trie_config = self.changes_tries_storage.configuration_at(&BlockId::Hash(parent_hash))?;
+				if let Some(changes_trie_config) = changes_trie_config {
+					self.changes_tries_storage.prune(&changes_trie_config, transaction, f_hash, f_num);
+				}
 			}
 		}
 
