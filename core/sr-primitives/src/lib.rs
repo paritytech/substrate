@@ -111,7 +111,7 @@ pub trait BuildStorage: Sized {
 	) -> Result<(), String>;
 }
 
-/// Somethig that can build the genesis storage of a module.
+/// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.

@@ -350,7 +350,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// we are about to replace is lower than the priority of the replacement transaction.
 	/// We remove/replace old transactions in case they have lower priority.
 	///
-	/// In case replacement is succesful returns a list of removed transactions.
+	/// In case replacement is successful returns a list of removed transactions.
 	fn replace_previous(&mut self, tx: &Transaction<Hash, Ex>) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		let mut to_remove = {
 			// check if we are replacing a transaction

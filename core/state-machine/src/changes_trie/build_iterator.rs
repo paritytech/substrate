@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Structures and functions to return blocks whose changes are to be included
-//! in given block' changes trie.
+//! in given block's changes trie.
 
 use crate::changes_trie::{Configuration, BlockNumber};
 
