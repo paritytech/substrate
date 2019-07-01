@@ -17,6 +17,7 @@
 //! Council system: Handles the voting in and maintenance of council members.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit="128"]
 
 pub mod motions;
 pub mod seats;

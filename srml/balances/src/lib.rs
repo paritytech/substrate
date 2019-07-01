@@ -364,6 +364,21 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		/// The minimum amount required to keep an account open.
+		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
+
+		/// The fee required to make a transfer.
+		const TransferFee: T::Balance = T::TransferFee::get();
+
+		/// The fee required to create an account.
+		const CreationFee: T::Balance = T::CreationFee::get();
+
+		/// The fee to be paid for making a transaction; the base.
+		const TransactionBaseFee: T::Balance = T::TransactionBaseFee::get();
+
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
+
 		fn deposit_event<T, I>() = default;
 
 		/// Transfer some liquid free balance to another account.

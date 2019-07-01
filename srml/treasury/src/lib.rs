@@ -119,6 +119,19 @@ type ProposalIndex = u32;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+		/// An accepted proposal gets these back. A rejected proposal does not.
+		const ProposalBond: Permill = T::ProposalBond::get();
+
+		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
+
+		/// Period between successive spends.
+		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
+
+		/// Percentage of spare funds (if any) that are burnt per spend period.
+		const Burn: Permill = T::Burn::get();
+
 		fn deposit_event<T>() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the

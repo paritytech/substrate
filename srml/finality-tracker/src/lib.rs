@@ -114,6 +114,12 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The number of recent samples to keep from this chain. Default is 101.
+		const WindowSize: T::BlockNumber = T::WindowSize::get();
+
+		/// The delay after which point things become suspicious. Default is 1000.
+		const ReportLatency: T::BlockNumber = T::ReportLatency::get();
+
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {

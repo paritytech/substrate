@@ -403,6 +403,67 @@ impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeC
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+		/// Number of block delay an extrinsic claim surcharge has.
+		///
+		/// When claim surchage is called by an extrinsic the rent is checked
+		/// for current_block - delay
+		const SignedClaimHandicap: T::BlockNumber = T::SignedClaimHandicap::get();
+
+		/// The minimum amount required to generate a tombstone.
+		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
+
+		/// Size of a contract at the time of creation. This is a simple way to ensure
+		/// that empty contracts eventually gets deleted.
+		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
+
+		/// Price of a byte of storage per one block interval. Should be greater than 0.
+		const RentByteFee: BalanceOf<T> = T::RentByteFee::get();
+
+		/// The amount of funds a contract should deposit in order to offset
+		/// the cost of one byte.
+		///
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
+		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
+		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
+		/// then it would pay 500 BU/day.
+		const RentDepositOffset: BalanceOf<T> = T::RentDepositOffset::get();
+
+		/// Reward that is received by the party whose touch has led
+		/// to removal of a contract.
+		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
+
+		/// The fee required to make a transfer.
+		const TransferFee: BalanceOf<T> = T::TransferFee::get();
+
+		/// The fee required to create an account.
+		const CreationFee: BalanceOf<T> = T::CreationFee::get();
+
+		/// The fee to be paid for making a transaction; the base.
+		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
+
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
+
+		/// The fee required to create a contract instance. A reasonable default value
+		/// is 21.
+		const ContractFee: BalanceOf<T> = T::ContractFee::get();
+
+		/// The base fee charged for calling into a contract. A reasonable default
+		/// value is 135.
+		const CallBaseFee: Gas = T::CallBaseFee::get();
+
+		/// The base fee charged for creating a contract. A reasonable default value
+		/// is 175.
+		const CreateBaseFee: Gas = T::CreateBaseFee::get();
+
+		/// The maximum nesting level of a call/create stack. A reasonable default
+		/// value is 100.
+		const MaxDepth: u32 = T::MaxDepth::get();
+
+		/// The maximum amount of gas that could be expended per block. A reasonable
+		/// default value is 10_000_000.
+		const BlockGasLimit: Gas = T::BlockGasLimit::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Updates the schedule for metering contracts.
