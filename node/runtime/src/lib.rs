@@ -59,7 +59,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	spec_version: 99,
-	impl_version: 105,
+	impl_version: 106,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -176,6 +176,7 @@ parameter_types! {
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
+
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
