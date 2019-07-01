@@ -76,6 +76,9 @@ mod cost {
 	pub(super) const INVALID_COMMIT: i32 = -5000;
 	pub(super) const OUT_OF_SCOPE_MESSAGE: i32 = -500;
 	pub(super) const CATCH_UP_REQUEST_TIMEOUT: i32 = -200;
+
+	// cost of answering a catch up request
+	pub(super) const CATCH_UP_REPLY: i32 = -200;
 }
 
 // benefit scalars for reporting peers.

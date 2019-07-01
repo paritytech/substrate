@@ -783,7 +783,7 @@ impl<Block: BlockT> Inner<Block> {
 			message: catch_up,
 		});
 
-		(Some(full_catch_up), Action::Discard(0))
+		(Some(full_catch_up), Action::Discard(cost::CATCH_UP_REPLY))
 	}
 
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
@@ -1573,7 +1573,7 @@ mod tests {
 				assert_eq!(catch_up.set_id, SetId(set_id));
 				assert_eq!(catch_up.message.round_number, 1);
 
-				assert_eq!(res.1, Action::Discard(0));
+				assert_eq!(res.1, Action::Discard(cost::CATCH_UP_REPLY));
 			},
 			_ => panic!("expected catch up message"),
 		};
