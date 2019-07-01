@@ -97,7 +97,7 @@ impl Config {
 	/// state.
 	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
 	where
-		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
+		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self) {
