@@ -84,6 +84,7 @@ mod cost {
 
 // benefit scalars for reporting peers.
 mod benefit {
+	pub(super) const NEIGHBOR_MESSAGE: i32 = 100;
 	pub(super) const ROUND_MESSAGE: i32 = 100;
 	pub(super) const BASIC_VALIDATED_CATCH_UP: i32 = 200;
 	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;

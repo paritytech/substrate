@@ -106,6 +106,8 @@ const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(15);
 /// catch up request.
 const CATCH_UP_THRESHOLD: u64 = 2;
 
+type Report = (PeerId, i32);
+
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Consider {
@@ -794,18 +796,65 @@ impl<Block: BlockT> Inner<Block> {
 		(Some(full_catch_up), Action::Discard(cost::CATCH_UP_REPLY))
 	}
 
+	fn try_catch_up(&mut self, who: &PeerId) -> (Option<GossipMessage<Block>>, Option<Report>) {
+		let mut catch_up = None;
+		let mut report = None;
+
+		// if the peer is on the same set and ahead of us by a margin bigger
+		// than `CATCH_UP_THRESHOLD` then we should ask it for a catch up
+		// message.
+		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
+			if peer.view.set_id == local_view.set_id &&
+				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
+			{
+				// send catch up request if allowed
+				let round = peer.view.round.0 - 1; // peer.view.round is > 0
+				let request = CatchUpRequestMessage {
+					set_id: peer.view.set_id,
+					round: Round(round),
+				};
+
+				let (catch_up_allowed, catch_up_report) = self.note_catch_up_request(who, &request);
+
+				if catch_up_allowed {
+					trace!(target: "afg", "Sending catch-up request for round {} to {}",
+						   round,
+						   who,
+					);
+
+					catch_up = Some(GossipMessage::<Block>::CatchUpRequest(request));
+				}
+
+				report = catch_up_report;
+			}
+		}
+
+		(catch_up, report)
+	}
+
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
-		-> (Vec<Block::Hash>, Action<Block::Hash>)
+		-> (Vec<Block::Hash>, Action<Block::Hash>, Option<GossipMessage<Block>>, Option<Report>)
 	{
-		let (cb, topics) = match self.peers.update_peer_state(who, update) {
-			Ok(view) => (100i32, view.map(|view| neighbor_topics::<Block>(view))),
-			Err(misbehavior) => (misbehavior.cost(), None)
+		let update_res = self.peers.update_peer_state(who, update);
+
+		let (cost_benefit, topics) = match update_res {
+			Ok(view) =>
+				(benefit::NEIGHBOR_MESSAGE, view.map(|view| neighbor_topics::<Block>(view))),
+			Err(misbehavior) =>
+				(misbehavior.cost(), None),
+		};
+
+		let (catch_up, report) = match update_res {
+			Ok(_) => self.try_catch_up(who),
+			_ => (None, None),
 		};
 
 		let neighbor_topics = topics.unwrap_or_default();
 
-		// always discard, it's valid for one hop.
-		(neighbor_topics, Action::Discard(cb))
+		// always discard neighbor messages, it's only valid for one hop.
+		let action = Action::Discard(cost_benefit);
+
+		(neighbor_topics, action, catch_up, report)
 	}
 
 	fn multicast_neighbor_packet(&self) -> MaybeMessage<Block> {
@@ -825,7 +874,7 @@ impl<Block: BlockT> Inner<Block> {
 		&mut self,
 		who: &PeerId,
 		catch_up_request: &CatchUpRequestMessage,
-	) -> (bool, Option<(PeerId, i32)>) {
+	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
 			PendingCatchUp::Requesting { who: peer, instant, .. } =>
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
@@ -927,12 +976,17 @@ impl<Block: BlockT> GossipValidator<Block> {
 					=> self.inner.write().validate_round_message(who, message),
 				Some(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
 				Some(GossipMessage::Neighbor(update)) => {
-					let (topics, action) = self.inner.write().import_neighbor_message(
+					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
 					);
 
+					if let Some((peer, cost_benefit)) = report {
+						self.report(peer, cost_benefit);
+					}
+
 					broadcast_topics = topics;
+					peer_reply = catch_up;
 					action
 				}
 				Some(GossipMessage::CatchUp(ref message))
@@ -991,46 +1045,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
-		let catch_up = {
-			let mut catch_up = None;
-			let mut inner = self.inner.write();
-
-			if let (Some(peer), Some(local_view)) = (inner.peers.peer(who), &inner.local_view) {
-				if peer.view.set_id == local_view.set_id &&
-					peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
-				{
-					// send catch up request if allowed
-					let round = peer.view.round.0 - 1; // peer.view.round is > 0
-					let request = CatchUpRequestMessage {
-						set_id: peer.view.set_id,
-						round: Round(round),
-					};
-
-					let (catch_up_allowed, report) = inner.note_catch_up_request(who, &request);
-
-					if catch_up_allowed {
-						trace!(target: "afg", "Sending catch-up request for round {} to {}",
-							round,
-							who,
-						);
-
-						catch_up = Some(GossipMessage::<Block>::CatchUpRequest(request));
-					}
-
-					if let Some((peer, cost)) = report {
-						self.report(peer, cost);
-					}
-				}
-			}
-
-			catch_up
-		};
-
 		// not with lock held!
-		if let Some(msg) = catch_up {
-			context.send_message(who, msg.encode())
-		}
-
 		if let Some(msg) = peer_reply {
 			context.send_message(who, msg.encode());
 		}
