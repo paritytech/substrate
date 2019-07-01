@@ -858,7 +858,7 @@ pub trait TypeId {
 	const TYPE_ID: [u8; 4];
 }
 
-/// Format is b"para" ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to fill AccountId.
+/// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to fill AccountId.
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_account(&self) -> T {
 		(Id::TYPE_ID, self).using_encoded(|b|
