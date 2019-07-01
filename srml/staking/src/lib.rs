@@ -607,6 +607,12 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Number of sessions per era.
+		const SessionsPerEra: SessionIndex = T::SessionsPerEra::get();
+
+		/// Number of eras that staked funds must remain bonded for.
+		const BondingDuration: EraIndex = T::BondingDuration::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will

@@ -17,7 +17,7 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, WithdrawReason};
+use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
