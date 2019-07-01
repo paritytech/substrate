@@ -497,9 +497,7 @@ mod tests {
 					author_a,
 				);
 
-				assert!(
-					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok()
-				);
+				assert!(Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok());
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]),
@@ -549,9 +547,7 @@ mod tests {
 					author_a,
 				);
 
-				assert!(
-					Authorship::verify_and_import_uncles(vec![other_8]).is_ok()
-				);
+				assert!(Authorship::verify_and_import_uncles(vec![other_8]).is_ok());
 			}
 		});
 	}
