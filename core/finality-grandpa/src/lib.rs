@@ -73,6 +73,7 @@ use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 use num_traits as num;
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use srml_finality_tracker;
 
@@ -354,12 +355,13 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	select_chain: SC,
+	transaction_pool: Option<Arc<TransactionPool<A>>>,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
+		GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>,
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
@@ -369,6 +371,7 @@ where
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
+	A: txpool::ChainApi,
 {
 	use runtime_primitives::traits::Zero;
 
@@ -400,6 +403,7 @@ where
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			api,
+			transaction_pool.clone(),
 		),
 		LinkHalf {
 			client,

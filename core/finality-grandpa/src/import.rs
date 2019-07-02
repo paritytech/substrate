@@ -16,7 +16,7 @@
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace, info};
+use log::{debug, trace, info, error};
 use parity_codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
@@ -30,8 +30,10 @@ use consensus_common::{
 	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
 	SelectChain,
 };
+use consensus_accountable_safety::SubmitReport;
 use fg_primitives::{
-	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId
+	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId,
+	PrevoteChallenge, PrecommitChallenge
 };
 use srml_grandpa::Signal;
 use runtime_primitives::Justification;
@@ -41,6 +43,7 @@ use runtime_primitives::traits::{
 	Header as HeaderT, NumberFor, ProvideRuntimeApi
 };
 use substrate_primitives::{H256, Blake2Hasher};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
@@ -57,17 +60,18 @@ use crate::justification::GrandpaJustification;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	api: Arc<PRA>,
+	transaction_pool: Option<Arc<TransactionPool<A>>>
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> JustificationImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -76,6 +80,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 		SC: SelectChain<Block>,
+		A: txpool::ChainApi,
 {
 	type Error = ConsensusError;
 
@@ -158,8 +163,8 @@ impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -168,6 +173,7 @@ where
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
+	A: txpool::ChainApi,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -392,6 +398,23 @@ where
 			Ok(Some(challenge)) => {
 				// do something with it
 				println!("got a challenge!");
+				let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+				
+				self.api.runtime_api()
+					.construct_report_unjustified_prevotes_call(
+						&block_id,
+						PrevoteChallenge { 
+						}
+					)
+					.map(|call| {
+						self.transaction_pool.as_ref().map(|txpool|
+							txpool.submit_report_call(&self.inner, call.as_slice())
+						);
+						info!(target: "afg", "Unjustified prevotes report has been submitted")
+					}).unwrap_or_else(|err|
+						error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
+					);
+
 				Ok(Some(()))
 			},
 			Ok(None) => Ok(None),
@@ -399,8 +422,8 @@ where
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -408,6 +431,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
+		A: txpool::ChainApi,
 {
 	type Error = ConsensusError;
 
@@ -535,8 +559,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
 {
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
@@ -545,7 +569,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		api: Arc<PRA>,
-	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC> {
+		transaction_pool: Option<Arc<TransactionPool<A>>>
+	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> {
 		GrandpaBlockImport {
 			inner,
 			select_chain,
@@ -557,13 +582,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
+	A: txpool::ChainApi,
 {
 
 	/// Import a block justification and finalize the block.

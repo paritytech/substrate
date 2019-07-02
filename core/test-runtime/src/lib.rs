@@ -47,7 +47,8 @@ use consensus_aura::AuraEquivocationProof;
 use consensus_grandpa::{
 	AuthorityId as GrandpaAuthorityId, GrandpaEquivocationProof, AuthorityWeight,
 	ScheduledChange, PrevoteEquivocation, PrecommitEquivocation, Challenge,
-	AuthoritySignature as GrandpaAuthoritySignature
+	AuthoritySignature as GrandpaAuthoritySignature, Prevote, Precommit,
+	PrevoteChallenge, PrecommitChallenge
 };
 
 use runtime_version::RuntimeVersion;
@@ -504,6 +505,11 @@ cfg_if! {
 				fn grandpa_authorities() -> Vec<(GrandpaAuthorityId, AuthorityWeight)> {
 					unimplemented!()
 				}
+
+				fn grandpa_challenge(digest: &DigestFor<Block>) 
+				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>> {
+					unimplemented!()
+				}
 		
 				fn construct_prevote_equivocation_report_call(
 					_proof: GrandpaEquivocationProof<
@@ -516,6 +522,22 @@ cfg_if! {
 				fn construct_precommit_equivocation_report_call(
 					_proof: GrandpaEquivocationProof<
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					vec![]
+				}
+
+				fn construct_report_unjustified_prevotes_call(
+					_proof: PrevoteChallenge<
+						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					vec![]
+				}
+
+				fn construct_report_unjustified_precommits_call(
+					_proof: PrecommitChallenge<
+						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
 					vec![]
@@ -698,6 +720,22 @@ cfg_if! {
 				fn construct_precommit_equivocation_report_call(
 					_proof: GrandpaEquivocationProof<
 						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					vec![]
+				}
+
+				fn construct_report_unjustified_prevotes_call(
+					_proof: PrevoteChallenge<
+						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
+					>
+				) -> Vec<u8> {
+					vec![]
+				}
+
+				fn construct_report_unjustified_precommits_call(
+					_proof: PrecommitChallenge<
+						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
 					vec![]

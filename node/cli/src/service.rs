@@ -166,8 +166,8 @@ construct_service_factory! {
 				{
 					let slot_duration = SlotDuration::get_or_compute(&*client)?;
 					let (block_import, link_half) =
-						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
-							client.clone(), client.clone(), select_chain
+						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _>(
+							client.clone(), client.clone(), select_chain, transaction_pool.clone()
 						)?;
 					let block_import = Arc::new(block_import);
 					let justification_import = block_import.clone();

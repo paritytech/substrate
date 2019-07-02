@@ -149,7 +149,10 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
-		
+
+		fn grandpa_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>>;
+
 		/// Construct a call to report the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
 			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
@@ -160,8 +163,17 @@ decl_runtime_apis! {
 			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8>;
 
-		fn grandpa_challenge(digest: &DigestFor<Block>)
-			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>>;
+		fn construct_report_unjustified_prevotes_call(
+			proof: PrevoteChallenge<
+				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
+			>
+		) -> Vec<u8>;
+
+		fn construct_report_unjustified_precommits_call(
+			proof: PrecommitChallenge<
+				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
+			>
+		) -> Vec<u8>;
 	}
 }
 

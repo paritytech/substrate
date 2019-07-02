@@ -29,7 +29,8 @@ use node_primitives::{
 };
 use grandpa::fg_primitives::{
 	self, ScheduledChange, GrandpaEquivocationProof, AuthoritySignature,
-	AuthorityId, PrevoteEquivocation, PrecommitEquivocation, Challenge
+	AuthorityId, PrevoteEquivocation, PrecommitEquivocation, Challenge,
+	PrevoteChallenge, PrecommitChallenge, Prevote, Precommit
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -368,6 +369,12 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
+		fn grandpa_challenge(digest: &DigestFor<Block>) 
+		-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>> {
+			Grandpa::grandpa_challenge(digest)
+		}
+
+
 		fn construct_prevote_equivocation_report_call(
 			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
 		) -> Vec<u8> {
@@ -383,10 +390,26 @@ impl_runtime_apis! {
 			extrinsic.encode()
 		}
 
-		fn grandpa_challenge(digest: &DigestFor<Block>) 
-		-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>> {
-			Grandpa::grandpa_challenge(digest)
+		fn construct_report_unjustified_prevotes_call(
+			proof: PrevoteChallenge<
+				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
+			>
+		) -> Vec<u8> {
+			let report_call = Call::Grandpa(GrandpaCall::report_unjustified_prevotes(proof));
+			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+			extrinsic.encode()
 		}
+
+		fn construct_report_unjustified_precommits_call(
+			proof: PrecommitChallenge<
+				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
+			>
+		) -> Vec<u8> {
+			let report_call = Call::Grandpa(GrandpaCall::report_unjustified_precommits(proof));
+			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
+			extrinsic.encode()
+		}
+
 	}
 
 	impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature> for Runtime {
