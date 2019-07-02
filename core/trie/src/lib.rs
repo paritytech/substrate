@@ -181,7 +181,6 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	let mut db = KeySpacedDBMut::new(&mut *db, Some(keyspace));
 	let mut root = child_trie_root_as_hash::<H,_>(root);
 	{
-		let mut db = KeySpacedDBMut::new(&mut db, None);
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 		for (key, change) in delta {
 			match change {

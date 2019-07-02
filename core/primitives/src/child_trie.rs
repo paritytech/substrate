@@ -78,46 +78,14 @@ pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: &[u8]) -> Vec<u8>
 	}
 }
 
-// see issue FIXME #2741, to avoid redundant code (here we include
-// code from memorydb prefixed key to avoid a vec alloc.
-#[cfg(not(feature = "legacy-trie"))]
 /// Make database key from hash and prefix.
-/// Include `NO_CHILD_KEYSPACE` prefix.
-pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8], keyspace: Option<&[u8]>) -> Vec<u8> {
-	if let Some(ks) = keyspace {
-		let mut res = Vec::with_capacity(ks.len() + prefix.len() + key.as_ref().len());
-		res.extend_from_slice(ks);
-		res.extend_from_slice(prefix);
-		res.extend_from_slice(key.as_ref());
-		res
-	} else {
-		let mut res = rstd::vec![0; NO_CHILD_KEYSPACE.len() + prefix.len() + key.as_ref().len()];
-		res.extend_from_slice(&NO_CHILD_KEYSPACE[..]);
-		res.extend_from_slice(prefix);
-		res.extend_from_slice(key.as_ref());
-		res
-	}
-}
-
-#[cfg(feature = "legacy-trie")]
-/// Make database key from hash and prefix.
-/// Include `NO_CHILD_KEYSPACE` prefix.
+/// (here prefix already contains optional keyspace).
 pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
-	if let Some(ks) = keyspace {
-		let mut res = Vec::with_capacity(ks.len() + prefix.len() + key.as_ref().len());
-		res.extend_from_slice(ks);
-		res.extend_from_slice(prefix);
-		res.extend_from_slice(key.as_ref());
-		res
-	} else {
-		let mut res = rstd::vec![0; prefix.len() + key.as_ref().len()];
-		res.extend_from_slice(prefix);
-		res.extend_from_slice(key.as_ref());
-		res
-	}
+	let mut res = Vec::with_capacity(prefix.len() + key.as_ref().len());
+	res.extend_from_slice(prefix);
+	res.extend_from_slice(key.as_ref());
+	res
 }
-
-
 
 /// Parent trie origin. This type contains all information
 /// needed to access a parent trie.
