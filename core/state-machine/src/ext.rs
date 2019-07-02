@@ -360,6 +360,8 @@ where
 			let mut calculated_root = Default::default();
 			let mut mdb = MemoryDB::default();
 			{
+				// following commented line is needed in case transaction get use)
+				// let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
 				for (key, value) in changes {
 					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);

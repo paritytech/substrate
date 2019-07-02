@@ -19,6 +19,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use trie::KeySpacedDB;
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 use primitives::child_trie::{ChildTrie, ChildTrieReadRef};
@@ -87,6 +88,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let eph = KeySpacedDB::new(&eph, None);
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
@@ -111,6 +113,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let eph = KeySpacedDB::new(&eph, None);
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
@@ -193,13 +196,14 @@ pub mod tests {
 		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"sub1"[..], &0u64);
 		let mut sub_root = H256::default();
 		{
-			let mut kmdb = KeySpacedDBMut::new(&mut mdb, child_trie1.keyspace());
-			let mut trie = TrieDBMut::new(&mut kmdb, &mut sub_root);
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, Some(child_trie1.keyspace()));
+			let mut trie = TrieDBMut::new(&mut mdb, &mut sub_root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		}
 		{
 			let enc_sub_root = child_trie1.encoded_with_root(&sub_root[..]);
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(&child_trie1.parent_trie()[..], &enc_sub_root).expect("insert failed");
 

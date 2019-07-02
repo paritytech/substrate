@@ -22,6 +22,7 @@ use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
+use hash_db::Hasher;
 
 /// `KeySpace` type contains a unique identifier to use for accessing
 /// child trie node in a underlying key value database.
@@ -39,14 +40,14 @@ pub use impl_serde::serialize as bytes;
 pub type KeySpace = Vec<u8>;
 
 
-/// Keyspace to use for the parent trie key.
-pub const NO_CHILD_KEYSPACE: [u8;1] = [0u8];
+#[cfg(not(feature = "legacy-trie"))]
+// Keyspace to use for the parent trie key.
+const NO_CHILD_KEYSPACE: [u8;1] = [0u8];
+#[cfg(feature = "legacy-trie")]
+// Keyspace to use for the parent trie key.
+const NO_CHILD_KEYSPACE: [u8;0] = [];
 const CHILD_KEYSPACE_HEAD: u8 = 1;
 
-// see FIXME #2741 for removal of this allocation on every operation.
-// (the PrefixedDB one is enough). Method could be to pass mutable
-// vector to `KeyFunction` and have an new key function to estimate
-// required additional allocation size.
 /// Generate a new keyspace for a child trie.
 pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8> {
 	// using 9 for block number and additional encoding targeting ~u64
@@ -57,19 +58,66 @@ pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> V
 	result
 }
 
+// see FIXME #2741 for removal of this allocation on every operation.
+// Simpliest would be to put an additional optional field in prefix.
 /// Utility function used for merging `KeySpace` data and `prefix` data
 /// before calling key value database primitives.
 /// Note that it currently does a costy append operation resulting in bigger
 /// key length but possibly allowing prefix related operation at lower level.
-pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
-	let n_pre_len = NO_CHILD_KEYSPACE.len();
-	// only use on prefixed db where NO_CHILD_KEYSPACE is added.
-	debug_assert!(prefix.len() >= n_pre_len);
-	let mut res = rstd::vec![0; ks.len() + prefix.len() - n_pre_len];
-	res[..ks.len()].copy_from_slice(&ks);
-	res[ks.len()..].copy_from_slice(&prefix[n_pre_len..]);
-	res
+pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: &[u8]) -> Vec<u8> {
+	if let Some(ks) = ks {
+		let mut res = rstd::vec![0; ks.len() + prefix.len()];
+		res[..ks.len()].copy_from_slice(&ks);
+		res[ks.len()..].copy_from_slice(prefix);
+		res
+	} else {
+		let mut res = rstd::vec![0; NO_CHILD_KEYSPACE.len() + prefix.len()];
+		res[..NO_CHILD_KEYSPACE.len()].copy_from_slice(&NO_CHILD_KEYSPACE[..]);
+		res[NO_CHILD_KEYSPACE.len()..].copy_from_slice(prefix);
+		res
+	}
 }
+
+// see issue FIXME #2741, to avoid redundant code (here we include
+// code from memorydb prefixed key to avoid a vec alloc.
+#[cfg(not(feature = "legacy-trie"))]
+/// Make database key from hash and prefix.
+/// Include `NO_CHILD_KEYSPACE` prefix.
+pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8], keyspace: Option<&[u8]>) -> Vec<u8> {
+	if let Some(ks) = keyspace {
+		let mut res = Vec::with_capacity(ks.len() + prefix.len() + key.as_ref().len());
+		res.extend_from_slice(ks);
+		res.extend_from_slice(prefix);
+		res.extend_from_slice(key.as_ref());
+		res
+	} else {
+		let mut res = rstd::vec![0; NO_CHILD_KEYSPACE.len() + prefix.len() + key.as_ref().len()];
+		res.extend_from_slice(&NO_CHILD_KEYSPACE[..]);
+		res.extend_from_slice(prefix);
+		res.extend_from_slice(key.as_ref());
+		res
+	}
+}
+
+#[cfg(feature = "legacy-trie")]
+/// Make database key from hash and prefix.
+/// Include `NO_CHILD_KEYSPACE` prefix.
+pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
+	if let Some(ks) = keyspace {
+		let mut res = Vec::with_capacity(ks.len() + prefix.len() + key.as_ref().len());
+		res.extend_from_slice(ks);
+		res.extend_from_slice(prefix);
+		res.extend_from_slice(key.as_ref());
+		res
+	} else {
+		let mut res = rstd::vec![0; prefix.len() + key.as_ref().len()];
+		res.extend_from_slice(prefix);
+		res.extend_from_slice(key.as_ref());
+		res
+	}
+}
+
+
 
 /// Parent trie origin. This type contains all information
 /// needed to access a parent trie.

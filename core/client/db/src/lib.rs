@@ -499,7 +499,7 @@ struct StorageDb<Block: BlockT> {
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<Blake2Hasher>(key, prefix);
+		let key = prefixed_key::<Blake2Hasher>(key, prefix, None);
 		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -520,6 +520,7 @@ impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<Blake2Hasher>::default();
+		// TODO EMCH code is likely to do nothing and if doing something there is method for it)
 		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
@@ -1642,7 +1643,7 @@ mod tests {
 
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX, None)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1679,7 +1680,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX, None)
 			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
@@ -1715,7 +1716,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX, None)
 			).unwrap().is_some());
 			hash
 		};
@@ -1749,7 +1750,7 @@ mod tests {
 			backend.commit_operation(op).unwrap();
 			assert!(backend.storage.db.get(
 				columns::STATE,
-				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX, None)
 			).unwrap().is_none())
 		}
 
@@ -1758,7 +1759,7 @@ mod tests {
 		backend.finalize_block(BlockId::Number(3), None).unwrap();
 		assert!(backend.storage.db.get(
 			columns::STATE,
-			&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX, None)
 		).unwrap().is_none());
 	}
 

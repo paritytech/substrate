@@ -25,6 +25,7 @@ use primitives::child_trie::ChildTrieReadRef;
 use trie::{
 	TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
 	read_trie_value, read_child_trie_value, for_keys_in_child_trie,
+	KeySpacedDB,
 };
 use crate::backend::Consolidate;
 
@@ -112,6 +113,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		};
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
+			let eph = KeySpacedDB::new(&eph, None);
 			let trie = TrieDB::<H>::new(&eph, &self.root)?;
 			let mut iter = trie.iter()?;
 

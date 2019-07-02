@@ -28,6 +28,7 @@ use parity_codec::{Encode, Decode, Input};
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};
 use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
+use substrate_trie::{KeySpacedDBMut, KeySpacedDB};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
@@ -319,17 +320,18 @@ fn code_using_trie() -> u64 {
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = rstd::default::Default::default();
-	let _ = {
+	{
 		let v = &pairs;
+		let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
 			t.insert(key, val).expect("static input");
 		}
-		t
-	};
+	}
 
+	let mdb = KeySpacedDB::new(&mdb, None);
 	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
 
 	let iter = trie.iter().expect("static input");

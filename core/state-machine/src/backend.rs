@@ -456,7 +456,7 @@ pub(crate) fn insert_into_memory_db<H, I>(
 	let mut root = <H as Hasher>::Out::default();
 	{
 		if let Some(child_trie) = child_trie.as_ref() {
-			let mut mdb = KeySpacedDBMut::new(&mut *mdb, child_trie.keyspace());
+			let mut mdb = KeySpacedDBMut::new(&mut *mdb, Some(child_trie.keyspace()));
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {
@@ -465,7 +465,8 @@ pub(crate) fn insert_into_memory_db<H, I>(
 				}
 			}
 		} else {
-			let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
+			let mut mdb = KeySpacedDBMut::new(&mut *mdb, None);
+			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {
 					warn!(target: "trie", "Failed to write to trie: {}", e);

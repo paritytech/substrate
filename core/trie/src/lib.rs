@@ -24,7 +24,6 @@ mod node_codec;
 mod trie_stream;
 
 use substrate_primitives::child_trie::{ChildTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
-use substrate_primitives::child_trie::{NO_CHILD_KEYSPACE};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use rstd::marker::PhantomData;
@@ -39,9 +38,7 @@ pub use node_codec::NodeCodec;
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
-
-#[cfg(feature = "legacy-trie")]
-pub use memory_db::prefixed_key;
+pub use substrate_primitives::child_trie::prefixed_key;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -53,7 +50,7 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
-pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, PrefixedKey<H>, trie_db::DBValue>;
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
@@ -65,6 +62,7 @@ pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
 pub type TrieDBMut<'a, H> = trie_db::TrieDBMut<'a, H, NodeCodec<H>>;
 /// Querying interface, as in `trie_db` but less generic.
 pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, H, NodeCodec<H>, Q>;
+
 
 /// Determine a trie root given its ordered contents, closed form.
 pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
@@ -87,7 +85,8 @@ pub fn delta_trie_root<H: Hasher, I, A, B, DB>(
 	DB: hash_db::HashDB<H, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
+		let mut db = KeySpacedDBMut::new(db, None);
+		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
 			match change {
@@ -106,7 +105,9 @@ pub fn read_trie_value<H: Hasher, DB: hash_db::HashDBRef<H, trie_db::DBValue>>(
 	root: &H::Out,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
-	Ok(TrieDB::<H>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	let db = KeySpacedDB::new(db, None);
+	let db = TrieDB::<H>::new(&db, root)?;
+	Ok(db.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the trie with given Query.
@@ -116,7 +117,9 @@ pub fn read_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB: hash_db::H
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
-	Ok(TrieDB::<H>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	let db = KeySpacedDB::new(db, None);
+	let db = TrieDB::<H>::new(&db, root)?;
+	Ok(db.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Determine a trie root node's data given its ordered contents, closed form.
@@ -175,9 +178,10 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 		ChildTrieReadRef::New(keyspace) => (&default_root[..], keyspace),
 	};
 	// keyspaced is needed (db can be init from this operation, this is not only root calculation)
-	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
+	let mut db = KeySpacedDBMut::new(&mut *db, Some(keyspace));
 	let mut root = child_trie_root_as_hash::<H,_>(root);
 	{
+		let mut db = KeySpacedDBMut::new(&mut db, None);
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 		for (key, change) in delta {
 			match change {
@@ -200,8 +204,8 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, keyspace);
 
+		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		let trie = TrieDB::<H>::new(&db, &root)?;
 		let iter = trie.iter()?;
 
@@ -222,7 +226,8 @@ pub fn record_all_keys<H: Hasher, DB>(
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue>
 {
-	let trie = TrieDB::<H>::new(&*db, root)?;
+	let db = KeySpacedDB::new(db, None);
+	let trie = TrieDB::<H>::new(&db, root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -247,7 +252,7 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, keyspace);
+		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -265,7 +270,7 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
 		let root = child_trie_root_as_hash::<H,_>(root);
-		let db = KeySpacedDB::new(&*db, keyspace);
+		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
@@ -333,45 +338,19 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 
 /// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
-pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a KeySpace, PhantomData<H>);
+pub struct KeySpacedDB<'a, DB, H>(&'a DB, Option<&'a KeySpace>, PhantomData<H>);
 /// `HashDBMut` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
 /// prefix of every key value.
 ///
 /// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
-pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a KeySpace, PhantomData<H>);
+pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, Option<&'a KeySpace>, PhantomData<H>);
 
-#[cfg(not(feature = "legacy-trie"))]
-/// Make database key from hash and prefix.
-/// Include `NO_CHILD_KEYSPACE` prefix.
-pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
-	let mut prefixed_key =
-		Vec::with_capacity(NO_CHILD_KEYSPACE.len() + key.as_ref().len() + prefix.len());
-	prefixed_key.extend_from_slice(&NO_CHILD_KEYSPACE[..]);
-	prefixed_key.extend_from_slice(prefix);
-	prefixed_key.extend_from_slice(key.as_ref());
-	prefixed_key
-}
-
-#[derive(Clone,Debug)]
-/// Key function that concatenates no child trie byte,
-/// Also include `NO_CHILD_KEYSPACE` prefix to avoid
-/// conflict with child trie keyspace (it is easy to
-/// change prefix to match the child trie one).
-pub struct PrefixedKey<H: Hasher>(PhantomData<H>);
-
-impl<H: Hasher> KeyFunction<H> for PrefixedKey<H> {
-	type Key = Vec<u8>;
-
-	fn key(hash: &H::Out, prefix: &[u8]) -> Vec<u8> {
-		prefixed_key::<H>(hash, prefix)
-	}
-}
 
 impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 {
 	/// instantiate new keyspaced db
-	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
+	pub fn new(db: &'a DB, ks: Option<&'a KeySpace>) -> Self {
 		KeySpacedDB(db, ks, PhantomData)
 	}
 }
@@ -379,7 +358,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 	H: Hasher,
 {
 	/// instantiate new keyspaced db
-	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
+	pub fn new(db: &'a mut DB, ks: Option<&'a KeySpace>) -> Self {
 		KeySpacedDBMut(db, ks, PhantomData)
 	}
 }
