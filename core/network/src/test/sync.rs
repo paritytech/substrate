@@ -458,17 +458,17 @@ fn light_peer_imports_header_from_announce() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		let header = net.peer(0).client().header(&BlockId::Hash(hash)).unwrap().unwrap();
-		/*// TODO: net.peer(1).receive_message(
-			&net.peer(0).peer_id,
-			message::generic::Message::BlockAnnounce(message::generic::BlockAnnounce {
-				header,
-			}),
-		);*/
+	fn import_with_announce(net: &mut TestNet, runtime: &mut current_thread::Runtime, hash: H256) {
+		net.peer(0).announce_block(hash);
 
-		// TODO: net.peer(1).import_queue_sync();
-		assert!(net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some());
+		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+			net.poll();
+			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
+				Ok(Async::Ready(()))
+			} else {
+				Ok(Async::NotReady)
+			}
+		})).unwrap();
 	}
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
@@ -480,9 +480,9 @@ fn light_peer_imports_header_from_announce() {
 
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
-	import_with_announce(&mut net, new_hash);
+	import_with_announce(&mut net, &mut runtime, new_hash);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
-	import_with_announce(&mut net, known_stale_hash);
+	import_with_announce(&mut net, &mut runtime, known_stale_hash);
 }

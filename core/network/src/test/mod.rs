@@ -259,6 +259,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.network.service().request_justification(hash, number);
 	}
 
+	/// Announces an important block on the network.
+	pub fn announce_block(&self, hash: <Block as BlockT>::Hash) {
+		self.network.service().announce_block(hash);
+	}
+
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
