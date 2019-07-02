@@ -28,12 +28,12 @@ use futures::prelude::*;
 use futures::stream::Fuse;
 use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use substrate_primitives::ed25519::Public as AuthorityId;
-use tokio::timer::Interval;
+use tokio_timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
+use fg_primitives::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -411,7 +411,7 @@ pub(crate) type UntilCommitBlocksImported<Block, Status, I, U> = UntilImported<
 mod tests {
 	use super::*;
 	use tokio::runtime::current_thread::Runtime;
-	use tokio::timer::Delay;
+	use tokio_timer::Delay;
 	use test_client::runtime::{Block, Hash, Header};
 	use consensus_common::BlockOrigin;
 	use client::BlockImportNotification;

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use network_libp2p::PeerId;
+use libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
@@ -30,10 +30,11 @@ use message::{
 };
 use message::{BlockAttributes, Direction, FromBlock, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
+use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use specialization::NetworkSpecialization;
-use sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
+use sync::{ChainSync, Context as SyncContext, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::Roles;
 use rustc_hex::ToHex;
@@ -49,6 +50,7 @@ use util::LruHashSet;
 mod util;
 pub mod consensus_gossip;
 pub mod message;
+pub mod event;
 pub mod on_demand;
 pub mod specialization;
 pub mod sync;
@@ -113,17 +115,6 @@ pub struct ConnectedPeer<B: BlockT> {
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
 	timestamp: time::Instant,
-}
-
-/// Syncing status and statistics
-#[derive(Clone)]
-pub struct ProtocolStatus<B: BlockT> {
-	/// Sync status.
-	pub sync: SyncStatus<B>,
-	/// Total number of connected peers
-	pub num_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 }
 
 /// Peer information
@@ -415,26 +406,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		})
 	}
 
-	/// Returns an object representing the status of the protocol.
-	pub fn status(&self) -> ProtocolStatus<B> {
-		ProtocolStatus {
-			sync: self.sync.status(),
-			num_peers: self.context_data.peers.values().count(),
-			num_active_peers: self
-				.context_data
-				.peers
-				.values()
-				.filter(|p| p.block_request.is_some())
-				.count(),
-		}
+	/// Returns the number of peers we're connected to.
+	pub fn num_connected_peers(&self) -> usize {
+		self.context_data.peers.values().count()
 	}
 
-	pub fn is_major_syncing(&self) -> bool {
-		self.sync.status().is_major_syncing()
+	/// Returns the number of peers we're connected to and that are being queried.
+	pub fn num_active_peers(&self) -> usize {
+		self.context_data
+			.peers
+			.values()
+			.filter(|p| p.block_request.is_some())
+			.count()
 	}
 
-	pub fn is_offline(&self) -> bool {
-		self.sync.status().is_offline()
+	/// Current global sync state.
+	pub fn sync_state(&self) -> SyncState {
+		self.sync.status().state
+	}
+
+	/// Target sync block number.
+	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+		self.sync.status().best_seen_block
+	}
+
+	/// Number of peers participating in syncing.
+	pub fn num_sync_peers(&self) -> u32 {
+		self.sync.status().num_peers
 	}
 
 	/// Starts a new data demand request.
@@ -499,6 +497,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
+	}
+
+	pub fn on_event(&mut self, event: Event) {
+		self.specialization.on_event(event);
 	}
 
 	pub fn on_custom_message(
@@ -618,15 +620,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called when a new peer is connected
-	pub fn on_peer_connected(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, debug_info: String) {
-		trace!(target: "sync", "Connecting {}: {}", who, debug_info);
+	pub fn on_peer_connected(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId) {
+		trace!(target: "sync", "Connecting {}", who);
 		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
 		self.send_status(network_out, who);
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, mut network_out: &mut dyn NetworkOut<B>, peer: PeerId, debug_info: String) {
-		trace!(target: "sync", "Disconnecting {}: {}", peer, debug_info);
+	pub fn on_peer_disconnected(&mut self, mut network_out: &mut dyn NetworkOut<B>, peer: PeerId) {
+		trace!(target: "sync", "Disconnecting {}", peer);
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
@@ -765,8 +767,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let outcome = self.sync.on_block_justification_data(
 				&mut ProtocolContext::new(&mut self.context_data, network_out),
 				peer,
-				request,
-				response,
+				response
 			);
 
 			if let Some((origin, hash, nb, just)) = outcome {

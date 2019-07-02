@@ -22,12 +22,11 @@ use super::*;
 use runtime_io;
 use substrate_primitives::{Blake2Hasher};
 use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch};
-use primitives::{BuildStorage};
 use primitives::traits::{IdentityLookup, BlakeTwo256};
-use primitives::testing::{Digest, DigestItem, Header, Block, UintAuthorityId};
+use primitives::testing::{Header, Block};
 use system;
-use balances::Call as balancesCall;
-use consensus::Call as consensusCall;
+pub use balances::Call as balancesCall;
+pub use system::Call as systemCall;
 
 impl_outer_origin! {
     pub enum Origin for Runtime {
@@ -43,7 +42,7 @@ impl_outer_event!{
 impl_outer_dispatch! {
 	pub enum Call for Runtime where origin: Origin {
 		balances::Balances,
-		consensus::Consensus,
+		system::System,
 	}
 }
 
@@ -56,12 +55,10 @@ impl system::Trait for Runtime {
     type BlockNumber = u64;
     type Hash = substrate_primitives::H256;
     type Hashing = BlakeTwo256;
-    type Digest = Digest;
     type AccountId = u64;
     type Lookup = IdentityLookup<u64>;
     type Header = Header;
     type Event = MetaEvent;
-    type Log = DigestItem;
 }
 impl balances::Trait for Runtime {
     type Balance = u128;
@@ -72,11 +69,6 @@ impl balances::Trait for Runtime {
     type TransactionPayment = ();
     type DustRemoval = ();
     type TransferPayment = ();
-}
-impl consensus::Trait for Runtime {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
 }
 
 impl ValidateUnsigned for Runtime {
@@ -97,7 +89,7 @@ impl ValidateUnsigned for Runtime {
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-    let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+    let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 1000_000_000)],
         existential_deposit: 0,
@@ -109,7 +101,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 }
 
 type Balances = balances::Module<Runtime>;
-type Consensus = consensus::Module<Runtime>;
+type System = system::Module<Runtime>;
 
 pub type TestXt = primitives::testing::TestXt<Call>;
 pub type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, Runtime, ()>;

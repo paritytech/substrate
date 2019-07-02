@@ -34,10 +34,10 @@ use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
+use tokio_executor::Executor;
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
@@ -55,8 +55,7 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
-/// The consensus engine ID of GRANDPA.
-pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+pub use fg_primitives::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
 mod cost {
@@ -127,9 +126,10 @@ pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
+impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	B: BlockT,
 	S: network::specialization::NetworkSpecialization<B>,
+	H: network::ExHashT,
 {
 	type In = NetworkStream;
 
@@ -292,8 +292,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
-			tokio::spawn(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(())));
-			tokio::spawn(reporting_job.select(on_exit.clone()).then(|_| Ok(())));
+			let mut executor = tokio_executor::DefaultExecutor::current();
+			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa rebroadcast job task");
+			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});
 

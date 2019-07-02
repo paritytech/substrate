@@ -51,10 +51,13 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 pub struct WeightToFeeHandler;
 impl Convert<Weight, Balance> for WeightToFeeHandler {
 	fn convert(weight: Weight) -> Balance {
+		println!("Doing {}", weight);
 		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
 		let max = MAX_TRANSACTIONS_WEIGHT as u128;
-		let all = <system::Module<Runtime>>::all_extrinsics_weight() as u128 + weight as u128;
+		let all =
+			(<system::Module<Runtime>>::all_extrinsics_weight() as u128)
+			.saturating_add(weight as u128);
 
 		let from_max_to_per_fraction = |x: u128| {
             if let Some(x_fraction) = x.checked_mul(max_fraction) {
@@ -101,12 +104,12 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
         if positive {
             let excess = first_term.saturating_add(second_term);
             let p = Perbill::from_parts(excess.min(max_fraction) as u32);
-            weight + (p * weight)
+            Balance::from(weight).saturating_add(Balance::from(p * weight))
         } else {
             // first_term > second_term
             let negative = first_term - second_term;
             let p = Perbill::from_parts((max_fraction - negative) as u32);
-            p * weight
+            Balance::from(p * weight)
         }.into()
 	}
 }
@@ -117,8 +120,7 @@ mod tests {
 	use runtime_primitives::{
 		weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
 		traits::{IdentityLookup, Convert, BlakeTwo256},
-		testing::{Digest, DigestItem, Header},
-		BuildStorage,
+		testing::Header,
 	};
 	use support::impl_outer_origin;
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -137,18 +139,16 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 
     type System = system::Module<Runtime>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0.into()
+		system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
 	}
 
 	fn weight_to_fee(weight: Weight, already_existing_weight: Weight) -> Balance  {
@@ -184,6 +184,17 @@ mod tests {
                 let diff = WeightToFeeHandler::convert(i) as i64 - weight_to_fee(i, 0) as i64;
                 assert!(diff < 4)
             });
+		})
+	}
+
+	#[test]
+	fn weight_to_fee_should_not_overflow_on_large_weights() {
+		with_externalities(&mut new_test_ext(), || {
+			let kb = 1024_u32;
+			let mb = kb * kb;
+			vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
+				.into_iter()
+				.for_each(|i| { WeightToFeeHandler::convert(i); });
 		})
 	}
 

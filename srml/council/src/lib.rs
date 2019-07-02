@@ -41,7 +41,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use primitives::{
-		BuildStorage, traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
+		traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
 	};
 	pub use {seats, motions};
 
@@ -73,12 +73,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -175,8 +173,8 @@ mod tests {
 			self
 		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-			t.extend(balances::GenesisConfig::<Test>{
+			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+			t.extend(balances::GenesisConfig::<Test> {
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),

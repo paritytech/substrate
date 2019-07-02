@@ -26,7 +26,10 @@ use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, Childr
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
-use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use crate::backend::{
+	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
+	StorageCollection, ChildStorageCollection,
+};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -310,7 +313,11 @@ where
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+	fn update_storage(
+		&mut self,
+		_update: StorageCollection,
+		_child_update: ChildStorageCollection,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}

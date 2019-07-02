@@ -33,7 +33,8 @@
 //!
 //! ### Terminology
 //!
-//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
+//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the
+//!   account that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
 //! * **Asset destruction:** The process of an account removing its entire holding of an asset.
 //! * **Fungible asset:** An asset whose units are interchangeable.
@@ -45,7 +46,8 @@
 //!
 //! * Issue a unique asset to its creator's account.
 //! * Move assets between accounts.
-//! * Remove an account's balance of an asset when requested by that account's owner and update the asset's total supply.
+//! * Remove an account's balance of an asset when requested by that account's owner and update
+//!   the asset's total supply.
 //!
 //! ## Interface
 //!
@@ -111,6 +113,14 @@
 //! 	}
 //! }
 //! ```
+//!
+//! ## Assumptions
+//!
+//! Below are assumptions that must be held when using this module.  If any of
+//! them are violated, the behavior of this module is undefined.
+//!
+//! * The total count of assets should be less than
+//!   `Trait::AssetId::max_value()`.
 //!
 //! ## Related Modules
 //!
@@ -234,11 +244,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use primitives::{
-		BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
-	};
+	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -255,12 +261,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -272,7 +276,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]

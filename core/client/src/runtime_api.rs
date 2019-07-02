@@ -25,7 +25,7 @@ pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
 	traits::{
-		AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
 		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,

@@ -37,21 +37,17 @@ pub enum Error<E> {
 
 impl<E: std::error::Error> fmt::Display for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		use std::error::Error;
-		write!(f, "{}", self.description())
+		let message = match *self {
+			Error::Duplicate => "Hash already exists in Tree".into(),
+			Error::UnfinalizedAncestor => "Finalized descendent of Tree node without finalizing its ancestor(s) first".into(),
+			Error::Revert => "Tried to import or finalize node that is an ancestor of a previously finalized node".into(),
+			Error::Client(ref err) => format!("Client error: {}", err),
+		};
+		write!(f, "{}", message)
 	}
 }
 
 impl<E: std::error::Error> std::error::Error for Error<E> {
-	fn description(&self) -> &str {
-		match *self {
-			Error::Duplicate => "Hash already exists in Tree",
-			Error::UnfinalizedAncestor => "Finalized descendent of Tree node without finalizing its ancestor(s) first",
-			Error::Revert => "Tried to import or finalize node that is an ancestor of a previously finalized node",
-			Error::Client(ref err) => err.description(),
-		}
-	}
-
 	fn cause(&self) -> Option<&dyn std::error::Error> {
 		None
 	}

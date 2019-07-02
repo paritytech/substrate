@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::{Digest, DigestItem, Header}, BuildStorage};
+use primitives::{traits::IdentityLookup, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait};
@@ -36,12 +36,10 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;
@@ -98,7 +96,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]

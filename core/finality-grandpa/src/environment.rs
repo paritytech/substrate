@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use log::{debug, warn, info};
 use parity_codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio::timer::Delay;
+use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
@@ -30,7 +30,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet, HistoricalVotes,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -50,8 +50,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-
-use ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
@@ -637,7 +636,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: Vec<SignedMessage<Block>>,
+		votes: &HistoricalVotes<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -656,7 +655,7 @@ where
 				number: round,
 				state: state.clone(),
 				base,
-				votes,
+				votes: votes.seen().to_owned(),
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));

@@ -18,75 +18,48 @@
 #[cfg(feature = "bench")]
 extern crate test;
 
-use std::io::{stdin, Read};
+use std::{str::FromStr, io::{stdin, Read}};
 use hex_literal::hex;
 use clap::load_yaml;
-use rand::{RngCore, rngs::OsRng};
-use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256};
 use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
-use schnorrkel::keys::MiniSecretKey;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
 
 mod vanity;
 
 trait Crypto {
-	type Seed: AsRef<[u8]> + AsMut<[u8]> + Sized + Default;
-	type Pair: Pair;
-	fn generate_phrase() -> String {
-		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_owned()
+	type Pair: Pair<Public=Self::Public>;
+	type Public: Ss58Codec + AsRef<[u8]>;
+	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
+		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
-	fn generate_seed() -> Self::Seed {
-		let mut seed: Self::Seed = Default::default();
-		OsRng::new().unwrap().fill_bytes(seed.as_mut());
-		seed
-	}
-	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed;
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair;
-	fn pair_from_suri(phrase: &str, password: Option<&str>) -> Self::Pair {
-		Self::pair_from_seed(&Self::seed_from_phrase(phrase, password))
-	}
-	fn ss58_from_pair(pair: &Self::Pair) -> String;
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8>;
-	fn seed_from_pair(_pair: &Self::Pair) -> Option<&Self::Seed> { None }
-	fn print_from_seed(seed: &Self::Seed) {
-		let pair = Self::pair_from_seed(seed);
-		println!("Seed 0x{} is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
-			HexDisplay::from(&seed.as_ref()),
-			HexDisplay::from(&Self::public_from_pair(&pair)),
-			Self::ss58_from_pair(&pair)
-		);
-	}
-	fn print_from_phrase(phrase: &str, password: Option<&str>) {
-		let seed = Self::seed_from_phrase(phrase, password);
-		let pair = Self::pair_from_seed(&seed);
-		println!("Phrase `{}` is account:\n  Seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
-			phrase,
-			HexDisplay::from(&seed.as_ref()),
-			HexDisplay::from(&Self::public_from_pair(&pair)),
-			Self::ss58_from_pair(&pair)
-		);
-	}
+	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
+	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { pair.public().as_ref().to_owned() }
 	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
-		if let Ok(pair) = Self::Pair::from_string(uri, password) {
-			let seed_text = Self::seed_from_pair(&pair)
-				.map_or_else(Default::default, |s| format!("\n  Seed: 0x{}", HexDisplay::from(&s.as_ref())));
-			println!("Secret Key URI `{}` is account:{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
+			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
-				seed_text,
+				HexDisplay::from(&seed.as_ref()),
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
-		}
-		if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
+		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
+			println!("Secret Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+				uri,
+				HexDisplay::from(&Self::public_from_pair(&pair)),
+				Self::ss58_from_pair(&pair)
+			);
+		} else if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
 			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
 				HexDisplay::from(&public.as_ref()),
 				public.to_ss58check()
 			);
+		} else {
+			println!("Invalid phrase/URI given");
 		}
 	}
 }
@@ -94,75 +67,47 @@ trait Crypto {
 struct Ed25519;
 
 impl Crypto for Ed25519 {
-	type Seed = [u8; 32];
 	type Pair = ed25519::Pair;
+	type Public = ed25519::Public;
 
-	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
-		Sr25519::seed_from_phrase(phrase, password)
-	}
 	fn pair_from_suri(suri: &str, password_override: Option<&str>) -> Self::Pair {
 		ed25519::Pair::from_legacy_string(suri, password_override)
 	}
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { ed25519::Pair::from_seed(seed.clone()) }
-	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
-	fn seed_from_pair(pair: &Self::Pair) -> Option<&Self::Seed> { Some(pair.seed()) }
 }
 
 struct Sr25519;
 
 impl Crypto for Sr25519 {
-	type Seed = [u8; 32];
 	type Pair = sr25519::Pair;
-
-	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
-		mini_secret_from_entropy(
-			Mnemonic::from_phrase(phrase, Language::English)
-				.unwrap_or_else(|_|
-					panic!("Phrase is not a valid BIP-39 phrase: \n    {}", phrase)
-				)
-				.entropy(),
-			password.unwrap_or("")
-		)
-			.expect("32 bytes can always build a key; qed")
-			.to_bytes()
-	}
-
-	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
-		sr25519::Pair::from_string(suri, password).expect("Invalid phrase")
-	}
-
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair {
-		MiniSecretKey::from_bytes(seed)
-			.expect("32 bytes can always build a key; qed")
-			.into()
-	}
-	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
+	type Public = sr25519::Public;
 }
 
-fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
+fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
 	let password = matches.value_of("password");
 	match matches.subcommand() {
-		("generate", Some(_matches)) => {
+		("generate", Some(matches)) => {
 			// create a new randomly generated mnemonic phrase
-			let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-			C::print_from_phrase(mnemonic.phrase(), password);
-		},
-		("vanity", Some(matches)) => {
-			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
-			let key = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			C::print_from_seed(&key.seed);
+			let words = matches.value_of("words")
+				.map(|x| usize::from_str(x).expect("Invalid number given for --words"))
+				.map(|x| MnemonicType::for_word_count(x)
+					.expect("Invalid number of words given for phrase: must be 12/15/18/21/24")
+				).unwrap_or(MnemonicType::Words12);
+			let mnemonic = Mnemonic::new(words, Language::English);
+			C::print_from_uri(mnemonic.phrase(), password);
 		}
 		("inspect", Some(matches)) => {
-			// TODO: Accept public key with derivation path.
 			let uri = matches.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
 			C::print_from_uri(uri, password);
-		},
+		}
+		("vanity", Some(matches)) => {
+			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
+			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
+			C::print_from_uri(&format!("0x{}", HexDisplay::from(&result.seed.as_ref())), None);
+		}
 		("sign", Some(matches)) => {
 			let suri = matches.value_of("suri")
 				.expect("secret URI parameter is required; thus it can't be None; qed");
@@ -201,7 +146,8 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..])).expect("Invalid genesis hash or unrecognised chain identifier"),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+          .expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));

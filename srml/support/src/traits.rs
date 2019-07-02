@@ -20,9 +20,8 @@
 
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
-use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic
-};
+use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic};
+use crate::runtime_primitives::ConsensusEngineId;
 use crate::runtime_primitives::weights::Weight;
 
 use super::for_each_tuple;
@@ -101,6 +100,20 @@ pub trait MakePayment<AccountId> {
 
 impl<T> MakePayment<T> for () {
 	fn make_payment(_: &T, _: Weight) -> Result<(), &'static str> { Ok(()) }
+}
+
+/// A trait for finding the author of a block header based on the `PreRuntime` digests contained
+/// within it.
+pub trait FindAuthor<Author> {
+	/// Find the author of a block based on the pre-runtime digests.
+	fn find_author<'a, I>(digests: I) -> Option<Author>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>;
+}
+
+/// A trait for verifying the seal of a header and returning the author.
+pub trait VerifySeal<Header, Author> {
+	/// Verify a header and return the author, if any.
+	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 
 /// Handler for when some currency "account" decreased in balance for

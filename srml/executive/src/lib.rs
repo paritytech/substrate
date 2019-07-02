@@ -77,17 +77,17 @@
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::traits::{
+use primitives::{generic::Digest, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
-	ValidateUnsigned, DigestItem,
-};
-use primitives::weights::{Weighable, MAX_TRANSACTIONS_WEIGHT};
-use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+	OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
+	ValidateUnsigned,
+}};
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
-use system::extrinsics_root;
+use system::{extrinsics_root, DigestOf};
+use primitives::{ApplyOutcome, ApplyError};
+use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use primitives::weights::{Weighable, MAX_TRANSACTIONS_WEIGHT};
 
 mod mock;
 mod tests;
@@ -114,6 +114,10 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
+pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
+pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
+pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+
 pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
 );
@@ -128,12 +132,10 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
-		From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
+	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
 		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
@@ -150,16 +152,14 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin:
-		From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
+	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		let mut digests = System::Digest::default();
+		let mut digests = <DigestOf<System>>::default();
 		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
 		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
 	}
@@ -168,7 +168,7 @@ where
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
 		extrinsics_root: &System::Hash,
-		digest: &System::Digest
+		digest: &Digest<System::Hash>,
 	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
@@ -261,7 +261,7 @@ where
 	fn apply_extrinsic_with_len(
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
-		to_note: Option<Vec<u8>>
+		to_note: Option<Vec<u8>>,
 	) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
@@ -353,6 +353,7 @@ where
 		match (xt.sender(), xt.index()) {
 			(Some(sender), Some(index)) => {
 				let weight = xt.weight(encoded_len);
+
 				// pay any fees
 				if Payment::make_payment(sender, weight).is_err() {
 					return TransactionValidity::Invalid(ApplyError::CantPay as i8)

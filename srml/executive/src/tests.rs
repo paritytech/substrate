@@ -19,11 +19,8 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{new_test_ext, TestXt, Executive, Runtime, Call};
-use balances::Call as balancesCall;
-use consensus::Call as consensusCall;
+use mock::{new_test_ext, TestXt, Executive, Runtime, Call, systemCall, balancesCall};
 use system;
-use primitives::BuildStorage;
 use primitives::weights::{MAX_TRANSACTIONS_WEIGHT};
 use primitives::testing::{Digest, Header, Block};
 use primitives::traits::{Header as HeaderT};
@@ -34,7 +31,7 @@ use hex_literal::hex;
 
 #[test]
 fn balance_transfer_dispatch_works() {
-    let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+    let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 129)],
         existential_deposit: 0,
@@ -120,7 +117,7 @@ fn bad_extrinsic_not_inserted() {
 #[test]
 fn block_weight_limit_enforced() {
     let run_test = |should_fail: bool| {
-        let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+        let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
         t.extend(balances::GenesisConfig::<Runtime> {
             balances: vec![(1, 129)],
             existential_deposit: 0,
@@ -168,7 +165,7 @@ fn exceeding_block_weight_fails() {
         primitives::testing::TestXt(
             Some(1),
             i.into(),
-            Call::Consensus(consensusCall::remark(vec![0_u8; 1024 * 128]))
+            Call::System(systemCall::remark(vec![0_u8; 1024 * 128]))
         );
     with_externalities(&mut t, || {
         let len = xt(0).clone().encode().len() as u32;
@@ -221,7 +218,7 @@ fn default_block_weight() {
 
 #[test]
 fn fail_on_bad_nonce() {
-    let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+    let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 129)],
         existential_deposit: 0,

@@ -83,7 +83,7 @@ where
 	let seed = factory_state.start_number() + factory_state.block_no();
 	let to = RA::gen_random_account_id(&seed);
 
-	let mut amount;
+	let amount;
 	if factory_state.round() == RA::Number::zero() {
 		amount = RA::minimum_balance() * factory_state.rounds();
 	} else {

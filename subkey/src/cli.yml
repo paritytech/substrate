@@ -21,6 +21,12 @@ args:
 subcommands:
   - generate:
       about: Generate a random account
+      args:
+        - words:
+            short: w
+            long: words
+            help: The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
+            takes_value: true
   - inspect:
       about: Gets a public key and a SS58 address from the provided Secret URI
       args:

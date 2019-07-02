@@ -20,8 +20,7 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use primitives::BuildStorage;
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::testing::Header;
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::impl_outer_origin;
 use {runtime_io, system};
@@ -71,12 +70,10 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;
@@ -92,7 +89,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		for i in 1..5 { h.insert(i); }
 	}
 
-	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 	t.extend(GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
 	}.build_storage().unwrap().0);

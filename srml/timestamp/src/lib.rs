@@ -333,9 +333,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -349,12 +347,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl Trait for Test {
 		type Moment = u64;
@@ -364,7 +360,7 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
@@ -379,7 +375,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
@@ -394,7 +390,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);

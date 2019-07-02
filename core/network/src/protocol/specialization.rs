@@ -16,9 +16,9 @@
 
 //! Specializations of the substrate network protocol to allow more complex forms of communication.
 
-use crate::PeerId;
-use runtime_primitives::traits::Block as BlockT;
 use crate::protocol::Context;
+use libp2p::PeerId;
+use runtime_primitives::traits::Block as BlockT;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
@@ -37,6 +37,12 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 		ctx: &mut dyn Context<B>,
 		who: PeerId,
 		message: &mut Option<crate::message::Message<B>>
+	);
+
+	/// Called when a network-specific event arrives.
+	fn on_event(
+		&mut self,
+		event: crate::protocol::event::Event
 	);
 
 	/// Called on abort.
@@ -128,6 +134,13 @@ macro_rules! construct_simple_protocol {
 				_message: &mut Option<$crate::message::Message<$block>>
 			) {
 				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
+			}
+
+			fn on_event(
+				&mut self,
+				_event: $crate::event::Event
+			) {
+				$( self.$sub_protocol_name.on_event(_event); )*
 			}
 
 			fn on_abort(&mut self) {

@@ -7,14 +7,13 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0", default-features = false }
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default_features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default_features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default_features = false }
 support = { package = "srml-support", path = "../../srml/support", default_features = false }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default_features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default_features = false }
-consensus = { package = "srml-consensus", path = "../../srml/consensus", default_features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default_features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default_features = false }
@@ -25,7 +24,6 @@ sr-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", 
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
-consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
 [features]
 default = ["std"]
@@ -49,5 +47,4 @@ std = [
 	"safe-mix/std",
 	"consensus-aura/std",
 	"offchain-primitives/std",
-	"consensus_authorities/std",
 ]

@@ -176,7 +176,7 @@ mod test {
 	#[test]
 	fn check_equivocation_works() {
 		let client = test_client::new();
-		let pair = sr25519::Pair::generate();
+		let (pair, _seed) = sr25519::Pair::generate();
 		let public = pair.public();
 
 		let header1 = create_header(1); // @ slot 2
