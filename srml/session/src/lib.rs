@@ -150,7 +150,7 @@ impl<
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn should_end_session(now: BlockNumber) -> bool {
 		let offset = Offset::get();
-		now > offset && ((now - offset) % Period::get()).is_zero()
+		now >= offset && ((now - offset) % Period::get()).is_zero()
 	}
 }
 
@@ -612,16 +612,16 @@ mod tests {
 
 		type P = PeriodicSessions<Period, Offset>;
 
-		for i in 0..13 {
+		for i in 0..3 {
+			assert!(!P::should_end_session(i));
+		}
+
+		assert!(P::should_end_session(3));
+
+		for i in (1..10).map(|i| 3 + i) {
 			assert!(!P::should_end_session(i));
 		}
 
 		assert!(P::should_end_session(13));
-
-		for i in (1..10).map(|i| 13 + i) {
-			assert!(!P::should_end_session(i));
-		}
-
-		assert!(P::should_end_session(23));
 	}
 }
