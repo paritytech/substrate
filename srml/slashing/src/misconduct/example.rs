@@ -55,9 +55,10 @@ impl RollingMisconduct<u64> for Rolling {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
 	#[test]
 	fn rolling_it_works() {
-
 		let mut rolling = Rolling::default();
 		let validator_len = 50;
 
