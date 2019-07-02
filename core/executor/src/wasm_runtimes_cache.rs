@@ -64,6 +64,8 @@ impl StateSnapshot {
 		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
+		// TODO:
+		dbg!(heap_pages);
 		let mut prepared_segments = Vec::with_capacity(data_segments.len());
 		for mut segment in data_segments {
 			// Just replace contents of the segment since the segments will be discarded later
@@ -112,9 +114,10 @@ impl StateSnapshot {
 			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
 		match mem {
 			wasmi::ExternVal::Memory(memory_ref) => {
-				let amount = self.heap_pages as usize * wasmi::LINEAR_MEMORY_PAGE_SIZE.0;
 				// TODO:
-				memory_ref.clear(0, 0, amount).expect("");
+				let amount: wasmi::memory_units::Bytes = memory_ref.current_size().into();
+				// TODO:
+				memory_ref.clear(0, 0, amount.0).expect("");
 
 				for (offset, contents) in &self.data_segments {
 					// TODO: expect

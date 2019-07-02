@@ -68,6 +68,11 @@ impl FreeingBumpHeapAllocator {
 		let current_size = current_size.0 as u32;
 		let heap_size = current_size - heap_base;
 
+		// TODO:
+		dbg!(current_size);
+		dbg!(heap_size);
+		dbg!(heap_base);
+
 		let mut ptr_offset = heap_base;
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
