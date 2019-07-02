@@ -142,6 +142,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 				Ok((module, onchain_version)) => (module, onchain_version),
 				Err(e) => return (Err(e), false),
 			};
+
+			// TODO:
+			let use_native = false;
+
 			match (
 				use_native,
 				onchain_version

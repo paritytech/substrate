@@ -157,7 +157,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 
 	fn minimum_balance() -> Self::Number {
 		// TODO get correct amount via api. See #2587.
-		1337
+		500
 	}
 
 	fn master_account_id() -> Self::AccountId {

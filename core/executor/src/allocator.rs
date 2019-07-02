@@ -66,7 +66,7 @@ impl FreeingBumpHeapAllocator {
 	pub fn new(mem: MemoryRef) -> Self {
 		let current_size: Bytes = mem.current_size().into();
 		let current_size = current_size.0 as u32;
-		let used_size = mem.used_size().0 as u32;
+		let used_size = 1137837 as u32; //mem.used_size().0 as u32;
 		let heap_size = current_size - used_size;
 
 		let mut ptr_offset = used_size;
