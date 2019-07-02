@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Private mplementation details of BABE digests.
+//! Private implementation details of BABE digests.
 
 use primitives::sr25519::{Public, Signature};
 use babe_primitives::BABE_ENGINE_ID;
