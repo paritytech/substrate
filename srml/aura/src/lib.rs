@@ -54,7 +54,6 @@ use rstd::{result, prelude::*};
 use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
 use primitives::{
-	KeyTypeId,
 	traits::{SaturatedConversion, Saturating, Zero, One, Member, TypedKey},
 	generic::DigestItem,
 };

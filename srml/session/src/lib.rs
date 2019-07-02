@@ -245,7 +245,7 @@ pub trait Trait: system::Trait {
 }
 
 type OpaqueKey = Vec<u8>;
-const CHILD_TRIE_KEY: &[u8] = b":child_storage:default:session_keys" as _;
+const CHILD_TRIE_KEY: &[u8] = b":child_storage:session_keys" as _;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -265,6 +265,18 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
+		build(|
+			storage: &mut primitives::StorageOverlay,
+			_: &mut primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig<T>
+		| {
+			runtime_io::with_storage(storage, || {
+				for (who, keys) in config.keys.iter().cloned() {
+					<Module<T>>::do_set_keys(&who, keys)
+						.expect("genesis config must not contain duplicates; qed");
+				}
+			});
+		});
 	}
 }
 
@@ -287,7 +299,7 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
 		/// # </weight>
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
@@ -299,29 +311,8 @@ decl_module! {
 				Some(val_id) => val_id,
 				None => return Err("no associated validator ID for account."),
 			};
-			let old_keys = Self::load_keys(&who);
 
-			for id in T::Keys::key_ids() {
-				let key = keys.get_raw(id);
-
-				ensure!(
-					Self::key_owner(id, key).map_or(true, |owner| owner == who),
-					"registered duplicate key"
-				);
-
-				// ensure keys are without duplication.
-				if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
-					if key == old {
-						continue;
-					}
-
-					Self::clear_key_owner(id, old);
-				}
-
-				Self::put_key_owner(id, key, &who);
-			}
-
-			Self::put_keys(&who, &keys);
+			Self::do_set_keys(&who, keys)?;
 
 			// Something changed.
 			Changed::put(true);
@@ -382,14 +373,65 @@ impl<T: Trait> Module<T> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
+	// perform the set_key operation, checking for duplicates.
+	// does not set `Changed`.
+	fn do_set_keys(who: &T::ValidatorId, keys: T::Keys) -> Result {
+		let old_keys = Self::load_keys(&who);
+
+		for id in T::Keys::key_ids() {
+			let key = keys.get_raw(id);
+
+			ensure!(
+				Self::key_owner(id, key).map_or(true, |owner| &owner == who),
+				"registered duplicate key"
+			);
+
+			// ensure keys are without duplication.
+			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
+				if key == old {
+					continue;
+				}
+
+				Self::clear_key_owner(id, old);
+			}
+
+			Self::put_key_owner(id, key, &who);
+		}
+
+		Self::put_keys(&who, &keys);
+
+		Ok(())
+	}
+
+	fn prune_dead_keys(who: &T::ValidatorId) {
+		if let Some(old_keys) = Self::take_keys(who) {
+			for id in T::Keys::key_ids() {
+				let key_data = old_keys.get_raw(id);
+				Self::clear_key_owner(id, key_data);
+			}
+
+			Changed::put(true);
+		}
+	}
+
 	// Child trie storage.
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		v.using_encoded(|s| child_storage::get(CHILD_TRIE_KEY, s))
+		v.using_encoded(|s|
+			child_storage::get(CHILD_TRIE_KEY, s)
+		)
+	}
+
+	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+		v.using_encoded(|s|
+			child_storage::take(CHILD_TRIE_KEY, s)
+		)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		v.using_encoded(|s| child_storage::put(CHILD_TRIE_KEY, s, keys));
+		v.using_encoded(|s|
+			child_storage::put(CHILD_TRIE_KEY, s, keys)
+		);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
@@ -407,7 +449,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 	fn on_free_balance_zero(who: &T::ValidatorId) {
-		unimplemented!()
+		Self::prune_dead_keys(who);
 	}
 }
 
@@ -437,7 +479,8 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, OnInitialize, ConvertInto}, testing::{Header, UintAuthorityId}
+		traits::{BlakeTwo256, IdentityLookup, OnInitialize, ConvertInto},
+		testing::{Header, UintAuthorityId}
 	};
 
 	impl_outer_origin!{
@@ -463,9 +506,13 @@ mod tests {
 	pub struct TestSessionHandler;
 	impl SessionHandler<u64> for TestSessionHandler {
 		fn on_new_session<T: OpaqueKeys>(_changed: bool, validators: &[(u64, T)]) {
-			AUTHORITIES.with(|l|
-				*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
-			);
+			AUTHORITIES.with(|l| {
+				let key_id = <UintAuthorityId as TypedKey>::KEY_TYPE;
+				*l.borrow_mut() = validators.iter().map(|(_, keys)| {
+					println!("{:?}", keys.get_raw(key_id));
+					keys.get::<UintAuthorityId>(key_id).unwrap_or_default()
+				}).collect()
+			});
 		}
 		fn on_disabled(_validator_index: usize) {}
 	}
@@ -539,6 +586,38 @@ mod tests {
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
+	}
+
+	#[test]
+	fn child_trie_is_valid_key() {
+		assert!(
+			substrate_primitives::storage::well_known_keys::is_child_storage_key(CHILD_TRIE_KEY)
+		);
+	}
+
+	#[test]
+	fn put_get_keys() {
+		with_externalities(&mut new_test_ext(), || {
+			Session::put_keys(&10, &UintAuthorityId(10));
+			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10)));
+		})
+	}
+
+	#[test]
+	fn keys_cleared_on_kill() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1)));
+
+			let id = <UintAuthorityId as TypedKey>::KEY_TYPE;
+			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
+
+			Session::on_free_balance_zero(&1);
+			assert_eq!(Session::load_keys(&1), None);
+			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
+
+			assert!(Changed::get());
+		})
 	}
 
 	#[test]
