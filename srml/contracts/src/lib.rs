@@ -886,6 +886,9 @@ pub struct Schedule {
 	/// Maximum number of memory pages allowed for a contract.
 	pub max_memory_pages: u32,
 
+	/// Maximum allowed size of a declared table.
+	pub max_table_size: u32,
+
 	/// Whether the `ext_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
@@ -912,6 +915,7 @@ impl Default for Schedule {
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
+			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
 		}

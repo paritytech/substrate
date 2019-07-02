@@ -74,6 +74,25 @@ impl<'a> ContractModule<'a> {
 		Ok(())
 	}
 
+	/// Ensures that tables declared in the module are not too big.
+	fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
+        if let Some(table_section) = self.module.table_section() {
+			// In Wasm MVP spec, there may be at most one table declared. Double check this
+			// explicitly just in case the Wasm version changes.
+			if table_section.entries().len() > 1 {
+				return Err("multiple tables declared");
+			}
+			if let Some(table_type) = table_section.entries().first() {
+				// Check the table's initial size as there is no instruction or environment function
+				// capable of growing the table.
+				if table_type.limits().initial() > limit {
+					return Err("table exceeds maximum size allowed")
+				}
+			}
+		}
+		Ok(())
+	}
+
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules =
 			rules::Set::new(
@@ -271,6 +290,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
+	contract_module.ensure_table_size_limit(schedule.max_table_size)?;
 
 	struct MemoryDefinition {
 		initial: u32,
@@ -500,6 +520,49 @@ mod tests {
 			)
 			"#,
 			Err("Cannot import globals")
+		);
+	}
+
+	mod tables {
+		use super::*;
+
+		// Tests below assumes that maximum table size is configured to a certain number.
+		#[test]
+		fn assume_table_size() {
+			assert_eq!(Schedule::default().max_table_size, 16384);
+		}
+
+		prepare_test!(no_tables,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(table_valid_size,
+			r#"
+			(module
+				(table 10000 funcref)
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(table_too_big,
+			r#"
+			(module
+				(table 20000 funcref)
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)"#,
+			Err("table exceeds maximum size allowed")
 		);
 	}
 

@@ -121,6 +121,11 @@ pub type ComponentClient<C> = Client<
 	<C as Components>::RuntimeApi,
 >;
 
+/// A offchain workers storage backend type.
+pub type ComponentOffchainStorage<C> = <
+	<C as Components>::Backend as client::backend::Backend<ComponentBlock<C>, Blake2Hasher>
+>::OffchainStorage;
+
 /// Block type for `Components`
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
 
@@ -259,7 +264,11 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 pub trait OffchainWorker<C: Components> {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		offchain: &offchain::OffchainWorkers<
+			ComponentClient<C>,
+			ComponentOffchainStorage<C>,
+			ComponentBlock<C>
+		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
@@ -270,7 +279,11 @@ impl<C: Components> OffchainWorker<Self> for C where
 {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		offchain: &offchain::OffchainWorkers<
+			ComponentClient<C>,
+			ComponentOffchainStorage<C>,
+			ComponentBlock<C>
+		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
 		Ok(Box::new(offchain.on_block_imported(number, pool)))
