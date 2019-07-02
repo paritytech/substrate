@@ -35,8 +35,8 @@
 //!
 //! The Council module provides functionality to handle:
 //!
-//! - The voting in and maintenance of council members.
-//! - Proposing, vetoing, and passing motions.
+//! - Voting in and maintenance of council members.
+//! - Proposing, vetoing, and passing of motions.
 //!
 //! The council is an on-chain entity comprised of a set of account IDs, with the role of representing
 //! passive stakeholders. Its primary tasks are to propose sensible referenda and thwart any uncontroversially

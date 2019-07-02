@@ -39,7 +39,7 @@ pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// Origin for the council module.
+/// Origin for the Council module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Origin {
@@ -49,10 +49,10 @@ pub enum Origin {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
-		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
+		/// A motion (given hash) has been proposed (by given account) with a threshold (given `u32`).
 		Proposed(AccountId, ProposalIndex, Hash, u32),
 		/// A motion (given hash) has been voted on by given account, leaving
-		/// a tally (yes votes and no votes given as u32s respectively).
+		/// a tally (yes votes and no votes given as `u32`s respectively).
 		Voted(AccountId, Hash, bool, u32, u32),
 		/// A motion was approved by the required threshold.
 		Approved(Hash),
@@ -66,6 +66,13 @@ decl_event!(
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
+
+		/// Make a proposal. `threshold` indicates the number of yes-votes needed for the proposal
+		/// to execute.
+		///
+		/// The proposal must be unique.
+		///
+		/// The dispatch origin of this call must be signed by a _councillor_.
 		fn propose(origin, #[compact] threshold: u32, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
@@ -89,6 +96,16 @@ decl_module! {
 			}
 		}
 
+		/// Vote on a proposal.
+		///
+		/// The proposal hash and the index of the vote must be correctly provided.
+		/// A voter can change their vote from yes to no, but duplicate votes will raise an error.
+		///
+		/// Each submitted vote _may_ cause the proposal to be executed, if the required
+		/// threshold is reached. Similarly, enough no-votes can cause the proposal to be
+		/// removed from storage.
+		///
+		/// The dispatch origin of this call must be signed by a _councillor_.
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 
@@ -158,8 +175,8 @@ decl_storage! {
 		/// The (hashes of) the active proposals.
 		pub Proposals get(proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
-		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
+		pub ProposalOf get(proposal_of): map T::Hash => Option<<T as Trait>::Proposal>;
+		/// Votes for a given proposal: (Proposal index, required number of yes votes, yes voters, no voters).
 		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>)>;
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
@@ -170,6 +187,7 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Returns true if `who` is an active councillor.
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
 			.any(|&(ref a, _)| a == who)
@@ -187,6 +205,7 @@ pub fn ensure_council_members<OuterOrigin>(o: OuterOrigin, n: u32) -> result::Re
 	}
 }
 
+/// Phantom struct to ensure that an `origin` is a councillor.
 pub struct EnsureMembers<N: U32>(::rstd::marker::PhantomData<N>);
 impl<O, N: U32> EnsureOrigin<O> for EnsureMembers<N>
 	where O: Into<Option<Origin>>
@@ -205,7 +224,11 @@ mod tests {
 	use crate::tests::{Call, Origin, Event as OuterEvent};
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
+
+	fn set_balance_proposal(value: u64) -> Call {
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
+	}
 
 	#[test]
 	fn motions_basic_environment_works() {
@@ -214,10 +237,6 @@ mod tests {
 			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(CouncilMotions::proposals(), Vec::<H256>::new());
 		});
-	}
-
-	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
 	}
 
 	#[test]
@@ -234,7 +253,15 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 3))
+					event: OuterEvent::motions(
+						RawEvent::Proposed(
+							1,
+							0,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							3
+						)
+					),
+					topics: vec![],
 				}
 			]);
 		});
@@ -245,7 +272,10 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())), "proposer not on council");
+			assert_noop!(
+				CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())),
+				"proposer not on council"
+			);
 		});
 	}
 
@@ -287,11 +317,28 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 2))
+					event: OuterEvent::motions(
+						RawEvent::Proposed(
+							1,
+							0,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							2
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(1, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false, 0, 1))
+					event: OuterEvent::motions(
+						RawEvent::Voted(
+							1,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							false,
+							0,
+							1
+						)
+					),
+					topics: vec![],
 				}
 			]);
 		});
@@ -309,15 +356,37 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 3))
+					event: OuterEvent::motions(
+						RawEvent::Proposed(
+							1,
+							0,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							3
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false, 1, 1))
+					event: OuterEvent::motions(
+						RawEvent::Voted(
+							2,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							false,
+							1,
+							1
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Disapproved(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()))
+					event: OuterEvent::motions(
+						RawEvent::Disapproved(
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()
+						)
+					),
+					topics: vec![],
 				}
 			]);
 		});
@@ -327,6 +396,7 @@ mod tests {
 	fn motions_approval_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
+			assert_eq!(Balances::free_balance(&42), 0);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
@@ -335,19 +405,47 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 2))
+					event: OuterEvent::motions(
+						RawEvent::Proposed(
+							1,
+							0,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							2
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), true, 2, 0))
+					event: OuterEvent::motions(
+						RawEvent::Voted(
+							2,
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							true,
+							2,
+							0
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Approved(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()))
+					event: OuterEvent::motions(
+						RawEvent::Approved(
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()
+						)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Executed(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false))
+					event: OuterEvent::motions(
+						RawEvent::Executed(
+							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							false
+						)
+					),
+					topics: vec![],
 				}
 			]);
 		});
