@@ -218,27 +218,6 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
-	/// Push a message into the gossip network and relay to peers.
-	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(
-		&self,
-		topic: <Block as BlockT>::Hash,
-		engine_id: ConsensusEngineId,
-		data: Vec<u8>,
-		force: bool,
-	) {
-		panic!()
-		// FIXME:
-		/*let recipient = if force {
-			GossipMessageRecipient::BroadcastToAll
-		} else {
-			GossipMessageRecipient::BroadcastNew
-		};
-		self.net_proto_channel.send_from_client(
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, recipient),
-		);*/
-	}
-
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
 		self.network.service().is_major_syncing()
@@ -308,7 +287,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			full_client.import_block(import_block, cache).unwrap();
-			self.network.service().on_block_imported(hash.clone(), header);
 			at = hash;
 		}
 
@@ -607,31 +585,6 @@ pub trait TestNetFactory: Sized {
 		});
 	}
 
-	/// Send block import notifications for all peers.
-	fn send_import_notifications(&mut self) {
-		// FIXME: self.peers().iter().for_each(|peer| peer.send_import_notifications())
-	}
-
-	/// Send block finalization notifications for all peers.
-	fn send_finality_notifications(&mut self) {
-		// FIXME: self.peers().iter().for_each(|peer| peer.send_finality_notifications())
-	}
-
-	/// Perform synchronization until complete, if provided the
-	/// given nodes set are excluded from sync.
-	fn sync_with(&mut self, disconnect: bool, disconnected: Option<HashSet<usize>>) {
-		/*FIXME: self.start();
-		while self.route_single(disconnect, disconnected.clone(), &|_| true) {
-			// give protocol a chance to do its maintain procedures
-			self.peers().iter().for_each(|peer| peer.sync_step());
-		}*/
-	}
-
-	/// Deliver at most 1 pending message from every peer.
-	fn sync_step(&mut self) {
-		// FIXME: self.route_single(true, None, &|_| true);
-	}
-
 	/// Polls the testnet until all nodes are in sync.
 	///
 	/// Must be executed in a task context.
@@ -648,12 +601,6 @@ pub trait TestNetFactory: Sized {
 			}
 		}
 		Async::Ready(())
-	}
-
-	/// Whether all peers have no pending outgoing messages.
-	fn done(&self) -> bool {
-		panic!()
-		// FIXME: self.peers().iter().all(|p| p.is_done())
 	}
 
 	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.

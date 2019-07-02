@@ -322,7 +322,6 @@ fn sync_after_fork_works() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
-	net.sync_step();
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 	net.peer(2).push_blocks(30, false);
@@ -347,7 +346,6 @@ fn syncs_all_forks() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(4);
-	net.sync_step();
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
@@ -415,7 +413,6 @@ fn can_sync_small_non_best_forks() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(2);
-	net.sync_step();
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
