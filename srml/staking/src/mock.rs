@@ -22,7 +22,8 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency, EnumerableStorageMap};
+use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
+use srml_support::traits::{Currency, Get};
 use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
 	ValidatorPrefs, RewardDestination, Nominators
 };
@@ -45,6 +46,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct TestSessionHandler;
@@ -69,6 +71,13 @@ pub fn is_disabled(validator: AccountId) -> bool {
 	SESSION.with(|d| d.borrow().1.contains(&validator))
 }
 
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
+	}
+}
+
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
@@ -88,6 +97,10 @@ impl system::Trait for Test {
 	type FeeMultiplierUpdate = ();
 	type Event = ();
 }
+parameter_types! {
+	pub const TransferFee: u64 = 0;
+	pub const CreationFee: u64 = 0;
+}
 impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Staking;
@@ -96,6 +109,9 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;
@@ -182,7 +198,11 @@ impl ExtBuilder {
 		self.fair = is_fair;
 		self
 	}
+	pub fn set_associated_consts(&self) {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		self.set_associated_consts();
 		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
@@ -212,9 +232,6 @@ impl ExtBuilder {
 					(100, 2000 * balance_factor),
 					(101, 2000 * balance_factor),
 			],
-			existential_deposit: self.existential_deposit,
-			transfer_fee: 0,
-			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let stake_21 = if self.fair { 1000 } else { 2000 };

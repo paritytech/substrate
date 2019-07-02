@@ -20,11 +20,36 @@
 
 use primitives::{traits::IdentityLookup, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
-use srml_support::impl_outer_origin;
+use runtime_io;
+use srml_support::{impl_outer_origin, traits::Get};
+use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
+}
+
+thread_local! {
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
+	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(0);
+}
+
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
+}
+
+pub struct TransferFee;
+impl Get<u64> for TransferFee {
+	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct CreationFee;
+impl Get<u64> for CreationFee {
+	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -50,6 +75,9 @@ impl Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
 }
 
 pub struct ExtBuilder {
@@ -95,7 +123,15 @@ impl ExtBuilder {
 		self.vesting = vesting;
 		self
 	}
+	pub fn set_associated_consts(&self) {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
+		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
+		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
+		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
@@ -103,9 +139,6 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-			existential_deposit: self.existential_deposit,
-			transfer_fee: self.transfer_fee,
-			creation_fee: self.creation_fee,
 			vesting: if self.vesting && self.monied {
 				vec![(1, 0, 10), (2, 10, 20)]
 			} else {

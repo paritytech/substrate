@@ -34,9 +34,6 @@ fn balance_transfer_dispatch_works() {
     let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 129)],
-        existential_deposit: 0,
-        transfer_fee: 0,
-        creation_fee: 0,
         vesting: vec![],
     }.build_storage().unwrap().0);
     let xt = primitives::testing::TestXt(Some(1), 0, Call::Balances(balancesCall::transfer(2, 69)));
@@ -59,7 +56,7 @@ fn block_import_works() {
             header: Header {
                 parent_hash: [69u8; 32].into(),
                 number: 1,
-                state_root: hex!("7f041ecce50e2238baefc59f1ebed7ce0ef3cfc53dac0e5a873af3400cc7080e").into(),
+                state_root: hex!("46966ff5fe03a29d380ee6d2cc38f5229c9905ac0a05260e15cfc1995218420f").into(),
                 extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
                 digest: Digest { logs: vec![], },
             },
@@ -120,9 +117,6 @@ fn block_weight_limit_enforced() {
         let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
         t.extend(balances::GenesisConfig::<Runtime> {
             balances: vec![(1, 129)],
-            existential_deposit: 0,
-            transfer_fee: 0,
-            creation_fee: 0,
             vesting: vec![],
         }.build_storage().unwrap().0);
         let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
@@ -221,9 +215,6 @@ fn fail_on_bad_nonce() {
     let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 129)],
-        existential_deposit: 0,
-        transfer_fee: 0,
-        creation_fee: 0,
         vesting: vec![],
     }.build_storage().unwrap().0);
     let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);

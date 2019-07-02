@@ -21,7 +21,7 @@
 use super::*;
 use runtime_io;
 use substrate_primitives::{Blake2Hasher};
-use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch};
+use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 use primitives::traits::{IdentityLookup, BlakeTwo256};
 use primitives::testing::{Header, Block};
 use system;
@@ -62,14 +62,22 @@ impl system::Trait for Runtime {
     type FeeMultiplierUpdate = FeeMultiplierUpdateHandler;
     type Event = MetaEvent;
 }
+parameter_types! {
+    pub const ExistentialDeposit: u64 = 0;
+    pub const TransferFee: u64 = 0;
+    pub const CreationFee: u64 = 0;
+}
 impl balances::Trait for Runtime {
-    type Balance = u128;
+    type Balance = u64;
     type OnFreeBalanceZero = ();
     type OnNewAccount = ();
     type Event = MetaEvent;
     type TransactionPayment = ();
     type DustRemoval = ();
     type TransferPayment = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type TransferFee = TransferFee;
+    type CreationFee = CreationFee;
 }
 
 impl ValidateUnsigned for Runtime {
@@ -93,9 +101,6 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
     let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
     t.extend(balances::GenesisConfig::<Runtime> {
         balances: vec![(1, 1000_000_000)],
-        existential_deposit: 0,
-        transfer_fee: 0,
-        creation_fee: 0,
         vesting: vec![],
     }.build_storage().unwrap().0);
     t.into()

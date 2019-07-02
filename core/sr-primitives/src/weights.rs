@@ -81,22 +81,6 @@ pub enum FeeMultiplier {
 	Negative(Perbill),
 }
 
-impl FeeMultiplier {
-	/// Applies the self, as a multiplier, to the given weight.
-	pub fn apply_to(&self, weight: Weight) -> Weight {
-		match *self {
-			FeeMultiplier::Positive(p) => weight.saturating_add(p * weight),
-			FeeMultiplier::Negative(p) => weight.checked_sub(p * weight).unwrap_or(Zero::zero()),
-		}
-	}
-}
-
-impl Default for FeeMultiplier {
-	fn default() -> Self {
-		FeeMultiplier::Positive(Perbill::zero())
-	}
-}
-
 impl Weighable for TransactionWeight {
 	fn weight(&self, len: usize) -> Weight {
 		match self {
@@ -113,5 +97,21 @@ impl Default for TransactionWeight {
 		// for all substrate transactions that do NOT explicitly annotate weight.
 		// TODO #2431 needs to be updated with proper max values.
 		TransactionWeight::Basic(0, 1)
+	}
+}
+
+impl FeeMultiplier {
+	/// Applies the self, as a multiplier, to the given weight.
+	pub fn apply_to(&self, weight: Weight) -> Weight {
+		match *self {
+			FeeMultiplier::Positive(p) => weight.saturating_add(p * weight),
+			FeeMultiplier::Negative(p) => weight.checked_sub(p * weight).unwrap_or(Zero::zero()),
+		}
+	}
+}
+
+impl Default for FeeMultiplier {
+	fn default() -> Self {
+		FeeMultiplier::Positive(Perbill::zero())
 	}
 }
