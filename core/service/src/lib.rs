@@ -71,11 +71,6 @@ pub use futures::future::Executor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
-/// A future representing a task.
-trait TaskFuture: Future<Item = (), Error = ()> + Send {}
-
-impl<T: Future<Item = (), Error = ()> + Send> TaskFuture for T {}
-
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
@@ -88,9 +83,9 @@ pub struct Service<Components: components::Components> {
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: mpsc::UnboundedSender<Box<dyn TaskFuture>>,
+	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<Box<dyn TaskFuture>>,
+	to_spawn_rx: mpsc::UnboundedReceiver<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// List of futures to poll from `poll`.
 	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
 	/// The elements must then be polled manually.
@@ -118,12 +113,12 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
-	sender: mpsc::UnboundedSender<Box<dyn TaskFuture>>,
+	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
 impl SpawnTaskHandle {
 	/// Spawn a task to run the given future.
-	pub fn spawn_task(task: impl TaskFuture) {
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.sender.unbounded_send(Box::new(task));
 	}
 }
@@ -275,7 +270,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future);
+						let _ = to_spawn_tx_.unbounded_send(future.into());
 					}
 
 					Ok(())
@@ -530,7 +525,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	pub fn spawn_task(&self, task: impl TaskFuture) {
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
