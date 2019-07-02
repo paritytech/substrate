@@ -374,22 +374,24 @@ fn blocks_are_not_announced_by_light_nodes() {
 	light_config.roles = Roles::LIGHT;
 	net.add_full_peer(&ProtocolConfig::default());
 	net.add_light_peer(&light_config);
-	net.add_full_peer(&ProtocolConfig::default());
 
+	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
-
-	// Only sync between 0 -> 1, and 1 -> 2
-	let mut disconnected = HashSet::new();
-	disconnected.insert(0);
-	disconnected.insert(2);
-	net.sync_with(true, Some(disconnected));
-
-	// peer 0 has the best chain
-	// peer 1 has the best chain
-	// peer 2 has genesis-chain only
 	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
 	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
-	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
+
+	// Add another node and remove node 0.
+	net.add_full_peer(&ProtocolConfig::default());
+	net.peers.remove(0);
+
+	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
+	let mut delay = tokio_timer::Delay::new(Instant::now() + Duration::from_secs(5));
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+		net.poll();
+		delay.poll().map_err(|_| ())
+	})).unwrap();
+	assert_eq!(net.peer(1).client.info().chain.best_number, 0);
 }
 
 #[test]
