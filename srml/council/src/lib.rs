@@ -97,7 +97,7 @@
 //! Each tally (round of voting) is divided into two time periods:
 //!
 //!   - **Voting period:** In which any stakeholder can vote for any of the council candidates.
-//!   - **Presentation period:** In which voting is no longer allowed and stakeholders can _present_ a candidate
+//!   - **Presentation period:** In which voting is no longer allowed, and stakeholders can _present_ a candidate
 //!   and claim that a particular candidate has won a seat.
 //!
 //! A tally is scheduled to execute based on the number of desired and free seats in the council.
@@ -122,9 +122,9 @@
 //! `O(|number_of_voters|)`, so the presenter must be slashable and will be slashed for duplicate or invalid
 //! presentations. Presentation is only allowed during the "presentation period," after voting has closed.
 //! - **Voting bond:** Bond required to be permitted to vote. Must be held because many voting operations affect
-//! storage. The bond is held to disincent abuse.
-//! - **Voting:** Process of inserting approval votes into storage. Can be called by anyone, given she submits
-//! an appropriate list of approvals. A bond is reserved from a voter until she retracts or gets reported.
+//! storage. The bond is held to discourage abuse.
+//! - **Voting:** Process of inserting approval votes into storage. Can be called by anyone, given they submit
+//! an appropriate list of approvals. A bond is reserved from a voter until they retract or get reported.
 //! - **Inactive voter**: A voter whose approvals are now invalid. Such voters can be _reaped_ by other voters
 //!   after an `inactivity_grace_period` has passed from their last known activity.
 //! - **Reaping process:** Voters may propose the removal of inactive voters, as explained above. If the claim is not
@@ -179,32 +179,30 @@
 //!
 //! ### Example
 //!
-//! This code snippet includes an `approve_all` public function that could be called to approve all
-//! existing candidates, if a tally is scheduled to happen, without having to check the number of them.
+//! This code snippet uses the `is_councillor` public function to check if the calling user
+//! is an active councillor before proceeding with additional runtime logic.
 //!
-//! ```ignore
-//! use srml_support::{decl_module, dispatch::Result};
+//! ```
+//! use srml_support::{decl_module, ensure, dispatch::Result};
 //! use system::ensure_signed;
-//! use srml_council::seats;
+//! use srml_council::motions;
 //!
-//! pub trait Trait: seats::Trait {}
+//! pub trait Trait: motions::Trait + system::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 //!
-//! 		pub fn approve_all(origin, vote_index: u32) -> Result {
-//! 			// Get the appropriate block number to schedule the next tally.
-//! 			let maybe_next_tally = <seats::Module<T>>::next_tally();
+//! 		pub fn privileged_function(origin) -> Result {
+//! 			// Get the sender AccountId
+//! 			let sender = ensure_signed(origin)?;
 //!
-//! 			if maybe_next_tally.is_some() {
-//! 				// Create votes.
-//! 				let candidate_count = <seats::Module<T>>::candidate_count();
-//! 				let votes = vec![true; candidate_count as usize];
+//! 			// Check they are an active councillor
+//!				ensure!(<motions::Module<T>>::is_councillor(&sender),
+//!					"Must be a councillor to call this function");
+//!				
+//!				// Do some privileged operation here...
 //!
-//!					<seats::Module<T>>::set_approvals(origin, votes, vote_index)?;
-//! 			}
-//!
-//!				// either way return `Ok`. You can change this and return an `Err` based on what you need.
+//!				// Return `Ok` at the end
 //! 			Ok(())
 //! 		}
 //! 	}
