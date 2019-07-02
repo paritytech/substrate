@@ -206,15 +206,21 @@ macro_rules! decl_module {
 	// Entry point #1.
 	(
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty {
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$( <I>, I: $instantiable:path $( = $module_default_instance:path )? )?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty $(, $other_where_bounds:ty: $other_stuff:path )* {
 			$($t:tt)*
 		}
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			pub struct $mod_type<
+				$trait_instance: $trait_name $(<I>, I: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = system
+			{ $( $other_where_bounds: $other_stuff ),* }
 			{}
 			{}
 			{}
@@ -227,15 +233,25 @@ macro_rules! decl_module {
 	// Entry point #2.
 	(
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$( <I>, I: $instantiable:path $( = $module_default_instance:path )? )?
+		>
+		for enum $call_type:ident where
+			origin: $origin_type:ty,
+			system = $system:ident
+			$(, $other_where_bounds:ty: $other_stuff:path )*
+		{
 			$($t:tt)*
 		}
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			pub struct $mod_type<
+				$trait_instance: $trait_name $(<I>, I: $instantiable $( = $module_default_instance )? )?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds: $other_stuff ),* }
 			{}
 			{}
 			{}
@@ -251,6 +267,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{}
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -265,6 +282,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* () = default; }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -278,6 +296,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{}
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -294,6 +313,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* ($( $param_name: $param ),* ) { $( $impl )* } }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -307,6 +327,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{}
@@ -321,6 +342,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* } }
@@ -334,6 +356,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{}
@@ -352,6 +375,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_finalize:tt )* }
@@ -366,6 +390,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $on_finalize )* }
@@ -379,6 +404,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_finalize:tt )* }
@@ -400,6 +426,7 @@ macro_rules! decl_module {
 			$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
 		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -416,6 +443,7 @@ macro_rules! decl_module {
 				$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?
 			>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -434,6 +462,7 @@ macro_rules! decl_module {
 			$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
 		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -451,6 +480,7 @@ macro_rules! decl_module {
 				$( <I>, $instance: $instantiable $(= $module_default_instance)? )?
 			>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -473,6 +503,7 @@ macro_rules! decl_module {
 			$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
 			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -492,6 +523,7 @@ macro_rules! decl_module {
 				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
 			>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -517,6 +549,7 @@ macro_rules! decl_module {
 				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
 			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -535,6 +568,7 @@ macro_rules! decl_module {
 				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
 			>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -554,6 +588,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -578,6 +613,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -602,6 +638,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -619,6 +656,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -640,6 +678,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -653,6 +692,7 @@ macro_rules! decl_module {
 			for enum $call_type where origin: $origin_type, system = $system {
 				$( $dispatchables )*
 			}
+			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
@@ -684,14 +724,18 @@ macro_rules! decl_module {
 	(@impl_deposit_event
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path)?>;
 		$system:ident;
+		{ $( $other_where_bounds:tt )* }
 	) => {};
 
 	(@impl_deposit_event
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$system:ident;
+		{ $( $other_where_bounds:tt )* }
 		$vis:vis fn deposit_event$(<$event_trait_instance:ident $(, $event_instance:ident)?>)?() = default;
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
 			$vis fn deposit_event(event: Event$(<$event_trait_instance $(, $event_instance)?>)?) {
 				<$system::Module<$trait_instance>>::deposit_event(
 					<$trait_instance as $trait_name$(<$instance>)?>::Event::from(event).into()
@@ -703,9 +747,12 @@ macro_rules! decl_module {
 	(@impl_deposit_event
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$system:ident;
+		{ $( $other_where_bounds:tt )* }
 		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
 			$vis fn deposit_event($param: $param_ty) {
 				$( $impl )*
 			}
@@ -714,11 +761,12 @@ macro_rules! decl_module {
 
 	(@impl_on_initialize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn on_initialize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
@@ -726,11 +774,12 @@ macro_rules! decl_module {
 
 	(@impl_on_initialize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn on_initialize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) { $( $impl )* }
 		}
@@ -738,20 +787,22 @@ macro_rules! decl_module {
 
 	(@impl_on_initialize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
 
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn on_finalize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
@@ -759,11 +810,12 @@ macro_rules! decl_module {
 
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn on_finalize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) { $( $impl )* }
 		}
@@ -771,21 +823,23 @@ macro_rules! decl_module {
 
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 		}
 	};
 
 	(@impl_offchain
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
@@ -793,11 +847,12 @@ macro_rules! decl_module {
 
 	(@impl_offchain
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
 		}
@@ -805,10 +860,11 @@ macro_rules! decl_module {
 
 	(@impl_offchain
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
 
@@ -884,6 +940,7 @@ macro_rules! decl_module {
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
@@ -897,6 +954,7 @@ macro_rules! decl_module {
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $other_where_bounds )* }
 			{ $( $generated_variants )* }
 			{
 				$( $current_params )*
@@ -914,6 +972,7 @@ macro_rules! decl_module {
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
@@ -926,6 +985,7 @@ macro_rules! decl_module {
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $other_where_bounds )* }
 			{ $( $generated_variants )* }
 			{
 				$( $current_params )*
@@ -941,6 +1001,7 @@ macro_rules! decl_module {
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
@@ -955,6 +1016,7 @@ macro_rules! decl_module {
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $other_where_bounds )* }
 			{
 				$( $generated_variants )*
 				#[allow(non_camel_case_types)]
@@ -975,12 +1037,15 @@ macro_rules! decl_module {
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $other_where_bounds:tt )* }
 		{ $( $generated_variants:tt )* }
 		{}
 	) => {
 		#[derive($crate::codec::Encode, $crate::codec::Decode)]
 		$( #[$attr] )*
-		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
+		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
+			where $( $other_where_bounds )*
+		{
 			#[doc(hidden)]
 			#[codec(skip)]
 			__PhantomItem($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
@@ -1006,6 +1071,7 @@ macro_rules! decl_module {
 				{ $($fn_instance:ident: $fn_instantiable:path)? }
 			)*
 		}
+		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
@@ -1020,36 +1086,43 @@ macro_rules! decl_module {
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
+		>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>) where
+			$( $other_where_bounds )*;
 
 		$crate::decl_module! {
 			@impl_on_initialize
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
 			$( $on_initialize )*
 		}
 
 		$crate::decl_module! {
 			@impl_on_finalize
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
 			$( $on_finalize )*
 		}
 
 		$crate::decl_module! {
 			@impl_offchain
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
 			$( $offchain )*
 		}
 		$crate::decl_module! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$system;
+			{ $( $other_where_bounds )* }
 			$( $deposit_event )*
 		}
 
 		/// Can also be called using [`Call`].
 		///
 		/// [`Call`]: enum.Call.html
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
 			$(
 				$crate::decl_module! {
 					@impl_function
@@ -1069,6 +1142,7 @@ macro_rules! decl_module {
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $other_where_bounds )* }
 			{}
 			{}
 			$(
@@ -1083,7 +1157,7 @@ macro_rules! decl_module {
 
 		// Implement weight calculation function for Call
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weighable
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn weight(&self, _len: usize) -> $crate::dispatch::Weight {
 				match self {
@@ -1096,7 +1170,7 @@ macro_rules! decl_module {
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn clone(&self) -> Self {
 				match *self {
@@ -1109,7 +1183,7 @@ macro_rules! decl_module {
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::PartialEq
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn eq(&self, _other: &Self) -> bool {
 				match *self {
@@ -1131,12 +1205,12 @@ macro_rules! decl_module {
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Eq
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{}
 
 		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::fmt::Debug
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn fmt(
 				&self,
@@ -1156,7 +1230,7 @@ macro_rules! decl_module {
 		}
 
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
-			for $call_type<$trait_instance $(, $instance)?>
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
@@ -1176,12 +1250,14 @@ macro_rules! decl_module {
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable
-			for $mod_type<$trait_instance $(, $instance)?>
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			type Call = $call_type<$trait_instance $(, $instance)?>;
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
 			#[doc(hidden)]
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
 				d: D,
@@ -1191,11 +1267,19 @@ macro_rules! decl_module {
 			}
 		}
 		$crate::__dispatch_impl_metadata! {
-			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $(#[$codec_attr])* $param_name : $param )*); )*}
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+			{ $( $other_where_bounds )* }
+			$call_type $origin_type
+			{
+				$(
+					$(#[doc = $doc_attr])*
+					fn $fn_name($from $(, $(#[$codec_attr])* $param_name : $param )*);
+				)*
+			}
 		}
 		$crate::__impl_module_constants_metadata ! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+			{ $( $other_where_bounds )* }
 			$( $constants )*
 		}
 	}
@@ -1260,9 +1344,12 @@ macro_rules! impl_outer_dispatch {
 macro_rules! __dispatch_impl_metadata {
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
 		$($rest:tt)*
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
 			#[doc(hidden)]
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
@@ -1278,6 +1365,7 @@ macro_rules! __impl_module_constants_metadata {
 	// Without instance
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		{ $( $other_where_bounds:tt )* }
 		$(
 			$( #[doc = $doc_attr:tt] )*
 			$name:ident: $type:ty = $value:expr;
@@ -1287,6 +1375,7 @@ macro_rules! __impl_module_constants_metadata {
 			$crate::__impl_module_constants_metadata! {
 				GENERATE_CODE
 				$mod_type<$trait_instance: $trait_name>
+				{ $( $other_where_bounds )* }
 				$(
 					$( #[doc = $doc_attr] )*
 					[< $name DefaultByteGetter >]
@@ -1298,6 +1387,7 @@ macro_rules! __impl_module_constants_metadata {
 	// With instance
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident<I>, $instance:ident: $instantiable:path>
+		{ $( $other_where_bounds:tt )* }
 		$(
 			$( #[doc = $doc_attr:tt] )*
 			$name:ident: $type:ty = $value:expr;
@@ -1307,6 +1397,7 @@ macro_rules! __impl_module_constants_metadata {
 			$crate::__impl_module_constants_metadata! {
 				GENERATE_CODE
 				$mod_type<$trait_instance: $trait_name<I>, $instance: $instantiable>
+				{ $( $other_where_bounds )* }
 				$(
 					$( #[doc = $doc_attr] )*
 					[< $name DefaultByteGetter >]
@@ -1318,6 +1409,7 @@ macro_rules! __impl_module_constants_metadata {
 	// Do the code generation
 	(GENERATE_CODE
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident $(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
 		$(
 			$( #[doc = $doc_attr:tt] )*
 			$default_byte_name:ident
@@ -1329,7 +1421,7 @@ macro_rules! __impl_module_constants_metadata {
 		)*
 	) => {
 		impl<$trait_instance: 'static + $trait_name $(<I>, $instance: $instantiable)?>
-			$mod_type<$trait_instance $(, $instance)?>
+			$mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
 			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
@@ -1386,14 +1478,16 @@ macro_rules! __impl_module_constants_metadata {
 macro_rules! __call_to_functions {
 	(
 		$call_type:ident $origin_type:ty
-			{$(
+		{
+			$(
 				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident($from:ident
 					$(
 						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
 					)*
 				);
-			)*}
+			)*
+		}
 	) => {
 		$crate::__functions_to_metadata!(0; $origin_type;; $(
 			fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
@@ -1518,7 +1612,7 @@ mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
 
-	pub trait Trait {
+	pub trait Trait: system::Trait where Self::AccountId: From<u32> {
 		type Origin;
 		type BlockNumber: Into<u32>;
 	}
@@ -1526,13 +1620,17 @@ mod tests {
 	pub mod system {
 		use super::Result;
 
+		pub trait Trait {
+			type AccountId;
+		}
+
 		pub fn ensure_root<R>(_: R) -> Result {
 			Ok(())
 		}
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
@@ -1624,6 +1722,10 @@ mod tests {
 	impl Trait for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
+	}
+
+	impl system::Trait for TraitImpl {
+		type AccountId = u32;
 	}
 
 	#[test]

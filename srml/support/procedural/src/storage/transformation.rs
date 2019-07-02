@@ -27,6 +27,7 @@ use proc_macro2::{TokenStream as TokenStream2, Span};
 use syn::{
 	Ident,
 	GenericParam,
+	WhereClause,
 	spanned::Spanned,
 	parse::{
 		Error,
@@ -68,6 +69,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		crate_ident: cratename,
 		content: ext::Braces { content: storage_lines, ..},
 		extra_genesis,
+		where_clause,
 		..
 	} = def;
 
@@ -110,6 +112,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&storage_lines,
 		&extra_genesis.inner,
+		&where_clause,
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -184,6 +187,7 @@ fn decl_store_extra_genesis(
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	extra_genesis: &Option<AddExtraGenesis>,
+	where_clause: &Option<syn::WhereClause>,
 ) -> Result<TokenStream2> {
 
 	let InstanceOpts {
@@ -479,7 +483,13 @@ fn decl_store_extra_genesis(
 
 		let impl_trait = quote!(BuildModuleGenesisStorage<#traitinstance, #inherent_instance>);
 
-		let builders_clone_bound = quote!( #( #builders_clone_bound: Clone ),* );
+		let mut genesis_where_clause: WhereClause = syn::parse_quote!(
+			where #( #builders_clone_bound: Clone ),*
+		);
+
+		if let Some(where_clause) = where_clause {
+			genesis_where_clause.predicates.extend(where_clause.predicates.iter().cloned());
+		}
 
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
@@ -503,7 +513,7 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl GenesisConfig#sparam where #builders_clone_bound {
+			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
 						#scrate::runtime_primitives::StorageOverlay,
@@ -535,7 +545,7 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
-				for GenesisConfig#sparam where #builders_clone_bound
+				for GenesisConfig#sparam #genesis_where_clause
 			{
 				fn build_module_genesis_storage(
 					self,
