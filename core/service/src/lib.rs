@@ -270,7 +270,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future.into());
+						let _ = to_spawn_tx_.unbounded_send(future);
 					}
 
 					Ok(())
