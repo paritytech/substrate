@@ -172,12 +172,6 @@ decl_module! {
 			Self::deposit_event(RawEvent::Proposed(c));
 		}
 
-		/// Set the balance of funds available to spend.
-		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
-			// Put the new value into storage.
-			<Pot<T>>::put(new_pot);
-		}
-
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
