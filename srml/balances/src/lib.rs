@@ -160,7 +160,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, Convert,
 	MaybeSerializeDebug, Saturating, Bounded
 };
 use primitives::weights::Weight;
