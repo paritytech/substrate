@@ -144,7 +144,7 @@ test-srml-staking:                 &test-srml-staking
       - srml/staking/*
   script:
     - cd srml/staking/
-    - time cargo test --tests tests --no-default-features --features std
+    - time cargo test --no-default-features --features std
     - sccache -s
 
 
