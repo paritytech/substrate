@@ -37,8 +37,8 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-/// Struct used to convert from a transaction weight into the actual fee value.
-/// This is used in the balances module.
+/// A struct that updates the fee multiplier based on the saturation level of the previous block.
+/// This should typically be called per-block.
 ///
 /// This assumes that weight is a numeric value in the u32 range.
 ///
@@ -160,8 +160,8 @@ mod tests {
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		// defensive-only test. at the moment we are not allowing any weight more than 4 * 1024 * 1024
-		// in a block.
+		// defensive-only test. at the moment we are not allowing any weight more than
+		// 4 * 1024 * 1024 in a block.
 		let kb = 1024_u32;
 		let mb = kb * kb;
 		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]

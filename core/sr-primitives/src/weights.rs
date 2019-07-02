@@ -16,13 +16,12 @@
 
 //! Primitives for transaction weighting.
 //!
-//! Each dispatch function within `decl_module!` can now have an optional
-//! `#[weight = $x]` attribute. $x can be any object that implements the
-//! `Weighable` trait. By default, All transactions are annotated by
-//! `#[weight = TransactionWeight::default()]`.
+//! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute.
+//!  $x can be any object that implements the `Weighable` trait. By default, All transactions are
+//! annotated by `#[weight = TransactionWeight::default()]`.
 //!
-//! Note that the decl_module macro _cannot_ enforce this and will simply fail
-//! if an invalid struct is passed in.
+//! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
+//! (something that does not  implement `Weighable`) is passed in.
 
 use crate::codec::{Decode, Encode};
 use crate::Perbill;
@@ -68,7 +67,11 @@ pub enum TransactionWeight {
 /// A wrapper for fee multiplier.
 /// This is to simulate a `Perbill` which is greater than `1`.
 ///
-/// This should be updated per-block based on the current saturation level.
+/// The fee multiplier is always multiplied by the weight (as denoted by `TransactionWeight` on a
+/// per-transaction basis with `#[weight]` annotation) of the transaction to obtain the final fee.
+///
+/// One can define how this conversion evolves based on the previous block weight by implementing
+/// the `FeeMultiplierUpdate` type of the `system` trait.
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Clone, Debug))]
 #[derive(Encode, Decode)]
 pub enum FeeMultiplier {

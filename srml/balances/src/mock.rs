@@ -127,8 +127,6 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
-		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
-		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
