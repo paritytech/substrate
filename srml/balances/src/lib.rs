@@ -158,7 +158,7 @@ use srml_support::traits::{
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 	Imbalance, SignedImbalance, ReservableCurrency
 };
-use srml_support::dispatch::Result;
+use srml_support::{dispatch::Result, traits::Get};
 use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating, Bounded
@@ -169,6 +169,12 @@ mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+
+pub const DEFAULT_EXISTENTIAL_DEPOSIT: u32 = 0;
+pub const DEFAULT_TRANSFER_FEE: u32 = 0;
+pub const DEFAULT_CREATION_FEE: u32 = 0;
+pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
+pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -183,6 +189,21 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
+
+	/// The minimum amount required to keep an account open.
+	type ExistentialDeposit: Get<Self::Balance>;
+
+	/// The fee required to make a transfer.
+	type TransferFee: Get<Self::Balance>;
+
+	/// The fee required to create an account.
+	type CreationFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the base.
+	type TransactionBaseFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the per-byte portion.
+	type TransactionByteFee: Get<Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
@@ -211,12 +232,32 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+
+	/// The minimum amount required to keep an account open.
+	type ExistentialDeposit: Get<Self::Balance>;
+
+	/// The fee required to make a transfer.
+	type TransferFee: Get<Self::Balance>;
+
+	/// The fee required to create an account.
+	type CreationFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the base.
+	type TransactionBaseFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the per-byte portion.
+	type TransactionByteFee: Get<Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
+	type ExistentialDeposit = T::ExistentialDeposit;
+	type TransferFee = T::TransferFee;
+	type CreationFee = T::CreationFee;
+	type TransactionBaseFee = T::TransactionBaseFee;
+	type TransactionByteFee = T::TransactionByteFee;
 }
 
 decl_event!(
@@ -271,16 +312,6 @@ decl_storage! {
 		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
-		/// The minimum amount required to keep an account open.
-		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
-		/// The fee required to make a transfer.
-		pub TransferFee get(transfer_fee) config(): T::Balance;
-		/// The fee required to create an account.
-		pub CreationFee get(creation_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
@@ -341,6 +372,21 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		/// The minimum amount required to keep an account open.
+		const ExistentialDeposit: T::Balance = T::ExistentialDeposit::get();
+
+		/// The fee required to make a transfer.
+		const TransferFee: T::Balance = T::TransferFee::get();
+
+		/// The fee required to create an account.
+		const CreationFee: T::Balance = T::CreationFee::get();
+
+		/// The fee to be paid for making a transaction; the base.
+		const TransactionBaseFee: T::Balance = T::TransactionBaseFee::get();
+
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
+
 		fn deposit_event<T, I>() = default;
 
 		/// Transfer some liquid free balance to another account.
@@ -440,7 +486,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		if balance < Self::existential_deposit() {
+		if balance < T::ExistentialDeposit::get() {
 			<ReservedBalance<T, I>>::insert(who, balance);
 			Self::on_reserved_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
@@ -461,8 +507,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
-		// assert!(Self::free_balance(who) > Self::existential_deposit());
-		if balance < Self::existential_deposit() {
+		// assert!(Self::free_balance(who) > T::ExistentialDeposit::get());
+		if balance < T::ExistentialDeposit::get() {
 			<FreeBalance<T, I>>::insert(who, balance);
 			Self::on_free_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
@@ -707,6 +753,11 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
+	type ExistentialDeposit = T::ExistentialDeposit;
+	type TransferFee = T::TransferFee;
+	type CreationFee = T::CreationFee;
+	type TransactionBaseFee = T::TransactionBaseFee;
+	type TransactionByteFee = T::TransactionByteFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -730,7 +781,7 @@ where
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		Self::existential_deposit()
+		T::ExistentialDeposit::get()
 	}
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
@@ -795,7 +846,7 @@ where
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
 		let liability = match value.checked_add(&fee) {
 			Some(l) => l,
 			None => return Err("got overflow after adding a fee to value"),
@@ -805,7 +856,7 @@ where
 			None => return Err("balance too low to send value"),
 			Some(b) => b,
 		};
-		if would_create && value < Self::existential_deposit() {
+		if would_create && value < T::ExistentialDeposit::get() {
 			return Err("value too low to create account");
 		}
 		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
@@ -837,7 +888,7 @@ where
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		if let Some(new_balance) = Self::free_balance(who).checked_sub(&value) {
-			if liveness == ExistenceRequirement::KeepAlive && new_balance < Self::existential_deposit() {
+			if liveness == ExistenceRequirement::KeepAlive && new_balance < T::ExistentialDeposit::get() {
 				return Err("payment would kill account")
 			}
 			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
@@ -899,7 +950,7 @@ where
 		UpdateBalanceOutcome
 	) {
 		let original = Self::free_balance(who);
-		if balance < Self::existential_deposit() && original.is_zero() {
+		if balance < T::ExistentialDeposit::get() && original.is_zero() {
 			// If we're attempting to set an existing account to less than ED, then
 			// bypass the entire operation. It's a no-op if you follow it through, but
 			// since this is an instance where we might account for a negative imbalance
@@ -925,7 +976,7 @@ where
 		// Free balance can never be less than ED. If that happens, it gets reduced to zero
 		// and the account information relevant to this subsystem is deleted (i.e. the
 		// account is reaped).
-		let outcome = if balance < <Module<T, I>>::existential_deposit() {
+		let outcome = if balance < T::ExistentialDeposit::get() {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
@@ -1079,7 +1130,7 @@ where
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let encoded_len = T::Balance::from(encoded_len as u32);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
+		let transaction_fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * encoded_len;
 		let imbalance = Self::withdraw(
 			transactor,
 			transaction_fee,

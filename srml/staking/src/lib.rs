@@ -442,6 +442,9 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
+pub const DEFAULT_SESSIONS_PER_ERA: u32 = 3;
+pub const DEFAULT_BONDING_DURATION: u32 = 1;
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
