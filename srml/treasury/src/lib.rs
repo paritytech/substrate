@@ -231,9 +231,6 @@ pub struct Proposal<AccountId, Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
-		/// Total funds available to this module for spending.
-		Pot get(pot): BalanceOf<T>;
-
 		/// Number of proposals that have been made.
 		ProposalCount get(proposal_count): ProposalIndex;
 
