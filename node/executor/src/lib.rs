@@ -155,7 +155,7 @@ mod tests {
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() =>
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => 0u64.encode()
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => 0u64.encode(),
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => 0u64.encode(),
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => 0u64.encode(),
