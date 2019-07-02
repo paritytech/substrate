@@ -24,7 +24,7 @@ use rstd::convert::TryFrom;
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(C)]
 pub enum StorageKind {
-	///	Persistent storage is non-revertible and not fork-aware. It means that any value
+	/// Persistent storage is non-revertible and not fork-aware. It means that any value
 	/// set by the offchain worker triggered at block `N(hash1)` is persisted even
 	/// if that block is reverted as non-canonical and is available for the worker
 	/// that is re-run at block `N(hash2)`.
