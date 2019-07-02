@@ -117,7 +117,7 @@ impl StateSnapshot {
 				// TODO:
 				let amount: wasmi::memory_units::Bytes = memory_ref.current_size().into();
 				// TODO:
-				memory_ref.clear(0, 0, amount.0).expect("");
+				memory_ref.erase();
 
 				for (offset, contents) in &self.data_segments {
 					// TODO: expect
