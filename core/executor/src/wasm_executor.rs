@@ -55,10 +55,10 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
+			heap: allocator::FreeingBumpHeapAllocator::new(m.clone(), heap_base),
 			memory: m,
 			table: t,
 			ext: e,
@@ -1241,6 +1241,20 @@ impl WasmExecutor {
 			.clone())
 	}
 
+	fn get_heap_base(module: &ModuleRef) -> Result<u32> {
+		let heap_base_val = module
+			.export_by_name("__heap_base")
+			.ok_or_else(|| Error::InvalidMemoryReference)? // TODO:
+			.as_global()
+			.ok_or_else(|| Error::InvalidMemoryReference)?
+			.get(); // TODO:
+
+		Ok(match heap_base_val {
+			wasmi::RuntimeValue::I32(v) => v as u32,
+			_ => return Err(Error::InvalidMemoryReference), // TODO:
+		})
+	}
+
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
 		&self,
@@ -1289,8 +1303,9 @@ impl WasmExecutor {
 		let table: Option<TableRef> = module_instance
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
+		let heap_base = Self::get_heap_base(module_instance)?;
 
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
@@ -1332,12 +1347,13 @@ impl WasmExecutor {
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
+		let heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
 		let table: Option<TableRef> = intermediate_instance
 			.not_started_instance()
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		Ok(intermediate_instance.run_start(&mut fec)?)

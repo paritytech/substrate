@@ -63,13 +63,12 @@ impl FreeingBumpHeapAllocator {
 	/// * `heap` - A `MemoryRef` to the available `MemoryInstance` which is
 	///   used as the heap.
 	///
-	pub fn new(mem: MemoryRef) -> Self {
+	pub fn new(mem: MemoryRef, heap_base: u32) -> Self {
 		let current_size: Bytes = mem.current_size().into();
 		let current_size = current_size.0 as u32;
-		let used_size = 1137837 as u32; //mem.used_size().0 as u32;
-		let heap_size = current_size - used_size;
+		let heap_size = current_size - heap_base;
 
-		let mut ptr_offset = used_size;
+		let mut ptr_offset = heap_base;
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
 			ptr_offset += ALIGNMENT - padding;
@@ -194,16 +193,11 @@ mod tests {
 
 	const PAGE_SIZE: u32 = 65536;
 
-	fn set_offset(mem: MemoryRef, offset: usize) {
-		let offset: Vec<u8> = vec![255; offset];
-		mem.set(0, &offset).unwrap();
-	}
-
 	#[test]
 	fn should_allocate_properly() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 
 		// when
 		let ptr = heap.allocate(1).unwrap();
@@ -216,8 +210,7 @@ mod tests {
 	fn should_always_align_pointers_to_multiples_of_8() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		set_offset(mem.clone(), 13);
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 13);
 
 		// when
 		let ptr = heap.allocate(1).unwrap();
@@ -232,7 +225,7 @@ mod tests {
 	fn should_increment_pointers_properly() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 
 		// when
 		let ptr1 = heap.allocate(1).unwrap();
@@ -255,7 +248,7 @@ mod tests {
 	fn should_free_properly() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 		let ptr1 = heap.allocate(1).unwrap();
 		// the prefix of 8 bytes is prepended to the pointer
 		assert_eq!(ptr1, 8);
@@ -277,9 +270,8 @@ mod tests {
 	fn should_deallocate_and_reallocate_properly() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		set_offset(mem.clone(), 13);
 		let padded_offset = 16;
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 13);
 
 		let ptr1 = heap.allocate(1).unwrap();
 		// the prefix of 8 bytes is prepended to the pointer
@@ -305,7 +297,7 @@ mod tests {
 	fn should_build_linked_list_of_free_areas_properly() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 
 		let ptr1 = heap.allocate(8).unwrap();
 		let ptr2 = heap.allocate(8).unwrap();
@@ -332,8 +324,7 @@ mod tests {
 	fn should_not_allocate_if_too_large() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), Some(Pages(1))).unwrap();
-		set_offset(mem.clone(), 13);
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 13);
 
 		// when
 		let ptr = heap.allocate(PAGE_SIZE - 13);
@@ -352,7 +343,7 @@ mod tests {
 	fn should_not_allocate_if_full() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), Some(Pages(1))).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 		let ptr1 = heap.allocate((PAGE_SIZE / 2) - 8).unwrap();
 		assert_eq!(ptr1, 8);
 
@@ -375,7 +366,7 @@ mod tests {
 		// given
 		let pages_needed = (MAX_POSSIBLE_ALLOCATION as usize / PAGE_SIZE as usize) + 1;
 		let mem = MemoryInstance::alloc(Pages(pages_needed), Some(Pages(pages_needed))).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 
 		// when
 		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION).unwrap();
@@ -388,7 +379,7 @@ mod tests {
 	fn should_not_allocate_if_requested_size_too_large() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
 
 		// when
 		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION + 1);
@@ -407,8 +398,7 @@ mod tests {
 	fn should_include_prefixes_in_total_heap_size() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		set_offset(mem.clone(), 1);
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 1);
 
 		// when
 		// an item size of 16 must be used then
@@ -422,8 +412,7 @@ mod tests {
 	fn should_calculate_total_heap_size_to_zero() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		set_offset(mem.clone(), 13);
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 13);
 
 		// when
 		let ptr = heap.allocate(42).unwrap();
@@ -438,8 +427,7 @@ mod tests {
 	fn should_calculate_total_size_of_zero() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		set_offset(mem.clone(), 19);
-		let mut heap = FreeingBumpHeapAllocator::new(mem);
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 19);
 
 		// when
 		for _ in 1..10 {

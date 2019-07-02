@@ -20,11 +20,13 @@ use crate::error::{Error, Result};
 use crate::wasm_executor::WasmExecutor;
 use log::trace;
 use parity_codec::Decode;
+use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
 use std::collections::HashMap;
+use std::mem;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 /// A runtime along with its version and initial state snapshot.
@@ -48,30 +50,46 @@ enum RuntimePreproc {
 /// It is used for restoring the state of the module after execution.
 #[derive(Clone)]
 struct StateSnapshot {
-	memory_contents: Vec<u8>,
+	/// The offset and the contents of the memory segments that should be copied at
+	/// to restore the snapshot.
+	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
+	heap_pages: u32,
 }
 
 impl StateSnapshot {
-	fn take(module_instance: &WasmModuleInstanceRef) -> Option<Self> {
-		// TODO: Write in trace if the `memory` export is not found.
-		let mem = module_instance.export_by_name("memory")?;
-		let memory_contents = match mem {
-			wasmi::ExternVal::Memory(memory_ref) => {
-				// The returned used size is a heuristic which returns one more
-				// than the highest memory address that had been written to.
-				// TODO: Analyze this
-				let used_size = memory_ref.used_size().0;
+	fn take(
+		module_instance: &WasmModuleInstanceRef,
+		data_segments: Vec<DataSegment>,
+		heap_pages: u32,
+	) -> Option<Self> {
+		let mut prepared_segments = Vec::with_capacity(data_segments.len());
+		for mut segment in data_segments {
+			// Just replace contents of the segment since the segments will be discarded later
+			// anyway.
+			let contents = mem::replace(segment.value_mut(), vec![]);
 
-				memory_ref.get(0, used_size)
-					.expect("extracting data will always succeed since requested range is always valid; qed")
-			}
-			_ => {
-				trace!(target: "runtimes_cache", "the `memory` export is not of memory kind");
+			let init_expr = segment.offset().code();
+			// [op, End]
+			if init_expr.len() != 2 {
 				return None;
 			}
-		};
+			let offset = match init_expr[0] {
+				Instruction::I32Const(v) => v as u32,
+				Instruction::GetGlobal(idx) => {
+					let global_val = module_instance.globals().get(idx as usize)?.get();
+					match global_val {
+						RuntimeValue::I32(v) => v as u32,
+						_ => return None,
+					}
+				}
+				_ => return None,
+			};
+			prepared_segments.push((offset, contents))
+		}
+
+		// Collect all values of mutable globals.
 		let global_mut_values = module_instance
 			.globals()
 			.iter()
@@ -80,8 +98,9 @@ impl StateSnapshot {
 			.collect();
 
 		Some(Self {
-			memory_contents,
+			data_segments: prepared_segments,
 			global_mut_values,
+			heap_pages,
 		})
 	}
 
@@ -93,9 +112,14 @@ impl StateSnapshot {
 			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
 		match mem {
 			wasmi::ExternVal::Memory(memory_ref) => {
-				let mem = memory_ref;
-				mem.set(0, &self.memory_contents)
-					.expect("only putting data back in which was already in; qed");
+				let amount = self.heap_pages as usize * wasmi::LINEAR_MEMORY_PAGE_SIZE.0;
+				// TODO:
+				memory_ref.clear(0, 0, amount).expect("");
+
+				for (offset, contents) in &self.data_segments {
+					// TODO: expect
+					memory_ref.set(*offset, contents).expect("");
+				}
 			}
 			_ => unreachable!("memory export always exists wasm module; qed"),
 		}
@@ -217,6 +241,12 @@ impl RuntimesCache {
 			None => return RuntimePreproc::InvalidCode,
 		};
 
+		// Extract the data segments from the wasm code.
+		let data_segments = match extract_data_segments(&code) {
+			Some(data_segments) => data_segments,
+			None => return RuntimePreproc::InvalidCode,
+		};
+
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
 			.and_then(|pages| u64::decode(&mut &pages[..]))
@@ -225,16 +255,15 @@ impl RuntimesCache {
 
 		match WasmModule::from_buffer(code)
 			.map_err(|_| Error::InvalidCode)
-			.and_then(|instance| {
-				WasmExecutor::instantiate_module(ext, heap_pages as usize, &instance)
-			})
+			.and_then(|module| WasmExecutor::instantiate_module(ext, heap_pages as usize, &module))
 		{
 			Ok(instance) => {
 				// Take state snapshot before executing anything.
-				let state_snapshot = match StateSnapshot::take(&instance) {
-					Some(snapshot) => snapshot,
-					None => return RuntimePreproc::InvalidCode,
-				};
+				let state_snapshot =
+					match StateSnapshot::take(&instance, data_segments, heap_pages as u32) {
+						Some(snapshot) => snapshot,
+						None => return RuntimePreproc::InvalidCode,
+					};
 
 				let version = wasm_executor
 					.call_in_wasm_module(ext, &instance, "Core_version", &[])
@@ -252,4 +281,17 @@ impl RuntimesCache {
 			}
 		}
 	}
+}
+
+/// Extract the data segments in the given wasm code.
+///
+/// Returns `Err` if the given wasm code cannot be deserialized.
+fn extract_data_segments(wasm_code: &[u8]) -> Option<Vec<DataSegment>> {
+	let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
+	let segments = raw_module
+		.data_section()
+		.map(|ds| ds.entries())
+		.unwrap_or(&[])
+		.to_vec();
+	Some(segments)
 }
