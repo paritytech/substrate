@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Hash, Zero};
+use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType, decl_module, decl_storage, decl_event, ensure};
@@ -29,6 +29,39 @@ use system::ensure_signed;
 pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
+
+decl_storage! {
+	trait Store for Module<T: Trait> as CouncilVoting {
+		/// Period (in blocks) that a veto is in effect.
+		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// Period (in blocks) that a vote is open for.
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
+		/// Number of blocks by which to delay enactment of successful,
+		/// non-unanimous, council-instigated referendum proposals.
+		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
+		/// A list of proposals by block number and proposal ID.
+		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		/// Map from proposal ID to the proposal.
+		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
+		/// List of voters that have voted on a proposal ID.
+		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
+		/// Map from a proposal ID and voter to the outcome of the vote. True indicates that it passed.
+		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
+		/// A veto of a proposal. The veto has an expiry (block number) and a list of vetoers.
+		pub VetoedProposal get(veto_of): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+	}
+}
+
+decl_event!(
+	pub enum Event<T> where <T as system::Trait>::Hash {
+		/// A voting tally has happened for a referendum cancellation vote.
+		/// Last three are yes, no, abstain counts.
+		TallyCancellation(Hash, u32, u32, u32),
+		/// A voting tally has happened for a referendum vote.
+		/// Last three are yes, no, abstain counts.
+		TallyReferendum(Hash, u32, u32, u32),
+	}
+);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -131,39 +164,6 @@ decl_module! {
 		}
 	}
 }
-
-decl_storage! {
-	trait Store for Module<T: Trait> as CouncilVoting {
-		/// Period (in blocks) that a veto is in effect.
-		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = 1000.into();
-		/// Period (in blocks) that a vote is open for.
-		pub VotingPeriod get(voting_period) config(): T::BlockNumber = 3.into();
-		/// Number of blocks by which to delay enactment of successful,
-		/// non-unanimous, council-instigated referendum proposals.
-		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = 0.into();
-		/// A list of proposals by block number and proposal ID.
-		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
-		/// Map from proposal ID to the proposal.
-		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
-		/// List of voters that have voted on a proposal ID.
-		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
-		/// Map from a proposal ID and voter to the outcome of the vote. True indicates that it passed.
-		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
-		/// A veto of a proposal. The veto has an expiry (block number) and a list of vetoers.
-		pub VetoedProposal get(veto_of): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where <T as system::Trait>::Hash {
-		/// A voting tally has happened for a referendum cancellation vote.
-		/// Last three are yes, no, abstain counts.
-		TallyCancellation(Hash, u32, u32, u32),
-		/// A voting tally has happened for a referendum vote.
-		/// Last three are yes, no, abstain counts.
-		TallyReferendum(Hash, u32, u32, u32),
-	}
-);
 
 impl<T: Trait> Module<T> {
 	/// Returns true if there are one or more vetos in effect on a proposal.

@@ -224,7 +224,7 @@ mod tests {
 	use crate::tests::{Call, Origin, Event as OuterEvent};
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
-	use hex_literal::hex;
+	use hex_literal::{hex, hex_impl};
 
 	fn set_balance_proposal(value: u64) -> Call {
 		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
@@ -261,7 +261,6 @@ mod tests {
 							3
 						)
 					),
-					topics: vec![],
 				}
 			]);
 		});
@@ -325,7 +324,6 @@ mod tests {
 							2
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -338,7 +336,6 @@ mod tests {
 							1
 						)
 					),
-					topics: vec![],
 				}
 			]);
 		});
@@ -364,7 +361,6 @@ mod tests {
 							3
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -377,7 +373,6 @@ mod tests {
 							1
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -386,7 +381,6 @@ mod tests {
 							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()
 						)
 					),
-					topics: vec![],
 				}
 			]);
 		});
@@ -413,7 +407,6 @@ mod tests {
 							2
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -426,7 +419,6 @@ mod tests {
 							0
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -435,7 +427,6 @@ mod tests {
 							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()
 						)
 					),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -445,7 +436,6 @@ mod tests {
 							false
 						)
 					),
-					topics: vec![],
 				}
 			]);
 		});

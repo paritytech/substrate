@@ -17,7 +17,7 @@
 //! Council member seat candidacy, voting, approval, and maintenance.
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, StaticLookup};
+use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap, dispatch::Result, decl_storage, decl_event, ensure,
@@ -99,6 +99,79 @@ pub trait Trait: democracy::Trait {
 	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
 	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Council {
+
+		// parameters
+		/// Amount that must be locked up in order to submit one's candidacy.
+		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = BalanceOf::<T>::sa(9);
+		/// Amount that must be locked up in order to be able to submit votes.
+		pub VotingBond get(voting_bond) config(voter_bond): BalanceOf<T>;
+		/// The punishment, per voter, if you provide an invalid presentation.
+		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
+		/// Number of runners-up who should have their approvals persist until the next vote.
+		pub CarryCount get(carry_count) config(): u32 = 2;
+		/// Number of blocks to give each top candidate to present themselves after the vote ends.
+		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// Number of vote indices that need to go by after a target voter's last vote before they can
+		/// be reaped if their approvals are moot.
+		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
+		/// How often (in blocks) to check for new votes.
+		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// How long (in blocks) each position is active for.
+		pub TermDuration get(term_duration) config(): T::BlockNumber = T::BlockNumber::sa(5);
+		/// Number of accounts that should be sitting on the council.
+		pub DesiredSeats get(desired_seats) config(): u32;
+
+		// permanent state (always relevant, changes only at the finalization of voting)
+		/// The current council. When there's a vote going on, this should still be used for executive
+		/// matters. The block number is the block that the associated account ID's position is
+		/// active until (calculated by the sum of the block number when the council member was
+		/// elected and his or her term duration).
+		pub ActiveCouncil get(active_council) config(): Vec<(T::AccountId, T::BlockNumber)>;
+		/// The total number of votes that have happened or are in progress.
+		pub VoteCount get(vote_index): VoteIndex;
+
+		// persistent state (always relevant, changes constantly)
+		/// A list of votes for each voter, respecting the last cleared vote index that this voter was
+		/// last active at.
+		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
+		/// The vote index and list slot in which the candidate account ID was registered or `None` if
+		/// they are not currently registered.
+		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
+		/// The last cleared vote index that this voter was last active at.
+		pub LastActiveOf get(voter_last_active): map T::AccountId => Option<VoteIndex>;
+		/// The present voter list.
+		pub Voters get(voters): Vec<T::AccountId>;
+		/// The present candidate list.
+		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
+		/// Number of candidates.
+		pub CandidateCount get(candidate_count): u32;
+
+		// temporary state (only relevant during finalization/presentation)
+		/// The accounts holding the seats that will become free on the next tally. Tuple of the block number
+		/// at which the next tally will occur, the number of seats, and a list of the account IDs.
+		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
+		/// The stakes as they were at the point that the vote ended.
+		pub SnapshotedStakes get(snapshoted_stakes): Vec<BalanceOf<T>>;
+		/// Get the leaderboard if we're in the presentation phase.
+		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
+	}
+}
+
+decl_event!(
+	pub enum Event<T> where <T as system::Trait>::AccountId {
+		/// A voter has been reaped. The tuple corresponds to the reaped voter and reaper, respectively.
+		VoterReaped(AccountId, AccountId),
+		/// A reaper has been slashed.
+		BadReaperSlashed(AccountId),
+		/// A tally (for approval votes of council seat(s)) has started.
+		TallyStarted(u32),
+		/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
+		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
+	}
+);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -235,7 +308,7 @@ decl_module! {
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let stakes = Self::snapshoted_stakes();
 			let voters = Self::voters();
-			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::from(voters.len() as u32);
+			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(voters.len() as u64);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
 				"presenter must have sufficient slashable funds"
@@ -313,79 +386,6 @@ decl_module! {
 		}
 	}
 }
-
-decl_storage! {
-	trait Store for Module<T: Trait> as Council {
-
-		// parameters
-		/// Amount that must be locked up in order to submit one's candidacy.
-		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = 9.into();
-		/// Amount that must be locked up in order to be able to submit votes.
-		pub VotingBond get(voting_bond) config(voter_bond): BalanceOf<T>;
-		/// The punishment, per voter, if you provide an invalid presentation.
-		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = 1.into();
-		/// Number of runners-up who should have their approvals persist until the next vote.
-		pub CarryCount get(carry_count) config(): u32 = 2;
-		/// Number of blocks to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = 1000.into();
-		/// Number of vote indices that need to go by after a target voter's last vote before they can
-		/// be reaped if their approvals are moot.
-		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
-		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = 1000.into();
-		/// How long (in blocks) each position is active for.
-		pub TermDuration get(term_duration) config(): T::BlockNumber = 5.into();
-		/// Number of accounts that should be sitting on the council.
-		pub DesiredSeats get(desired_seats) config(): u32;
-
-		// permanent state (always relevant, changes only at the finalization of voting)
-		/// The current council. When there's a vote going on, this should still be used for executive
-		/// matters. The block number is the block that the associated account ID's position is
-		/// active until (calculated by the sum of the block number when the council member was
-		/// elected and his or her term duration).
-		pub ActiveCouncil get(active_council) config(): Vec<(T::AccountId, T::BlockNumber)>;
-		/// The total number of votes that have happened or are in progress.
-		pub VoteCount get(vote_index): VoteIndex;
-
-		// persistent state (always relevant, changes constantly)
-		/// A list of votes for each voter, respecting the last cleared vote index that this voter was
-		/// last active at.
-		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
-		/// The vote index and list slot in which the candidate account ID was registered or `None` if
-		/// they are not currently registered.
-		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
-		/// The last cleared vote index that this voter was last active at.
-		pub LastActiveOf get(voter_last_active): map T::AccountId => Option<VoteIndex>;
-		/// The present voter list.
-		pub Voters get(voters): Vec<T::AccountId>;
-		/// The present candidate list.
-		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
-		/// Number of candidates.
-		pub CandidateCount get(candidate_count): u32;
-
-		// temporary state (only relevant during finalization/presentation)
-		/// The accounts holding the seats that will become free on the next tally. Tuple of the block number
-		/// at which the next tally will occur, the number of seats, and a list of the account IDs.
-		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
-		/// The stakes as they were at the point that the vote ended.
-		pub SnapshotedStakes get(snapshoted_stakes): Vec<BalanceOf<T>>;
-		/// Get the leaderboard if we're in the presentation phase.
-		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where <T as system::Trait>::AccountId {
-		/// A voter has been reaped. The tuple corresponds to the reaped voter and reaper, respectively.
-		VoterReaped(AccountId, AccountId),
-		/// A reaper has been slashed.
-		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of council seat(s)) has started.
-		TallyStarted(u32),
-		/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
-		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
-	}
-);
 
 impl<T: Trait> Module<T> {
 	// exposed immutables.

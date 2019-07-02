@@ -46,7 +46,7 @@
 //!
 //! #### Council Motions (motions.rs)
 //!
-//! _Motions_ handles internal proposals that are only proposed and voted upon by _councillors_.
+//! _Motions_ handle internal proposals that are only proposed and voted upon by _councillors_.
 //! Each proposal has a minimum threshold of yay votes that it needs to gain to be enacted.
 //!
 //! - **Council motion:** A mechanism used to enact a proposal.
@@ -182,7 +182,7 @@
 //! This code snippet includes an `approve_all` public function that could be called to approve all
 //! existing candidates, if a tally is scheduled to happen, without having to check the number of them.
 //!
-//! ```
+//! ```ignore
 //! use srml_support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_council::seats;
