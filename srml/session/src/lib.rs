@@ -136,7 +136,7 @@ pub trait ShouldEndSession<BlockNumber> {
 
 /// Ends the session after a fixed period of blocks.
 ///
-/// The first session will have length of `Period + Offset`, and
+/// The first session will have length of `Offset`, and
 /// the following sessions will have length of `Period`.
 pub struct PeriodicSessions<
 	Period,
