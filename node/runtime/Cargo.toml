@@ -49,6 +49,7 @@ std = [
 	"runtime_primitives/std",
 	"support/std",
 	"aura/std",
+	"authorship/std",
 	"balances/std",
 	"contracts/std",
 	"council/std",

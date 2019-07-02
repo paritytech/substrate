@@ -212,8 +212,8 @@ decl_module! {
 
 		fn on_finalize() {
 			// ensure we never go to trie with these values.
-			let _ = <Self as Store>::Author::take();
-			let _ = <Self as Store>::DidSetUncles::take();
+			<Self as Store>::Author::kill();
+			<Self as Store>::DidSetUncles::kill();
 		}
 
 		/// Provide a set of uncles.
