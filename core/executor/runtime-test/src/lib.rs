@@ -5,12 +5,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-#[cfg(not(feature = "std"))]
-use alloc::{vec::Vec, slice};
-#[cfg(feature = "std")]
-use std::slice;
+use rstd::{vec::Vec, slice, vec};
 
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
@@ -40,7 +35,7 @@ macro_rules! impl_stubs {
 			// Leak the output vector to avoid it being freed.
 			// This is fine in a WASM context since the heap
 			// will be discarded after the call.
-			::core::mem::forget(output);
+			rstd::mem::forget(output);
 			res
 		}
 	};

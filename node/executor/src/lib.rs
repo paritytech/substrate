@@ -53,10 +53,9 @@ mod tests {
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
-		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig,
-		System, SystemConfig, GrandpaConfig, IndicesConfig, ContractsConfig, Event,
-		SessionKeys, Treasury, CENTS, DOLLARS, MILLICENTS
+		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
+		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
+		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CENTS, DOLLARS, MILLICENTS
 	};
 	use wabt;
 	use primitives::map;
