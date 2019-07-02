@@ -114,6 +114,14 @@
 //! }
 //! ```
 //!
+//! ## Assumptions
+//!
+//! Below are assumptions that must be held when using this module.  If any of
+//! them are violated, the behavior of this module is undefined.
+//!
+//! * The total count of assets should be less than
+//!   `Trait::AssetId::max_value()`.
+//!
 //! ## Related Modules
 //!
 //! * [`System`](../srml_system/index.html)
@@ -236,11 +244,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use primitives::{
-		BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-		testing::Header
-	};
+	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -272,7 +276,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]

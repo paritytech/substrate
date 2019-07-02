@@ -11,11 +11,12 @@ parking_lot = "0.8.0"
 lazy_static = "1.0"
 log = "0.4"
 slog = {version = "^2", features = ["nested-values"]}
-tokio = "0.1.7"
+tokio-executor = "0.1.7"
+tokio-timer = "0.2"
 exit-future = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sysinfo = "0.8.0"
+sysinfo = "0.9.0"
 target_info = "0.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
@@ -25,7 +26,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 client = { package = "substrate-client", path = "../../core/client" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
-parity-codec = "3.3"
+parity-codec = "4.1.1"
 substrate-executor = { path = "../../core/executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 rpc = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }

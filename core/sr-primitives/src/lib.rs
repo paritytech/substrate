@@ -28,6 +28,9 @@ pub use serde;
 #[doc(hidden)]
 pub use rstd;
 
+#[doc(hidden)]
+pub use paste;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
@@ -66,6 +69,14 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
+/// A module identifier. These are per module and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct ModuleId(pub [u8; 8]);
+
+impl traits::TypeId for ModuleId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
+
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
@@ -101,7 +112,22 @@ pub trait BuildStorage: Sized {
 		Ok((storage, child_storage))
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
+}
+
+/// Something that can build the genesis storage of a module.
+#[cfg(feature = "std")]
+pub trait BuildModuleGenesisStorage<T, I>: Sized {
+	/// Create the module genesis storage into the given `storage` and `child_storage`.
+	fn build_module_genesis_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
@@ -162,6 +188,21 @@ impl Permill {
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per million fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/million)) < million
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
+
+		Permill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Permill
@@ -254,6 +295,21 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per billion fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
+
+		Perbill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -318,8 +374,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
@@ -556,26 +611,32 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 /// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
+	// Generic + Instance
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// Generic
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// No Generic and maybe Instance
 	(
-		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
 	($concrete:ident) => ()
 }
@@ -590,30 +651,76 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
+			$( $config:ident =>
+				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
-		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		pub struct $main {
-			$(
-				pub $snake: Option<$config>,
-			)*
+		$crate::__impl_outer_config_types! {
+			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
 		}
-		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildStorage for $main {
-			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+
+		$crate::paste::item! {
+			#[cfg(any(feature = "std", test))]
+			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+			#[serde(rename_all = "camelCase")]
+			#[serde(deny_unknown_fields)]
+			pub struct $main {
 				$(
-					if let Some(extra) = self.$snake {
-						extra.assimilate_storage(top, children)?;
-					}
+					pub [< $snake $(_ $instance )? >]: Option<$config>,
 				)*
-				Ok(())
+			}
+			#[cfg(any(feature = "std", test))]
+			impl $crate::BuildStorage for $main {
+				fn assimilate_storage(
+					self,
+					top: &mut $crate::StorageOverlay,
+					children: &mut $crate::ChildrenStorageOverlay
+				) -> std::result::Result<(), String> {
+					$(
+						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
+							$crate::impl_outer_config! {
+								@CALL_FN
+								$concrete;
+								$snake;
+								$( $instance )?;
+								extra;
+								top;
+								children;
+							}
+						}
+					)*
+					Ok(())
+				}
 			}
 		}
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		$instance:ident;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
 	}
 }
 
@@ -646,9 +753,9 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 mod tests {
 	use crate::codec::{Encode, Decode};
 
-	macro_rules! per_thing_mul_upper_test {
+	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
-			// all sort of from_percent
+			// multiplication from all sort of from_percent
 			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 			assert_eq!(
 				$per::from_percent(99) * $num_type::max_value(),
@@ -658,9 +765,23 @@ mod tests {
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
 
-			// bounds
+			// multiplication with bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
+
+			// from_rational_approximation
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
+				$per::one(),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value()/3, u128::max_value()),
+				$per::from_parts($per::one().0/3),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(1, u128::max_value()),
+				$per::zero(),
+			);
 		}
 	}
 
@@ -714,13 +835,14 @@ mod tests {
 		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
-		per_thing_mul_upper_test!(u32, Perbill);
-		per_thing_mul_upper_test!(u64, Perbill);
-		per_thing_mul_upper_test!(u128, Perbill);
+		per_thing_upper_test!(u32, Perbill);
+		per_thing_upper_test!(u64, Perbill);
+		per_thing_upper_test!(u128, Perbill);
 
-		per_thing_mul_upper_test!(u32, Permill);
-		per_thing_mul_upper_test!(u64, Permill);
-		per_thing_mul_upper_test!(u128, Permill);
+		per_thing_upper_test!(u32, Permill);
+		per_thing_upper_test!(u64, Permill);
+		per_thing_upper_test!(u128, Permill);
+
 	}
 
 	#[test]

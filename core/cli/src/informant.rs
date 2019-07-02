@@ -22,7 +22,7 @@ use std::time;
 use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
-use network::{SyncState, SyncProvider};
+use network::SyncState;
 use client::{backend::Backend, BlockchainEvents};
 use log::{info, warn};
 
@@ -40,39 +40,36 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 /// Creates an informant in the form of a `Future` that must be polled regularly.
 pub fn build<C>(service: &Service<C>) -> impl Future<Item = (), Error = ()>
 where C: Components {
-	let network = service.network();
 	let client = service.client();
 	let mut last_number = None;
 	let mut last_update = time::Instant::now();
 
-	let display_notifications = network.status().for_each(move |sync_status| {
+	let display_notifications = service.network_status().for_each(move |net_status| {
 
 		let info = client.info();
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
 		let speed = move || speed(best_number, last_number, last_update);
 		last_update = time::Instant::now();
-		let (status, target) = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
+		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("Idle".into(), "".into()),
 			(SyncState::Downloading, None) => (format!("Syncing{}", speed()), "".into()),
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed()), format!(", target=#{}", n)),
 		};
 		last_number = Some(best_number);
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-		let bandwidth_download = network.average_download_per_sec();
-		let bandwidth_upload = network.average_upload_per_sec();
 		info!(
 			target: "substrate",
 			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 			Colour::White.bold().paint(&status),
 			target,
-			Colour::White.bold().paint(format!("{}", sync_status.num_peers)),
+			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
 			Colour::White.paint(format!("{}", best_number)),
 			best_hash,
 			Colour::White.paint(format!("{}", finalized_number)),
 			info.chain.finalized_hash,
-			TransferRateFormat(bandwidth_download),
-			TransferRateFormat(bandwidth_upload),
+			TransferRateFormat(net_status.average_download_per_sec),
+			TransferRateFormat(net_status.average_upload_per_sec),
 		);
 
 		Ok(())

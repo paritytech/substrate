@@ -195,7 +195,7 @@ pub trait JustificationImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
@@ -211,7 +211,7 @@ pub trait FinalityProofImport<B: BlockT> {
 	type Error: std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(

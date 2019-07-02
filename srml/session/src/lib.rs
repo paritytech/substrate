@@ -34,7 +34,7 @@
 //! - **Session key:** A session key is actually several keys kept together that provide the various signing
 //! functions required by network authorities/validators in pursuit of their duties.
 //! - **Session key configuration process:** A session key is set using `set_key` for use in the
-//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountID` and the session
+//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountId` and the session
 //! key provided. `set_key` allows users to set their session key prior to becoming a validator.
 //! It is a public call since it uses `ensure_signed`, which checks that the origin is a signed account.
 //! As such, the account ID of the origin stored in in `NextKeyFor` may not necessarily be associated with
@@ -120,8 +120,11 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::Decode;
 use primitives::traits::{Zero, Saturating, Member, OpaqueKeys};
-use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get}, Parameter, print};
+use srml_support::{
+	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
+	decl_event, decl_storage,
+};
+use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
 use system::ensure_signed;
 
 /// Simple index type with which we can count sessions.
@@ -290,7 +293,7 @@ decl_module! {
 					updates.push(None);
 					continue;
 				}
-				let mut active = <Active<T>>::get(i as u32);
+				let mut active = Active::get(i as u32);
 				match active.binary_search_by(|k| k[..].cmp(&new_key)) {
 					Ok(_) => return Err("duplicate key provided"),
 					Err(pos) => active.insert(pos, new_key.to_owned()),
@@ -310,12 +313,12 @@ decl_module! {
 
 			// Update the active sets.
 			for (i, active) in updates.into_iter().filter_map(|x| x) {
-				<Active<T>>::insert(i as u32, active);
+				Active::insert(i as u32, active);
 			}
 			// Set new keys value for next session.
 			<NextKeyFor<T>>::insert(who, keys);
 			// Something changed.
-			<Changed<T>>::put(true);
+			Changed::put(true);
 		}
 
 		/// Called when a block is finalized. Will rotate session if it is the last
@@ -332,9 +335,9 @@ impl<T: Trait> Module<T> {
 	/// Move on to next session: register the new authority set.
 	pub fn rotate_session() {
 		// Increment current session index.
-		let session_index = <CurrentIndex<T>>::get();
+		let session_index = CurrentIndex::get();
 
-		let mut changed = <Changed<T>>::take();
+		let mut changed = Changed::take();
 
 		// See if we have a new validator set.
 		let validators = if let Some(new) = T::OnSessionEnding::on_session_ending(session_index) {
@@ -346,7 +349,7 @@ impl<T: Trait> Module<T> {
 		};
 
 		let session_index = session_index + 1;
-		<CurrentIndex<T>>::put(session_index);
+		CurrentIndex::put(session_index);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
@@ -359,15 +362,39 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Disable the validator of index `i`.
-	pub fn disable(i: usize) {
+	pub fn disable_index(i: usize) {
 		T::SessionHandler::on_disabled(i);
-		<Changed<T>>::put(true);
+		Changed::put(true);
+	}
+
+	/// Disable the validator identified by `c`. (If using with the staking module, this would be
+	/// their *controller* account.)
+	pub fn disable(c: &T::AccountId) -> rstd::result::Result<(), ()> {
+		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<NextKeyFor<T>>::remove(who);
+	}
+}
+
+/// Wraps the author-scraping logic for consensus engines that can recover
+/// the canonical index of an author. This then transforms it into the
+/// registering account-ID of that session key index.
+pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
+
+impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AccountId>
+	for FindAccountFromAuthorIndex<T, Inner>
+{
+	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		let i = Inner::find_author(digests)?;
+
+		let validators = <Module<T>>::validators();
+		validators.get(i as usize).map(|k| k.clone())
 	}
 }
 
@@ -378,9 +405,9 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnInitialize};
-	use primitives::testing::{Header, UintAuthorityId};
+	use primitives::{
+		traits::{BlakeTwo256, IdentityLookup, OnInitialize}, testing::{Header, UintAuthorityId}
+	};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -460,11 +487,11 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(timestamp::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
+		t.extend(GenesisConfig::<Test> {
 			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()

@@ -17,7 +17,7 @@
 //! Auxilliaries to help with managing partial changes to accounts state.
 
 use super::{
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Module, Trait, TrieId,
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
 	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
@@ -26,7 +26,7 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{Bounded, Zero};
-use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use srml_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;
 
@@ -75,7 +75,12 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
+	fn get_storage(
+		&self,
+		_account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey
+	) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -120,7 +125,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				} else if let Some(code_hash) = changed.code_hash {
 					AliveContractInfo::<T> {
 						code_hash,
-						storage_size: <Module<T>>::storage_size_offset(),
+						storage_size: T::StorageSizeOffset::get(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <system::Module<T>>::block_number(),
 						rent_allowance: <BalanceOf<T>>::max_value(),
@@ -240,7 +245,12 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
+	fn get_storage(
+		&self,
+		account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey
+	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)

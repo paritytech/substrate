@@ -15,14 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use srml_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV5,
-	DefaultByteGetter, RuntimeMetadataPrefixed,
-	StorageMetadata, StorageFunctionMetadata,
-	StorageFunctionType, StorageFunctionModifier,
-	DefaultByte, StorageHasher
+	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataV6,
+	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata,
+	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher
 };
-
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///
@@ -40,8 +36,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadata::V5 (
-					$crate::metadata::RuntimeMetadataV5 {
+				$crate::metadata::RuntimeMetadata::V6 (
+					$crate::metadata::RuntimeMetadataV6 {
 						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
@@ -67,6 +63,11 @@ macro_rules! __runtime_modules_to_metadata {
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
+				constants: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode(
+						$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
+					)
+				)
 			};
 			$( $rest )*
 		)
@@ -82,16 +83,6 @@ macro_rules! __runtime_modules_to_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_call {
-	// skip system
-	(
-		system,
-		$skip_module: ident $( <$instance:ident> )?,
-		$skip_runtime: ident,
-		with Call
-		$(with $kws:ident)*
-	) => {
-		None
-	};
 	(
 		$mod: ident,
 		$module: ident $( <$instance:ident> )?,
@@ -237,23 +228,31 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 mod tests {
 	use super::*;
 	use srml_metadata::{
-		EventMetadata,
-		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
-		StorageFunctionMetadata,
-		ModuleMetadata, RuntimeMetadataPrefixed
+		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
+		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
 	};
-	use crate::codec::{Encode, Decode};
+	use codec::{Encode, Decode};
+	use crate::traits::Get;
 
 	mod system {
+		use super::*;
+
 		pub trait Trait {
+			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId>>;
-			type AccountId;
-			type BlockNumber;
+			type AccountId: From<u32> + Encode;
+			type BlockNumber: From<u32> + Encode;
+			type SomeValue: Get<u32>;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				/// Hi, I am a comment.
+				const BlockNumber: T::BlockNumber = 100.into();
+				const GetType: T::AccountId = T::SomeValue::get().into();
+				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
+			}
 		}
 
 		decl_event!(
@@ -369,10 +368,15 @@ mod tests {
 		type BlockNumber = u32;
 	}
 
+	crate::parameter_types! {
+		pub const SystemValue: u32 = 600;
+	}
+
 	impl system::Trait for TestRuntime {
 		type Origin = Origin;
 		type AccountId = u32;
 		type BlockNumber = u32;
+		type SomeValue = SystemValue;
 	}
 
 	impl_runtime_metadata!(
@@ -382,76 +386,130 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V5(
-		RuntimeMetadataV5 {
-		modules: DecodeDifferent::Encode(&[
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("system"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"")),
-				storage: None,
-				calls: None,
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("SystemEvent"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[])
-						}
-			 		])
-				)),
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("event_module"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"")),
-				storage: None,
-				calls: Some(
-					DecodeDifferent::Encode(FnEncode(||&[
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_0"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						}
-					]))),
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-						}
-			 		])
-				)),
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("event_module2"),
-				prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
-				storage: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						StorageFunctionMetadata {
-							name: DecodeDifferent::Encode("StorageMethod"),
-							modifier: StorageFunctionModifier::Optional,
-							ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-							default: DecodeDifferent::Encode(
-								DefaultByteGetter(
-									&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
-								)
-							),
-							documentation: DecodeDifferent::Encode(&[]),
-						}
-			 		])
-				)),
-				calls: Some(DecodeDifferent::Encode(FnEncode(||&[	]))),
-				event: Some(DecodeDifferent::Encode(
-			 		FnEncode(||&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[])
-						}
-			 		])
-				)),
-			},
-		])}
+	struct ConstantBlockNumberByteGetter;
+	impl DefaultByte for ConstantBlockNumberByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			100u32.encode()
+		}
+	}
+
+	struct ConstantGetTypeByteGetter;
+	impl DefaultByte for ConstantGetTypeByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			SystemValue::get().encode()
+		}
+	}
+
+	struct ConstantAssociatedConstByteGetter;
+	impl DefaultByte for ConstantAssociatedConstByteGetter {
+		fn default_byte(&self) -> Vec<u8> {
+			<TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
+		}
+	}
+
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V6(
+		RuntimeMetadataV6 {
+			modules: DecodeDifferent::Encode(&[
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("system"),
+					prefix: DecodeDifferent::Encode(FnEncode(|| "")),
+					storage: None,
+					calls: None,
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("SystemEvent"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(
+						FnEncode(|| &[
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("BlockNumber"),
+								ty: DecodeDifferent::Encode("T::BlockNumber"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantBlockNumberByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+							},
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("GetType"),
+								ty: DecodeDifferent::Encode("T::AccountId"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantGetTypeByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							},
+							ModuleConstantMetadata {
+								name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
+								ty: DecodeDifferent::Encode("u64"),
+								value: DecodeDifferent::Encode(
+									DefaultByteGetter(&ConstantAssociatedConstByteGetter)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					),
+				},
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("event_module"),
+					prefix: DecodeDifferent::Encode(FnEncode(|| "")),
+					storage: None,
+					calls: Some(
+						DecodeDifferent::Encode(FnEncode(|| &[
+							FunctionMetadata {
+								name: DecodeDifferent::Encode("aux_0"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						]))),
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				},
+				ModuleMetadata {
+					name: DecodeDifferent::Encode("event_module2"),
+					prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
+					storage: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							StorageEntryMetadata {
+								name: DecodeDifferent::Encode("StorageMethod"),
+								modifier: StorageEntryModifier::Optional,
+								ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+								default: DecodeDifferent::Encode(
+									DefaultByteGetter(
+										&event_module2::__GetByteStructStorageMethod(
+											std::marker::PhantomData::<TestRuntime>
+										)
+									)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					)),
+					calls: Some(DecodeDifferent::Encode(FnEncode(|| &[]))),
+					event: Some(DecodeDifferent::Encode(
+						FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+						])
+					)),
+					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				},
+			])
+		}
 	);
 
 	#[test]
@@ -460,6 +518,6 @@ mod tests {
 		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
 		let expected_metadata: RuntimeMetadataPrefixed = EXPECTED_METADATA.into();
 
-		assert_eq!(expected_metadata, metadata_decoded.unwrap());
+		pretty_assertions::assert_eq!(expected_metadata, metadata_decoded.unwrap());
 	}
 }
