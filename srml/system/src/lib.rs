@@ -181,6 +181,8 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// it receives the current block's weight as input and returns the next fee multiplier for next
 	/// block.
+	///
+	/// Note that passing `()` will keep the value constant.
 	type FeeMultiplierUpdate: Convert<Weight, FeeMultiplier>;
 
 	/// The block header.

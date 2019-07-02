@@ -106,10 +106,6 @@ impl system::Trait for Test {
 	type FeeMultiplierUpdate = ();
 	type Event = MetaEvent;
 }
-parameter_types! {
-	pub const BalancesTransactionBaseFee: u64 = 0;
-	pub const BalancesTransactionByteFee: u64 = 0;
-}
 impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Contract;
@@ -121,8 +117,6 @@ impl balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = BalancesTransactionBaseFee;
-	type TransactionByteFee = BalancesTransactionByteFee;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
