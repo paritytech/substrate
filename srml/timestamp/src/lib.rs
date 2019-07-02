@@ -331,8 +331,6 @@ impl<T: Trait> Time for Module<T> {
 
 	fn now() -> Self::Moment {
 		let now = Self::now();
-		// TODO TODO: we might change signature to return Option of Moment instead of this.
-		// or return 0.
 		assert!(!now.is_zero(), "Time hasn't been set yet");
 		now
 	}
