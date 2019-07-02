@@ -33,7 +33,7 @@ use consensus_common::{
 use consensus_accountable_safety::SubmitReport;
 use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId,
-	PrevoteChallenge, PrecommitChallenge
+	Challenge
 };
 use srml_grandpa::Signal;
 use runtime_primitives::Justification;
@@ -171,9 +171,9 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi,
+	PRA: ProvideRuntimeApi + HeaderBackend<<A as txpool::ChainApi>::Block>,
 	PRA::Api: GrandpaApi<Block>,
-	A: txpool::ChainApi,
+	A: txpool::ChainApi + 'static,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -391,7 +391,7 @@ where
 
 		let api = self.api.runtime_api();
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		let maybe_challenge = api.grandpa_challenge(&at, digest);
+		let maybe_challenge = api.grandpa_prevote_challenge(&at, digest);
 
 		match maybe_challenge {
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
@@ -403,12 +403,11 @@ where
 				self.api.runtime_api()
 					.construct_report_unjustified_prevotes_call(
 						&block_id,
-						PrevoteChallenge { 
-						}
+						challenge,
 					)
 					.map(|call| {
 						self.transaction_pool.as_ref().map(|txpool|
-							txpool.submit_report_call(&self.inner, call.as_slice())
+							txpool.submit_report_call(self.api.as_ref(), call.as_slice())
 						);
 						info!(target: "afg", "Unjustified prevotes report has been submitted")
 					}).unwrap_or_else(|err|
@@ -429,9 +428,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		PRA: ProvideRuntimeApi,
+		PRA: ProvideRuntimeApi + HeaderBackend<<A as txpool::ChainApi>::Block>,
 		PRA::Api: GrandpaApi<Block>,
-		A: txpool::ChainApi,
+		A: txpool::ChainApi + 'static,
 {
 	type Error = ConsensusError;
 
@@ -450,7 +449,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		self.answer_misbehaviour_reports(&mut block, hash)?;
+		// self.answer_misbehaviour_reports(&mut block, hash)?;
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
@@ -578,6 +577,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi>
 			send_voter_commands,
 			consensus_changes,
 			api,
+			transaction_pool,
 		}
 	}
 }

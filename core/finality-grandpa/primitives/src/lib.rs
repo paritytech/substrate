@@ -86,13 +86,6 @@ pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 /// Length of a challenge session in blocks.
 pub const CHALLENGE_SESSION_LENGTH: u32 = 8;
 
-/// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Challenge<H, N, Header, Signature, Id> {
-	pub phantom_data: core::marker::PhantomData<(H, N, Header, Signature, Id)>,
-}
-
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
@@ -150,9 +143,12 @@ decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
-		fn grandpa_challenge(digest: &DigestFor<Block>)
-			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId>>;
+		fn grandpa_prevote_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>>;
 
+		fn grandpa_precommit_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>>;
+		
 		/// Construct a call to report the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
 			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
@@ -164,13 +160,13 @@ decl_runtime_apis! {
 		) -> Vec<u8>;
 
 		fn construct_report_unjustified_prevotes_call(
-			proof: PrevoteChallenge<
+			proof: Challenge<
 				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
 			>
 		) -> Vec<u8>;
 
 		fn construct_report_unjustified_precommits_call(
-			proof: PrecommitChallenge<
+			proof: Challenge<
 				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
 			>
 		) -> Vec<u8>;
@@ -197,7 +193,7 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrevoteChallenge<H, N, Header, S, Id, Vote> {
+pub struct Challenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
 	pub challenged_votes: ChallengedVoteSet<Vote>,
@@ -210,17 +206,6 @@ pub struct FinalizedBlockProof<H, N, Header, S, Id> {
 	pub commit: Commit<H, N, S, Id>,
 	pub headers: Vec<Header>,
 }
-
-
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PrecommitChallenge<H, N, Header, S, Id, Vote> {
-	pub finalized_block: (H, N),
-	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
-	pub challenged_votes: ChallengedVoteSet<Vote>,
-	pub previous_challenge: Option<H>,
-}
-
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]

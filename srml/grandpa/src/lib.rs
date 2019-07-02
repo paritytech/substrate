@@ -48,8 +48,8 @@ use primitives::{
 };
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID,
-	GrandpaEquivocationProof, PrevoteChallenge, PrecommitChallenge, Prevote, Precommit,
-	Message, PrevoteEquivocation, PrecommitEquivocation, localized_payload, AncestryChain,
+	GrandpaEquivocationProof, Prevote, Precommit, Message,
+	PrevoteEquivocation, PrecommitEquivocation, localized_payload, AncestryChain,
 	Chain, validate_commit, VoterSet
 };
 pub use fg_primitives::{
@@ -75,7 +75,9 @@ pub enum Signal<H, N, Header, Signature, Id> {
 	/// before applying and the new set of authorities.
 	ForcedAuthoritiesChange(N, ScheduledChange<N>),
 
-	Challenge(Challenge<H, N, Header, Signature, Id>),
+	PrevoteChallenge(Challenge<H, N, Header, Signature, Id, Prevote<H, N>>),
+
+	PrecommitChallenge(Challenge<H, N, Header, Signature, Id, Precommit<H, N>>),
 }
 
 impl<H, N, Header, Signature, Id> Signal<H, N, Header, Signature, Id> {
@@ -97,9 +99,16 @@ impl<H, N, Header, Signature, Id> Signal<H, N, Header, Signature, Id> {
 		}
 	}
 
-	pub fn try_into_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id>> {
+	pub fn try_into_prevote_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>> {
 		match self {
-			Signal::Challenge(challenge) => Some(challenge),
+			Signal::PrevoteChallenge(challenge) => Some(challenge),
+			_ => None,
+		}
+	}
+
+	pub fn try_into_precommit_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>> {
+		match self {
+			Signal::PrecommitChallenge(challenge) => Some(challenge),
 			_ => None,
 		}
 	}
@@ -167,9 +176,9 @@ pub struct StoredPendingChallenge<H, N, Header, Signature, Id> {
 
 	pub parent_hash: H,
 	
-	pub prevote_challenge: Option<PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
+	pub prevote_challenge: Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
 
-	pub precommit_challenge: Option<PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
+	pub precommit_challenge: Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
 }
 
 
@@ -183,9 +192,9 @@ pub struct StoredChallengeSession<H, N, Header, Signature, Id> {
 
 	pub parent_hash: H,
 	
-	pub prevote_challenge: Option<PrevoteChallenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
+	pub prevote_challenge: Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
 
-	pub precommit_challenge: Option<PrecommitChallenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
+	pub precommit_challenge: Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
 }
 
 decl_event!(
@@ -243,7 +252,7 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_prevotes(
 			_origin,
-			proof: PrevoteChallenge<
+			proof: Challenge<
 				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
 			>
 		) {
@@ -271,7 +280,7 @@ decl_module! {
 		/// Report unjustified precommit votes.
 		fn report_unjustified_precommits(
 			_origin,
-			_proof: PrecommitChallenge<
+			_proof: Challenge<
 				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
 			>
 		) {
@@ -309,7 +318,7 @@ decl_module! {
 			}
 
 			if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
-				Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
+				// Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
 			}
 		}
 	}
@@ -395,10 +404,16 @@ impl<T: Trait> Module<T> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 
-	pub fn grandpa_challenge(digest: &DigestOf<T>)
-		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>>
+	pub fn grandpa_prevote_challenge(digest: &DigestOf<T>)
+		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>>>
 	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_prevote_challenge())
+	}
+
+	pub fn grandpa_precommit_challenge(digest: &DigestOf<T>)
+		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>>>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_precommit_challenge())
 	}
 }
 
@@ -551,7 +566,7 @@ where
 }
 
 fn handle_unjustified_prevotes<T: Trait>(
-	proof: &PrevoteChallenge<
+	proof: &Challenge<
 		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
 	>
 ) -> TransactionValidity
@@ -605,7 +620,7 @@ where
 }
 
 fn handle_unjustified_precommits<T: Trait>(
-	proof: &PrecommitChallenge<
+	proof: &Challenge<
 		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
 	>
 ) -> TransactionValidity
