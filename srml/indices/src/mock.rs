@@ -73,6 +73,7 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
+	type FeeMultiplierUpdate = ();
 	type Event = ();
 }
 impl Trait for Runtime {

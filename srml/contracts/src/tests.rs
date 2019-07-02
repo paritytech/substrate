@@ -75,11 +75,11 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type FeeMultiplierUpdate = ();
 	type Event = MetaEvent;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
-	type WeightToFee = ();
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;

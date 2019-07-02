@@ -17,9 +17,9 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use node_primitives::Balance;
-use runtime_primitives::weights::{Weight, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
+use runtime_primitives::weights::{Weight, FeeMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{Convert, Zero};
-use crate::{Runtime, Perbill, Balances};
+use crate::{Perbill, Balances};
 
 /// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
 /// calculation.
@@ -48,15 +48,13 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 ///   fee = weight * (1 + (v . diff) + v^2 (v . d)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
-pub struct WeightToFeeHandler;
-impl Convert<Weight, Balance> for WeightToFeeHandler {
-	fn convert(weight: Weight) -> Balance {
+pub struct FeeMultiplierUpdateHandler;
+impl Convert<Weight, FeeMultiplier> for FeeMultiplierUpdateHandler {
+	fn convert(block_weight: Weight) -> FeeMultiplier {
 		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
 		let max = MAX_TRANSACTIONS_WEIGHT as u128;
-		let all =
-			(<system::Module<Runtime>>::all_extrinsics_weight() as u128)
-			.saturating_add(weight as u128);
+		let block_weight = block_weight as u128;
 
 		let from_max_to_per_fraction = |x: u128| {
 			if let Some(x_fraction) = x.checked_mul(max_fraction) {
@@ -77,11 +75,8 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		};
 
 		// determines if the first_term is positive
-		let mut positive = false;
-		let diff = match ideal.checked_sub(all) {
-			Some(d) => d,
-			None => { positive = true; all - ideal }
-		};
+		let positive = block_weight >= ideal;
+		let diff = block_weight.max(ideal) - block_weight.min(ideal);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
 		let v = 40_000;
@@ -92,8 +87,8 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		first_term = collapse_mul(first_term, from_max_to_per_fraction(diff));
 		first_term = first_term / max_fraction;
 
-		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving it
-		// a shot.
+		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving
+		// it a shot.
 		let mut second_term = v_squared;
 		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff));
 		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff) / 2);
@@ -102,112 +97,75 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 
 		if positive {
 			let excess = first_term.saturating_add(second_term);
+			// max_fraction is always safe to convert to u32.
 			let p = Perbill::from_parts(excess.min(max_fraction) as u32);
-			Balance::from(weight).saturating_add(Balance::from(p * weight))
+			FeeMultiplier::Positive(p)
 		} else {
 			// first_term > second_term
 			let negative = first_term - second_term;
-			let p = Perbill::from_parts((max_fraction - negative) as u32);
-			Balance::from(p * weight)
-		}.into()
+			// max_fraction is always safe to convert to u32.
+			let p = Perbill::from_parts(negative.min(max_fraction) as u32);
+			FeeMultiplier::Negative(p)
+		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::{
-		weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight},
-		traits::{IdentityLookup, Convert, BlakeTwo256},
-		testing::Header,
-	};
-	use support::impl_outer_origin;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_io::with_externalities;
+	use runtime_primitives::weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight};
 
-	impl_outer_origin!{
-		pub enum Origin for Runtime {}
-	}
-
-	// needed because WeightToFeeHandler uses system module internally.
-	#[derive(Clone, PartialEq, Eq, Debug)]
-	pub struct Runtime;
-	impl system::Trait for Runtime {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-	}
-
-	type System = system::Module<Runtime>;
-
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
-	}
-
-	fn weight_to_fee(weight: Weight, already_existing_weight: Weight) -> Balance  {
-		let weight = weight as f32;
-		let already_existing_weight = already_existing_weight as f32;
-		let v = 0.00004;
+	// poc reference implementation.
+	#[allow(dead_code)]
+	fn fee_multiplier_update(block_weight: Weight) -> Perbill  {
+		let block_weight = block_weight as f32;
+		let v: f32 = 0.00004;
 
 		// maximum tx weight
 		let m = MAX_TRANSACTIONS_WEIGHT as f32;
 		// Ideal saturation in terms of weight
 		let ss = IDEAL_TRANSACTIONS_WEIGHT as f32;
 		// Current saturation in terms of weight
-		let s = already_existing_weight + weight;
+		let s = block_weight;
 
 		let fm = 1.0 + (v * (s/m - ss/m)) + (v.powi(2) * (s/m - ss/m).powi(2)) / 2.0;
-		(weight * fm) as Balance
+		// return a per-bill-like value.
+		let fm = if fm >= 1.0 { fm - 1.0 } else { 1.0 - fm };
+		Perbill::from_parts((fm * 1_000_000_000_f32) as u32)
 	}
 
 	#[test]
-	fn stateless_weight_fee() {
-		with_externalities(&mut new_test_ext(), || {
-			let ideal = IDEAL_TRANSACTIONS_WEIGHT;
-			let max = MAX_TRANSACTIONS_WEIGHT;
-			// NOTE: this is now accurate enough for weights below 4194304. Might need change later
-			// on with new weight values
-			// (1) Typical low-cost transaction
-			// (2) Close to ideal. Fee is less than size.
-			// (3) 5 below the ideal, Less fee.
-			// (4) 5 above the ideal
-			// (6) largest number allowed (note: max weight is 4194304)
-			let inputs = vec![28, ideal/2, ideal/2 + 5_000, ideal/2 + 10_000, ideal, ideal + 1000, max / 2, max];
-			inputs.into_iter().for_each(|i| {
-				let diff = WeightToFeeHandler::convert(i) as i64 - weight_to_fee(i, 0) as i64;
-				assert!(diff < 4)
-			});
-		})
+	fn stateless_weight_mul() {
+		// Light block. Fee is reduced a little.
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert(1024),
+			FeeMultiplier::Negative(Perbill::from_parts(9990))
+		);
+		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert(1024 * 4),
+			FeeMultiplier::Negative(Perbill::from_parts(9960))
+		);
+		// ideal. Original fee.
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert(IDEAL_TRANSACTIONS_WEIGHT as u32),
+			FeeMultiplier::Positive(Perbill::zero())
+		);
+		// More than ideal. Fee is increased.
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32),
+			FeeMultiplier::Positive(Perbill::from_parts(10000))
+		);
 	}
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		with_externalities(&mut new_test_ext(), || {
-			let kb = 1024_u32;
-			let mb = kb * kb;
-			vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
-				.into_iter()
-				.for_each(|i| { WeightToFeeHandler::convert(i); });
-		})
-	}
-
-	#[test]
-	fn stateful_weight_to_fee() {
-		with_externalities(&mut new_test_ext(), || {
-			// below ideal: we charge a bit less.
-			assert!(WeightToFeeHandler::convert(1_000_000) < 1_000_000);
-
-			System::note_applied_extrinsic(&Ok(()), IDEAL_TRANSACTIONS_WEIGHT * 3);
-			assert_eq!(System::all_extrinsics_weight(), 3 * IDEAL_TRANSACTIONS_WEIGHT);
-
-			// above ideal: we charge a bit more.
-			assert!(WeightToFeeHandler::convert(1_000_000) > 1_000_000);
-		})
+		// defensive-only test. at the moment we are not allowing any weight more than 4 * 1024 * 1024
+		// in a block.
+		let kb = 1024_u32;
+		let mb = kb * kb;
+		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
+			.into_iter()
+			.for_each(|i| { FeeMultiplierUpdateHandler::convert(i); });
 	}
 }

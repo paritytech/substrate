@@ -289,6 +289,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
+		type FeeMultiplierUpdate = ();
 		type Event = ();
 	}
 

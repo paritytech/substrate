@@ -279,7 +279,8 @@ where
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 			// pay any fees
-			Payment::make_payment(sender, weight).map_err(|_| internal::ApplyError::CantPay)?;
+			let fee_multiplier = <system::Module<System>>::next_fee_multiplier();
+			Payment::make_payment(sender, fee_multiplier.apply_to(weight)).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
@@ -355,7 +356,8 @@ where
 				let weight = xt.weight(encoded_len);
 
 				// pay any fees
-				if Payment::make_payment(sender, weight).is_err() {
+				let fee_multiplier = <system::Module<System>>::next_fee_multiplier();
+				if Payment::make_payment(sender, fee_multiplier.apply_to(weight)).is_err() {
 					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 				}
 

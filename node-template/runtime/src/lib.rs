@@ -12,8 +12,8 @@ use rstd::prelude::*;
 use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use sr_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str, weights,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, Convert, Zero}
+	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -127,6 +127,8 @@ impl system::Trait for Runtime {
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// Update fee multiplier per-block.
+	type FeeMultiplierUpdate = ();
 	/// The ubiquitous origin type.
 	type Origin = Origin;
 }
@@ -154,20 +156,9 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
-/// A weight to fee handler that sets the fee for all transactions to zero.
-/// You probably want to change this based on your needs.
-pub struct FreeWeightToFeeHandler;
-impl Convert<weights::Weight, Balance> for FreeWeightToFeeHandler {
-	fn convert(_: weights::Weight) -> Balance {
-		Zero::zero()
-	}
-}
-
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = Balance;
-	/// To convert transaction weight to fee.
-	type WeightToFee = FreeWeightToFeeHandler;
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.

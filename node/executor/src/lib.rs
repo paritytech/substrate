@@ -82,7 +82,7 @@ mod tests {
 	const INITIAL_BALANCE: u128 = 1_000_000_000;
 
 	// amount of fee for a simple transfer tx with default parameters.
-	const TRANSFER_FEE: u128 = 138;
+	const TRANSFER_FEE: u128 = 139;
 
 	fn alice() -> AccountId {
 		AccountKeyring::Alice.into()
@@ -152,13 +152,13 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() =>
-				69u64.encode(),
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() =>
-				69u64.encode(),
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => 0u64.encode()
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => 0u64.encode(),
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => 0u64.encode(),
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => 0u64.encode(),
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -246,7 +246,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 46);
+			assert_eq!(Balances::total_balance(&alice()), 254 - TRANSFER_FEE - 69 - 1);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
@@ -283,7 +283,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 46);
+			assert_eq!(Balances::total_balance(&alice()), 254 - TRANSFER_FEE - 69 - 1);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
@@ -538,7 +538,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
-						balances::RawEvent::NewAccount(Treasury::account_id(), 0)
+						balances::RawEvent::NewAccount(Treasury::account_id(), TRANSFER_FEE * 8 / 10)
 					),
 					topics: vec![],
 				},
@@ -552,7 +552,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
-						balances::RawEvent::NewAccount(Default::default(), 1)
+						balances::RawEvent::NewAccount(Default::default(), (TRANSFER_FEE * 2 / 10) + 1)
 					),
 					topics: vec![],
 				},
@@ -573,7 +573,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Spending(0)),
+					event: Event::treasury(treasury::RawEvent::Spending(TRANSFER_FEE * 8 / 10)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -583,7 +583,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Rollover(0)),
+					event: Event::treasury(treasury::RawEvent::Rollover(TRANSFER_FEE * 8 / 10)),
 					topics: vec![],
 				},
 			]);
@@ -599,6 +599,11 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), INITIAL_BALANCE - TRANSFER_FEE - 6 - TRANSFER_FEE - 15 + 5);
 			assert_eq!(Balances::total_balance(&bob()), INITIAL_BALANCE + 6 - TRANSFER_FEE - 5 + 15);
+			// the default account that gets the 20%
+			assert_eq!(
+				Balances::total_balance(&primitives::sr25519::Public::default()),
+				3 * ((TRANSFER_FEE * 2 / 10) + 1)
+			);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -629,7 +634,7 @@ mod tests {
 							alice().into(),
 							bob().into(),
 							15,
-							0
+							0,
 						)
 					),
 					topics: vec![],
@@ -641,7 +646,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Spending(0)),
+					event: Event::treasury(treasury::RawEvent::Spending(3 * TRANSFER_FEE * 8 / 10)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -651,7 +656,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Rollover(0)),
+					event: Event::treasury(treasury::RawEvent::Rollover(3 * TRANSFER_FEE * 8 / 10)),
 					topics: vec![],
 				},
 			]);
@@ -880,12 +885,10 @@ mod tests {
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-			},
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() =>
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() =>
+				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -905,12 +908,10 @@ mod tests {
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-			},
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() =>
+				vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() =>
+				vec![254u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
@@ -927,7 +928,7 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 46);
+			assert_eq!(Balances::total_balance(&alice()), 254 - TRANSFER_FEE - 69 - 1);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}

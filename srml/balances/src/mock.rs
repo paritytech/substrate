@@ -39,11 +39,11 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type FeeMultiplierUpdate = ();
 	type Event = ();
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type WeightToFee = ();
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();

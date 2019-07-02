@@ -58,7 +58,7 @@ pub use staking::StakerStatus;
 /// Implementations for `Convert` and other helper structs passed into runtime modules as associated
 /// types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightToFeeHandler};
+use impls::{CurrencyToVoteHandler, FeeMultiplierUpdateHandler};
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -105,6 +105,7 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type FeeMultiplierUpdate = FeeMultiplierUpdateHandler;
 	type Event = Event;
 }
 
@@ -122,7 +123,6 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type WeightToFee = WeightToFeeHandler;
 	type OnFreeBalanceZero = ((Staking, Contracts), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;

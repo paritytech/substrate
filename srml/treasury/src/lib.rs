@@ -375,11 +375,11 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type FeeMultiplierUpdate = ();
 		type Event = ();
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type WeightToFee = ();
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = ();

@@ -41,6 +41,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type FeeMultiplierUpdate = ();
 	type Event = ();
 }
 

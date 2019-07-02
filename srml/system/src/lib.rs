@@ -76,10 +76,10 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::weights::Weight;
-use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
-	Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup,
+use primitives::weights::{Weight, FeeMultiplier};
+use primitives::{generic, Perbill, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One,
+	Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash, Bounded, Lookup,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, Convert,
 }};
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
@@ -176,6 +176,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
+
+	/// Handler for updating the fee multiplier at the end of each block.
+	///
+	/// it receives the current block's weight as input and returns the next fee multiplier for next
+	/// block.
+	type FeeMultiplierUpdate: Convert<Weight, FeeMultiplier>;
 
 	/// The block header.
 	type Header: Parameter + traits::Header<
@@ -312,6 +318,9 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<Weight>;
+		/// The next fee multiplier. This should be updated at the end of each block based on the
+		/// saturation level (weight).
+		NextFeeMultiplier: FeeMultiplier = FeeMultiplier::Positive(Perbill::zero());
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -533,6 +542,11 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
+	/// Gets the next fee multiplier
+	pub fn next_fee_multiplier() -> FeeMultiplier {
+		NextFeeMultiplier::get()
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -561,6 +575,9 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
+		// update the multiplier based on block weight.
+		NextFeeMultiplier::put(T::FeeMultiplierUpdate::convert(Self::all_extrinsics_weight()));
+		// then kill the weight.
 		AllExtrinsicsWeight::kill();
 
 		let number = <Number<T>>::take();
@@ -785,6 +802,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type FeeMultiplierUpdate = ();
 		type Event = u16;
 	}
 

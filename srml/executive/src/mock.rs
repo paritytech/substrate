@@ -27,6 +27,7 @@ use primitives::testing::{Header, Block};
 use system;
 pub use balances::Call as balancesCall;
 pub use system::Call as systemCall;
+use node_runtime::impls::FeeMultiplierUpdateHandler;
 
 impl_outer_origin! {
     pub enum Origin for Runtime {
@@ -58,11 +59,11 @@ impl system::Trait for Runtime {
     type AccountId = u64;
     type Lookup = IdentityLookup<u64>;
     type Header = Header;
+    type FeeMultiplierUpdate = FeeMultiplierUpdateHandler;
     type Event = MetaEvent;
 }
 impl balances::Trait for Runtime {
     type Balance = u128;
-    type WeightToFee = node_runtime::impls::WeightToFeeHandler;
     type OnFreeBalanceZero = ();
     type OnNewAccount = ();
     type Event = MetaEvent;

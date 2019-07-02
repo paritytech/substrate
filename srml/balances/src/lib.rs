@@ -160,7 +160,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, Convert,
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating, Bounded
 };
 use primitives::weights::Weight;
@@ -176,9 +176,6 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDebug + From<Self::BlockNumber>;
 
-	/// Handler for converting transactions weights to fees
-	type WeightToFee: Convert<Weight, Self::Balance>;
-
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
@@ -193,9 +190,6 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
 		MaybeSerializeDebug + From<Self::BlockNumber>;
-
-	/// Handler for converting transaction weights to fees
-	type WeightToFee: Convert<Weight, Self::Balance>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -222,7 +216,6 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
-	type WeightToFee = T::WeightToFee;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
 }
@@ -701,11 +694,11 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
+	type FeeMultiplierUpdate = T::FeeMultiplierUpdate;
 	type Event = ();
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
-	type WeightToFee = T::WeightToFee;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
@@ -1083,7 +1076,7 @@ where
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
-		let transaction_fee = T::WeightToFee::convert(weight);
+		let transaction_fee = T::Balance::from(weight);
 		let imbalance = Self::withdraw(
 			transactor,
 			transaction_fee,

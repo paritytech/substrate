@@ -47,7 +47,7 @@ fn balance_transfer_dispatch_works() {
         );
         assert_eq!(Executive::apply_extrinsic(xt.clone()).unwrap(), ApplyOutcome::Success);
         // default fee.
-        assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 129 - 69 - 28);
+        assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 129 - 69 - 29);
         assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
     });
 }
@@ -59,7 +59,7 @@ fn block_import_works() {
             header: Header {
                 parent_hash: [69u8; 32].into(),
                 number: 1,
-                state_root: hex!("ff8511e2162ead4166feac91c60d838c84b5bdbf3010f454cf124bd6722cfa02").into(),
+                state_root: hex!("7f041ecce50e2238baefc59f1ebed7ce0ef3cfc53dac0e5a873af3400cc7080e").into(),
                 extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
                 digest: Digest { logs: vec![], },
             },

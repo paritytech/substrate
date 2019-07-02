@@ -24,6 +24,10 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
 
+use crate::codec::{Decode, Encode};
+use crate::Perbill;
+use crate::traits::Zero;
+
 /// The final type that each `#[weight = $x:expr]`'s
 /// expression must evaluate to.
 pub type Weight = u32;
@@ -59,6 +63,38 @@ pub enum TransactionWeight {
 	/// Free. The transaction does not increase the total weight
 	/// (i.e. is not included in weight calculation).
 	Free,
+}
+
+/// A wrapper for fee multiplier.
+/// This is to simulate a `Perbill` which is greater than `1`.
+///
+/// This should be updated per-block based on the current saturation level.
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Clone, Debug))]
+#[derive(Encode, Decode)]
+pub enum FeeMultiplier {
+	/// Should be interpreted as a positive ratio added to the weight, i.e. `weight + weight * p`
+	/// where `p` is a small `Perbill`.
+	///
+	Positive(Perbill),
+	/// Should be interpreted as a negative ratio subtracted from the weight, i.e.
+	/// `weight - weight * p` where `p` is a small `Perbill`.
+	Negative(Perbill),
+}
+
+impl FeeMultiplier {
+	/// Applies the self, as a multiplier, to the given weight.
+	pub fn apply_to(&self, weight: Weight) -> Weight {
+		match *self {
+			FeeMultiplier::Positive(p) => weight.saturating_add(p * weight),
+			FeeMultiplier::Negative(p) => weight.checked_sub(p * weight).unwrap_or(Zero::zero()),
+		}
+	}
+}
+
+impl Default for FeeMultiplier {
+	fn default() -> Self {
+		FeeMultiplier::Positive(Perbill::zero())
+	}
 }
 
 impl Weighable for TransactionWeight {
