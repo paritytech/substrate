@@ -105,18 +105,31 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
-	net.sync_step();
 
-	// Peer 1 is major-syncing.
-	assert!(net.peer(1).is_major_syncing());
-
-	// Disconnect peer 1 form everyone else.
-	// TODO: net.peer(1).on_disconnect(net.peer(0));
-	// TODO: net.peer(1).on_disconnect(net.peer(2));
-
-	// Peer 1 is not major-syncing.
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	// Check that we're not major syncing when disconnected.
 	assert!(!net.peer(1).is_major_syncing());
+
+	// Check that we switch to major syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if !net.peer(1).is_major_syncing() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
+
+	// Destroy two nodes, and check that we switch to non-major syncing.
+	net.peers.remove(2);
+	net.peers.remove(0);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(0).is_major_syncing() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 }
 
 #[test]
