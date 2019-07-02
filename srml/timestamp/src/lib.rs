@@ -93,8 +93,8 @@ use parity_codec::Encode;
 use parity_codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
-use srml_support::for_each_tuple;
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
+use srml_support::traits::Time;
 use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
@@ -323,6 +323,18 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Ok(())
 		}
+	}
+}
+
+impl<T: Trait> Time for Module<T> {
+	type Moment = T::Moment;
+
+	fn now() -> Self::Moment {
+		let now = Self::now();
+		// TODO TODO: we might change signature to return Option of Moment instead of this.
+		// or return 0.
+		assert!(!now.is_zero(), "Time hasn't been set yet");
+		now
 	}
 }
 

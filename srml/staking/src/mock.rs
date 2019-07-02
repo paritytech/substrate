@@ -166,6 +166,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	type Currency = balances::Module<Self>;
+	type Time = timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = ();
 	type Event = ();

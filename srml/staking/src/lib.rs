@@ -280,7 +280,7 @@ use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{OnSessionEnding, SessionIndex};
@@ -446,6 +446,7 @@ type PositiveImbalanceOf<T> =
 <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
 <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
 type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
@@ -457,9 +458,12 @@ type ExpoMap<T> = BTreeMap<
 pub const DEFAULT_SESSIONS_PER_ERA: u32 = 3;
 pub const DEFAULT_BONDING_DURATION: u32 = 1;
 
-pub trait Trait: system::Trait + session::Trait + timestamp::Trait + authorship::Trait {
+pub trait Trait: system::Trait + session::Trait + authorship::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+
+	/// Time used for computing era duration.
+	type Time: Time;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
@@ -542,7 +546,7 @@ decl_storage! {
 		pub CurrentEra get(current_era) config(): EraIndex;
 
 		/// The start of the current era.
-		pub CurrentEraStart get(current_era_start): T::Moment;
+		pub CurrentEraStart get(current_era_start): MomentOf<T>;
 
 		/// Rewards for the current era. Using indices of current elected set.
 		pub CurrentEraRewards: EraRewards;
@@ -574,9 +578,6 @@ decl_storage! {
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
-				assert!(<timestamp::Now<T>>::exists());
-				<CurrentEraStart<T>>::put(<timestamp::Module<T>>::now());
-
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					assert!(T::Currency::free_balance(&stash) >= balance);
 					let _ = <Module<T>>::bond(
@@ -629,6 +630,13 @@ decl_module! {
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
 		fn deposit_event<T>() = default;
+
+		fn on_initialize() {
+			// Set the start of the first era.
+			if !<CurrentEraStart<T>>::exists() {
+				<CurrentEraStart<T>>::put(T::Time::now());
+			}
+		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the  account that controls it.
@@ -1055,7 +1063,7 @@ impl<T: Trait> Module<T> {
 	fn new_era() -> Option<Vec<T::AccountId>> {
 		// Payout
 		let rewards = CurrentEraRewards::take();
-		let now = <timestamp::Module<T>>::now();
+		let now = T::Time::now();
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
 			rstd::mem::replace(v, now.clone())
 		});

@@ -445,6 +445,8 @@ fn staking_should_work() {
 		.fair(false) // to give 20 more staked value
 		.build(),
 	|| {
+		Timestamp::set_timestamp(1); // Initialize time.
+
 		// remember + compare this along with the test.
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
@@ -1628,6 +1630,8 @@ fn switching_roles() {
 		.nominate(false)
 		.build(),
 	|| {
+		Timestamp::set_timestamp(1); // Initialize time.
+
 		// Reset reward destination
 		for i in &[10, 20] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller)); }
 
