@@ -38,7 +38,7 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use consensus::well_known_cache_keys;
 
-const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
+const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
 pub struct Backend<S, F, H: Hasher> {

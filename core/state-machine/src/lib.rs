@@ -62,7 +62,7 @@ pub use trie_backend::TrieBackend;
 
 /// A wrapper around a child storage key.
 ///
-/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// This wrapper ensures that the child storage key is correct and properly used. It is
 /// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
