@@ -212,7 +212,7 @@ decl_module! {
 		}
 
 		/// Set the new changes trie configuration.
-		pub fn set_changes_trie_onfig(changes_trie_config: Option<ChangesTrieConfiguration>) {
+		pub fn set_changes_trie_config(changes_trie_config: Option<ChangesTrieConfiguration>) {
 			match changes_trie_config.clone() {
 				Some(changes_trie_config) => storage::unhashed::put_raw(
 					well_known_keys::CHANGES_TRIE_CONFIG,

@@ -1039,10 +1039,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			apply_state_commit(transaction, commit);
 
 			if !f_num.is_zero() {
-				let changes_trie_config = self.changes_tries_storage.configuration_at(&BlockId::Hash(parent_hash))?;
-				if let Some(changes_trie_config) = changes_trie_config {
-					self.changes_tries_storage.prune(&changes_trie_config, transaction, f_hash, f_num);
-				}
+				self.changes_tries_storage.prune(transaction, parent_hash, f_hash, f_num)?;
 			}
 		}
 

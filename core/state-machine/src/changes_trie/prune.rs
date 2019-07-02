@@ -47,7 +47,6 @@ pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 /// level digest is created. Pruning guarantees to save changes tries for last
 /// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
-/// Returns MemoryDB that contains all deleted changes tries nodes.
 pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	config_activation_block: Number,
 	config: &Configuration,

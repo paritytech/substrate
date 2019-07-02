@@ -90,15 +90,12 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	pub fn configuration_at(
 		&self,
 		at: &BlockId<Block>,
-	) -> ClientResult<Option<ChangesTrieConfiguration>> {
+	) -> ClientResult<(NumberFor<Block>, Block::Hash, Option<ChangesTrieConfiguration>)> {
 		// TODO: deal with errors here - whenever cache have no value for block, or we unable to decode it - return error
-		let encoded = self.cache
+		self.cache
 			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
-			.map(|block_and_value| block_and_value.1)
-			.ok_or_else(|| ClientError::Backend("TODO".into()))?; // TODO: specific error
-		let maybe_config = Decode::decode(&mut &encoded[..])
-			.ok_or_else(|| ClientError::Backend("TODO".into()))?; // TODO: specific error
-		Ok(maybe_config)
+			.and_then(|(block, encoded)| Decode::decode(&mut &encoded[..]).map(|config| (block, config)))
+			.ok_or_else(|| ClientError::Backend("TODO".into())) // TODO: specific error
 	}
 
 	/// Commit new changes trie.
@@ -145,27 +142,35 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	/// Prune obsolete changes tries.
 	pub fn prune(
 		&self,
-		config: &ChangesTrieConfiguration,
 		tx: &mut DBTransaction,
+		parent_hash: Block::Hash,
 		block_hash: Block::Hash,
 		block_num: NumberFor<Block>,
-	) {
+	) -> ClientResult<()> {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,
-			None => return,
+			None => return Ok(()),
 		};
 
-		state_machine::prune_changes_tries(
-			Zero::zero(), // TODO: not true
-			config,
-			&*self,
-			min_blocks_to_keep.into(),
-			&state_machine::ChangesTrieAnchorBlockId {
-				hash: convert_hash(&block_hash),
-				number: block_num,
-			},
-			|node| tx.delete(self.changes_tries_column, node.as_ref()));
+		// prune changes tries that are created using newest configuration
+		let (mut activation_num, mut activation_hash, newest_config) = self.configuration_at(&BlockId::Hash(parent_hash))?;
+		if let Some(config) = newest_config {
+			state_machine::prune_changes_tries(
+				activation_num,
+				config,
+				&*self,
+				min_blocks_to_keep.into(),
+				&state_machine::ChangesTrieAnchorBlockId {
+					hash: convert_hash(&block_hash),
+					number: block_num,
+				},
+				|node| tx.delete(self.changes_tries_column, node.as_ref()));
+		}
+
+		// TODO: prune tries that were created using previous configurations
+
+		Ok(())
 	}
 }
 
@@ -568,31 +573,31 @@ mod tests {
 		// test configuration cache
 		let storage = backend.changes_trie_storage().unwrap();
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block1)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block1)).unwrap().1,
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block2)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block2)).unwrap().1,
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block3)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block3)).unwrap().1,
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block4)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block4)).unwrap().1,
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block5)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block5)).unwrap().1,
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block6)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block6)).unwrap().1,
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block7)).unwrap(),
+			storage.configuration_at(&BlockId::Hash(block7)).unwrap().1,
 			config_at_7.clone(),
 		);
 	}
