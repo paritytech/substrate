@@ -341,11 +341,11 @@ impl SandboxInstance {
 	}
 }
 
-/// Error occured during instantiation of a sandboxed module.
+/// Error occurred during instantiation of a sandboxed module.
 pub enum InstantiationError {
 	/// Something wrong with the environment definition. It either can't
 	/// be decoded, have a reference to a non-existent or torn down memory instance.
-	EnvironmentDefintionCorrupted,
+	EnvironmentDefinitionCorrupted,
 	/// Provided module isn't recognized as a valid webassembly binary.
 	ModuleDecoding,
 	/// Module is a well-formed webassembly binary but could not be instantiated. This could
@@ -361,7 +361,7 @@ fn decode_environment_definition(
 	memories: &[Option<MemoryRef>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
-		.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
+		.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
@@ -381,8 +381,8 @@ fn decode_environment_definition(
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
-					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?
-					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
+					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?
+					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?;
 				memories_map.insert((module, field), memory_ref);
 			}
 		}

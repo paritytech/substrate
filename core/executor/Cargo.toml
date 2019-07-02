@@ -27,6 +27,8 @@ assert_matches = "1.1"
 wabt = "~0.7.4"
 hex-literal = "0.2.0"
 runtime-test = { package = "substrate-runtime-test", path = "runtime-test" }
+substrate-client = { path = "../client" }
+substrate-offchain = { path = "../offchain/" }
 
 [features]
 default = []

@@ -70,10 +70,14 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance};
-use runtime_primitives::{Permill,
-	traits::{Zero, EnsureOrigin, StaticLookup, Saturating, CheckedSub, CheckedMul}
+use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
+use srml_support::traits::{
+	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
+	ReservableCurrency, WithdrawReason
+};
+use runtime_primitives::{Permill, ModuleId};
+use runtime_primitives::traits::{
+	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
@@ -81,6 +85,13 @@ use system::ensure_signed;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+
+const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
+
+pub const DEFAULT_PROPOSAL_BOND: u32 = 0;
+pub const DEFAULT_PROPOSAL_BOND_MINIMUM: u32 = 0;
+pub const DEFAULT_SPEND_PERIOD: u32 = 0;
+pub const DEFAULT_BURN: u32 = 0;
 
 pub trait Trait: system::Trait {
 	/// The staking balance.
@@ -100,12 +111,38 @@ pub trait Trait: system::Trait {
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
 	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+	/// An accepted proposal gets these back. A rejected proposal does not.
+	type ProposalBond: Get<Permill>;
+
+	/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+	type ProposalBondMinimum: Get<BalanceOf<Self>>;
+
+	/// Period between successive spends.
+	type SpendPeriod: Get<Self::BlockNumber>;
+
+	/// Percentage of spare funds (if any) that are burnt per spend period.
+	type Burn: Get<Permill>;
 }
 
 type ProposalIndex = u32;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+		/// An accepted proposal gets these back. A rejected proposal does not.
+		const ProposalBond: Permill = T::ProposalBond::get();
+
+		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
+
+		/// Period between successive spends.
+		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
+
+		/// Percentage of spare funds (if any) that are burnt per spend period.
+		const Burn: Permill = T::Burn::get();
+
 		fn deposit_event<T>() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
@@ -133,25 +170,6 @@ decl_module! {
 			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
 			Self::deposit_event(RawEvent::Proposed(c));
-		}
-
-		/// Set the balance of funds available to spend.
-		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
-			// Put the new value into storage.
-			<Pot<T>>::put(new_pot);
-		}
-
-		/// (Re-)configure this module.
-		fn configure(
-			#[compact] proposal_bond: Permill,
-			#[compact] proposal_bond_minimum: BalanceOf<T>,
-			#[compact] spend_period: T::BlockNumber,
-			#[compact] burn: Permill
-		) {
-			ProposalBond::put(proposal_bond);
-			<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
-			<SpendPeriod<T>>::put(spend_period);
-			Burn::put(burn);
 		}
 
 		/// Reject a proposed spend. The original deposit will be slashed.
@@ -188,7 +206,7 @@ decl_module! {
 
 		fn on_finalize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
-			if (n % Self::spend_period()).is_zero() {
+			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds();
 			}
 		}
@@ -207,26 +225,6 @@ pub struct Proposal<AccountId, Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
-		// Config...
-
-		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
-		/// An accepted proposal gets these back. A rejected proposal does not.
-		ProposalBond get(proposal_bond) config(): Permill;
-
-		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		ProposalBondMinimum get(proposal_bond_minimum) config(): BalanceOf<T>;
-
-		/// Period between successive spends.
-		SpendPeriod get(spend_period) config(): T::BlockNumber = runtime_primitives::traits::One::one();
-
-		/// Percentage of spare funds (if any) that are burnt per spend period.
-		Burn get(burn) config(): Permill;
-
-		// State...
-
-		/// Total funds available to this module for spending.
-		Pot get(pot): BalanceOf<T>;
-
 		/// Number of proposals that have been made.
 		ProposalCount get(proposal_count): ProposalIndex;
 
@@ -260,9 +258,17 @@ decl_event!(
 impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 
+	/// The account ID of the treasury pot.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn account_id() -> T::AccountId {
+		MODULE_ID.into_account()
+	}
+
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
-		Self::proposal_bond_minimum().max(Self::proposal_bond() * value)
+		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
 	}
 
 	// Spend some money!
@@ -298,18 +304,36 @@ impl<T: Trait> Module<T> {
 			});
 		});
 
-		T::MintedForSpending::on_unbalanced(imbalance);
-
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = (Self::burn() * budget_remaining).min(budget_remaining);
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
+			imbalance.subsume(T::Currency::burn(burn));
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
-		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+		if let Err(problem) = T::Currency::settle(
+			&Self::account_id(),
+			imbalance,
+			WithdrawReason::Transfer,
+			ExistenceRequirement::KeepAlive
+		) {
+			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
+			// Nothing else to do here.
+			drop(problem);
+		}
 
-		<Pot<T>>::put(budget_remaining);
+		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+	}
+
+	fn pot() -> BalanceOf<T> {
+		T::Currency::free_balance(&Self::account_id())
+	}
+}
+
+impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
+		T::Currency::resolve_creating(&Self::account_id(), amount);
 	}
 }
 
@@ -322,7 +346,7 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 			if let Some(funding) = total_issuance.checked_sub(&portion) {
 				let funding = funding / portion;
 				if let Some(funding) = funding.checked_mul(&minted) {
-					<Pot<T>>::mutate(|x| *x = x.saturating_add(funding));
+					Self::on_unbalanced(T::Currency::issue(funding));
 				}
 			}
 		}
@@ -334,7 +358,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
+	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 
@@ -355,6 +379,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnNewAccount = ();
@@ -363,6 +394,17 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
+	}
+	parameter_types! {
+		pub const ProposalBond: Permill = Permill::from_percent(5);
+		pub const ProposalBondMinimum: u64 = 1;
+		pub const SpendPeriod: u64 = 2;
+		pub const Burn: Permill = Permill::from_percent(50);
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;
@@ -371,6 +413,10 @@ mod tests {
 		type Event = ();
 		type MintedForSpending = ();
 		type ProposalRejection = ();
+		type ProposalBond = ProposalBond;
+		type ProposalBondMinimum = ProposalBondMinimum;
+		type SpendPeriod = SpendPeriod;
+		type Burn = Burn;
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
@@ -379,18 +425,7 @@ mod tests {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			existential_deposit: 0,
 			vesting: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1,
-			spend_period: 2,
-			burn: Permill::from_percent(50),
 		}.build_storage().unwrap().0);
 		t.into()
 	}
@@ -398,10 +433,6 @@ mod tests {
 	#[test]
 	fn genesis_config_works() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Treasury::proposal_bond(), Permill::from_percent(5));
-			assert_eq!(Treasury::proposal_bond_minimum(), 1);
-			assert_eq!(Treasury::spend_period(), 2);
-			assert_eq!(Treasury::burn(), Permill::from_percent(50));
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
 		});
@@ -519,6 +550,7 @@ mod tests {
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -536,25 +568,27 @@ mod tests {
 	fn on_dilution_quantization_effects() {
 		with_externalities(&mut new_test_ext(), || {
 			// minted = 1% of total issuance for all cases
-			let _ = Treasury::set_pot(0);
 			assert_eq!(Balances::total_issuance(), 200);
 
 			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
 			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
-			assert_eq!(Treasury::pot(), 6); // should increase by 2 (200 - 67) / 67 * 2
+			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 67) / 67 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 2 (200 - 100) / 100 * 2
+			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 100) / 100 * 2
+			Balances::make_free_balance_be(&Treasury::account_id(), 0);
 
 			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
 			// then the pot will not increase.
 			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 101) / 101 * 2
+			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 101) / 101 * 2
 
 			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
-			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 134) / 134 * 2
+			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 134) / 134 * 2
 		});
 	}
 
@@ -572,7 +606,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150);
-			assert_eq!(Treasury::pot(), 25);
+			assert_eq!(Treasury::pot(), 75);
 		});
 	}
 }
