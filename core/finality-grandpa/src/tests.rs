@@ -46,7 +46,8 @@ use runtime_primitives::traits::{
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
-	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation
+	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation,
+	Challenge
 };
 use authorities::AuthoritySet;
 use finality_proof::{
@@ -136,6 +137,7 @@ impl TestNetFactory for GrandpaTestNet {
 					client.clone(),
 					Arc::new(self.test_config.clone()),
 					select_chain,
+					None,
 				).expect("Could not create block import for fresh peer.");
 				let shared_import = Arc::new(import);
 				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
@@ -434,6 +436,51 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Vec<u8>>> {
+		Ok(NativeOrEncoded::Native(vec![]))
+	}
+
+	fn GrandpaApi_grandpa_prevote_challenge_runtime_api_impl(
+		&self,
+		_at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<&DigestFor<Block>>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>>>>> {
+		Ok(NativeOrEncoded::Native(None))
+	}
+
+
+	fn GrandpaApi_grandpa_precommit_challenge_runtime_api_impl(
+		&self,
+		_at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<&DigestFor<Block>>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>>>>> {
+		Ok(NativeOrEncoded::Native(None))
+	}
+
+	fn GrandpaApi_construct_report_unjustified_prevotes_call_runtime_api_impl(
+		&self,
+		_at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<Challenge<
+			<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>
+		>>,
+		_: Vec<u8>,
+	) ->  Result<NativeOrEncoded<Vec<u8>>> {
+		Ok(NativeOrEncoded::Native(vec![]))
+	}
+
+	fn GrandpaApi_construct_report_unjustified_precommits_call_runtime_api_impl(
+		&self,
+		_at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<Challenge<
+			<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>
+		>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))

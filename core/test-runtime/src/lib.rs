@@ -506,12 +506,12 @@ cfg_if! {
 				}
 
 				fn grandpa_prevote_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>> {
+				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>> {
 					unimplemented!()
 				}
 		
 				fn grandpa_precommit_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>> {
+				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>> {
 					unimplemented!()
 				}
 
@@ -532,7 +532,7 @@ cfg_if! {
 				}
 
 				fn construct_report_unjustified_prevotes_call(
-					_proof: PrevoteChallenge<
+					_proof: Challenge<
 						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {
@@ -540,7 +540,7 @@ cfg_if! {
 				}
 
 				fn construct_report_unjustified_precommits_call(
-					_proof: PrecommitChallenge<
+					_proof: Challenge<
 						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
 					>
 				) -> Vec<u8> {

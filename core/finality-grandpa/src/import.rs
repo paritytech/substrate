@@ -449,7 +449,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		// self.answer_misbehaviour_reports(&mut block, hash)?;
+		self.answer_misbehaviour_reports(&mut block, hash)?;
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 

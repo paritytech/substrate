@@ -22,6 +22,7 @@ use primitives::{BuildStorage, traits::IdentityLookup, testing::Header};
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher, sr25519};
+use core::marker::PhantomData;
 use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
@@ -62,6 +63,7 @@ pub fn new_test_ext(authorities: Vec<sr25519::Public>) -> runtime_io::TestExtern
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| a).collect(),
+		_genesis_phantom_data: PhantomData,
 	}.build_storage().unwrap().0);
 	t.into()
 }
