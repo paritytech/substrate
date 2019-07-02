@@ -145,7 +145,7 @@ fn pruning_range<Number: BlockNumber>(
 /// blocks. So we can only prune blocks that are earlier than B - max_digest_interval.
 /// The pruning_delay stands for number of max_digest_interval-s that we want to keep:
 /// 0 or 1: means that only last changes trie is guaranteed to exists;
-/// 2: the last chnages trie + previous changes trie
+/// 2: the last changes trie + previous changes trie
 /// ...
 fn max_digest_intervals_to_keep<Number: BlockNumber>(
 	min_blocks_to_keep: Number,
