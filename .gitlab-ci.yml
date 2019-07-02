@@ -138,6 +138,10 @@ test-srml-staking:                 &test-srml-staking
   except:
     variables:
       - $DEPLOY_TAG
+  only:
+    changes:
+      - .gitlab-ci.yml
+      - srml/staking/*
   script:
     - cd srml/staking/
     - time cargo test --tests tests --no-default-features --features std
