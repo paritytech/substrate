@@ -45,7 +45,7 @@ impl<T: Trait> OnSlashing<T::AccountId> for StakingSlasher<T> {
 #[cfg(test)]
 mod tests {
 	use crate::mock::*;
-	use srml_slashing::{Slashing, misconduct};
+	use srml_slashing::{Slashing, misconduct::network::Unresponsive};
 	use runtime_io::with_externalities;
 
 	#[test]
@@ -74,7 +74,7 @@ mod tests {
 
 			let misbehaved = [11, 21, 31, 41];
 			let validator_len = 30;
-			assert_eq!(Staking::slash_end_of_era(&misbehaved, validator_len, &misconduct::Unresponsive), 3);
+			assert_eq!(Staking::slash_end_of_era(&misbehaved, validator_len, &Unresponsive), 3);
 			assert_eq!(982, Balances::free_balance(&11));
 		});
 	}
