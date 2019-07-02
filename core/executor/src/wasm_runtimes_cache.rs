@@ -226,7 +226,7 @@ impl RuntimesCache {
 		match WasmModule::from_buffer(code)
 			.map_err(|_| Error::InvalidCode)
 			.and_then(|instance| {
-				wasm_executor.instantiate_module(ext, heap_pages as usize, &instance)
+				WasmExecutor::instantiate_module(ext, heap_pages as usize, &instance)
 			})
 		{
 			Ok(instance) => {
