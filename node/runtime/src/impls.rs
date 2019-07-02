@@ -51,7 +51,6 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 pub struct WeightToFeeHandler;
 impl Convert<Weight, Balance> for WeightToFeeHandler {
 	fn convert(weight: Weight) -> Balance {
-		println!("Doing {}", weight);
 		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
 		let max = MAX_TRANSACTIONS_WEIGHT as u128;
@@ -60,22 +59,22 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 			.saturating_add(weight as u128);
 
 		let from_max_to_per_fraction = |x: u128| {
-            if let Some(x_fraction) = x.checked_mul(max_fraction) {
-                x_fraction / max
-            } else {
-                max_fraction
-            }
-        };
+			if let Some(x_fraction) = x.checked_mul(max_fraction) {
+				x_fraction / max
+			} else {
+				max_fraction
+			}
+		};
 
-        let collapse_mul = |a: u128, b| {
-            if let Some(v) = a.checked_mul(b) {
-                v
-            } else {
-                // collapse to zero if it overflow. For now we don't have the accuracy needed to
-                // compute this trivially with u128.
-                Zero::zero()
-            }
-        };
+		let collapse_mul = |a: u128, b| {
+			if let Some(v) = a.checked_mul(b) {
+				v
+			} else {
+				// collapse to zero if it overflow. For now we don't have the accuracy needed to
+				// compute this trivially with u128.
+				Zero::zero()
+			}
+		};
 
 		// determines if the first_term is positive
 		let mut positive = false;
@@ -90,27 +89,27 @@ impl Convert<Weight, Balance> for WeightToFeeHandler {
 		let v_squared = 2;
 
 		let mut first_term = v;
-        first_term = collapse_mul(first_term, from_max_to_per_fraction(diff));
+		first_term = collapse_mul(first_term, from_max_to_per_fraction(diff));
 		first_term = first_term / max_fraction;
 
-        // It is very unlikely that this will exist (in our poor perbill estimate) but we are giving it
-        // a shot.
+		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving it
+		// a shot.
 		let mut second_term = v_squared;
-        second_term = collapse_mul(second_term, from_max_to_per_fraction(diff));
-        second_term = collapse_mul(second_term, from_max_to_per_fraction(diff) / 2);
+		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff));
+		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff) / 2);
 		second_term = second_term / max_fraction;
 		second_term = second_term / max_fraction;
 
-        if positive {
-            let excess = first_term.saturating_add(second_term);
-            let p = Perbill::from_parts(excess.min(max_fraction) as u32);
-            Balance::from(weight).saturating_add(Balance::from(p * weight))
-        } else {
-            // first_term > second_term
-            let negative = first_term - second_term;
-            let p = Perbill::from_parts((max_fraction - negative) as u32);
-            Balance::from(p * weight)
-        }.into()
+		if positive {
+			let excess = first_term.saturating_add(second_term);
+			let p = Perbill::from_parts(excess.min(max_fraction) as u32);
+			Balance::from(weight).saturating_add(Balance::from(p * weight))
+		} else {
+			// first_term > second_term
+			let negative = first_term - second_term;
+			let p = Perbill::from_parts((max_fraction - negative) as u32);
+			Balance::from(p * weight)
+		}.into()
 	}
 }
 
@@ -145,7 +144,7 @@ mod tests {
 		type Event = ();
 	}
 
-    type System = system::Module<Runtime>;
+	type System = system::Module<Runtime>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
@@ -170,10 +169,10 @@ mod tests {
 	#[test]
 	fn stateless_weight_fee() {
 		with_externalities(&mut new_test_ext(), || {
-            let ideal = IDEAL_TRANSACTIONS_WEIGHT;
-            let max = MAX_TRANSACTIONS_WEIGHT;
-            // NOTE: this is now accurate enough for weights below 4194304. Might need change later
-            // on with new weight values
+			let ideal = IDEAL_TRANSACTIONS_WEIGHT;
+			let max = MAX_TRANSACTIONS_WEIGHT;
+			// NOTE: this is now accurate enough for weights below 4194304. Might need change later
+			// on with new weight values
 			// (1) Typical low-cost transaction
 			// (2) Close to ideal. Fee is less than size.
 			// (3) 5 below the ideal, Less fee.
@@ -181,9 +180,9 @@ mod tests {
 			// (6) largest number allowed (note: max weight is 4194304)
 			let inputs = vec![28, ideal/2, ideal/2 + 5_000, ideal/2 + 10_000, ideal, ideal + 1000, max / 2, max];
 			inputs.into_iter().for_each(|i| {
-                let diff = WeightToFeeHandler::convert(i) as i64 - weight_to_fee(i, 0) as i64;
-                assert!(diff < 4)
-            });
+				let diff = WeightToFeeHandler::convert(i) as i64 - weight_to_fee(i, 0) as i64;
+				assert!(diff < 4)
+			});
 		})
 	}
 
@@ -198,17 +197,17 @@ mod tests {
 		})
 	}
 
-    #[test]
-    fn stateful_weight_to_fee() {
-        with_externalities(&mut new_test_ext(), || {
-            // below ideal: we charge a bit less.
-            assert!(WeightToFeeHandler::convert(1_000_000) < 1_000_000);
+	#[test]
+	fn stateful_weight_to_fee() {
+		with_externalities(&mut new_test_ext(), || {
+			// below ideal: we charge a bit less.
+			assert!(WeightToFeeHandler::convert(1_000_000) < 1_000_000);
 
-            System::note_applied_extrinsic(&Ok(()), IDEAL_TRANSACTIONS_WEIGHT * 3);
-            assert_eq!(System::all_extrinsics_weight(), 3 * IDEAL_TRANSACTIONS_WEIGHT);
+			System::note_applied_extrinsic(&Ok(()), IDEAL_TRANSACTIONS_WEIGHT * 3);
+			assert_eq!(System::all_extrinsics_weight(), 3 * IDEAL_TRANSACTIONS_WEIGHT);
 
-            // above ideal: we charge a bit more.
-            assert!(WeightToFeeHandler::convert(1_000_000) > 1_000_000);
-        })
-    }
+			// above ideal: we charge a bit more.
+			assert!(WeightToFeeHandler::convert(1_000_000) > 1_000_000);
+		})
+	}
 }
