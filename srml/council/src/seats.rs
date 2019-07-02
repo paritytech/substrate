@@ -131,6 +131,15 @@ type ApprovalFlag = u32;
 pub const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
 pub const APPROVAL_FLAG_LEN: usize = 32;
 
+pub const DEFAULT_CANDIDACY_BOND: u32 = 9;
+pub const DEFAULT_VOTING_BOND: u32 = 0;
+pub const DEFAULT_VOTING_FEE: u32 = 0;
+pub const DEFAULT_PRESENT_SLASH_PER_VOTER: u32 = 1;
+pub const DEFAULT_CARRY_COUNT: u32 = 2;
+pub const DEFAULT_INACTIVE_GRACE_PERIOD: u32 = 1;
+pub const DEFAULT_COUNCIL_VOTING_PERIOD: u32 = 1000;
+pub const DEFAULT_DECAY_RATIO: u32 = 24;
+
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 

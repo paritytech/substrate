@@ -279,6 +279,22 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>
 pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+pub const DEFAULT_SIGNED_CLAIM_HANDICAP: u32 = 0;
+pub const DEFAULT_TOMBSTONE_DEPOSIT: u32 = 0;
+pub const DEFAULT_STORAGE_SIZE_OFFSET: u32 = 0;
+pub const DEFAULT_RENT_BYTE_FEE: u32 = 0;
+pub const DEFAULT_RENT_DEPOSIT_OFFSET: u32 = 0;
+pub const DEFAULT_SURCHARGE_REWARD: u32 = 0;
+pub const DEFAULT_TRANSFER_FEE: u32 = 0;
+pub const DEFAULT_CREATION_FEE: u32 = 0;
+pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
+pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
+pub const DEFAULT_CONTRACT_FEE: u32 = 21;
+pub const DEFAULT_CALL_BASE_FEE: u32 = 135;
+pub const DEFAULT_CREATE_BASE_FEE: u32 = 175;
+pub const DEFAULT_MAX_DEPTH: u32 = 100;
+pub const DEFAULT_BLOCK_GAS_LIMIT: u32 = 10_000_000;
+
 pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 

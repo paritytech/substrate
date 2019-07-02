@@ -33,9 +33,6 @@ use srml_system::{ensure_none, Trait as SystemTrait};
 #[cfg(feature = "std")]
 use parity_codec::Encode;
 
-pub const DEFAULT_WINDOW_SIZE: u32 = 101;
-pub const DEFAULT_DELAY: u32 = 1000;
-
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
 
@@ -84,6 +81,8 @@ impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
 	}
 }
 
+pub const DEFAULT_WINDOW_SIZE: u32 = 101;
+pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
 
 pub trait Trait: SystemTrait {
 	/// Something which can be notified when the timestamp is set. Set this to `()`

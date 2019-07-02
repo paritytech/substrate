@@ -324,8 +324,8 @@ impl grandpa::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE as _;
-	pub const ReportLatency: BlockNumber = DEFAULT_DELAY as _;
+	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE.into();
+	pub const ReportLatency: BlockNumber = DEFAULT_DELAY.into();
 }
 
 impl finality_tracker::Trait for Runtime {

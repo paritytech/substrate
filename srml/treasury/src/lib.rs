@@ -82,6 +82,11 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+pub const DEFAULT_PROPOSAL_BOND: u32 = 0;
+pub const DEFAULT_PROPOSAL_BOND_MINIMUM: u32 = 0;
+pub const DEFAULT_SPEND_PERIOD: u32 = 0;
+pub const DEFAULT_BURN: u32 = 0;
+
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
