@@ -45,7 +45,7 @@ use council::seats as council_seats;
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use finality_tracker::{DEFAULT_DELAY, DEFAULT_WINDOW_SIZE};
+use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -325,7 +325,7 @@ impl grandpa::Trait for Runtime {
 
 parameter_types! {
 	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE.into();
-	pub const ReportLatency: BlockNumber = DEFAULT_DELAY.into();
+	pub const ReportLatency: BlockNumber = DEFAULT_REPORT_LATENCY.into();
 }
 
 impl finality_tracker::Trait for Runtime {
