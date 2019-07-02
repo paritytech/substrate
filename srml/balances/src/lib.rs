@@ -160,8 +160,8 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, Convert, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
+	MaybeSerializeDebug, Saturating, Bounded
 };
 use primitives::weights::Weight;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
@@ -317,7 +317,9 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T, I>| config.balances.clone()): map T::AccountId => T::Balance;
+		pub FreeBalance get(free_balance)
+			build(|config: &GenesisConfig<T, I>| config.balances.clone()):
+			map T::AccountId => T::Balance;
 
 		/// The amount of the balance of a given account that is externally reserved; this can still get
 		/// slashed, but gets slashed last of all.
@@ -738,6 +740,26 @@ where
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
 		<FreeBalance<T, I>>::get(who)
+	}
+
+	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
+		<TotalIssuance<T, I>>::mutate(|issued|
+			issued.checked_sub(&amount).unwrap_or_else(|| {
+				amount = *issued;
+				Zero::zero()
+			})
+		);
+		PositiveImbalance::new(amount)
+	}
+
+	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
+		<TotalIssuance<T, I>>::mutate(|issued|
+			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
+				amount = Self::Balance::max_value() - *issued;
+				Self::Balance::max_value()
+			})
+		);
+		NegativeImbalance::new(amount)
 	}
 
 	// # <weight>
