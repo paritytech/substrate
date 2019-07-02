@@ -138,6 +138,7 @@ pub trait ShouldEndSession<BlockNumber> {
 ///
 /// The first session will have length of `Offset`, and
 /// the following sessions will have length of `Period`.
+/// This may prove nonsensical if `Offset` >= `Period`.
 pub struct PeriodicSessions<
 	Period,
 	Offset,
