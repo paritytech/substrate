@@ -70,31 +70,47 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
-	for peer in 0..3 {
-		// Online
-		assert!(!net.peer(peer).is_offline());
-		if peer < 2 {
-			// Major syncing.
-			assert!(net.peer(peer).is_major_syncing());
-		}
-	}
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
-	for peer in 0..3 {
-		// All done syncing.
-		assert!(!net.peer(peer).is_major_syncing());
-	}
 
-	// Now disconnect them all.
-	for peer in 0..3 {
-		for other in 0..3 {
-			if other != peer {
-				// TODO: net.peer(peer).on_disconnect(net.peer(other));
+	// Block until all nodes are online and nodes 0 and 1 and major syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		for peer in 0..3 {
+			// Online
+			if net.peer(peer).is_offline() {
+				return Ok(Async::NotReady)
+			}
+			if peer < 2 {
+				// Major syncing.
+				if !net.peer(peer).is_major_syncing() {
+					return Ok(Async::NotReady)
+				}
 			}
 		}
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
-		assert!(net.peer(peer).is_offline());
-		assert!(!net.peer(peer).is_major_syncing());
-	}
+		Ok(Async::Ready(()))
+	})).unwrap();
+
+	// Block until all nodes are done syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		for peer in 0..3 {
+			if net.peer(peer).is_major_syncing() {
+				return Ok(Async::NotReady)
+			}
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
+
+	// Now drop nodes 1 and 2, and check that node 0 is offline.
+	net.peers.remove(2);
+	net.peers.remove(1);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if !net.peer(0).is_offline() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 }
 
 #[test]
