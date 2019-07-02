@@ -104,4 +104,11 @@ type Balances = balances::Module<Runtime>;
 type System = system::Module<Runtime>;
 
 pub type TestXt = primitives::testing::TestXt<Call>;
-pub type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, Runtime, ()>;
+pub type Executive = super::Executive<
+    Runtime,
+    Block<TestXt>,
+    system::ChainContext<Runtime>,
+    balances::Module<Runtime>,
+    Runtime,
+    ()
+>;
