@@ -18,6 +18,8 @@
 //!
 //! This tracks the current author of the block and recent uncles.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use rstd::prelude::*;
 use rstd::collections::btree_set::BTreeSet;
 use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
@@ -100,6 +102,15 @@ pub trait FilterUncle<Header, Author> {
 	/// filter.
 	fn filter_uncle(header: &Header, acc: Self::Accumulator)
 		-> Result<(Option<Author>, Self::Accumulator), &'static str>;
+}
+
+impl<H, A> FilterUncle<H, A> for () {
+	type Accumulator = ();
+	fn filter_uncle(_: &H, acc: Self::Accumulator)
+		-> Result<(Option<A>, Self::Accumulator), &'static str>
+	{
+		Ok((None, acc))
+	}
 }
 
 /// A filter on uncles which verifies seals and does no additional checks.
@@ -201,8 +212,8 @@ decl_module! {
 
 		fn on_finalize() {
 			// ensure we never go to trie with these values.
-			let _ = <Self as Store>::Author::take();
-			let _ = <Self as Store>::DidSetUncles::take();
+			<Self as Store>::Author::kill();
+			<Self as Store>::DidSetUncles::kill();
 		}
 
 		/// Provide a set of uncles.

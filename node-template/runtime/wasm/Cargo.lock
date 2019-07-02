@@ -2521,6 +2521,7 @@ dependencies = [
  "srml-metadata 2.0.0",
  "srml-support-procedural 2.0.0",
  "substrate-inherents 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]

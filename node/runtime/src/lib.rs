@@ -21,7 +21,9 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use support::{construct_runtime, parameter_types};
+use support::{
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
+};
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Signature, AuraId
@@ -58,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 99,
-	impl_version: 106,
+	spec_version: 100,
+	impl_version: 100,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -71,6 +73,23 @@ pub fn native_version() -> NativeVersion {
 		can_author_with: Default::default(),
 	}
 }
+
+type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+
+pub struct Author;
+
+impl OnUnbalanced<NegativeImbalance> for Author {
+	fn on_unbalanced(amount: NegativeImbalance) {
+		Balances::resolve_creating(&Authorship::author(), amount);
+	}
+}
+
+pub type DealWithFees = SplitTwoWays<
+	Balance,
+	NegativeImbalance,
+	_4, Treasury,   // 4 parts (80%) goes to the treasury.
+	_1, Author,     // 1 part (20%) goes to the block author.
+>;
 
 pub struct CurrencyToVoteHandler;
 
@@ -115,7 +134,7 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ((Staking, Contracts), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;
-	type TransactionPayment = ();
+	type TransactionPayment = DealWithFees;
 	type DustRemoval = ();
 	type TransferPayment = ();
 }
@@ -123,6 +142,18 @@ impl balances::Trait for Runtime {
 impl timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
+}
+
+parameter_types! {
+	pub const UncleGenerations: u64 = 0;
+}
+
+// TODO: #2986 implement this properly
+impl authorship::Trait for Runtime {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ();
 }
 
 parameter_types! {
@@ -250,6 +281,7 @@ construct_runtime!(
 		System: system::{Module, Call, Storage, Config, Event},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
 		Balances: balances,
 		Session: session::{Module, Call, Storage, Event, Config<T>},
