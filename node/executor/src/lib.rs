@@ -154,7 +154,7 @@ mod tests {
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() =>
 				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() =>
-				vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				69u64.encode(),
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => 0u64.encode()
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => 0u64.encode(),
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => 0u64.encode(),
