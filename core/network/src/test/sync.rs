@@ -401,7 +401,15 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	// poll until the two nodes connect, otherwise announcing the block will not work
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(0).num_peers() == 0 {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
@@ -410,13 +418,19 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	// TODO: net.peer(0).announce_block(small_hash);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.peer(0).announce_block(small_hash);
 
 	// after announcing, peer 1 downloads the block.
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+
+		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
+			return Ok(Async::NotReady)
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
 }
 
 #[test]
