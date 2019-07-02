@@ -110,6 +110,19 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 	Ok(client)
 }
 
+/// An handle for spawning tasks in the service.
+#[derive(Clone)]
+pub struct SpawnTaskHandle {
+	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+}
+
+impl SpawnTaskHandle {
+	/// Spawn a task to run the given future.
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.sender.unbounded_send(Box::new(task));
+	}
+}
+
 /// Stream of events for connection established to a telemetry server.
 pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 
@@ -512,8 +525,15 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	pub fn spawn_task(&self, task: Box<dyn Future<Item = (), Error = ()> + Send>) {
-		let _ = self.to_spawn_tx.unbounded_send(task);
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Returns a handle for spawning tasks.
+	pub fn spawn_task_handle(&self) -> SpawnTaskHandle {
+		SpawnTaskHandle {
+			sender: self.to_spawn_tx.clone(),
+		}
 	}
 
 	/// Get shared client instance.

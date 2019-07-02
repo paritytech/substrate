@@ -69,6 +69,14 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
+/// A module identifier. These are per module and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct ModuleId(pub [u8; 8]);
+
+impl traits::TypeId for ModuleId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
+
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;

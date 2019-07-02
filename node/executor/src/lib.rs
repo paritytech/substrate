@@ -56,7 +56,7 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig,
 		System, SystemConfig, GrandpaConfig, IndicesConfig, ContractsConfig, Event,
-		SessionKeys, CENTS, DOLLARS, MILLICENTS
+		SessionKeys, Treasury, CENTS, DOLLARS, MILLICENTS
 	};
 	use wabt;
 	use primitives::map;
@@ -526,6 +526,34 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::indices(
+						indices::RawEvent::NewAccountIndex(Treasury::account_id(), 6)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::NewAccount(Treasury::account_id(), 0)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::indices(
+						indices::RawEvent::NewAccountIndex(Default::default(), 7)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::NewAccount(Default::default(), 1)
+					),
 					topics: vec![],
 				},
 				EventRecord {
