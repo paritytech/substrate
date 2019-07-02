@@ -33,7 +33,7 @@ mod ffi {
 	/// # Safety
 	///
 	/// This function should be only called with a `HostFuncIndex` that was previously registered
-	/// in the environment defintion. Typically this should only
+	/// in the environment definition. Typically this should only
 	/// be called with an argument received in `dispatch_thunk`.
 	pub unsafe fn coerce_host_index_to_func<T>(idx: HostFuncIndex) -> HostFuncType<T> {
 		// We need to ensure that sizes of a callable function pointer and host function index is

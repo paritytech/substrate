@@ -24,8 +24,6 @@ use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap}
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
 
-// TODO TODO: if reward is zero should they be rewarded at least one ?
-
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock

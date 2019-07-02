@@ -321,7 +321,6 @@ mod test_inflation {
 			u32::max_value() => u32,
 			u64::max_value() => u64,
 			u128::max_value() => u128,
-			// TODO TODO: check actually that those values makes sense
 		);
 	}
 }

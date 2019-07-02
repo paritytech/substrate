@@ -16,6 +16,7 @@ offchain-primitives = { package = "substrate-offchain-primitives", path = "../..
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
+authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 council = { package = "srml-council", path = "../../srml/council", default-features = false }
@@ -48,6 +49,7 @@ std = [
 	"runtime_primitives/std",
 	"support/std",
 	"aura/std",
+	"authorship/std",
 	"balances/std",
 	"contracts/std",
 	"council/std",
