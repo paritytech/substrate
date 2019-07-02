@@ -631,7 +631,7 @@ decl_module! {
 
 		fn deposit_event<T>() = default;
 
-		fn on_initialize() {
+		fn on_finalize() {
 			// Set the start of the first era.
 			if !<CurrentEraStart<T>>::exists() {
 				<CurrentEraStart<T>>::put(T::Time::now());
