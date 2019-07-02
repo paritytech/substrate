@@ -32,7 +32,7 @@ pub enum StorageKind {
 	/// and coordinate offchain workers running on different forks.
 	PERSISTENT = 1,
 	/// Local storage is revertible and fork-aware. It means that any value
-	///	set by the offchain worker triggered at block `N(hash1)` is reverted
+	/// set by the offchain worker triggered at block `N(hash1)` is reverted
 	/// if that block is reverted as non-canonical and is NOT available for the worker
 	/// that is re-run at block `N(hash2)`.
 	LOCAL = 2,
