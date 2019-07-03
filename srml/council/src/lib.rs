@@ -14,7 +14,217 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Council system: Handles the voting in and maintenance of council members.
+//! # Council Module
+//!
+//! The Council module provides tools to manage the council and proposals. The main components are:
+//!
+//! - **Council Seats:** Election of councillors.
+//! 	- [`seats::Trait`](./seats/trait.Trait.html)
+//! 	- [`Call`](./seats/enum.Call.html)
+//! 	- [`Module`](./seats/struct.Module.html)
+//! - **Council Motions:** Voting as a body to dispatch calls from the `Council` origin.
+//! 	- [`motions::Trait`](./motions/trait.Trait.html)
+//! 	- [`Call`](./motions/enum.Call.html)
+//! 	- [`Module`](./motions/struct.Module.html)
+//! - **Council Voting:** Proposals sent to the [Democracy module](../srml_democracy/index.html) for referenda.
+//! 	- [`voting::Trait`](./voting/trait.Trait.html)
+//! 	- [`Call`](./voting/enum.Call.html)
+//! 	- [`Module`](./voting/struct.Module.html)
+//!
+//! ## Overview
+//!
+//! The Council module provides functionality to handle:
+//!
+//! - Voting in and maintenance of council members.
+//! - Proposing, vetoing, and passing of motions.
+//!
+//! The council is an on-chain entity comprised of a set of account IDs, with the role of representing
+//! passive stakeholders. Its primary tasks are to propose sensible referenda and thwart any uncontroversially
+//! dangerous or malicious referenda.
+//!
+//! ### Terminology
+//!
+//! #### Council Motions (motions.rs)
+//!
+//! _Motions_ handle internal proposals that are only proposed and voted upon by _councillors_.
+//! Each proposal has a minimum threshold of yay votes that it needs to gain to be enacted.
+//!
+//! - **Council motion:** A mechanism used to enact a proposal.
+//! - **Proposal:** A submission by a councillor. An initial vote of yay from that councillor is applied.
+//! - **Vote:** A vote of yay or nay from a councillor on a single proposal. Councillors may change their vote but a
+//!   duplicate vote will return an error.
+//!
+//! Upon each vote, if the threshold is reached, the proposal is dispatched from the `Council` origin. Similarly,
+//! if the number of nay votes is high enough such that it could not pass even if all other councillors
+//! (including those who have not voted) voted yay, the proposal is dropped.
+//!
+//! Note that a council motion has a special origin type, [`seats::Origin`](./motions/enum.Origin.html), that limits
+//! which calls can be effectively dispatched.
+//!
+//! #### Council Voting (voting.rs)
+//!
+//! _Voting_ handles councillor proposing and voting. Unlike motions, if a proposal is approved,
+//! it is elevated to the [Democracy module](../srml_democracy/index.html) as a referendum.
+//!
+//! - **Proposal validity:** A council proposal is valid when it's unique, hasn't yet been vetoed, and
+//! when the proposing councillor's term doesn't expire before the block number when the proposal's voting period ends.
+//! A proposal is a generic type that can be _dispatched_ (similar to variants of the `Call` enum in each module).
+//! - **Proposal postponement:** Councillors may postpone a council proposal from being approved or rejected.
+//! Postponement is equivalent to a veto, which only lasts for the cooloff period.
+//! - **Cooloff period:** Period, in blocks, for which a veto is in effect.
+//! - **Referendum:** The means of public voting on a proposal.
+//! - **Veto:** A council member may veto any council proposal that exists. A vetoed proposal that's valid is set
+//! aside for a cooloff period. The vetoer cannot re-veto or propose the proposal again until the veto expires.
+//! - **Elevation:** A referendum can be elevated from the council to a referendum. This means it has
+//! been passed to the Democracy module for a public vote.
+//! - **Referendum cancellation:** At the end of a given block we cancel all elevated referenda whose voting period
+//! ends at that block and where the outcome of the vote tally was a unanimous vote to cancel the referendum.
+//! - **Voting process to elevate a proposal:** At the end of a given block we tally votes for expiring referenda.
+//! Referenda that are passed (yay votes are greater than nay votes plus abstainers) are sent to the Democracy
+//! module for a public referendum. If there are no nay votes (abstention is acceptable), then the proposal is
+//! tabled immediately. Otherwise, there will be a delay period. If the vote is unanimous, then the public
+//! referendum will require a vote threshold of supermajority against to prevent it. Otherwise,
+//! it is a simple majority vote. See [`VoteThreshold`](../srml_democracy/enum.VoteThreshold.html) in the
+//! Democracy module for more details on how votes are approved.
+//!
+//! As opposed to motions, proposals executed through the Democracy module have the
+//! root origin, which gives them the highest privilege.
+//!
+//! #### Council Seats (seats.rs)
+//!
+//! _Seats_ handles the selection of councillors. The selection of council seats is a circulating procedure,
+//! regularly performing approval voting to accept a new council member and remove those whose period has ended.
+//! Each tally (round of voting) is divided into two time periods:
+//!
+//!   - **Voting period:** In which any stakeholder can vote for any of the council candidates.
+//!   - **Presentation period:** In which voting is no longer allowed, and stakeholders can _present_ a candidate
+//!   and claim that a particular candidate has won a seat.
+//!
+//! A tally is scheduled to execute based on the number of desired and free seats in the council.
+//!
+//! Both operations have associated bonds and fees that need to be paid based on the complexity of the transaction.
+//! See [`set_approvals`](./seats/enum.Call.html#variant.set_approvals) and
+//! [`submit_candidacy`](./seats/enum.Call.html#variant.submit_candidacy) for more information.
+//!
+//! Upon the end of the presentation period, the leaderboard is finalized and sorted based on the approval
+//! weight of the _presented_ candidates.
+//! Based on the configurations of the module, `N` top candidates in the leaderboard are immediately recognized
+//! as councillors (where `N` is `desired_seats - active_council.len()`) and runners-up are kept in
+//! the leaderboard as carry for the next tally to compete again. Similarly, councillors whose term has ended
+//! are also removed.
+//!
+//! - **Vote index**: A counter indicating the number of tally rounds already applied.
+//! - **Desired seats:** The number of seats on the council.
+//! - **Candidacy bond:** Bond required to be a candidate. The bond is returned to all candidates at the end
+//! of the tally if they have won the tally (i.e. have become a councillor).
+//! - **Leaderboard:** A list of candidates and their respective votes in an election, ordered low to high.
+//! - **Presentation:** The act of proposing a candidate for insertion into the leaderboard. Presenting is
+//! `O(|number_of_voters|)`, so the presenter must be slashable and will be slashed for duplicate or invalid
+//! presentations. Presentation is only allowed during the "presentation period," after voting has closed.
+//! - **Voting bond:** Bond required to be permitted to vote. Must be held because many voting operations affect
+//! storage. The bond is held to discourage abuse.
+//! - **Voting:** Process of inserting approval votes into storage. Can be called by anyone, given they submit
+//! an appropriate list of approvals. A bond is reserved from a voter until they retract or get reported.
+//! - **Inactive voter**: A voter whose approvals are now invalid. Such voters can be _reaped_ by other voters
+//!   after an `inactivity_grace_period` has passed from their last known activity.
+//! - **Reaping process:** Voters may propose the removal of inactive voters, as explained above. If the claim is not
+//! valid, the _reaper_ will be slashed and removed as a voter. Otherwise, the _reported_ voter is removed. A voter
+//! always gets his or her bond back upon being removed (either through _reaping_ or _retracting_).
+//!
+//! ### Goals
+//!
+//! The Council module in Substrate is designed to make the following possible:
+//!
+//! - Create council proposals by councillors using the council motion mechanism.
+//! - Validate council proposals.
+//! - Tally votes of council proposals by councillors during the proposal's voting period.
+//! - Veto (postpone) council proposals for a cooloff period through abstention by councillors.
+//! - Elevate council proposals to start a referendum.
+//! - Execute referenda once their vote tally reaches the vote threshold level of approval.
+//! - Manage candidacy, including voting, term expiration, and punishment.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! The dispatchable functions in the Council module provide the functionality that councillors need.
+//! See the `Call` enums from the Motions, Seats, and Voting modules for details on dispatchable functions.
+//!
+//! ### Public Functions
+//!
+//! The public functions provide the functionality for other modules to interact with the Council module.
+//! See the `Module` structs from the Motions, Seats, and Voting modules for details on public functions.
+//!
+//! ## Usage
+//!
+//! ### Council Seats: Councillor Election Procedure
+//!
+//! A Council seat vote can proceed as follows:
+//!
+//! 1. Candidates submit themselves for candidacy.
+//! 2. Voting occurs.
+//! 3. Voting period ends and presentation period begins.
+//! 4. Candidates are presented for the leaderboard.
+//! 5. Presentation period ends, votes are tallied, and new council takes effect.
+//! 6. Candidate list is cleared (except for a defined number of carries) and vote index increased.
+//!
+//! ### Council Votes: Proposal Elevation Procedure
+//!
+//! A council motion elevation would proceed as follows:
+//!
+//! 1. A councillor makes a proposal.
+//! 2. Other councillors vote yay or nay or abstain.
+//! 3. At the end of the voting period, the votes are tallied.
+//! 4. If it has passed, then it will be sent to the Democracy module with the vote threshold parameter.
+//!
+//! ### Example
+//!
+//! This code snippet uses the `is_councillor` public function to check if the calling user
+//! is an active councillor before proceeding with additional runtime logic.
+//!
+//! ```
+//! use srml_support::{decl_module, ensure, dispatch::Result};
+//! use system::ensure_signed;
+//! use srml_council::motions;
+//!
+//! pub trait Trait: motions::Trait + system::Trait {}
+//!
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+//!
+//! 		pub fn privileged_function(origin) -> Result {
+//! 			// Get the sender AccountId
+//! 			let sender = ensure_signed(origin)?;
+//!
+//! 			// Check they are an active councillor
+//!				ensure!(<motions::Module<T>>::is_councillor(&sender),
+//!					"Must be a councillor to call this function");
+//!				
+//!				// Do some privileged operation here...
+//!
+//!				// Return `Ok` at the end
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! # fn main() { }
+//! ```
+//!
+//! ## Genesis Config
+//!
+//! The Council module depends on the `GenesisConfig`.
+//!
+//! - [Seats](./seats/struct.GenesisConfig.html)
+//! - [Voting](./voting/struct.GenesisConfig.html)
+//!
+//! ## Related Modules
+//!
+//! - [Democracy](../srml_democracy/index.html)
+//! - [Staking](../srml_staking/index.html)
+//!
+//! ## References
+//!
+//! - [Polkadot wiki](https://wiki.polkadot.network/en/latest/polkadot/learn/governance/) on governance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -56,7 +266,7 @@ mod tests {
 		}
 	}
 
-	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	// Workaround for https://github.com/rust-lang/rust/issues/26925. Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
 	impl system::Trait for Test {
