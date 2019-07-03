@@ -1200,7 +1200,7 @@ impl WasmExecutor {
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code)?;
-		let module = Self::instantiate_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
 	}
 
@@ -1222,7 +1222,7 @@ impl WasmExecutor {
 		filter_result: FR,
 	) -> Result<R> {
 		let module = wasmi::Module::from_buffer(code)?;
-		let module = Self::instantiate_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module_with_custom_signature(
 			ext,
 			&module,
@@ -1335,7 +1335,6 @@ impl WasmExecutor {
 
 	/// Prepare module instance
 	pub fn instantiate_module<E: Externalities<Blake2Hasher>>(
-		ext: &mut E,
 		heap_pages: usize,
 		module: &Module,
 	) -> Result<ModuleRef> {

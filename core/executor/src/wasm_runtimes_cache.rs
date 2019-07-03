@@ -16,33 +16,39 @@
 
 //! Implements a cache for pre-created Wasm runtime module instances.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::wasm_executor::WasmExecutor;
-use log::trace;
+use log::{trace, warn};
 use parity_codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
-use std::collections::HashMap;
+use std::collections::hash_map::{HashMap, Entry};
 use std::mem;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
+#[derive(Debug)]
+enum CacheError {
+	CodeNotFound,
+	ApplySnapshotFailed,
+	InvalidModule,
+	CantDeserializeWasm,
+	Instantiation,
+}
+
 /// A runtime along with its version and initial state snapshot.
 #[derive(Clone)]
-enum RuntimePreproc {
-	InvalidCode,
-	ValidCode {
-		/// A wasm module instance.
-		instance: WasmModuleInstanceRef,
-		/// Runtime version according to `Core_version`.
-		///
-		/// Can be `None` if the runtime doesn't expose this function.
-		version: Option<RuntimeVersion>,
-		/// The snapshot of the instance's state taken just after the instantiation.
-		state_snapshot: StateSnapshot,
-	},
+struct CachedRuntime {
+	/// A wasm module instance.
+	instance: WasmModuleInstanceRef,
+	/// Runtime version according to `Core_version`.
+	///
+	/// Can be `None` if the runtime doesn't expose this function.
+	version: Option<RuntimeVersion>,
+	/// The snapshot of the instance's state taken just after the instantiation.
+	state_snapshot: StateSnapshot,
 }
 
 /// A state snapshot of an instance taken just after instantiation.
@@ -59,6 +65,7 @@ struct StateSnapshot {
 }
 
 impl StateSnapshot {
+	// Returns `None` if instance is not valid.
 	fn take(
 		module_instance: &WasmModuleInstanceRef,
 		data_segments: Vec<DataSegment>,
@@ -106,59 +113,62 @@ impl StateSnapshot {
 
 	/// Reset the runtime instance to the initial version by restoring
 	/// the preserved memory and globals.
-	fn apply(&self, instance: &WasmModuleInstanceRef) {
-		let mem = instance
+	///
+	/// Returns `Err` if applying the snapshot is failed.
+	fn apply(&self, instance: &WasmModuleInstanceRef) -> Result<(), CacheError> {
+		let memory = instance
 			.export_by_name("memory")
-			.expect("export identifier 'memory' is hardcoded and will always exist; qed");
-		match mem {
-			wasmi::ExternVal::Memory(memory_ref) => {
-				// TODO:
-				let amount: wasmi::memory_units::Bytes = memory_ref.current_size().into();
-				// TODO:
-				memory_ref.erase();
+			.ok_or(CacheError::ApplySnapshotFailed)?
+			.as_memory()
+			.cloned()
+			.ok_or(CacheError::ApplySnapshotFailed)?;
 
-				for (offset, contents) in &self.data_segments {
-					// TODO: expect
-					memory_ref.set(*offset, contents).expect("");
-				}
-			}
-			_ => unreachable!("memory export always exists wasm module; qed"),
+		// First, erase the memory and copy the data segments into it.
+		memory
+			.erase()
+			.map_err(|_| CacheError::ApplySnapshotFailed)?;
+		for (offset, contents) in &self.data_segments {
+			memory
+				.set(*offset, contents)
+				.map_err(|_| CacheError::ApplySnapshotFailed)?;
 		}
 
-		// Restore the values of mutable globals.
+		// Second, restore the values of mutable globals.
 		for (global_ref, global_val) in instance
 			.globals()
 			.iter()
 			.filter(|g| g.is_mutable())
 			.zip(self.global_mut_values.iter())
 		{
-			// TODO: Can we guarantee that the instance is the same?
-			global_ref.set(*global_val).expect(
-				"the instance should be the same as used for preserving;
-				we iterate the same way it as we do it for preserving values;
-				the types should be the same;
-				all the values are mutable;
-				qed
-				",
-			);
+			// the instance should be the same as used for preserving and
+			// we iterate the same way it as we do it for preserving values that means that the
+			// types should be the same and all the values are mutable. So no error is expected/
+			global_ref
+				.set(*global_val)
+				.map_err(|_| CacheError::ApplySnapshotFailed)?;
 		}
+		Ok(())
 	}
 }
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
+/// Cache for the runtimes.
+///
 /// When an instance is requested for the first time it is added to this
-/// cache. Furthermore its initial memory is preserved here. Follow-up
+/// cache. Furthermore its initial memory and values of mutable globals are preserved here. Follow-up
 /// requests to fetch a runtime return this one instance with the memory
 /// reset to the initial memory. So, one runtime instance is reused for
 /// every fetch request.
+///
+/// For now the cache grows indefinitely, but that should be fine for now since runtimes can only be
+/// upgraded rarely and there are no other ways to make the node to execute some other runtime.
 pub struct RuntimesCache {
-	// TODO: Consider LRU.
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the hash of their code.
-	instances: HashMap<[u8; 32], RuntimePreproc>,
+	instances: HashMap<[u8; 32], Result<CachedRuntime, CacheError>>,
 }
 
 impl RuntimesCache {
@@ -207,27 +217,40 @@ impl RuntimesCache {
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		initial_heap_pages: Option<u64>,
-	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>)> {
-		let code_hash = match ext.original_storage_hash(well_known_keys::CODE) {
-			Some(code_hash) => code_hash,
-			None => return Err(Error::InvalidCode),
+	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>), Error> {
+		let code_hash = ext.original_storage_hash(well_known_keys::CODE).ok_or(Error::InvalidCode)?;
+
+		// This is direct result from fighting with borrowck.
+		let handle_result = |cached_result: &Result<CachedRuntime, CacheError>| {
+			match *cached_result {
+				Err(_) => Err(Error::InvalidCode),
+				Ok(CachedRuntime  {
+					ref instance,
+					ref version,
+					ref state_snapshot,
+					..
+				}) => {
+					state_snapshot.apply(&instance).expect(
+						"applying the snapshot can only fail if the passed instance is different
+						from the one that was used for creation of the snapshot;
+						we use the snapshot that is directly associated with the instance;
+						thus the snapshot was created using the instance;
+						qed",
+					);
+					Ok((instance.clone(), version.clone()))
+				}
+			}
 		};
 
-		let runtime_preproc = self.instances.entry(code_hash.into()).or_insert_with(|| {
-			trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-			Self::create_wasm_instance(wasm_executor, ext, initial_heap_pages)
-		});
-
-		match *runtime_preproc {
-			RuntimePreproc::InvalidCode => Err(Error::InvalidCode),
-			RuntimePreproc::ValidCode {
-				ref instance,
-				ref version,
-				ref state_snapshot,
-				..
-			} => {
-				state_snapshot.apply(&instance);
-				Ok((instance.clone(), version.clone()))
+		match self.instances.entry(code_hash.into()) {
+			Entry::Occupied(o) => handle_result(o.get()),
+			Entry::Vacant(v) => {
+				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
+				let result = Self::create_wasm_instance(wasm_executor, ext, initial_heap_pages);
+				if let Err(ref err) = result {
+					warn!(target: "runtimes_cachce", "cannot create a runtime: {:?}", err);
+				}
+				handle_result(v.insert(result))
 			}
 		}
 	}
@@ -236,17 +259,17 @@ impl RuntimesCache {
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		initial_heap_pages: Option<u64>,
-	) -> RuntimePreproc {
-		let code = match ext.original_storage(well_known_keys::CODE) {
-			Some(code) => code,
-			None => return RuntimePreproc::InvalidCode,
-		};
+	) -> Result<CachedRuntime, CacheError> {
+		let code = ext
+			.original_storage(well_known_keys::CODE)
+			.ok_or(CacheError::CodeNotFound)?;
+		let module = WasmModule::from_buffer(&code).map_err(|_| CacheError::InvalidModule)?;
 
 		// Extract the data segments from the wasm code.
-		let data_segments = match extract_data_segments(&code) {
-			Some(data_segments) => data_segments,
-			None => return RuntimePreproc::InvalidCode,
-		};
+		//
+		// A return of this error actually indicates that there is a problem in logic, since
+		// we just loaded and validated the `module` above.
+		let data_segments = extract_data_segments(&code).ok_or(CacheError::CantDeserializeWasm)?;
 
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
@@ -254,37 +277,32 @@ impl RuntimesCache {
 			.or(initial_heap_pages)
 			.unwrap_or(DEFAULT_HEAP_PAGES);
 
-		match WasmModule::from_buffer(code)
-			.map_err(|_| Error::InvalidCode)
-			.and_then(|module| WasmExecutor::instantiate_module(ext, heap_pages as usize, &module))
-		{
-			Ok(instance) => {
-				// Take state snapshot before executing anything.
-				let state_snapshot =
-					match StateSnapshot::take(&instance, data_segments, heap_pages as u32) {
-						Some(snapshot) => snapshot,
-						None => return RuntimePreproc::InvalidCode,
-					};
+		// Instantiate this module.
+		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
+			.map_err(|_| CacheError::Instantiation)?;
 
-				let version = wasm_executor
-					.call_in_wasm_module(ext, &instance, "Core_version", &[])
-					.ok()
-					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-				RuntimePreproc::ValidCode {
-					instance,
-					version,
-					state_snapshot,
-				}
-			}
-			Err(e) => {
-				trace!(target: "runtimes_cache", "Invalid code presented to executor ({:?})", e);
-				RuntimePreproc::InvalidCode
-			}
-		}
+		// Take state snapshot before executing anything.
+		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages as u32)
+			.expect(
+				"`take` returns `Err` if the module is not valid;
+				we already loaded module above, thus the `Module` is proven to be valid at this point;
+				qed
+			",
+			);
+
+		let version = wasm_executor
+			.call_in_wasm_module(ext, &instance, "Core_version", &[])
+			.ok()
+			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+		Ok(CachedRuntime {
+			instance,
+			version,
+			state_snapshot,
+		})
 	}
 }
 
-/// Extract the data segments in the given wasm code.
+/// Extract the data segments from the given wasm code.
 ///
 /// Returns `Err` if the given wasm code cannot be deserialized.
 fn extract_data_segments(wasm_code: &[u8]) -> Option<Vec<DataSegment>> {
