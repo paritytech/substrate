@@ -130,9 +130,7 @@ impl Store {
 			})
 			.collect();
 
-		let key_type: [u8; 4] = unsafe {
-			std::mem::transmute(TPublic::KEY_TYPE.to_le())
-		};
+		let key_type: [u8; 4] = TPublic::KEY_TYPE.to_le_bytes();
 		for entry in fs::read_dir(&self.path)? {
 			let entry = entry?;
 			let path = entry.path();
@@ -155,7 +153,7 @@ impl Store {
 
 	fn key_file_path<TPair: Pair + TypedKey>(&self, public: &TPair::Public) -> PathBuf {
 		let mut buf = self.path.clone();
-		let bytes: [u8; 4] = unsafe { std::mem::transmute(TPair::KEY_TYPE.to_le()) };
+		let bytes: [u8; 4] = TPair::KEY_TYPE.to_le_bytes();
 		let key_type = hex::encode(bytes);
 		let key = hex::encode(public.as_slice());
 		buf.push(key_type + key.as_str());
