@@ -1349,16 +1349,15 @@ impl WasmExecutor {
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
-		let heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;
+		let _heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
-		let table: Option<TableRef> = intermediate_instance
-			.not_started_instance()
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
 
-		// finish instantiation by running 'start' function (if any).
-		Ok(intermediate_instance.run_start(&mut fec)?)
+		if intermediate_instance.has_start() {
+			// Runtime is not allowed to have the `start` function.
+			Err(Error::RuntimeHasStartFn)
+		} else {
+			Ok(intermediate_instance.assert_no_start())
+		}
 	}
 }
 

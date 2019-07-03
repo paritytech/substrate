@@ -62,6 +62,9 @@ pub enum Error {
 	/// allocator is allowed to place its data.
 	#[display(fmt="The runtime doesn't provide a global named __heap_base")]
 	HeapBaseNotFoundOrInvalid,
+	/// The runtime WebAssembly module is not allowed to have the `start` function.
+	#[display(fmt="The runtime has the \"start\" function")]
+	RuntimeHasStartFn,
 	/// Some other error occurred
 	Other(&'static str),
 	/// Some error occurred in the allocator
