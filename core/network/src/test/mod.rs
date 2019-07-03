@@ -213,6 +213,9 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	verifier: Arc<dyn Verifier<Block>>,
+	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
+	/// instead of going through the import queue.
+	block_import: Arc<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send + Sync>; 2]>,		// TODO: remove Sync
 }
@@ -286,7 +289,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			} else {
 				Default::default()
 			};
-			full_client.import_block(import_block, cache).unwrap();
+			self.block_import.import_block(import_block, cache);
 			at = hash;
 		}
 
@@ -420,7 +423,7 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import,
+			block_import.clone(),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -506,6 +509,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
+				block_import,
 				verifier,
 				to_poll: {
 					let mut sv = smallvec::SmallVec::new();
@@ -530,7 +534,7 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import,
+			block_import.clone(),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -574,6 +578,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				verifier,
+				block_import,
 				client: PeersClient::Light(client),
 				to_poll: {
 					let mut sv = smallvec::SmallVec::new();
