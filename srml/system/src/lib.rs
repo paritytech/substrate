@@ -77,7 +77,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use primitives::weights::{Weight, FeeMultiplier};
-use primitives::{generic, Perbill, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One,
+use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One,
 	Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash, Bounded, Lookup,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, Convert,
 }};
@@ -183,7 +183,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// block.
 	///
 	/// Note that passing `()` will keep the value constant.
-	type FeeMultiplierUpdate: Convert<Weight, FeeMultiplier>;
+	type FeeMultiplierUpdate: Convert<(Weight, FeeMultiplier), FeeMultiplier>;
 
 	/// The block header.
 	type Header: Parameter + traits::Header<
@@ -322,7 +322,7 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<Weight>;
 		/// The next fee multiplier. This should be updated at the end of each block based on the
 		/// saturation level (weight).
-		NextFeeMultiplier: FeeMultiplier = FeeMultiplier::Positive(Perbill::zero());
+		NextFeeMultiplier: FeeMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -549,6 +549,17 @@ impl<T: Trait> Module<T> {
 		NextFeeMultiplier::get()
 	}
 
+	/// Update the next fee multiplier.
+	///
+	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
+	pub fn update_fee_multiplier() {
+		// update the multiplier based on block weight.
+		let current_weight = Self::all_extrinsics_weight();
+		let current_multiplier = NextFeeMultiplier::get();
+		let next_multiplier = T::FeeMultiplierUpdate::convert((current_weight, current_multiplier));
+		NextFeeMultiplier::put(next_multiplier);
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -577,9 +588,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		// update the multiplier based on block weight.
-		NextFeeMultiplier::put(T::FeeMultiplierUpdate::convert(Self::all_extrinsics_weight()));
-		// then kill the weight.
+		Self::update_fee_multiplier();
 		AllExtrinsicsWeight::kill();
 
 		let number = <Number<T>>::take();

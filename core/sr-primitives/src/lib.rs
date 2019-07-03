@@ -165,7 +165,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
@@ -237,6 +237,16 @@ where
 	}
 }
 
+impl ops::Add for Permill {
+	type Output = Self;
+
+	fn add(self, b: Self) -> Self::Output {
+		// both u32 values are below a billion. sum won't overflow for u32.
+		Self::from_parts((self.0 + b.0).min(1_000_000))
+	}
+}
+
+
 #[cfg(feature = "std")]
 impl From<f64> for Permill {
 	fn from(x: f64) -> Permill {
@@ -269,7 +279,7 @@ impl From<codec::Compact<Permill>> for Permill {
 
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perbill(u32);
 
@@ -341,6 +351,15 @@ where
 		};
 
 		(b / billion) * part + rem_multiplied_divided
+	}
+}
+
+impl ops::Add for Perbill {
+	type Output = Self;
+
+	fn add(self, b: Self) -> Self::Output {
+		// both u32 values are below a billion. sum won't overflow for u32.
+		Self::from_parts((self.0 + b.0).min(1_000_000_000))
 	}
 }
 

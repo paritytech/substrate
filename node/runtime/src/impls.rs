@@ -45,12 +45,13 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// Formula:
 ///   diff = (ideal_weight - current_block_weight)
 ///   v = 0.00004
-///   fee = weight * (1 + (v . diff) + v^2 (v . d)^2 / 2)
+///   weight_next = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
 pub struct FeeMultiplierUpdateHandler;
-impl Convert<Weight, FeeMultiplier> for FeeMultiplierUpdateHandler {
-	fn convert(block_weight: Weight) -> FeeMultiplier {
+impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHandler {
+	fn convert(previous_state: (Weight, FeeMultiplier)) -> FeeMultiplier {
+		let (block_weight, multiplier) = previous_state;
 		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
 		let max = MAX_TRANSACTIONS_WEIGHT as u128;
@@ -99,13 +100,13 @@ impl Convert<Weight, FeeMultiplier> for FeeMultiplierUpdateHandler {
 			let excess = first_term.saturating_add(second_term);
 			// max_fraction is always safe to convert to u32.
 			let p = Perbill::from_parts(excess.min(max_fraction) as u32);
-			FeeMultiplier::Positive(p)
+			multiplier.sum(FeeMultiplier::Positive(p, 0))
 		} else {
 			// first_term > second_term
 			let negative = first_term - second_term;
 			// max_fraction is always safe to convert to u32.
 			let p = Perbill::from_parts(negative.min(max_fraction) as u32);
-			FeeMultiplier::Negative(p)
+			multiplier.sum(FeeMultiplier::Negative(p))
 		}
 	}
 }
@@ -138,23 +139,56 @@ mod tests {
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert(1024),
+			FeeMultiplierUpdateHandler::convert((1024, FeeMultiplier::default())),
 			FeeMultiplier::Negative(Perbill::from_parts(9990))
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert(1024 * 4),
+			FeeMultiplierUpdateHandler::convert((1024 * 4, FeeMultiplier::default())),
 			FeeMultiplier::Negative(Perbill::from_parts(9960))
 		);
 		// ideal. Original fee.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert(IDEAL_TRANSACTIONS_WEIGHT as u32),
-			FeeMultiplier::Positive(Perbill::zero())
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT as u32, FeeMultiplier::default())),
+			FeeMultiplier::Positive(Perbill::zero(), 0)
 		);
 		// More than ideal. Fee is increased.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32),
-			FeeMultiplier::Positive(Perbill::from_parts(10000))
+			FeeMultiplierUpdateHandler::convert(((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32, FeeMultiplier::default())),
+			FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
+		);
+	}
+
+	#[test]
+	fn stateful_weight_mul_grow_to_infinity() {
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((
+				IDEAL_TRANSACTIONS_WEIGHT * 2,
+				FeeMultiplier::default()
+			)),
+			FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
+		);
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((
+				IDEAL_TRANSACTIONS_WEIGHT * 2,
+				FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
+			)),
+			FeeMultiplier::Positive(Perbill::from_parts(20000), 0)
+		);
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((
+				IDEAL_TRANSACTIONS_WEIGHT * 2,
+				FeeMultiplier::Positive(Perbill::from_parts(20000), 0)
+			)),
+			FeeMultiplier::Positive(Perbill::from_parts(30000), 0)
+		);
+		// ...
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((
+				IDEAL_TRANSACTIONS_WEIGHT * 2,
+				FeeMultiplier::Positive(Perbill::one(), 0)
+			)),
+			FeeMultiplier::Positive(Perbill::from_parts(10000), 1)
 		);
 	}
 
@@ -166,6 +200,6 @@ mod tests {
 		let mb = kb * kb;
 		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
 			.into_iter()
-			.for_each(|i| { FeeMultiplierUpdateHandler::convert(i); });
+			.for_each(|i| { FeeMultiplierUpdateHandler::convert((i, FeeMultiplier::default())); });
 	}
 }

@@ -49,6 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use runtime_primitives::weights::{IDEAL_TRANSACTIONS_WEIGHT, FeeMultiplier};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -490,7 +491,7 @@ mod tests {
 		(block1, block2)
 	}
 
-	fn big_block() -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
@@ -498,11 +499,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(time)),
 				},
 				CheckedExtrinsic {
-					signed: Some((alice(), 0)),
-					function: Call::System(system::Call::remark(vec![0; 120_000])),
+					signed: Some((charlie(), nonce)),
+					function: Call::System(system::Call::remark(vec![0; size])),
 				}
 			]
 		)
@@ -514,6 +515,7 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
+		println!("executing.");
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -799,20 +801,19 @@ mod tests {
 				4,
 				COMPACT_CODE,
 				"Core_execute_block",
-				&big_block().0
+				&block_with_size(42, 0, 120_000).0
 			).is_err()
 		);
 	}
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		// TODO: add a test for low balance. The error message seems to be vague.
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&big_block().0,
+			&block_with_size(42, 0, 120_000).0,
 			true,
 			None,
 		).0.unwrap();
@@ -826,7 +827,7 @@ mod tests {
 			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
-				&big_block().0,
+				&block_with_size(42, 0, 120_000).0,
 				false,
 				None,
 			).0.is_err()
@@ -923,6 +924,96 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
+	}
+
+
+	#[test]
+	fn fee_multiplier_increases_on_big_block() {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
+		let mut prev_multiplier = FeeMultiplier::default();
+
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(System::next_fee_multiplier(), prev_multiplier);
+		});
+
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut tt,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 0)),
+					function: Call::System(system::Call::remark(vec![0; (IDEAL_TRANSACTIONS_WEIGHT*2) as usize])),
+				}
+			]
+		);
+		let block2 = construct_block(
+			&mut tt,
+			2,
+			block1.1.clone(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(52)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::System(system::Call::remark(vec![0; (IDEAL_TRANSACTIONS_WEIGHT*2) as usize])),
+				}
+			]
+		);
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block1.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// fee multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_fee_multiplier();
+			if let FeeMultiplier::Positive(prev, _) = prev_multiplier {
+				match fm {
+					FeeMultiplier::Positive(v, _) => assert!(v > prev),
+					_ => assert!(false, "Fee multiplier should increase"),
+				}
+				prev_multiplier = fm;
+			} else {
+				unreachable!();
+			}
+		});
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block2.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// fee multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_fee_multiplier();
+			if let FeeMultiplier::Positive(prev, _) = prev_multiplier {
+				match fm {
+					FeeMultiplier::Positive(v, _) => assert!(v > prev, "should be {:?} > {:?}", v, prev),
+					_ => assert!(false, "Fee multiplier should increase"),
+				}
+				prev_multiplier = fm;
+			} else {
+				unreachable!();
+			}
+		});
 	}
 
 	#[cfg(feature = "benchmarks")]

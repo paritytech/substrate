@@ -64,26 +64,6 @@ pub enum TransactionWeight {
 	Free,
 }
 
-/// A wrapper for fee multiplier.
-/// This is to simulate a `Perbill` which is greater than `1`.
-///
-/// The fee multiplier is always multiplied by the weight (as denoted by `TransactionWeight` on a
-/// per-transaction basis with `#[weight]` annotation) of the transaction to obtain the final fee.
-///
-/// One can define how this conversion evolves based on the previous block weight by implementing
-/// the `FeeMultiplierUpdate` type of the `system` trait.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Clone, Debug))]
-#[derive(Encode, Decode)]
-pub enum FeeMultiplier {
-	/// Should be interpreted as a positive ratio added to the weight, i.e. `weight + weight * p`
-	/// where `p` is a small `Perbill`.
-	///
-	Positive(Perbill),
-	/// Should be interpreted as a negative ratio subtracted from the weight, i.e.
-	/// `weight - weight * p` where `p` is a small `Perbill`.
-	Negative(Perbill),
-}
-
 impl Weighable for TransactionWeight {
 	fn weight(&self, len: usize) -> Weight {
 		match self {
@@ -103,18 +83,138 @@ impl Default for TransactionWeight {
 	}
 }
 
+/// A wrapper for fee multiplier.
+/// This is to simulate a `Perbill` in the range [-1, infinity]
+///
+/// The fee multiplier is always multiplied by the weight (as denoted by `TransactionWeight` on a
+/// per-transaction basis with `#[weight]` annotation) of the transaction to obtain the final fee.
+///
+/// One can define how this conversion evolves based on the previous block weight by implementing
+/// the `FeeMultiplierUpdate` type of the `system` trait.
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
+#[derive(Encode, Decode, Clone, Copy)]
+pub enum FeeMultiplier {
+	/// Should be interpreted as a positive ratio added to the weight, i.e. `weight + weight * p`
+	/// where `p` is a small `Perbill`.
+	///
+	Positive(Perbill, Weight),
+	/// Should be interpreted as a negative ratio subtracted from the weight, i.e.
+	/// `weight - weight * p` where `p` is a small `Perbill`.
+	Negative(Perbill),
+}
+
 impl FeeMultiplier {
 	/// Applies the self, as a multiplier, to the given weight.
 	pub fn apply_to(&self, weight: Weight) -> Weight {
 		match *self {
-			FeeMultiplier::Positive(p) => weight.saturating_add(p * weight),
+			FeeMultiplier::Positive(p, r) => weight + weight.saturating_mul(r).saturating_add(p * weight),
 			FeeMultiplier::Negative(p) => weight.checked_sub(p * weight).unwrap_or(Zero::zero()),
+		}
+	}
+
+	/// consumes self and returns the combination of `self` and `rhs`, taking the sign into account.
+	pub fn sum(self, rhs: Self) -> Self {
+		match (self, rhs) {
+			(FeeMultiplier::Positive(p1, r1), FeeMultiplier::Positive(p2, r2)) => {
+				// because the add implementation silently saturates. A perbill should saturate but
+				// once we have a proper `Float` type this can be improved.
+				let billion = 1_000_000_000;
+				if p1.0 + p2.0 > billion {
+					FeeMultiplier::Positive(
+						Perbill::from_parts((p1.0 + p2.0) % billion),
+						r1.saturating_add(r2).saturating_add(1)
+					)
+				} else {
+					FeeMultiplier::Positive(p1 + p2, r1.saturating_add(r2))
+				}
+			},
+			(FeeMultiplier::Negative(p1), FeeMultiplier::Negative(p2)) => {
+				// the sum impl of perbill simply caps this. This cannot grow more than -1.
+				FeeMultiplier::Negative(p1 + p2)
+			},
+			(FeeMultiplier::Positive(p1, r1), FeeMultiplier::Negative(p2)) => {
+				if let Some(new_p) = p1.0.checked_sub(p2.0) {
+					FeeMultiplier::Positive(Perbill::from_parts(new_p), r1)
+				} else {
+					let new_p = Perbill::from_parts(p2.0 - p1.0);
+					if r1 > 0 {
+						FeeMultiplier::Positive(new_p, r1-1)
+					} else {
+						FeeMultiplier::Negative(new_p)
+					}
+				}
+			},
+			(FeeMultiplier::Negative(_), FeeMultiplier::Positive(_, _)) => {
+				rhs.sum(self)
+			},
 		}
 	}
 }
 
 impl Default for FeeMultiplier {
 	fn default() -> Self {
-		FeeMultiplier::Positive(Perbill::zero())
+		FeeMultiplier::Positive(Perbill::zero(), Zero::zero())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn p(percent: u32) -> Perbill {
+		Perbill::from_parts(percent * 1_000_000_0)
+	}
+
+	#[test]
+	fn fee_multiplier_can_sum() {
+		assert_eq!(
+			FeeMultiplier::Positive(p(10), 1).sum(FeeMultiplier::Positive(p(10), 1)),
+			FeeMultiplier::Positive(p(20), 2)
+		);
+
+		assert_eq!(
+			FeeMultiplier::Positive(p(60), 0).sum(FeeMultiplier::Positive(p(60), 1)),
+			FeeMultiplier::Positive(p(20), 2)
+		);
+
+		assert_eq!(
+			FeeMultiplier::Positive(p(60), 0).sum(FeeMultiplier::Positive(p(60), 0)),
+			FeeMultiplier::Positive(p(20), 1)
+		);
+
+		assert_eq!(
+			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Positive(p(10), 1)),
+			FeeMultiplier::Positive(p(20), 1)
+		);
+
+		assert_eq!(
+			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Positive(p(10), 1)),
+			FeeMultiplier::Positive(p(20), 1)
+		);
+
+		assert_eq!(
+			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Negative(p(10))),
+			FeeMultiplier::Positive(p(0), 0)
+		);
+
+		// zero
+		assert_eq!(
+			FeeMultiplier::Positive(p(0), 0).sum(FeeMultiplier::Negative(p(10))),
+			FeeMultiplier::Negative(p(10))
+		);
+		assert_eq!(
+			FeeMultiplier::Negative(p(0)).sum(FeeMultiplier::Positive(p(10), 2)),
+			FeeMultiplier::Positive(p(10), 2)
+		);
+
+		// asymmetric operation.
+		assert_eq!(
+			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Negative(p(30))),
+			FeeMultiplier::Negative(p(20))
+		);
+		assert_eq!(
+			FeeMultiplier::Negative(p(30)).sum(FeeMultiplier::Positive(p(10), 0)),
+			FeeMultiplier::Negative(p(20))
+		);
 	}
 }
