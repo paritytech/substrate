@@ -101,27 +101,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 }
 
-/// Extend into backend
-impl<H: Hasher, N: ChangesTrieBlockNumber> Extend<StorageTuple> for TestExternalities<H, N> {
-	fn extend<T>(&mut self, iter: T)
-		where T: IntoIterator<Item = StorageTuple>
-	{
-		self.backend = self.backend.update(
-			iter.into_iter()
-				.flat_map(|storage| {
-					let top_iter = storage.0.into_iter().map(|(k, v)| (None, k, Some(v)));
-					let child_iter = storage.1.into_iter().flat_map(|(child, map)| {
-						map.into_iter()
-							.map(|(k, v)| (Some(child.clone()), k, Some(v)))
-							.collect::<Vec<_>>()
-					});
-					top_iter.chain(child_iter)
-				})
-				.collect()
-		);
-	}
-}
-
 impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
