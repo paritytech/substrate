@@ -575,8 +575,8 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
-			self.0.on_start(link)
+		fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+			self.0.on_start()
 		}
 
 		fn import_finality_proof(
