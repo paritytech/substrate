@@ -126,6 +126,32 @@ test-linux-stable:                 &test-linux
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
+
+test-srml-staking:                 &test-srml-staking
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  only:
+    changes:
+      - .gitlab-ci.yml
+      - srml/staking/*
+  script:
+    - cd srml/staking/
+    - time cargo test --release --verbose --no-default-features --features std
+    - sccache -s
+
+
+
+
+
+
 test-linux-stable-int:
   <<:                              *test-linux
   except:

@@ -119,12 +119,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, ops::Rem};
+use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::{Decode, Encode};
 use primitives::KeyTypeId;
-use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey, Hash};
+use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash};
 use srml_support::{
 	dispatch::Result,
 	storage,
@@ -147,18 +147,23 @@ pub trait ShouldEndSession<BlockNumber> {
 }
 
 /// Ends the session after a fixed period of blocks.
+///
+/// The first session will have length of `Offset`, and
+/// the following sessions will have length of `Period`.
+/// This may prove nonsensical if `Offset` >= `Period`.
 pub struct PeriodicSessions<
 	Period,
 	Offset,
 >(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Saturating + Zero,
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn should_end_session(now: BlockNumber) -> bool {
-		((now.saturating_sub(Offset::get())) % Period::get()).is_zero()
+		let offset = Offset::get();
+		now >= offset && ((now - offset) % Period::get()).is_zero()
 	}
 }
 
@@ -716,5 +721,34 @@ mod tests {
 			// is fine now that 1 has migrated off.
 			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_ok());
 		});
+	}
+
+	#[test]
+	fn periodic_session_works() {
+		struct Period;
+		struct Offset;
+
+		impl Get<u64> for Period {
+			fn get() -> u64 { 10 }
+		}
+
+		impl Get<u64> for Offset {
+			fn get() -> u64 { 3 }
+		}
+
+
+		type P = PeriodicSessions<Period, Offset>;
+
+		for i in 0..3 {
+			assert!(!P::should_end_session(i));
+		}
+
+		assert!(P::should_end_session(3));
+
+		for i in (1..10).map(|i| 3 + i) {
+			assert!(!P::should_end_session(i));
+		}
+
+		assert!(P::should_end_session(13));
 	}
 }

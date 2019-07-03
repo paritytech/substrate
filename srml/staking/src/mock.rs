@@ -22,12 +22,16 @@ use primitives::traits::{IdentityLookup, Convert, Identity, OpaqueKeys, OnInitia
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, assert_ok, traits::Currency};
-use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination};
+use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
+use srml_support::traits::{Currency, Get};
+use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
+	ValidatorPrefs, RewardDestination, Nominators
+};
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
 pub type BlockNumber = u64;
+pub type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
@@ -42,6 +46,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct TestSessionHandler;
@@ -66,6 +71,13 @@ pub fn is_disabled(validator: AccountId) -> bool {
 	SESSION.with(|d| d.borrow().1.contains(&validator))
 }
 
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
+	}
+}
+
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
@@ -84,6 +96,12 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 }
+parameter_types! {
+	pub const TransferFee: u64 = 0;
+	pub const CreationFee: u64 = 0;
+	pub const TransactionBaseFee: u64 = 0;
+	pub const TransactionByteFee: u64 = 0;
+}
 impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Staking;
@@ -92,6 +110,11 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;
@@ -181,7 +204,11 @@ impl ExtBuilder {
 		self.fair = is_fair;
 		self
 	}
+	pub fn set_associated_consts(&self) {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		self.set_associated_consts();
 		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
@@ -211,11 +238,6 @@ impl ExtBuilder {
 					(100, 2000 * balance_factor),
 					(101, 2000 * balance_factor),
 			],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			existential_deposit: self.existential_deposit,
-			transfer_fee: 0,
-			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let stake_21 = if self.fair { 1000 } else { 2000 };
@@ -264,18 +286,50 @@ pub type Session = session::Module<Test>;
 pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub fn check_exposure(acc: u64) {
-	let expo = Staking::stakers(&acc);
-	assert_eq!(expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>());
-}
-
 pub fn check_exposure_all() {
 	Staking::current_elected().into_iter().for_each(|acc| check_exposure(acc));
 }
 
-pub fn assert_total_expo(acc: u64, val: u64) {
-	let expo = Staking::stakers(&acc);
+pub fn check_nominator_all() {
+	<Nominators<Test>>::enumerate().for_each(|(acc, _)| check_nominator_exposure(acc));
+}
+
+/// Check for each selected validator: expo.total = Sum(expo.other) + expo.own
+pub fn check_exposure(stash: u64) {
+	assert_is_stash(stash);
+	let expo = Staking::stakers(&stash);
+	assert_eq!(
+		expo.total as u128, expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
+		"wrong total exposure for {:?}: {:?}", stash, expo,
+	);
+}
+
+/// Check that for each nominator: slashable_balance > sum(used_balance)
+/// Note: we might not consume all of a nominator's balance, but we MUST NOT over spend it.
+pub fn check_nominator_exposure(stash: u64) {
+	assert_is_stash(stash);
+	let mut sum = 0;
+	Staking::current_elected()
+		.iter()
+		.map(|v| Staking::stakers(v))
+		.for_each(|e| e.others.iter()
+			.filter(|i| i.who == stash)
+			.for_each(|i| sum += i.value));
+	let nominator_stake = Staking::slashable_balance_of(&stash);
+	// a nominator cannot over-spend.
+	assert!(
+		nominator_stake >= sum,
+		"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
+	);
+}
+
+pub fn assert_total_expo(stash: u64, val: u64) {
+	let expo = Staking::stakers(&stash);
 	assert_eq!(expo.total, val);
+}
+
+pub fn assert_is_stash(acc: u64) {
+	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
 pub fn bond_validator(acc: u64, val: u64) {
