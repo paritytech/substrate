@@ -274,7 +274,6 @@ decl_storage! {
 		| {
 			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
-					println!("set keys for {:?}: {:?}", who, keys);
 					<Module<T>>::do_set_keys(&who, keys)
 						.expect("genesis config must not contain duplicates; qed");
 				}
@@ -401,7 +400,6 @@ impl<T: Trait> Module<T> {
 			Self::put_key_owner(id, key, &who);
 		}
 
-		println!("set keys for {:?}: {:?}", who, keys);
 		Self::put_keys(&who, &keys);
 
 		Ok(())
@@ -521,7 +519,6 @@ mod tests {
 			AUTHORITIES.with(|l| {
 				let key_id = <UintAuthorityId as TypedKey>::KEY_TYPE;
 				*l.borrow_mut() = validators.iter().map(|(_, keys)| {
-					println!("{:?}", keys.get_raw(key_id));
 					keys.get::<UintAuthorityId>(key_id).unwrap_or_default()
 				}).collect()
 			});
@@ -612,7 +609,6 @@ mod tests {
 	#[test]
 	fn keys_cleared_on_kill() {
 		let mut ext = new_test_ext();
-		println!("entering test");
 		with_externalities(&mut ext, || {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1)));
