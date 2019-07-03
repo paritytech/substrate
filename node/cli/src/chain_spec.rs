@@ -17,10 +17,14 @@
 //! Substrate chain configurations.
 
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::{AccountId, AuraId};
-use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
-	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractsConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys};
+use node_primitives::{AccountId, AuraId, Balance};
+use node_runtime::{
+	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
+	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
+	SystemConfig, TimestampConfig,
+	Perbill, SessionKeys, StakerStatus,
+	DAYS, DOLLARS, MILLICENTS, SECS_PER_BLOCK,
+};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
@@ -88,17 +92,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		hex!["9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"].unchecked_into(),
 	];
 
-	const MILLICENTS: u128 = 1_000_000_000;
-	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.
-	const DOLLARS: u128 = 100 * CENTS;
-
-	const SECS_PER_BLOCK: u64 = 6;
-	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
-	const HOURS: u64 = MINUTES * 60;
-	const DAYS: u64 = HOURS * 24;
-
-	const ENDOWMENT: u128 = 10_000_000 * DOLLARS;
-	const STASH: u128 = 100 * DOLLARS;
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = 100 * DOLLARS;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -106,15 +101,10 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
 			balances: endowed_accounts.iter().cloned()
 				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
-			existential_deposit: 1 * DOLLARS,
-			transfer_fee: 1 * CENTS,
-			creation_fee: 1 * CENTS,
 			vesting: vec![],
 		}),
 		indices: Some(IndicesConfig {
@@ -140,47 +130,16 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		democracy: Some(DemocracyConfig::default()),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
-			candidacy_bond: 10 * DOLLARS,
-			voter_bond: 1 * DOLLARS,
-			voting_fee: 2 * DOLLARS,
-			present_slash_per_voter: 1 * CENTS,
-			carry_count: 6,
 			presentation_duration: 1 * DAYS,
-			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
-			decay_ratio: 0,
-			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
-		treasury: Some(TreasuryConfig {
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1 * DOLLARS,
-			spend_period: 1 * DAYS,
-			burn: Permill::from_percent(50),
-		}),
 		contracts: Some(ContractsConfig {
-			signed_claim_handicap: 2,
-			rent_byte_price: 4,
-			rent_deposit_offset: 1000,
-			storage_size_offset: 8,
-			surcharge_reward: 150,
-			tombstone_deposit: 16,
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
-			transfer_fee: 1 * CENTS,
-			creation_fee: 1 * CENTS,
-			contract_fee: 1 * CENTS,
+			current_schedule: Default::default(),
 			gas_price: 1 * MILLICENTS,
-			max_depth: 1024,
-			block_gas_limit: 10_000_000,
-			current_schedule: contracts::Schedule {
-				call_base_cost: 1000,
-				instantiate_base_cost: 1000,
-				..Default::default()
-			},
 		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
@@ -264,8 +223,8 @@ pub fn testnet_genesis(
 		]
 	});
 
-	const STASH: u128 = 1 << 20;
-	const ENDOWMENT: u128 = 1 << 20;
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = 100 * DOLLARS;
 
 	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 
@@ -278,11 +237,6 @@ pub fn testnet_genesis(
 			ids: endowed_accounts.clone(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			existential_deposit: 500,
-			transfer_fee: 0,
-			creation_fee: 0,
 			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
 			vesting: vec![],
 		}),
@@ -306,46 +260,19 @@ pub fn testnet_genesis(
 			active_council: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
-			candidacy_bond: 10,
-			voter_bond: 2,
-			voting_fee: 5,
-			present_slash_per_voter: 1,
-			carry_count: 4,
 			presentation_duration: 10,
-			approval_voting_period: 20,
 			term_duration: 1000000,
 			desired_seats: council_desired_seats,
-			decay_ratio: council_desired_seats / 3,
-			inactive_grace_period: 1,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.
 		}),
-		treasury: Some(TreasuryConfig {
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1_000_000,
-			spend_period: 12 * 60 * 24,
-			burn: Permill::from_percent(50),
-		}),
 		contracts: Some(ContractsConfig {
-			signed_claim_handicap: 2,
-			rent_byte_price: 4,
-			rent_deposit_offset: 1000,
-			storage_size_offset: 8,
-			surcharge_reward: 150,
-			tombstone_deposit: 16,
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			contract_fee: 21,
-			gas_price: 1,
-			max_depth: 1024,
-			block_gas_limit: 10_000_000,
 			current_schedule: contracts::Schedule {
 				enable_println, // this should only be enabled on development chains
 				..Default::default()
 			},
+			gas_price: 1 * MILLICENTS,
 		}),
 		sudo: Some(SudoConfig {
 			key: root_key,

@@ -38,7 +38,7 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use consensus::well_known_cache_keys;
 
-const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
+const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
 pub struct Backend<S, F, H: Hasher> {
@@ -118,6 +118,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
 	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
+	type OffchainStorage = in_mem::OffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -192,6 +193,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+		None
+	}
+
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
 		None
 	}
 

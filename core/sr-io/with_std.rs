@@ -305,7 +305,7 @@ impl OffchainApi for () {
 		}, "timestamp can be called only in the offchain worker context")
 	}
 
-	fn sleep_until(deadline: Timestamp) {
+	fn sleep_until(deadline: offchain::Timestamp) {
 		with_offchain(|ext| {
 			ext.sleep_until(deadline)
 		}, "sleep_until can be called only in the offchain worker context")
@@ -317,21 +317,26 @@ impl OffchainApi for () {
 		}, "random_seed can be called only in the offchain worker context")
 	}
 
-	fn local_storage_set(key: &[u8], value: &[u8]) {
+	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		with_offchain(|ext| {
-			ext.local_storage_set(key, value)
+			ext.local_storage_set(kind, key, value)
 		}, "local_storage_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(
+		kind: offchain::StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		with_offchain(|ext| {
-			ext.local_storage_compare_and_set(key, old_value, new_value)
+			ext.local_storage_compare_and_set(kind, key, old_value, new_value)
 		}, "local_storage_compare_and_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(kind: offchain::StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		with_offchain(|ext| {
-			ext.local_storage_get(key)
+			ext.local_storage_get(kind, key)
 		}, "local_storage_get can be called only in the offchain worker context")
 	}
 

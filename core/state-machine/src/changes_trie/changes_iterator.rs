@@ -98,7 +98,7 @@ pub fn key_changes_proof<S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 	Ok(iter.extract_proof())
 }
 
-/// Check key changes proog and return changes of the key at given blocks range.
+/// Check key changes proof and return changes of the key at given blocks range.
 /// `max` is the number of best known block.
 /// Changes are returned in descending order (i.e. last block comes first).
 pub fn key_changes_proof_check<S: RootsStorage<H, Number>, H: Hasher, Number: BlockNumber>(

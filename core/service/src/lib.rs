@@ -32,7 +32,7 @@ use std::time::Duration;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend};
+use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -51,11 +51,10 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
-use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient,
+	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
@@ -94,8 +93,12 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
+		ComponentClient<Components>,
+		ComponentOffchainStorage<Components>,
+		ComponentBlock<Components>>
+	>>,
 }
 
 /// Creates bare client without any networking.
@@ -108,6 +111,19 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 		executor,
 	)?;
 	Ok(client)
+}
+
+/// An handle for spawning tasks in the service.
+#[derive(Clone)]
+pub struct SpawnTaskHandle {
+	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+}
+
+impl SpawnTaskHandle {
+	/// Spawn a task to run the given future.
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.sender.unbounded_send(Box::new(task));
+	}
 }
 
 /// Stream of events for connection established to a telemetry server.
@@ -221,10 +237,20 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(client.clone())))
-		} else {
-			None
+		#[allow(deprecated)]
+		let offchain_storage = client.backend().offchain_storage();
+		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+			(true, Some(db)) => {
+				Some(Arc::new(offchain::OffchainWorkers::new(
+					client.clone(),
+					db,
+				)))
+			},
+			(true, None) => {
+				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				None
+			},
+			_ => None,
 		};
 
 		{
@@ -512,8 +538,15 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	pub fn spawn_task(&self, task: Box<dyn Future<Item = (), Error = ()> + Send>) {
-		let _ = self.to_spawn_tx.unbounded_send(task);
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Returns a handle for spawning tasks.
+	pub fn spawn_task_handle(&self) -> SpawnTaskHandle {
+		SpawnTaskHandle {
+			sender: self.to_spawn_tx.clone(),
+		}
 	}
 
 	/// Get shared client instance.
