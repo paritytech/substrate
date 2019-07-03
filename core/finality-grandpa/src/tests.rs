@@ -29,7 +29,7 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 	LongestChain,
 };
-use test_client::{self, runtime::BlockNumber};
+use test_client::{self, runtime::BlockNumber, blockchain::{Info, BlockStatus}};
 use consensus_common::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult
 };
@@ -319,6 +319,32 @@ impl ProvideRuntimeApi for TestApi {
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
 		RuntimeApi { inner: self.clone() }.into()
+	}
+}
+
+impl<Block> HeaderBackend<Block> for TestApi
+where
+	Block: BlockT
+{
+	/// Get block header. Returns `None` if block is not found.
+	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>> {
+		unimplemented!()
+	}
+	/// Get blockchain info.
+	fn info(&self) -> Info<Block> {
+		unimplemented!()
+	}
+	/// Get block status.
+	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus> {
+		unimplemented!()
+	}
+	/// Get block number by hash. Returns `None` if the header is not in the chain.
+	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		unimplemented!()
+	}
+	/// Get block hash by number. Returns `None` if the header is not in the chain.
+	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>> {
+		unimplemented!()
 	}
 }
 
