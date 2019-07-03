@@ -124,11 +124,10 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		if self.sender.is_closed() {
+		if let Err(err) = self.sender.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
-			Err(futures::future::ExecuteError::new(kind, future))
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
 		} else {
-			let _ = self.sender.unbounded_send(future);
 			Ok(())
 		}
 	}
@@ -629,11 +628,10 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		if self.to_spawn_tx.is_closed() {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
-			Err(futures::future::ExecuteError::new(kind, future))
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
 		} else {
-			let _ = self.to_spawn_tx.unbounded_send(future);
 			Ok(())
 		}
 	}
