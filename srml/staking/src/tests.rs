@@ -727,11 +727,11 @@ fn nominating_and_rewards_should_work() {
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
-		let approximation = 3;
+		// NOTE: some addition or substraction (-2, -3, +1) are due to arithmetic approximations
 		if cfg!(feature = "equalize") {
 			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
-			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - approximation);
-			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - approximation);
+			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - 3);
+			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - 3);
 			// Rest for validators.
 			assert_eq!(Balances::total_balance(&10), initial_balance + new_session_reward/2 + 1);
 			assert_eq!(Balances::total_balance(&20), initial_balance + new_session_reward/2 + 1);
@@ -739,16 +739,16 @@ fn nominating_and_rewards_should_work() {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&2),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
 			);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&4),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
 			);
 
 			// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
+			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - 1);
 			// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 			assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11 + 2);
 		}
