@@ -38,7 +38,7 @@ use futures::prelude::*;
 use keystore::Store as Keystore;
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
-use primitives::Pair;
+use primitives::{Pair, Public, crypto::TypedKey, ed25519};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -158,13 +158,13 @@ impl<Components: components::Components> Service<Components> {
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
 		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
+			keystore.generate_from_seed::<ed25519::Pair>(seed)?;
 		}
 		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
+		let public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
+			Some(public_key) => public_key.to_owned(),
 			None => {
-				let key = keystore.generate(&config.password)?;
+				let key: ed25519::Pair = keystore.generate(&config.password)?;
 				let public_key = key.public();
 				info!("Generated a new keypair: {:?}", public_key);
 
@@ -507,12 +507,16 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+	pub fn authority_key<TPair>(&self) -> Option<TPair>
+	where
+		TPair: Pair + TypedKey,
+		<TPair as Pair>::Public: Public + TypedKey,
+	{
 		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, &self.config.password)))
-		{
+		if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| {
+			keys.get(0).map(|k| keystore.load::<TPair>(k, &self.config.password))
+		}) {
 			Some(key)
 		} else {
 			None
