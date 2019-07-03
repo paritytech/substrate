@@ -22,18 +22,16 @@
 //! Rather than store the full session data for any given session, we instead commit
 //! to the roots of merkle tries containing the session data.
 
-use rstd::{prelude::*, marker::PhantomData, ops::Rem};
+use rstd::prelude::*;
 #[cfg(not(feature = "std"))]
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::{Encode, Decode};
 use primitives::KeyTypeId;
-use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, Header as HeaderT, Hash as HashT};
+use primitives::traits::{Convert, Member, OpaqueKeys, Hash as HashT};
 use srml_support::{
-	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
-	decl_event, decl_storage,
+	StorageValue, StorageMap, decl_module, decl_storage,
 };
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
-use system::ensure_signed;
+use srml_support::{Parameter, print};
 use substrate_trie::{MemoryDB, Trie, TrieMut, TrieDBMut, TrieDB, Recorder};
 
 use super::{SessionIndex, OnSessionEnding, Module as SessionModule};
@@ -94,9 +92,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
+/// An `OnSessionEnding` implementation that wraps an inner `I` and also
+/// sets the historical trie root of the ending session.
+pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
+
+impl<T: Trait, I> OnSessionEnding<T::AccountId> for NoteHistoricalRoot<T, I>
+	where I: OnSessionEnding<T::AccountId>
+{
 	fn on_session_ending(i: SessionIndex) -> Option<Vec<T::AccountId>> {
-		<Self as Store>::StoredRange::mutate(|range| {
+		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (i, i)).1 = i + 1;
 		});
 
@@ -108,7 +112,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
 			}
 		}
 
-		None
+		I::on_session_ending(i)
 	}
 }
 
@@ -202,7 +206,7 @@ impl<T: Trait> ProvingTrie<T> {
 }
 
 /// Proof of ownership of a specific key.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Clone)]
 pub struct Proof {
 	session: SessionIndex,
 	trie_nodes: Vec<Vec<u8>>,
@@ -214,7 +218,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 	type Proof = Proof;
 	type FullIdentification = T::FullIdentification;
 
-	fn prove(&self, key: (KeyTypeId, D)) -> Option<Self::Proof> {
+	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let trie = ProvingTrie::<T>::generate_now().ok()?;
 		let session = <SessionModule<T>>::current_index();
 
@@ -226,11 +230,146 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 		})
 	}
 
-	fn check_proof(&self, key: (KeyTypeId, D), proof: Proof) -> Option<T::FullIdentification> {
-		let root = <HistoricalSessions<T>>::get(&proof.session)?;
-		let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
-
+	fn check_proof(key: (KeyTypeId, D), proof: Proof) -> Option<T::FullIdentification> {
 		let (id, data) = key;
-		trie.query(id, data.as_ref())
+
+		if proof.session == <SessionModule<T>>::current_index() {
+			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(T::FullIdentificationOf::convert)
+		} else {
+			let root = <HistoricalSessions<T>>::get(&proof.session)?;
+			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
+
+			trie.query(id, data.as_ref())
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_io::with_externalities;
+	use substrate_primitives::Blake2Hasher;
+	use primitives::{
+		traits::OnInitialize,
+		testing::{UintAuthorityId, UINT_DUMMY_KEY},
+	};
+	use crate::mock::{
+		NEXT_VALIDATORS, force_new_session, next_validators,
+		set_next_validators, Test, System, Session,
+	};
+	use srml_support::traits::KeyOwnerProofSystem;
+
+	type Historical = Module<Test>;
+
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		t.extend(timestamp::GenesisConfig::<Test> {
+			minimum_period: 5,
+		}.build_storage().unwrap().0);
+		let (storage, _child_storage) = crate::GenesisConfig::<Test> {
+			validators: next_validators(),
+			keys: NEXT_VALIDATORS.with(|l|
+				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
+			),
+		}.build_storage().unwrap();
+		t.extend(storage);
+		runtime_io::TestExternalities::new(t)
+	}
+
+	#[test]
+	fn generated_proof_is_good() {
+		with_externalities(&mut new_test_ext(), || {
+			set_next_validators(vec![1, 2]);
+			force_new_session();
+
+			System::set_block_number(1);
+			Session::on_initialize(1);
+
+			let encoded_key_1 = UintAuthorityId(1).encode();
+			let proof = Historical::prove((UINT_DUMMY_KEY, &encoded_key_1[..])).unwrap();
+
+			// proof-checking in the same session is OK.
+			assert!(
+				Historical::check_proof(
+					(UINT_DUMMY_KEY, &encoded_key_1[..]),
+					proof.clone(),
+				).is_some()
+			);
+
+			set_next_validators(vec![1, 2, 4]);
+			force_new_session();
+
+			System::set_block_number(2);
+			Session::on_initialize(2);
+
+			assert!(Historical::historical_root(proof.session).is_some());
+			assert!(Session::current_index() > proof.session);
+
+			// proof-checking in the next session is also OK.
+			assert!(
+				Historical::check_proof(
+					(UINT_DUMMY_KEY, &encoded_key_1[..]),
+					proof.clone(),
+				).is_some()
+			);
+		});
+	}
+
+	#[test]
+	fn prune_up_to_works() {
+		with_externalities(&mut new_test_ext(), || {
+			for i in 1..101u64 {
+				set_next_validators(vec![i]);
+				force_new_session();
+
+				System::set_block_number(i);
+				Session::on_initialize(i);
+
+			}
+
+			assert_eq!(StoredRange::get(), Some((0, 100)));
+
+			for i in 1..100 {
+				assert!(Historical::historical_root(i).is_some())
+			}
+
+			Historical::prune_up_to(10);
+			assert_eq!(StoredRange::get(), Some((10, 100)));
+
+			Historical::prune_up_to(9);
+			assert_eq!(StoredRange::get(), Some((10, 100)));
+
+			for i in 10..100 {
+				assert!(Historical::historical_root(i).is_some())
+			}
+
+			Historical::prune_up_to(99);
+			assert_eq!(StoredRange::get(), Some((99, 100)));
+
+			Historical::prune_up_to(100);
+			assert_eq!(StoredRange::get(), None);
+
+			for i in 101..201u64 {
+				set_next_validators(vec![i]);
+				force_new_session();
+
+				System::set_block_number(i);
+				Session::on_initialize(i);
+
+			}
+
+			assert_eq!(StoredRange::get(), Some((100, 200)));
+
+			for i in 101..200 {
+				assert!(Historical::historical_root(i).is_some())
+			}
+
+			Historical::prune_up_to(9999);
+			assert_eq!(StoredRange::get(), None);
+
+			for i in 101..200 {
+				assert!(Historical::historical_root(i).is_none())
+			}
+		});
 	}
 }

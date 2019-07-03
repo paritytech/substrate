@@ -131,8 +131,11 @@ use srml_support::{
 	ConsensusEngineId, StorageValue, for_each_tuple, decl_module,
 	decl_event, decl_storage,
 };
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
+use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
+
+#[cfg(test)]
+mod mock;
 
 #[cfg(feature = "historical")]
 pub mod historical;
@@ -170,7 +173,9 @@ impl<
 /// An event handler for when the session is ending.
 pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
-	fn on_session_ending(i: SessionIndex) -> Option<Vec<ValidatorId>>;
+	///
+	/// `ending_index` is the index of the currently ending session.
+	fn on_session_ending(ending_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
 impl<A> OnSessionEnding<A> for () {
@@ -487,104 +492,25 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::cell::RefCell;
-	use srml_support::{impl_outer_origin, assert_ok};
+	use srml_support::assert_ok;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use substrate_primitives::Blake2Hasher;
 	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, OnInitialize, ConvertInto},
-		testing::{Header, UintAuthorityId}
+		traits::OnInitialize,
+		testing::UintAuthorityId,
 	};
-
-	impl_outer_origin!{
-		pub enum Origin for Test {}
-	}
-
-	thread_local!{
-		static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
-		static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
-			RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-		static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
-		static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
-	}
-
-	pub struct TestShouldEndSession;
-	impl ShouldEndSession<u64> for TestShouldEndSession {
-		fn should_end_session(now: u64) -> bool {
-			let l = SESSION_LENGTH.with(|l| *l.borrow());
-			now % l == 0 || FORCE_SESSION_END.with(|l| { let r = *l.borrow(); *l.borrow_mut() = false; r })
-		}
-	}
-
-	pub struct TestSessionHandler;
-	impl SessionHandler<u64> for TestSessionHandler {
-		fn on_new_session<T: OpaqueKeys>(_changed: bool, validators: &[(u64, T)]) {
-			AUTHORITIES.with(|l| {
-				let key_id = <UintAuthorityId as TypedKey>::KEY_TYPE;
-				*l.borrow_mut() = validators.iter().map(|(_, keys)| {
-					keys.get::<UintAuthorityId>(key_id).unwrap_or_default()
-				}).collect()
-			});
-		}
-		fn on_disabled(_validator_index: usize) {}
-	}
-
-	pub struct TestOnSessionEnding;
-	impl OnSessionEnding<u64> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex) -> Option<Vec<u64>> {
-			Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
-		}
-	}
-
-	fn authorities() -> Vec<UintAuthorityId> {
-		AUTHORITIES.with(|l| l.borrow().to_vec())
-	}
-
-	fn force_new_session() {
-		FORCE_SESSION_END.with(|l| *l.borrow_mut() = true )
-	}
-
-	fn set_session_length(x: u64) {
-		SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
-	}
-
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
-	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-	}
-	impl timestamp::Trait for Test {
-		type Moment = u64;
-		type OnTimestampSet = ();
-	}
-	impl Trait for Test {
-		type ShouldEndSession = TestShouldEndSession;
-		type OnSessionEnding = TestOnSessionEnding;
-		type SessionHandler = TestSessionHandler;
-		type ValidatorId = u64;
-		type ValidatorIdOf = ConvertInto;
-		type Keys = UintAuthorityId;
-		type Event = ();
-	}
-
-	type System = system::Module<Test>;
-	type Session = Module<Test>;
+	use mock::{
+		NEXT_VALIDATORS, authorities, force_new_session, next_validators,
+		set_next_validators, set_session_length, Test, Origin, System, Session,
+	};
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
-		let (storage, child_storage) = GenesisConfig::<Test> {
-			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
+		let (storage, _child_storage) = GenesisConfig::<Test> {
+			validators: next_validators(),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
@@ -630,7 +556,7 @@ mod tests {
 	#[test]
 	fn authorities_should_track_validators() {
 		with_externalities(&mut new_test_ext(), || {
-			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2]);
+			set_next_validators(vec![1, 2]);
 			force_new_session();
 
 			System::set_block_number(1);
@@ -638,7 +564,7 @@ mod tests {
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 
-			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 4]);
+			set_next_validators(vec![1, 2, 4]);
 			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4), vec![]));
 
 			force_new_session();
@@ -647,7 +573,7 @@ mod tests {
 			assert_eq!(Session::validators(), vec![1, 2, 4]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
 
-			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 3]);
+			set_next_validators(vec![1, 2, 3]);
 			force_new_session();
 			System::set_block_number(3);
 			Session::on_initialize(3);

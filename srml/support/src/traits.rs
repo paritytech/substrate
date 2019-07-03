@@ -142,11 +142,11 @@ pub trait KeyOwnerProofSystem<Key> {
 	///
 	/// Returns `Some` iff the key owner referred to by the given `key` is a
 	/// member of the current set.
-	fn prove(&self, key: Key) -> Option<Self::Proof>;
+	fn prove(key: Key) -> Option<Self::Proof>;
 
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
-	fn check_proof(&self, key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
+	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
 }
 
 /// Handler for when some currency "account" decreased in balance for
