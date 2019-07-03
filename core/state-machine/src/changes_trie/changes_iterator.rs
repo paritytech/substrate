@@ -35,6 +35,7 @@ use crate::trie_backend_essence::{TrieBackendEssence};
 pub fn key_changes<'a, S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 	config: &'a Configuration,
 	storage: &'a S,
+	zero: Number,
 	begin: Number,
 	end: &'a AnchorBlockId<H::Out, Number>,
 	max: Number,
@@ -50,7 +51,13 @@ pub fn key_changes<'a, S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 			storage,
 			begin: begin.clone(),
 			end,
-			surface: surface_iterator(config, max, begin, end.number.clone())?,
+			surface: surface_iterator(
+				config,
+				zero,
+				max,
+				begin,
+				end.number.clone(),
+			)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -65,6 +72,7 @@ pub fn key_changes<'a, S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 pub fn key_changes_proof<S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 	config: &Configuration,
 	storage: &S,
+	zero: Number,
 	begin: Number,
 	end: &AnchorBlockId<H::Out, Number>,
 	max: Number,
@@ -80,7 +88,13 @@ pub fn key_changes_proof<S: Storage<H, Number>, H: Hasher, Number: BlockNumber>(
 			storage,
 			begin: begin.clone(),
 			end,
-			surface: surface_iterator(config, max, begin, end.number.clone())?,
+			surface: surface_iterator(
+				config,
+				zero,
+				max,
+				begin,
+				end.number.clone(),
+			)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -105,6 +119,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H, Number>, H: Hasher, Number: Bl
 	config: &Configuration,
 	roots_storage: &S,
 	proof: Vec<Vec<u8>>,
+	zero: Number,
 	begin: Number,
 	end: &AnchorBlockId<H::Out, Number>,
 	max: Number,
@@ -126,7 +141,13 @@ pub fn key_changes_proof_check<S: RootsStorage<H, Number>, H: Hasher, Number: Bl
 			storage: &proof_db,
 			begin: begin.clone(),
 			end,
-			surface: surface_iterator(config, max, begin, end.number.clone())?,
+			surface: surface_iterator(
+				config,
+				zero,
+				max,
+				begin,
+				end.number.clone(),
+			)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -140,6 +161,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H, Number>, H: Hasher, Number: Bl
 /// all digest changes for the key.
 pub struct SurfaceIterator<'a, Number: BlockNumber> {
 	config: &'a Configuration,
+	zero: Number,
 	begin: Number,
 	max: Number,
 	current: Option<Number>,
@@ -166,8 +188,14 @@ impl<'a, Number: BlockNumber> Iterator for SurfaceIterator<'a, Number> {
 			else if next > self.current_begin {
 				self.current = Some(next);
 			} else {
-				let (current, current_begin, digest_step, digest_level) = match
-					lower_bound_max_digest(self.config, self.max.clone(), self.begin.clone(), next) {
+				let max_digest_interval = lower_bound_max_digest(
+					self.config,
+					self.zero.clone(),
+					self.max.clone(),
+					self.begin.clone(),
+					next,
+				);
+				let (current, current_begin, digest_step, digest_level) = match max_digest_interval {
 					Err(err) => return Some(Err(err)),
 					Ok(range) => range,
 				};
@@ -363,18 +391,21 @@ impl<'a, RS, S, H, Number> Iterator for ProvingDrilldownIterator<'a, RS, S, H, N
 /// Returns surface iterator for given range of blocks.
 fn surface_iterator<'a, Number: BlockNumber>(
 	config: &'a Configuration,
+	zero: Number,
 	max: Number,
 	begin: Number,
 	end: Number,
 ) -> Result<SurfaceIterator<'a, Number>, String> {
 	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(
 		config,
+		zero.clone(),
 		max.clone(),
 		begin.clone(),
 		end,
 	)?;
 	Ok(SurfaceIterator {
 		config,
+		zero,
 		begin,
 		max,
 		current: Some(current),
@@ -388,6 +419,7 @@ fn surface_iterator<'a, Number: BlockNumber>(
 /// and tends to include the whole range.
 fn lower_bound_max_digest<Number: BlockNumber>(
 	config: &Configuration,
+	zero: Number,
 	max: Number,
 	begin: Number,
 	end: Number,
@@ -408,7 +440,7 @@ fn lower_bound_max_digest<Number: BlockNumber>(
 			let new_digest_interval = config.digest_interval * {
 				if digest_interval == 0 { 1 } else { digest_interval }
 			};
-			let new_digest_begin = ((current.clone() - One::one())
+			let new_digest_begin = zero.clone() + ((current.clone() - One::one() - zero.clone())
 				/ new_digest_interval.into()) * new_digest_interval.into();
 			let new_digest_end = new_digest_begin.clone() + new_digest_interval.into();
 			let new_current = new_digest_begin.clone() + new_digest_interval.into();
@@ -488,30 +520,70 @@ mod tests {
 	}
 
 	#[test]
+	fn lower_bound_max_digest_works() {
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
+
+		// when config activates at 0
+		assert_eq!(
+			lower_bound_max_digest(&config, 0u64, 100_000u64, 20u64, 180u64).unwrap(),
+			(192, 176, 16, 2),
+		);
+
+		// when config activates at 30
+		assert_eq!(
+			lower_bound_max_digest(&config, 30u64, 100_000u64, 20u64, 180u64).unwrap(),
+			(190, 174, 16, 2),
+		);
+	}
+
+	#[test]
+	fn surface_iterator_works() {
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
+
+		// when config activates at 0
+		assert_eq!(
+			surface_iterator(&config, 0u64, 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
+			vec![
+				Ok((192, 2)), Ok((176, 2)), Ok((160, 2)), Ok((144, 2)), Ok((128, 2)), Ok((112, 2)),
+				Ok((96, 2)), Ok((80, 2)), Ok((64, 2)), Ok((48, 2)),
+			],
+		);
+
+		// when config activates at 30
+		assert_eq!(
+			surface_iterator(&config, 30u64, 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
+			vec![
+				Ok((190, 2)), Ok((174, 2)), Ok((158, 2)), Ok((142, 2)), Ok((126, 2)), Ok((110, 2)),
+				Ok((94, 2)), Ok((78, 2)), Ok((62, 2)), Ok((46, 2)),
+			],
+		);
+	}
+
+	#[test]
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
+			&config, &storage, 0, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
+			&config, &storage, 0, 0, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
+			&config, &storage, 0, 0, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(3, 0)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 7, &AnchorBlockId { hash: Default::default(), number: 8 }, 8, &[42])
+			&config, &storage, 0, 7, &AnchorBlockId { hash: Default::default(), number: 8 }, 8, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 5, &AnchorBlockId { hash: Default::default(), number: 7 }, 8, &[42])
+			&config, &storage, 0, 5, &AnchorBlockId { hash: Default::default(), number: 7 }, 8, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3)]));
 	}
@@ -522,7 +594,7 @@ mod tests {
 		storage.clear_storage();
 
 		assert!(key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
+			&config, &storage, 0, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
 			.and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 	}
 
@@ -530,9 +602,9 @@ mod tests {
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
 		assert!(key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 50, &[42]).is_err());
+			&config, &storage, 0, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 50, &[42]).is_err());
 		assert!(key_changes::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
-			&config, &storage, 20, &AnchorBlockId { hash: Default::default(), number: 10 }, 100, &[42]).is_err());
+			&config, &storage, 0, 20, &AnchorBlockId { hash: Default::default(), number: 10 }, 100, &[42]).is_err());
 	}
 
 
@@ -544,7 +616,7 @@ mod tests {
 		let (remote_config, remote_storage) = prepare_for_drilldown();
 		let remote_proof = key_changes_proof::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
 			&remote_config, &remote_storage,
-			0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]).unwrap();
+			0, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]).unwrap();
 
 		// happens on local light node:
 
@@ -553,7 +625,7 @@ mod tests {
 		local_storage.clear_storage();
 		let local_result = key_changes_proof_check::<InMemoryStorage<Blake2Hasher, u64>, Blake2Hasher, u64>(
 			&local_config, &local_storage, remote_proof,
-			0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]);
+			0, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]);
 
 		// check that drilldown result is the same as if it was happening at the full node
 		assert_eq!(local_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));

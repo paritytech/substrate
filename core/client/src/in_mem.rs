@@ -714,6 +714,13 @@ where
 /// Prunable in-memory changes trie storage.
 pub struct ChangesTrieStorage<Block: BlockT, H: Hasher>(InMemoryChangesTrieStorage<H, NumberFor<Block>>);
 impl<Block: BlockT, H: Hasher> backend::PrunableStateChangesTrieStorage<Block, H> for ChangesTrieStorage<Block, H> {
+	fn configuration_at(&self, _at: &BlockId<Block>) -> error::Result<(
+		NumberFor<Block>,
+		Block::Hash,
+		Option<ChangesTrieConfiguration>,
+	)> {
+		unimplemented!("TODO: do we still need this?")
+	}
 	fn oldest_changes_trie_block(
 		&self,
 		_config: &ChangesTrieConfiguration,

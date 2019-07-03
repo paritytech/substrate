@@ -26,7 +26,7 @@ use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion,
+	SimpleArithmetic, CheckedConversion, Zero,
 };
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
@@ -291,6 +291,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				prev_roots: remote_roots,
 			},
 			remote_proof,
+			Zero::zero(), // TODO: wrong
 			request.first_block.0,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),

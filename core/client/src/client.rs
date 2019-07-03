@@ -503,14 +503,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get longest range within [first; last] that is possible to use in `key_changes`
 	/// and `key_changes_proof` calls.
 	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes trues are not supported.
+	/// Returns Ok(None) if changes tries are not supported.
 	pub fn max_key_changes_range(
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
 	) -> error::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
-		let (config, storage) = match self.require_changes_trie().ok() {
-			Some((config, storage)) => (config, storage),
+		let (activation_block, config, storage) = match self.require_changes_trie().ok() {
+			Some((activation_block, config, storage)) => (activation_block, config, storage),
 			None => return Ok(None),
 		};
 		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?;
@@ -519,6 +519,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 		let finalized_number = self.backend.blockchain().info().finalized_number;
 		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
+		let oldest = ::std::cmp::max(activation_block + One::one(), oldest);
 		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
 	}
@@ -533,13 +534,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: BlockId<Block>,
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
-		let (config, storage) = self.require_changes_trie()?;
+		let (activation_block, config, storage) = self.require_changes_trie()?;
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
 		key_changes::<_, Blake2Hasher, _>(
 			&config,
 			&*storage,
+			activation_block,
 			first,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
@@ -620,7 +622,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		let (config, storage) = self.require_changes_trie()?;
+		let (activation_block, config, storage) = self.require_changes_trie()?;
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
@@ -642,6 +644,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
 			&config,
 			&recording_storage,
+			activation_block,
 			first_number,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last),
@@ -706,12 +709,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Returns changes trie configuration and storage or an error if it is not supported.
-	fn require_changes_trie(&self) -> error::Result<(ChangesTrieConfiguration, &B::ChangesTrieStorage)> {
-		let config = self.changes_trie_config()?;
-		let storage = self.backend.changes_trie_storage();
-		match (config, storage) {
-			(Some(config), Some(storage)) => Ok((config, storage)),
-			_ => Err(error::Error::ChangesTriesNotSupported.into()),
+	fn require_changes_trie(&self) -> error::Result<(NumberFor<Block>, ChangesTrieConfiguration, &B::ChangesTrieStorage)> {
+		let best_block = self.backend.blockchain().info().best_hash;
+		let storage = match self.backend.changes_trie_storage() {
+			Some(storage) => storage,
+			None => return Err(error::Error::ChangesTriesNotSupported),
+		};
+		let (activation_block, _, config) = storage.configuration_at(&BlockId::Hash(best_block))?;
+		match config {
+			Some(config) => Ok((activation_block, config, storage)),
+			None => Err(error::Error::ChangesTriesNotSupported.into()),
 		}
 	}
 
@@ -1303,13 +1310,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok(uncles)
-	}
-
-	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
-		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
-			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
-			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c)))
 	}
 
 	/// Prepare in-memory header that is used in execution environment.

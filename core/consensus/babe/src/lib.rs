@@ -699,7 +699,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
+			.and_then(|(_, _, v)| Decode::decode(&mut &v[..])))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				BabeApi::authorities(&*client.runtime_api(), at).ok()
@@ -798,7 +798,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_authorities: Option<Vec<AuthorityId>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]));
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]));
 	if genesis_authorities.is_some() {
 		return Ok(());
 	}

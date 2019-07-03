@@ -199,6 +199,12 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	StateChangesTrieStorage<H, NumberFor<Block>>
 {
+	/// Get coniguration at given block.
+	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<(
+		NumberFor<Block>,
+		Block::Hash,
+		Option<ChangesTrieConfiguration>,
+	)>;
 	/// Get number block of oldest, non-pruned changes trie.
 	fn oldest_changes_trie_block(
 		&self,
