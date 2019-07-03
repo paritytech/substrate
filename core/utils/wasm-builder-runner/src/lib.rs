@@ -14,14 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! WASM builder runner
+//! # WASM builder runner
 //!
 //! As cargo just contains millions of bugs when it comes to correct dependency and feature
-//! resolution, we need this little tool. See https://github.com/rust-lang/cargo/issues/5730 for
+//! resolution, we need this little tool. See <https://github.com/rust-lang/cargo/issues/5730> for
 //! more information.
 //!
-//! It will create a project that itself will call `wasm-builder` to not let any dependency
-//! from `wasm-builder` influence the main project's dependencies.
+//! It will create a project that itself will call `substrate-wasm-builder` to not let any dependency
+//! from `substrate-wasm-builder` influence the main project's dependencies.
+//!
+//! For more information see <https://crates.io/substrate-wasm-builder>
 
 use std::{env, process::Command, fs, path::{PathBuf, Path}};
 
@@ -51,7 +53,7 @@ pub enum WasmBuilderSource {
 		repo: &'static str,
 		rev: &'static str,
 	},
-	/// Use the source code from crates.io for the given version.
+	/// Use the given version released on crates.io
 	Crates(&'static str),
 }
 

@@ -1,9 +1,11 @@
 [package]
 name = "substrate-wasm-builder"
-version = "2.0.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utility for building WASM binaries"
 edition = "2018"
+readme = "README.md"
+repository = "https://github.com/paritytech/substrate"
 
 [dependencies]
 build-helper = "0.1.1"

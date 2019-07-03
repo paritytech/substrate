@@ -308,6 +308,21 @@ cargo run --release \-- \
 
 Additional Substrate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
+== WASM binaries
+
+The WASM binaries are build in the normal `cargo build` process. To control the WASM binary building,
+we support multiple environment variables:
+
+* `SKIP_WASM_BUILD` - Skips building any WASM binary. This is useful when only native should be recompiled.
+* `BUILD_DUMMY_WASM_BINARY` - Builds dummy WASM binaries. These dummy binaries are empty and useful
+                              for `cargo check` runs.
+* `WASM_BUILD_TYPE` - Sets the build type for building WASM binaries. Supported values are `release` or `debug`.
+                      By default the build type is equal to the build type used by the main build.
+
+Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
+Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
+be `NODE_RUNTIME`.
+
 [[flaming-fir]]
 === Joining the Flaming Fir Testnet
 

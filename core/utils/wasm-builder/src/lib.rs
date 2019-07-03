@@ -14,18 +14,62 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The WASM builder is a utility for building a project as WASM binary.
+//! # WASM builder is an utility for building a project as a WASM binary
 //!
-//! The functions need to be called from a `build.rs` and will create a file with a given name in
-//! `OUT_DIR`. This file contains the `WASM_BINARY` constant and the `WASM_BINARY_BLOATY` constant.
-//! The former contains the build and compacted wasm binary, while the later just contains the
-//! build wasm binary.
+//! The WASM builder is a tool that integrates the building of a WASM binary of your project into the main
+//! `cargo` build process.
 //!
-//! When passing `SKIP_WASM_BUILD` to the build, the WASM binary will not be rebuild.
+//! ## Project setup
 //!
-//! Prerequisites:
+//! A project that should be compiled as WASM binary needs to add a `build.rs`, add
+//! `substrate-wasm-builder-runner` as dependency into `build-dependencies` and requires to have a
+//! feature called `no-std`. The `build.rs` needs to contain the following code:
+//!
+//! ```rust,nocompile
+//! use wasm_builder_runner::{build_current_project, WasmBuilderSource};
+//!
+//! fn main() {
+//! 	build_current_project(
+//! 		// The name of the file being generated in out-dir.
+//! 		"wasm_binary.rs",
+//! 		// How to include wasm-builder, in this case from crates.io.
+//! 		WasmBuilderSource::Crates("1.0.0"),
+//! 	);
+//! }
+//! ```
+//!
+//! The `no-std` feature will be enabled by WASM builder while compiling your project to WASM.
+//!
+//! As a last step you need to add the following to your project:
+//!
+//! ```rust,nocompile
+//! include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+//! ```
+//!
+//! This will include the generated wasm binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
+//! The former is the WASM binary compacted and the later without compaction.
+//!
+//! ## Environment variables
+//!
+//! By using environment variables, you can configure which WASM binaries are build and how:
+//!
+//! - `SKIP_WASM_BUILD` - Skips building any WASM binary. This is useful when only native should be recompiled.
+//! - `BUILD_DUMMY_WASM_BINARY` - Builds dummy WASM binaries. These dummy binaries are empty and useful
+//!                              for `cargo check` runs.
+//! - `WASM_BUILD_TYPE` - Sets the build type for building WASM binaries. Supported values are `release` or `debug`.
+//!                       By default the build type is equal to the build type used by the main build.
+//!
+//! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
+//! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
+//! be `NODE_RUNTIME`.
+//!
+//! ## Prerequisites:
+//!
+//! WASM builder requires the following prerequisities for building the WASM binary:
+//!
 //! - rust nightly + wasm32-unknown-unknown toolchain
 //! - wasm-gc
+//!
 
 use std::{env, fs, path::PathBuf, process::Command};
 
