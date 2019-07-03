@@ -137,7 +137,7 @@ impl TestNetFactory for GrandpaTestNet {
 					client.clone(),
 					Arc::new(self.test_config.clone()),
 					select_chain,
-					None,
+					Some(Arc::new(TestPool::default())),
 				).expect("Could not create block import for fresh peer.");
 				let shared_import = Arc::new(import);
 				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
@@ -550,7 +550,7 @@ fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Pu
 		.collect()
 }
 
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone, Default)]
 pub struct TestPool;
 
 impl<C, Block> SubmitReport<C, Block> for TestPool
