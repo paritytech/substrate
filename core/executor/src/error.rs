@@ -58,6 +58,10 @@ pub enum Error {
 	/// Invalid memory reference.
 	#[display(fmt="Invalid memory reference")]
 	InvalidMemoryReference,
+	/// The runtime must provide a global named `__heap_base` of type i32 for specifying where the
+	/// allocator is allowed to place its data.
+	#[display(fmt="The runtime doesn't provide a global named __heap_base")]
+	HeapBaseNotFoundOrInvalid,
 	/// Some other error occurred
 	Other(&'static str),
 	/// Some error occurred in the allocator

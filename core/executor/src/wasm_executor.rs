@@ -1241,17 +1241,19 @@ impl WasmExecutor {
 			.clone())
 	}
 
+	/// Find the global named `__heap_base` in the given wasm module instance and
+	/// tries to get its value.
 	fn get_heap_base(module: &ModuleRef) -> Result<u32> {
 		let heap_base_val = module
 			.export_by_name("__heap_base")
-			.ok_or_else(|| Error::InvalidMemoryReference)? // TODO:
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
 			.as_global()
-			.ok_or_else(|| Error::InvalidMemoryReference)?
-			.get(); // TODO:
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+			.get();
 
 		Ok(match heap_base_val {
 			wasmi::RuntimeValue::I32(v) => v as u32,
-			_ => return Err(Error::InvalidMemoryReference), // TODO:
+			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
 		})
 	}
 
