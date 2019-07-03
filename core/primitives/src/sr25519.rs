@@ -38,7 +38,7 @@ use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "std")]
-use schnorrkel::keys::MINI_SECRET_KEY_LENGTH;
+use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
 #[cfg(feature = "std")]
@@ -409,14 +409,22 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase(), from_phrase()
 	fn from_seed_slice(seed: &[u8]) -> Result<Pair, SecretStringError> {
-		if seed.len() != MINI_SECRET_KEY_LENGTH {
-			Err(SecretStringError::InvalidSeedLength)
-		} else {
-			Ok(Pair(
-				MiniSecretKey::from_bytes(seed)
-					.map_err(|_| SecretStringError::InvalidSeed)?
-					.expand_to_keypair()
-			))
+		match seed.len() {
+			MINI_SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					MiniSecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.expand_to_keypair()
+				))
+			}
+			SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					SecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.to_keypair()
+				))
+			}
+			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
 
@@ -489,6 +497,11 @@ impl TraitPair for Pair {
 			),
 			Err(_) => false,
 		}
+	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8> {
+		self.0.secret.to_bytes().to_vec()
 	}
 }
 

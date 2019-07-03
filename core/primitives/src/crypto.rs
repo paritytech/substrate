@@ -413,6 +413,9 @@ pub trait Pair: Clone + Sized + 'static
 			path,
 		)
 	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
 /// An identifier for a type of cryptographic key.

@@ -460,6 +460,11 @@ impl TraitPair for Pair {
 			_ => false,
 		}
 	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8> {
+		self.seed().to_vec()
+	}
 }
 
 #[cfg(feature = "std")]
