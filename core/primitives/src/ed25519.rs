@@ -490,6 +490,14 @@ impl TypedKey for Public {
 	const KEY_TYPE: KeyTypeId = key_types::ED25519;
 }
 
+impl TypedKey for Signature {
+	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+}
+
+impl TypedKey for Pair {
+	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
