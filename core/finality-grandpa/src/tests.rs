@@ -1163,6 +1163,45 @@ fn force_change_to_new_set() {
 }
 
 #[test]
+fn challenge_digest_produces_answer() {
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie, AuthorityKeyring::Dave];
+	let voters = make_ids(peers);
+	let api = TestApi::new(voters);
+	let net = GrandpaTestNet::new(api.clone(), 4);
+
+	let client = net.peer(0).client().clone();
+	let (block_import, ..) = net.make_block_import(client.clone());
+
+	let full_client = client.as_full().unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+	let block = builder.bake().unwrap();
+
+	let block = || {
+		let block = block.clone();
+		ImportBlock {
+			origin: BlockOrigin::File,
+			header: block.header,
+			justification: None,
+			post_digests: Vec::new(),
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}
+	};
+
+	assert_eq!(
+		block_import.import_block(block(), HashMap::new()).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: false,
+			clear_justification_requests: false,
+			bad_justification: false,
+			needs_finality_proof: false,
+		}),
+	);
+}
+
+#[test]
 fn allows_reimporting_change_blocks() {
 	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
