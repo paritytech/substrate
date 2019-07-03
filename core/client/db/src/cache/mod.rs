@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client::blockchain::Cache as BlockchainCache;
+use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use client::well_known_cache_keys::Id as CacheKeyId;
 use client::error::Result as ClientResult;
 use parity_codec::{Encode, Decode};
@@ -29,7 +29,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use crate::utils::{self, COLUMN_META, db_err};
 
-use self::list_cache::ListCache;
+use self::list_cache::{ListCache, PruningStrategy};
 
 mod list_cache;
 mod list_entry;
@@ -166,7 +166,7 @@ fn get_cache_helper<'a, Block: BlockT>(
 					cache,
 				},
 			),
-			PRUNE_DEPTH.into(),
+			cache_pruning_strategy(name),
 			best_finalized_block.clone(),
 		)
 	})
@@ -325,3 +325,10 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 	}
 }
 
+/// Get pruning strategy for given cache.
+fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N> {
+	match cache {
+		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
+		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
+	}
+}
