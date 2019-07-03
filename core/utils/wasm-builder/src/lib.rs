@@ -85,8 +85,8 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
 				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
 			"#,
-			wasm_binary = wasm_binary.wasm_binary_path().display(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path().display(),
+			wasm_binary = wasm_binary.wasm_binary_path(),
+			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path(),
 		),
 	);
 }

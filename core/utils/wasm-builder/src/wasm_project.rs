@@ -31,8 +31,8 @@ pub struct WasmBinaryBloaty(PathBuf);
 
 impl WasmBinaryBloaty {
 	/// Returns the path to the bloaty wasm binary.
-	pub fn wasm_binary_bloaty_path(&self) -> &Path {
-		&self.0
+	pub fn wasm_binary_bloaty_path(&self) -> String {
+		self.0.display().to_string().replace('\\', "/")
 	}
 }
 
@@ -41,8 +41,8 @@ pub struct WasmBinary(PathBuf);
 
 impl WasmBinary {
 	/// Returns the path to the wasm binary.
-	pub fn wasm_binary_path(&self) -> &Path {
-		&self.0
+	pub fn wasm_binary_path(&self) -> String {
+		self.0.display().to_string().replace('\\', "/")
 	}
 }
 
