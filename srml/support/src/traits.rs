@@ -127,26 +127,26 @@ pub trait VerifySeal<Header, Author> {
 }
 
 /// Something which can compute and check proofs of
-/// historical membership of an authority and return
-/// full identification data.
-pub trait ValidatorMembershipProofSystem<Id> {
+/// a historical key owner and return full identification data of that
+/// key owner.
+pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
 	type Proof: Codec;
-	/// The full identification of a validator.
+	/// The full identification of a key owner.
 	type FullIdentification: Codec;
 
-	/// Prove membership of a validator in the current block-state.
+	/// Prove membership of a key owner in the current block-state.
 	///
 	/// This should typically only be called off-chain, since it may be
 	/// computationally heavy.
 	///
-	/// Returns `Some` iff the validator referred to by the given `id` is a
+	/// Returns `Some` iff the key owner referred to by the given `key` is a
 	/// member of the current set.
-	fn prove(&self, id: Id) -> Option<Self::Proof>;
+	fn prove(&self, key: Key) -> Option<Self::Proof>;
 
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
-	fn check_proof(&self, proof: Self::Proof) -> Option<Self::FullIdentification>;
+	fn check_proof(&self, key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
 }
 
 /// Handler for when some currency "account" decreased in balance for

@@ -1316,3 +1316,15 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 		<Module<T>>::ledger(&controller).map(|l| l.stash)
 	}
 }
+
+/// A typed conversion from stash account ID to the current exposure of nominators
+/// on that account.
+pub struct ExposureOf<T>(rstd::marker::PhantomData<T>;
+
+impl<T: Trait> Convert<T::AccountId, Option<SlashCredential<T::AccountId>>>
+	for ExposureOf<T>
+{
+	fn convert(validator: T::AccountId) -> Option<SlashCredential<T::AccountId>> {
+		<Module<T>>::stakers(&validator)
+	}
+}

@@ -92,15 +92,6 @@ impl<T: Trait> Module<T> {
 			}
 		})
 	}
-
-	/// Generate a session-trie for the current session. This is used for proving
-	/// membership of voters.
-	///
-	/// In general, this should not be used on-chain and instead only in runtime APIs
-	/// that need to prove membership of a validator in the current set.
-	pub fn generate_proving_trie() -> Result<ProvingTrie<T>, &'static str> {
-		ProvingTrie::generate()
-	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
@@ -109,7 +100,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
 			range.get_or_insert_with(|| (i, i)).1 = i + 1;
 		});
 
-		match ProvingTrie::<T>::generate() {
+		match ProvingTrie::<T>::generate_now() {
 			Ok(trie) => <HistoricalSessions<T>>::insert(i, &trie.root),
 			Err(reason) => {
 				print("Failed to generate historical ancestry-inclusion proof.");
@@ -130,13 +121,8 @@ pub struct ProvingTrie<T: Trait> {
 }
 
 impl<T: Trait> ProvingTrie<T> {
-	fn generate() -> Result<Self, &'static str> {
+	fn generate_now() -> Result<Self, &'static str> {
 		let validators = <SessionModule<T>>::validators();
-		let n = validators.len();
-		ensure!(n <= u32::max_value() as usize, "2^32 or more validators is unsupported");
-
-		let n = n as u32;
-
 		let mut db = MemoryDB::default();
 		let mut root = Default::default();
 
@@ -173,6 +159,20 @@ impl<T: Trait> ProvingTrie<T> {
 		})
 	}
 
+	fn from_nodes(root: T::Hash, nodes: &[Vec<u8>]) -> Self {
+		use substrate_trie::HashDBT;
+
+		let mut memory_db = MemoryDB::default();
+		for node in nodes {
+			HashDBT::insert(&mut memory_db, &[], &node[..]);
+		}
+
+		ProvingTrie {
+			db: memory_db,
+			root,
+		}
+	}
+
 	/// Prove the full verification data for a given key and key ID.
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
@@ -201,18 +201,36 @@ impl<T: Trait> ProvingTrie<T> {
 
 }
 
+/// Proof of ownership of a specific key.
 #[derive(Encode, Decode)]
-struct Proof {
+pub struct Proof {
 	session: SessionIndex,
-	nodes: Vec<Vec<u8>>,
+	trie_nodes: Vec<Vec<u8>>,
 }
 
-// impl<T: Trait> srml_support::traits:::ValidatorMembershipProofSystem<u32> for Module<T> {
-// 	type Proof = Proof;
-// 	type FullIdentification = T::FullIdentification;
+impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
+	for Module<T>
+{
+	type Proof = Proof;
+	type FullIdentification = T::FullIdentification;
 
-// 	fn prove(&self, id: u32) -> Option<Self::Proof> {
-// 		let validators = <super::Module<T>>::validators();
-// 		if (id as usize) >= session
-// 	}
-// }
+	fn prove(&self, key: (KeyTypeId, D)) -> Option<Self::Proof> {
+		let trie = ProvingTrie::<T>::generate_now().ok()?;
+		let session = <SessionModule<T>>::current_index();
+
+		let (id, data) = key;
+
+		trie.prove(id, data.as_ref()).map(|trie_nodes| Proof {
+			session,
+			trie_nodes,
+		})
+	}
+
+	fn check_proof(&self, key: (KeyTypeId, D), proof: Proof) -> Option<T::FullIdentification> {
+		let root = <HistoricalSessions<T>>::get(&proof.session)?;
+		let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
+
+		let (id, data) = key;
+		trie.query(id, data.as_ref())
+	}
+}
