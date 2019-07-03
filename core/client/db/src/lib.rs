@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
-use client::backend::{StorageCollection, ChildStorageCollection};
+use client::backend::{StorageCollection, ChildStorageCollection, PrunableStateChangesTrieStorage};
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -1096,7 +1096,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
-	type ChangesTrieStorage = DbChangesTrieStorage<Block>;
 
 	fn begin_operation(&self) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -1167,7 +1166,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Ok(())
 	}
 
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block, Blake2Hasher>> {
 		Some(&self.changes_tries_storage)
 	}
 

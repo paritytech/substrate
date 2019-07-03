@@ -138,8 +138,6 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	type Blockchain: crate::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
-	/// Changes trie storage.
-	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block, H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -156,7 +154,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Returns the used state cache, if existent.
 	fn used_state_cache_size(&self) -> Option<usize>;
 	/// Returns reference to changes trie storage.
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
+	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block, H>>;
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
 		self.state_at(BlockId::Hash(hash.clone())).is_ok()
@@ -199,6 +197,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	StateChangesTrieStorage<H, NumberFor<Block>>
 {
+	/// Get reference to StateChangesTrieStorage.
+	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
 	/// Get coniguration at given block.
 	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<(
 		NumberFor<Block>,
@@ -239,7 +239,7 @@ pub fn changes_tries_state_at_block<'a, B: Backend<Block, H>, Block: BlockT, H: 
 		H: Hasher<Out=Block::Hash>,
 {
 	let changes_trie_storage = match backend.changes_trie_storage() {
-		Some(changes_trie_storage) => changes_trie_storage,
+		Some(changes_trie_storage) => changes_trie_storage.storage(),
 		None => return Ok(None),
 	};
 

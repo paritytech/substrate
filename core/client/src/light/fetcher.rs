@@ -284,7 +284,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<_, H, _>(
+		key_changes_proof_check::<H, _>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),

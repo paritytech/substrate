@@ -25,10 +25,10 @@ use parking_lot::{RwLock, Mutex};
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
-use crate::in_mem::{self, check_genesis_storage};
+use crate::in_mem::check_genesis_storage;
 use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-	StorageCollection, ChildStorageCollection,
+	StorageCollection, ChildStorageCollection, PrunableStateChangesTrieStorage,
 };
 use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -116,7 +116,6 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
-	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -190,7 +189,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 		None
 	}
 
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+	fn changes_trie_storage(&self) -> Option<&PrunableStateChangesTrieStorage<Block, H>> {
 		None
 	}
 

@@ -319,7 +319,10 @@ where
 		side_effects_handler: Option<&mut O>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		let changes_trie_state = match self.backend.changes_trie_storage() {
-			Some(changes_trie_storage) => backend::changes_tries_state_at_state::<_, Block, _>(state, changes_trie_storage)?,
+			Some(changes_trie_storage) => backend::changes_tries_state_at_state::<_, Block, _>(
+				state,
+				changes_trie_storage.storage(),
+			)?,
 			None => None,
 		};
 		state_machine::new(

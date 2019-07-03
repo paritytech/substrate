@@ -61,7 +61,7 @@ use hash_db::Hasher;
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	StorageCollection, ChildStorageCollection
+	StorageCollection, ChildStorageCollection,
 };
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
@@ -538,9 +538,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher, _>(
+		key_changes::<Blake2Hasher, _>(
 			&config,
-			&*storage,
+			storage.storage(),
 			activation_block,
 			first,
 			&ChangesTrieAnchorBlockId {
@@ -617,6 +617,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn as_roots_storage(&self) -> &ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+				self
+			}
+
 			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -626,7 +630,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
-			storage,
+			storage: storage.storage(),
 			min: min_number,
 			required_roots_proofs: Mutex::new(BTreeMap::new()),
 		};
@@ -641,7 +645,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(last))?;
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
+		let key_changes_proof = key_changes_proof::<Blake2Hasher, _>(
 			&config,
 			&recording_storage,
 			activation_block,
@@ -709,7 +713,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Returns changes trie configuration and storage or an error if it is not supported.
-	fn require_changes_trie(&self) -> error::Result<(NumberFor<Block>, ChangesTrieConfiguration, &B::ChangesTrieStorage)> {
+	fn require_changes_trie(&self) -> error::Result<(NumberFor<Block>, ChangesTrieConfiguration, &PrunableStateChangesTrieStorage<Block, Blake2Hasher>)> {
 		let best_block = self.backend.blockchain().info().best_hash;
 		let storage = match self.backend.changes_trie_storage() {
 			Some(storage) => storage,

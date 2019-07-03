@@ -169,6 +169,10 @@ impl<Block> client::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher
 where
 	Block: BlockT<Hash=H256>,
 {
+	fn storage(&self) -> &dyn state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> {
+		self
+	}
+
 	fn configuration_at(
 		&self,
 		at: &BlockId<Block>,
@@ -269,6 +273,10 @@ impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
 where
 	Block: BlockT<Hash=H256>,
 {
+	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+		self
+	}
+
 	fn get(&self, key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		self.db.get(self.changes_tries_column, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -299,8 +307,9 @@ mod tests {
 			};
 			assert_eq!(backend.changes_tries_storage.root(&anchor, block), Ok(Some(changes_root)));
 
+			let storage = backend.changes_tries_storage.storage();
 			for (key, (val, _)) in changes_trie_update.drain() {
-				assert_eq!(backend.changes_trie_storage().unwrap().get(&key, &[]), Ok(Some(val)));
+				assert_eq!(storage.get(&key, &[]), Ok(Some(val)));
 			}
 		};
 
@@ -582,7 +591,7 @@ mod tests {
 		let block7 = insert_header_with_configuration_change(&backend, 7, block6, Vec::new(), config_at_7.clone());
 
 		// test configuration cache
-		let storage = backend.changes_trie_storage().unwrap();
+		let storage = &backend.changes_tries_storage;
 		assert_eq!(
 			storage.configuration_at(&BlockId::Hash(block1)).unwrap().2,
 			config_at_1.clone(),

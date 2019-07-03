@@ -19,12 +19,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
-use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
-use runtime_primitives::generic::{BlockId, DigestItem};
+use primitives::storage::well_known_keys;
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory};
-use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
+use state_machine::{self, backend::{Backend as StateBackend, InMemory}};
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -539,7 +538,6 @@ where
 	H::Out: Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
-	changes_trie_storage: ChangesTrieStorage<Block, H>,
 	blockchain: Blockchain<Block>,
 	import_lock: Mutex<()>,
 }
@@ -554,7 +552,6 @@ where
 	pub fn new() -> Backend<Block, H> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
 			import_lock: Default::default(),
 		}
@@ -591,7 +588,6 @@ where
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
-	type ChangesTrieStorage = ChangesTrieStorage<Block, H>;
 
 	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -627,7 +623,7 @@ where
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 
-			let maybe_changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
+/*			let maybe_changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
 			if let Some(changes_trie_root) = maybe_changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					self.changes_trie_storage.0.insert(
@@ -636,7 +632,7 @@ where
 						changes_trie_update
 					);
 				}
-			}
+			}*/
 
 			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 		}
@@ -664,8 +660,8 @@ where
 		None
 	}
 
-	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
-		Some(&self.changes_trie_storage)
+	fn changes_trie_storage(&self) -> Option<&dyn backend::PrunableStateChangesTrieStorage<Block, H>> {
+		None
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
@@ -708,56 +704,6 @@ where
 		self.blockchain.expect_block_number_from_id(block)
 			.map(|num| num.is_zero())
 			.unwrap_or(false)
-	}
-}
-
-/// Prunable in-memory changes trie storage.
-pub struct ChangesTrieStorage<Block: BlockT, H: Hasher>(InMemoryChangesTrieStorage<H, NumberFor<Block>>);
-impl<Block: BlockT, H: Hasher> backend::PrunableStateChangesTrieStorage<Block, H> for ChangesTrieStorage<Block, H> {
-	fn configuration_at(&self, _at: &BlockId<Block>) -> error::Result<(
-		NumberFor<Block>,
-		Block::Hash,
-		Option<ChangesTrieConfiguration>,
-	)> {
-		unimplemented!("TODO: do we still need this?")
-	}
-	fn oldest_changes_trie_block(
-		&self,
-		_config: &ChangesTrieConfiguration,
-		_best_finalized: NumberFor<Block>,
-	) -> NumberFor<Block> {
-		Zero::zero()
-	}
-}
-
-impl<Block, H> state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
-	where
-		Block: BlockT,
-		H: Hasher,
-{
-	fn build_anchor(
-		&self,
-		_hash: H::Out,
-	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, NumberFor<Block>>, String> {
-		Err("Dummy implementation".into())
-	}
-
-	fn root(
-		&self,
-		_anchor: &ChangesTrieAnchorBlockId<H::Out, NumberFor<Block>>,
-		_block: NumberFor<Block>,
-	) -> Result<Option<H::Out>, String> {
-		Err("Dummy implementation".into())
-	}
-}
-
-impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for ChangesTrieStorage<Block, H>
-	where
-		Block: BlockT,
-		H: Hasher,
-{
-	fn get(&self, _key: &H::Out, _prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
-		Err("Dummy implementation".into())
 	}
 }
 

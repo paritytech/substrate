@@ -119,6 +119,8 @@ pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
+	/// Casts from self reference to RootsStorage reference.
+	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number>;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
 }

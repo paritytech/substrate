@@ -37,8 +37,8 @@ pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
-pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> {
-	storage: &'a S,
+pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber> {
+	storage: &'a Storage<H, Number>,
 	_hasher: ::std::marker::PhantomData<(H, Number)>,
 }
 
@@ -132,20 +132,23 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 }
 
 impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
+	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number> {
+		self
+	}
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 
-impl<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> TrieBackendAdapter<'a, H, Number, S> {
-	pub fn new(storage: &'a S) -> Self {
+impl<'a, H: Hasher, Number: BlockNumber> TrieBackendAdapter<'a, H, Number> {
+	pub fn new(storage: &'a Storage<H, Number>) -> Self {
 		Self { storage, _hasher: Default::default() }
 	}
 }
 
-impl<'a, H, Number, S> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number, S>
+impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 	where
-		S: 'a + Storage<H, Number>,
 		Number: BlockNumber,
 		H: Hasher,
 {
