@@ -53,16 +53,8 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// # Arguments
 	///
-	/// * `ptr_offset` - The pointers returned by `allocate()` start from this
-	///   offset on. The pointer offset needs to be aligned to a multiple of 8,
-	///   hence a padding might be added to align `ptr_offset` properly.
-	///
-	/// * `heap_size` - The size available to this heap instance (in bytes) for
-	///   allocating memory.
-	///
-	/// * `heap` - A `MemoryRef` to the available `MemoryInstance` which is
-	///   used as the heap.
-	///
+	/// - `mem` - reference to the linear memory instance on which this allocator operates.
+	/// - `heap_base` - the offset from the beginning of the linear memory where the heap starts.
 	pub fn new(mem: MemoryRef, heap_base: u32) -> Self {
 		let current_size: Bytes = mem.current_size().into();
 		let current_size = current_size.0 as u32;

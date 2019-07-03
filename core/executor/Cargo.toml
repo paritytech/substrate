@@ -14,6 +14,7 @@ serializer = { package = "substrate-serializer", path = "../serializer" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
+# TODO: Remove this after ser-fast-alloc merged
 wasmi = { git = "https://github.com/paritytech/wasmi.git", branch = "ser-fast-alloc" }
 parity-wasm = "0.31"
 byteorder = "1.1"

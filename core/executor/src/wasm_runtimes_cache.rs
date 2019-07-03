@@ -64,8 +64,6 @@ impl StateSnapshot {
 		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
-		// TODO:
-		dbg!(heap_pages);
 		let mut prepared_segments = Vec::with_capacity(data_segments.len());
 		for mut segment in data_segments {
 			// Just replace contents of the segment since the segments will be discarded later
