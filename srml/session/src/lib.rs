@@ -120,8 +120,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-#[cfg(not(feature = "std"))]
-use rstd::alloc::borrow::ToOwned;
 use parity_codec::{Decode, Encode};
 use primitives::KeyTypeId;
 use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash};

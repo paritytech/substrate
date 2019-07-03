@@ -459,8 +459,12 @@ pub trait SessionInterface<AccountId>: system::Trait {
 	fn prune_historical_up_to(up_to: session::SessionIndex);
 }
 
-impl<T> SessionInterface<<T as system::Trait>::AccountId> for T where
+impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
+	T: session::historical::Trait<
+		FullIdentification = Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>,
+		FullIdentificationOf=ExposureOf<T>,
+	>,
 	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
 	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
@@ -1319,12 +1323,12 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 
 /// A typed conversion from stash account ID to the current exposure of nominators
 /// on that account.
-pub struct ExposureOf<T>(rstd::marker::PhantomData<T>;
+pub struct ExposureOf<T>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait> Convert<T::AccountId, Option<SlashCredential<T::AccountId>>>
+impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
 {
-	fn convert(validator: T::AccountId) -> Option<SlashCredential<T::AccountId>> {
-		<Module<T>>::stakers(&validator)
+	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+		Some(<Module<T>>::stakers(&validator))
 	}
 }

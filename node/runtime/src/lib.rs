@@ -200,6 +200,11 @@ impl session::Trait for Runtime {
 	type ValidatorIdOf = staking::StashOf<Self>;
 }
 
+impl session::historical::Trait for Runtime {
+	type FullIdentification = staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = staking::ExposureOf<Runtime>;
+}
+
 parameter_types! {
 	pub const SessionsPerEra: session::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;

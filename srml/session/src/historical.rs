@@ -23,11 +23,9 @@
 //! to the roots of merkle tries containing the session data.
 
 use rstd::prelude::*;
-#[cfg(not(feature = "std"))]
-use rstd::alloc::borrow::ToOwned;
 use parity_codec::{Encode, Decode};
 use primitives::KeyTypeId;
-use primitives::traits::{Convert, Member, OpaqueKeys, Hash as HashT};
+use primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use srml_support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
@@ -39,7 +37,7 @@ use super::{SessionIndex, OnSessionEnding, Module as SessionModule};
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
 	/// Full identification of the validator.
-	type FullIdentification: Member + Parameter;
+	type FullIdentification: Parameter;
 
 	/// A conversion from validator ID to full identification.
 	///

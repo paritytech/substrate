@@ -2469,11 +2469,13 @@ dependencies = [
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "substrate-trie 2.0.0",
 ]
 
 [[package]]
