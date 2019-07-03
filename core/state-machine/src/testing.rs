@@ -99,16 +99,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
 		&mut self.changes_trie_storage
 	}
-
-// 	pub fn extend<T>(&mut self, storage: StorageTuple) {
-// 		let top_iter = storage.0.into_iter().map(|(k, v)| (None, k, Some(v)));
-// 		let child_iter = storage.1.into_iter().flat_map(|(child, map)| {
-// 			map.into_iter()
-// 				.map(|(k, v)| (Some(child.clone()), k, Some(v)))
-// 				.collect::<Vec<_>>()
-// 		});
-// 		self.backend = self.backend.update(top_iter.chain(child_iter).collect());
-// 	}
 }
 
 /// Extend into backend
