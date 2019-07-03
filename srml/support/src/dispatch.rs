@@ -47,13 +47,13 @@ pub trait Dispatchable {
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
-pub trait Callable {
+pub trait Callable<T> {
 	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A> = <A as Callable>::Call;
+pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
 #[cfg(feature = "std")]
 pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
@@ -1175,7 +1175,7 @@ macro_rules! decl_module {
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?>
 		{
 			type Call = $call_type<$trait_instance $(, $instance)?>;
@@ -1201,8 +1201,8 @@ macro_rules! decl_module {
 	}
 }
 
-pub trait IsSubType<T: Callable> {
-	fn is_aux_sub_type(&self) -> Option<&<T as Callable>::Call>;
+pub trait IsSubType<T: Callable<R>, R> {
+	fn is_aux_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1221,7 +1221,7 @@ macro_rules! impl_outer_dispatch {
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(
-				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
+				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}
 		impl $crate::dispatch::Weighable for $call_type {
@@ -1241,13 +1241,18 @@ macro_rules! impl_outer_dispatch {
 			}
 		}
 		$(
-			impl $crate::dispatch::IsSubType<$camelcase> for $call_type {
-				fn is_aux_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::Callable>::Call> {
-					if let $call_type::$camelcase ( ref r ) = *self {
-						Some(r)
-					} else {
-						None
+			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
+				fn is_aux_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
+					match *self {
+						$call_type::$camelcase(ref r) => Some(r),
+						_ => None,
 					}
+				}
+			}
+
+			impl From<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
+				fn from(call: $crate::dispatch::CallableCallFor<$camelcase, $runtime>) -> Self {
+					$call_type::$camelcase(call)
 				}
 			}
 		)*
@@ -1518,9 +1523,10 @@ mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
 
-	pub trait Trait {
+	pub trait Trait: Sized {
 		type Origin;
 		type BlockNumber: Into<u32>;
+		type Call: From<Call<Self>>;
 	}
 
 	pub mod system {
@@ -1619,11 +1625,20 @@ mod tests {
 				},
 			];
 
-	struct TraitImpl {}
+	pub struct TraitImpl {}
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type Call = OuterCall;
+	}
+
+	type Test = Module<TraitImpl>;
+
+	impl_outer_dispatch! {
+		pub enum OuterCall for TraitImpl where origin: u32 {
+			self::Test,
+		}
 	}
 
 	#[test]
