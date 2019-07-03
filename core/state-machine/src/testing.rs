@@ -91,22 +91,19 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		self.backend.update(
-			core::iter::empty()
-				.chain(self.overlay.committed.top.clone().into_iter()
-					.map(|(k, v)| (None, k, v.value)))
-				.chain(self.overlay.prospective.top.clone().into_iter()
-					.map(|(k, v)| (None, k, v.value)))
-				.chain(self.overlay.committed.children.clone().into_iter()
-					.flat_map(|(keyspace, map)| map.1.into_iter()
-						.map(|(k, v)| (Some(keyspace.clone()), k, v))
-						.collect::<Vec<_>>()))
-				.chain(self.overlay.prospective.children.clone().into_iter()
-					.flat_map(|(keyspace, map)| map.1.into_iter()
-						.map(|(k, v)| (Some(keyspace.clone()), k, v))
-						.collect::<Vec<_>>()))
-				.collect()
-		)
+		let top = self.overlay.committed.top.clone().into_iter()
+			.chain(self.overlay.prospective.top.clone().into_iter())
+			.map(|(k, v)| (None, k, v.value));
+
+		let children = self.overlay.committed.children.clone().into_iter()
+			.chain(self.overlay.prospective.children.clone().into_iter())
+			.flat_map(|(keyspace, map)| {
+				map.1.into_iter()
+					.map(|(k, v)| (Some(keyspace.clone()), k, v))
+					.collect::<Vec<_>>()
+			});
+
+		self.backend.update(top.chain(children).collect())
 	}
 }
 
