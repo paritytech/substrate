@@ -31,7 +31,8 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
 use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::{hash::{H256, H512}, crypto::UncheckedFrom};
+use crate::crypto::{key_types, KeyTypeId, UncheckedFrom, TypedKey};
+use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -493,6 +494,10 @@ impl Pair {
 		let kp = mini_key.expand_to_keypair();
 		(Pair(kp), mini_key.to_bytes())
 	}
+}
+
+impl TypedKey for Public {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
 }
 
 #[cfg(test)]

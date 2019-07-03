@@ -32,7 +32,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::UncheckedFrom;
+use crate::crypto::{key_types, KeyTypeId, UncheckedFrom, TypedKey};
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -479,6 +479,10 @@ impl Pair {
 			Self::from_seed(&padded_seed)
 		})
 	}
+}
+
+impl TypedKey for Public {
+	const KEY_TYPE: KeyTypeId = key_types::ED25519;
 }
 
 #[cfg(test)]
