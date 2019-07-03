@@ -1589,7 +1589,7 @@ mod tests {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let (offchain, state) = testing::TestOffchainExt::new();
 		ext.set_offchain_externalities(offchain);
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
 			vec![0]
@@ -1616,7 +1616,7 @@ mod tests {
 			},
 		);
 
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
 			vec![0]
