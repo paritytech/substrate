@@ -395,7 +395,6 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
@@ -479,11 +478,11 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime> {
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			vesting: vec![],
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
@@ -501,8 +500,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		balances::GenesisConfig::<Runtime>::default().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		t.into()
 	}
 
