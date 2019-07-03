@@ -30,8 +30,8 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, Public as TraitPublic, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::crypto::{key_types, KeyTypeId, UncheckedFrom, TypedKey};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
+use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
 use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
