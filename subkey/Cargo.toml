@@ -14,7 +14,7 @@ clap = { version = "~2.32", features = ["yaml"] }
 tiny-bip39 = "0.6.0"
 rustc-hex = "2.0"
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
-schnorrkel = "0.1"
+schnorrkel = "0.1.1"
 hex = "0.3"
 hex-literal = "0.2"
 parity-codec = "4.1.1"

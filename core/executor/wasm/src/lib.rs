@@ -1,9 +1,7 @@
 #![no_std]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-extern crate alloc;
-use alloc::vec::Vec;
-use alloc::slice;
+use rstd::{slice, vec::Vec, vec};
 
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
@@ -11,7 +9,7 @@ use runtime_io::{
 };
 
 macro_rules! impl_stubs {
-	( $( $new_name:ident => $invoke:expr ),* ) => {
+	( $( $new_name:ident => $invoke:expr, )* ) => {
 		$(
 			impl_stubs!(@METHOD $new_name => $invoke);
 		)*
@@ -134,7 +132,42 @@ impl_stubs!(
 			Err(sandbox::Error::OutOfBounds) => 3,
 		};
 		[code].to_vec()
-	}
+	},
+	test_offchain_local_storage => |_| {
+		let kind = substrate_primitives::offchain::StorageKind::PERSISTENT;
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
+		runtime_io::local_storage_set(kind, b"test", b"asd");
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
+
+		let res = runtime_io::local_storage_compare_and_set(kind, b"test", b"asd", b"");
+		assert_eq!(res, true);
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"".to_vec()));
+
+		[0].to_vec()
+	},
+	test_offchain_http => |_| {
+		use substrate_primitives::offchain::HttpRequestStatus;
+		let run = || -> Option<()> {
+			let id = runtime_io::http_request_start("POST", "http://localhost:12345", &[]).ok()?;
+			runtime_io::http_request_add_header(id, "X-Auth", "test").ok()?;
+			runtime_io::http_request_write_body(id, &[1, 2, 3, 4], None).ok()?;
+			runtime_io::http_request_write_body(id, &[], None).ok()?;
+			let status = runtime_io::http_response_wait(&[id], None);
+			assert!(status == vec![HttpRequestStatus::Finished(200)], "Expected Finished(200) status.");
+			let headers = runtime_io::http_response_headers(id);
+			assert_eq!(headers, vec![(b"X-Auth".to_vec(), b"hello".to_vec())]);
+			let mut buffer = vec![0; 64];
+			let read = runtime_io::http_response_read_body(id, &mut buffer, None).ok()?;
+			assert_eq!(read, 3);
+			assert_eq!(&buffer[0..read], &[1, 2, 3]);
+			let read = runtime_io::http_response_read_body(id, &mut buffer, None).ok()?;
+			assert_eq!(read, 0);
+
+			Some(())
+		};
+
+		[if run().is_some() { 0 } else { 1 }].to_vec()
+	},
 );
 
 fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {

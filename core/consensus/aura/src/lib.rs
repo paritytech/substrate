@@ -117,12 +117,14 @@ struct AuraSlotCompatible;
 
 impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
+		&self,
 		data: &InherentData
-	) -> Result<(TimestampInherent, AuraInherent), consensus_common::Error> {
+	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), consensus_common::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
+			.map(|(x, y)| (x, y, Default::default()))
 	}
 }
 
@@ -170,7 +172,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers
+		inherent_data_providers,
+		AuraSlotCompatible,
 	))
 }
 
@@ -514,7 +517,7 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();

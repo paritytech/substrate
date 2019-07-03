@@ -45,7 +45,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// Formula:
 ///   diff = (ideal_weight - current_block_weight)
 ///   v = 0.00004
-///   weight_next = weight * (1 + (v . diff) + (v . diff)^2 / 2)
+///   next_weught = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
 pub struct FeeMultiplierUpdateHandler;
