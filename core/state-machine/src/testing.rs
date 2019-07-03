@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap};
 use std::iter::FromIterator;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
@@ -79,17 +79,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		self.backend = self.backend.update(vec![(None, k, Some(v))]);
 	}
 
-	/// Iter to all pairs in key order
-	pub fn iter_pairs_in_order(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
-		self.backend.pairs().iter()
-			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.collect::<BTreeMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-	}
-
 	/// Set offchain externaltiies.
 	pub fn set_offchain_externalities(&mut self, offchain: impl offchain::Externalities + 'static) {
 		self.offchain = Some(Box::new(offchain));
@@ -98,6 +87,26 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Get mutable reference to changes trie storage.
 	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
 		&mut self.changes_trie_storage
+	}
+
+	/// Return a new backend with all pending value.
+	pub fn commit_all(&self) -> InMemory<H> {
+		self.backend.update(
+			core::iter::empty()
+				.chain(self.overlay.committed.top.clone().into_iter()
+					.map(|(k, v)| (None, k, v.value)))
+				.chain(self.overlay.prospective.top.clone().into_iter()
+					.map(|(k, v)| (None, k, v.value)))
+				.chain(self.overlay.committed.children.clone().into_iter()
+					.flat_map(|(keyspace, map)| map.1.into_iter()
+						.map(|(k, v)| (Some(keyspace.clone()), k, v))
+						.collect::<Vec<_>>()))
+				.chain(self.overlay.prospective.children.clone().into_iter()
+					.flat_map(|(keyspace, map)| map.1.into_iter()
+						.map(|(k, v)| (Some(keyspace.clone()), k, v))
+						.collect::<Vec<_>>()))
+				.collect()
+		)
 	}
 }
 
@@ -111,8 +120,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
-		// TODO TODO: do child comparison as well
-		self.iter_pairs_in_order().eq(other.iter_pairs_in_order())
+		self.commit_all().eq(&other.commit_all())
 	}
 }
 
