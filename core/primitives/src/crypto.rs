@@ -473,8 +473,21 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
+	#[derive(PartialEq, Eq, Hash)]
+	struct TestPublic;
+	impl Public for TestPublic {
+		fn from_slice(bytes: &[u8]) -> Self {
+			Self
+		}
+		fn as_slice(&self) -> &[u8] {
+			&[]
+		}
+		fn to_raw_vec(&self) -> Vec<u8> {
+			vec![]
+		}
+	}
 	impl Pair for TestPair {
-		type Public = ();
+		type Public = TestPublic;
 		type Seed = [u8; 0];
 		type Signature = ();
 		type DeriveError = ();
@@ -508,7 +521,7 @@ mod tests {
 			_message: M,
 			_pubkey: P
 		) -> bool { true }
-		fn public(&self) -> Self::Public { () }
+		fn public(&self) -> Self::Public { TestPublic }
 		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
 			phrase: &str,
 			password: Option<&str>,
@@ -524,6 +537,9 @@ mod tests {
 			-> Result<Self, SecretStringError>
 		{
 			Ok(TestPair::Seed(seed.to_owned()))
+		}
+		fn to_raw_vec(&self) -> Vec<u8> {
+			vec![]
 		}
 	}
 
