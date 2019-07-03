@@ -355,13 +355,13 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	select_chain: SC,
-	transaction_pool: Option<Arc<TransactionPool<A>>>,
+	transaction_pool: Option<Arc<T>>,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>,
+		GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>,
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
@@ -371,7 +371,8 @@ where
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
-	A: txpool::ChainApi,
+	// A: txpool::ChainApi,
+	T: SubmitReport<PRA, Block>,
 {
 	use runtime_primitives::traits::Zero;
 

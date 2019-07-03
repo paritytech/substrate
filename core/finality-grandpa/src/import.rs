@@ -60,18 +60,18 @@ use crate::justification::GrandpaJustification;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	api: Arc<PRA>,
-	transaction_pool: Option<Arc<TransactionPool<A>>>
+	transaction_pool: Option<Arc<T>>
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> JustificationImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> JustificationImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, T> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -80,7 +80,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> JustificationImport<Block>
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 		SC: SelectChain<Block>,
-		A: txpool::ChainApi,
 {
 	type Error = ConsensusError;
 
@@ -116,7 +115,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> JustificationImport<Block>
 		number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
+		self.import_justification(hash, number, justification)
 	}
 }
 
@@ -163,17 +162,17 @@ impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + HeaderBackend<<A as txpool::ChainApi>::Block>,
+	PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 	PRA::Api: GrandpaApi<Block>,
-	A: txpool::ChainApi + 'static,
+	T: SubmitReport<PRA, Block>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -421,16 +420,16 @@ where
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, T> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		PRA: ProvideRuntimeApi + HeaderBackend<<A as txpool::ChainApi>::Block>,
+		PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 		PRA::Api: GrandpaApi<Block>,
-		A: txpool::ChainApi + 'static,
+		T: SubmitReport<PRA, Block>,
 {
 	type Error = ConsensusError;
 
@@ -558,8 +557,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>
 {
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
@@ -568,8 +567,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi>
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		api: Arc<PRA>,
-		transaction_pool: Option<Arc<TransactionPool<A>>>
-	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC, A> {
+		transaction_pool: Option<Arc<T>>
+	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC, T> {
 		GrandpaBlockImport {
 			inner,
 			select_chain,
@@ -582,14 +581,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A: txpool::ChainApi>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, A>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC, A>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	A: txpool::ChainApi,
+	T: SubmitReport<PRA, Block>,
 {
 
 	/// Import a block justification and finalize the block.
