@@ -1173,26 +1173,32 @@ fn voter_persists_its_votes() {
 
 				// we push 20 more blocks to alice's chain
 				net.lock().peer(0).push_blocks(20, false);
-				let mut runtime = current_thread::Runtime::new().unwrap();
-				runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
 
-				assert_eq!(net.lock().peer(0).client().info().chain.best_number, 40,
-						   "Peer #{} failed to sync", 0);
+				let net2 = net.clone();
+				let net = net.clone();
+				let voter_tx = voter_tx.clone();
+				let round_tx = round_tx.clone();
+				future::Either::A(futures::future::poll_fn::<(), (), _>(move || Ok(net2.lock().poll_until_sync()))
+					.and_then(move |_| {
+						assert_eq!(net.lock().peer(0).client().info().chain.best_number, 40,
+								"Peer #{} failed to sync", 0);
 
-				#[allow(deprecated)]
-				let block_30_hash =
-					net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
+						#[allow(deprecated)]
+						let block_30_hash =
+							net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
 
-				// we restart alice's voter
-				voter_tx.unbounded_send(()).unwrap();
+						// we restart alice's voter
+						voter_tx.unbounded_send(()).unwrap();
 
-				// and we push our own prevote for block 30
-				let prevote = grandpa::Prevote {
-					target_number: 30,
-					target_hash: block_30_hash,
-				};
+						// and we push our own prevote for block 30
+						let prevote = grandpa::Prevote {
+							target_number: 30,
+							target_hash: block_30_hash,
+						};
 
-				round_tx.lock().start_send(grandpa::Message::Prevote(prevote)).unwrap();
+						round_tx.lock().start_send(grandpa::Message::Prevote(prevote)).unwrap();
+						Ok(())
+					}).map_err(|_| panic!()))
 
 			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
 				// the next message we receive should be our own prevote
@@ -1208,6 +1214,8 @@ fn voter_persists_its_votes() {
 				// therefore we won't ever receive it again since it will be a
 				// known message on the gossip layer
 
+				future::Either::B(future::ok(()))
+
 			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
 				// we then receive a precommit from alice for block 15
 				// even though we casted a prevote for block 30
@@ -1220,9 +1228,13 @@ fn voter_persists_its_votes() {
 
 				// signal exit
 				exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+
+				future::Either::B(future::ok(()))
+
+			} else {
+				panic!()
 			}
 
-			Ok(())
 		}).map_err(|_| ()));
 	}
 
