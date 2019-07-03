@@ -984,8 +984,7 @@ macro_rules! construct_service_factory {
 			) -> Result<Self::FullService, $crate::Error>
 			{
 				( $( $full_service_init )* ) (config).and_then(|service| {
-					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, key)
+					($( $authority_setup )*)(service)
 				})
 			}
 		}

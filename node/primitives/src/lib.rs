@@ -44,11 +44,15 @@ pub type Balance = u128;
 /// Type used for expressing timestamp.
 pub type Moment = u64;
 
-/// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = primitives::ed25519::Signature;
+/// The aura crypto scheme defined via the keypair type.
+#[cfg(feature = "std")]
+pub type AuraPair = primitives::ed25519::Pair;
 
-/// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
+/// Identity of an Aura authority.
 pub type AuraId = primitives::ed25519::Public;
+
+/// Signature for an Aura authority.
+pub type AuraSignature = primitives::ed25519::Signature;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;
