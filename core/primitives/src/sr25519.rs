@@ -52,6 +52,17 @@ pub struct Public(pub [u8; 32]);
 #[cfg(feature = "std")]
 pub struct Pair(Keypair);
 
+#[cfg(feature = "std")]
+impl Clone for Pair {
+	fn clone(&self) -> Self {
+		Pair(schnorrkel::Keypair {
+			public: self.0.public.clone(),
+			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
+				.expect("key is always the correct size; qed")
+		})
+	}
+}
+
 impl AsRef<Public> for Public {
 	fn as_ref(&self) -> &Public {
 		&self
