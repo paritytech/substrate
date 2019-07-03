@@ -119,10 +119,17 @@ pub struct SpawnTaskHandle {
 	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
-impl SpawnTaskHandle {
-	/// Spawn a task to run the given future.
-	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.sender.unbounded_send(Box::new(task));
+impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.sender.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -611,6 +618,22 @@ impl<Components> Future for Service<Components> where Components: components::Co
 
 		// The service future never ends.
 		Ok(Async::NotReady)
+	}
+}
+
+impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	for Service<Components> where Components: components::Components
+{
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
