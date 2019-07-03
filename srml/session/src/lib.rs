@@ -128,7 +128,7 @@ use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey
 use srml_support::{
 	dispatch::Result,
 	storage,
-	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
+	ConsensusEngineId, StorageValue, for_each_tuple, decl_module,
 	decl_event, decl_storage,
 };
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
@@ -243,8 +243,6 @@ pub trait Trait: system::Trait {
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
 }
-
-type OpaqueKey = Vec<u8>;
 
 const DEDUP_KEY_LEN: usize = 13;
 const DEDUP_KEY_PREFIX: &[u8; DEDUP_KEY_LEN] = b":session:keys";
@@ -704,6 +702,19 @@ mod tests {
 			System::set_block_number(4);
 			Session::on_initialize(4);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
+		});
+	}
+
+	#[test]
+	fn duplicates_are_not_allowed() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			Session::on_initialize(1);
+			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_err());
+			assert!(Session::set_keys(Origin::signed(1), UintAuthorityId(10), vec![]).is_ok());
+
+			// is fine now that 1 has migrated off.
+			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_ok());
 		});
 	}
 }
