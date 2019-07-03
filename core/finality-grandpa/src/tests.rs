@@ -890,6 +890,7 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 
 #[test]
 fn force_change_to_new_set() {
+	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	// two of these guys are offline.
 	let genesis_authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie, AuthorityKeyring::One, AuthorityKeyring::Two];
@@ -902,50 +903,44 @@ fn force_change_to_new_set() {
 	let net = GrandpaTestNet::new(api, 3);
 	let net = Arc::new(Mutex::new(net));
 
-	let runner_net = net.clone();
-	let add_blocks = move |_| {
-		net.lock().peer(0).push_blocks(1, false);
+	net.lock().peer(0).push_blocks(1, false);
 
-		{
-			// add a forced transition at block 12.
-			let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
-			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
-				next_authorities: voters.clone(),
-				delay: 10,
-			}));
+	{
+		// add a forced transition at block 12.
+		let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
+		forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
+			next_authorities: voters.clone(),
+			delay: 10,
+		}));
 
-			// add a normal transition too to ensure that forced changes take priority.
-			normal_transitions.lock().insert(parent_hash, ScheduledChange {
-				next_authorities: make_ids(genesis_authorities),
-				delay: 5,
-			});
-		}
+		// add a normal transition too to ensure that forced changes take priority.
+		normal_transitions.lock().insert(parent_hash, ScheduledChange {
+			next_authorities: make_ids(genesis_authorities),
+			delay: 5,
+		});
+	}
 
-		net.lock().peer(0).push_blocks(25, false);
-		let mut runtime = current_thread::Runtime::new().unwrap();
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().peer(0).push_blocks(25, false);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
 
-		for (i, peer) in net.lock().peers().iter().enumerate() {
-			assert_eq!(peer.client().info().chain.best_number, 26,
-					"Peer #{} failed to sync", i);
+	for (i, peer) in net.lock().peers().iter().enumerate() {
+		assert_eq!(peer.client().info().chain.best_number, 26,
+				"Peer #{} failed to sync", i);
 
-			let full_client = peer.client().as_full().expect("only full clients are used in test");
-			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-				#[allow(deprecated)]
-				&**full_client.backend()
-			).unwrap();
+		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+			#[allow(deprecated)]
+			&**full_client.backend()
+		).unwrap();
 
-			assert_eq!(set.current(), (1, voters.as_slice()));
-			assert_eq!(set.pending_changes().count(), 0);
-		}
-
-		None
-	};
+		assert_eq!(set.current(), (1, voters.as_slice()));
+		assert_eq!(set.pending_changes().count(), 0);
+	}
 
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
 	// the link-halfs have the wrong AuthoritySet
-	run_to_completion_with(&mut runtime, 25, runner_net, peers_a, add_blocks);
+	run_to_completion(&mut runtime, 25, net, peers_a);
 }
 
 #[test]
@@ -1338,43 +1333,36 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	let net = GrandpaTestNet::new(api, 3);
 	let net = Arc::new(Mutex::new(net));
 
-	let runner_net = net.clone();
-	let add_blocks = move |_| {
-		net.lock().peer(0).push_blocks(1, false); // best is #1
+	net.lock().peer(0).push_blocks(1, false); // best is #1
 
-		// add a forced transition at block 5.
-		if FORCE_CHANGE {
-			let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
-			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
-				next_authorities: voters.clone(),
-				delay: 3,
-			}));
-		}
+	// add a forced transition at block 5.
+	if FORCE_CHANGE {
+		let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
+		forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
+			next_authorities: voters.clone(),
+			delay: 3,
+		}));
+	}
 
-		// ensure block#10 enacts authorities set change => justification is generated
-		// normally it will reach light client, but because of the forced change, it will not
-		net.lock().peer(0).push_blocks(8, false); // best is #9
-		net.lock().peer(0).push_authorities_change_block(
-			vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
-		); // #10
-		net.lock().peer(0).push_blocks(1, false); // best is #11
-		let mut runtime = current_thread::Runtime::new().unwrap();
-		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
-		// TODO: net.lock().sync_without_disconnects();
-
-		None
-	};
+	// ensure block#10 enacts authorities set change => justification is generated
+	// normally it will reach light client, but because of the forced change, it will not
+	net.lock().peer(0).push_blocks(8, false); // best is #9
+	net.lock().peer(0).push_authorities_change_block(
+		vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
+	); // #10
+	net.lock().peer(0).push_blocks(1, false); // best is #11
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
 
 	// finalize block #11 on full clients
-	run_to_completion_with(&mut runtime, 11, runner_net.clone(), peers_a, add_blocks);
+	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
+
 	// request finalization by light client
-	runner_net.lock().add_light_peer(&GrandpaTestNet::default_config());
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(runner_net.lock().poll_until_sync()))).unwrap();
-	// TODO: runner_net.lock().sync_without_disconnects();
+	net.lock().add_light_peer(&GrandpaTestNet::default_config());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
 
 	// check block, finalized on light client
 	assert_eq!(
-		runner_net.lock().peer(3).client().info().chain.finalized_number,
+		net.lock().peer(3).client().info().chain.finalized_number,
 		if FORCE_CHANGE { 0 } else { 10 },
 	);
 }
