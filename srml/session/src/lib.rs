@@ -124,15 +124,15 @@ use rstd::{prelude::*, marker::PhantomData, ops::Rem};
 use rstd::alloc::borrow::ToOwned;
 use parity_codec::{Decode, Encode};
 use primitives::KeyTypeId;
-use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey};
+use primitives::traits::{Convert, Zero, Saturating, Member, OpaqueKeys, TypedKey, Hash};
 use srml_support::{
 	dispatch::Result,
-	storage::child as child_storage,
+	storage,
 	ConsensusEngineId, StorageValue, StorageMap, for_each_tuple, decl_module,
 	decl_event, decl_storage,
 };
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter, print};
-use system::ensure_signed;
+use system::{self, ensure_signed};
 
 #[cfg(feature = "historical")]
 pub mod historical;
@@ -245,7 +245,9 @@ pub trait Trait: system::Trait {
 }
 
 type OpaqueKey = Vec<u8>;
-const CHILD_TRIE_KEY: &[u8] = b":child_storage:session_keys" as _;
+
+const DEDUP_KEY_LEN: usize = 13;
+const DEDUP_KEY_PREFIX: &[u8; DEDUP_KEY_LEN] = b":session:keys";
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -272,6 +274,7 @@ decl_storage! {
 		| {
 			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
+					println!("set keys for {:?}: {:?}", who, keys);
 					<Module<T>>::do_set_keys(&who, keys)
 						.expect("genesis config must not contain duplicates; qed");
 				}
@@ -398,6 +401,7 @@ impl<T: Trait> Module<T> {
 			Self::put_key_owner(id, key, &who);
 		}
 
+		println!("set keys for {:?}: {:?}", who, keys);
 		Self::put_keys(&who, &keys);
 
 		Ok(())
@@ -417,34 +421,42 @@ impl<T: Trait> Module<T> {
 	// Child trie storage.
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		v.using_encoded(|s|
-			child_storage::get(CHILD_TRIE_KEY, s)
-		)
+		storage::unhashed::get(&dedup_trie_key::<T, _>(v))
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		v.using_encoded(|s|
-			child_storage::take(CHILD_TRIE_KEY, s)
-		)
+		storage::unhashed::take(&dedup_trie_key::<T, _>(v))
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		v.using_encoded(|s|
-			child_storage::put(CHILD_TRIE_KEY, s, keys)
-		);
+		storage::unhashed::put(&dedup_trie_key::<T, _>(v), keys)
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		(id, key_data).using_encoded(|s| child_storage::get(CHILD_TRIE_KEY, s))
+		storage::unhashed::get(&dedup_trie_key::<T, _>(&(id, key_data)))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		(id, key_data).using_encoded(|s| child_storage::put(CHILD_TRIE_KEY, s, v));
+		storage::unhashed::put(&dedup_trie_key::<T, _>(&(id, key_data)), v);
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		(id, key_data).using_encoded(|s| child_storage::kill(CHILD_TRIE_KEY, s));
+		storage::unhashed::kill(&dedup_trie_key::<T, _>(&(id, key_data)));
 	}
+}
+
+fn dedup_trie_key<T: Trait, K: Encode>(key: &K) -> [u8; 32 + DEDUP_KEY_LEN] {
+	key.using_encoded(|s| {
+		// take at most 32 bytes from the hash of the value.
+		let hash = <T as system::Trait>::Hashing::hash(s);
+		let hash: &[u8] = hash.as_ref();
+		let len = rstd::cmp::min(hash.len(), 32);
+
+		let mut data = [0; 32 + DEDUP_KEY_LEN];
+		data[..DEDUP_KEY_LEN].copy_from_slice(DEDUP_KEY_PREFIX);
+		data[DEDUP_KEY_LEN..][..len].copy_from_slice(hash);
+		data
+	})
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
@@ -571,12 +583,13 @@ mod tests {
 		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test> {
+		let (storage, child_storage) = GenesisConfig::<Test> {
 			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap().0);
+		}.build_storage().unwrap();
+		t.extend(storage);
 		runtime_io::TestExternalities::new(t)
 	}
 
@@ -589,13 +602,6 @@ mod tests {
 	}
 
 	#[test]
-	fn child_trie_is_valid_key() {
-		assert!(
-			substrate_primitives::storage::well_known_keys::is_child_storage_key(CHILD_TRIE_KEY)
-		);
-	}
-
-	#[test]
 	fn put_get_keys() {
 		with_externalities(&mut new_test_ext(), || {
 			Session::put_keys(&10, &UintAuthorityId(10));
@@ -605,7 +611,9 @@ mod tests {
 
 	#[test]
 	fn keys_cleared_on_kill() {
-		with_externalities(&mut new_test_ext(), || {
+		let mut ext = new_test_ext();
+		println!("entering test");
+		with_externalities(&mut ext, || {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1)));
 
