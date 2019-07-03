@@ -623,7 +623,8 @@ impl<Components> Future for Service<Components> where Components: components::Co
 }
 
 impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
-for Service<Components> where Components: components::Components {
+	for Service<Components> where Components: components::Components
+{
 	fn execute(
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
