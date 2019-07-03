@@ -98,6 +98,7 @@ impl TestNetFactory for GrandpaTestNet {
 	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
+	type TestPool = Option<Arc<TestPool>>;
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -128,6 +129,7 @@ impl TestNetFactory for GrandpaTestNet {
 			Option<SharedFinalityProofImport<Block>>,
 			Option<SharedFinalityProofRequestBuilder<Block>>,
 			PeerData,
+			Option<Arc<TestPool>>,
 		)
 	{
 		match client {
@@ -136,14 +138,15 @@ impl TestNetFactory for GrandpaTestNet {
 				let select_chain = LongestChain::new(
 					client.backend().clone()
 				);
+				let test_pool = Some(Arc::new(TestPool::default()));
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
 					select_chain,
-					Some(Arc::new(TestPool::default())),
+					test_pool.clone(),
 				).expect("Could not create block import for fresh peer.");
 				let shared_import = Arc::new(import);
-				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
+				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)), test_pool)
 			},
 			PeersClient::Light(ref client) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
@@ -158,7 +161,7 @@ impl TestNetFactory for GrandpaTestNet {
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let shared_import = Arc::new(import);
-				(shared_import.clone(), None, Some(shared_import), Some(finality_proof_req_builder), Mutex::new(None))
+				(shared_import.clone(), None, Some(shared_import), Some(finality_proof_req_builder), Mutex::new(None), None)
 			},
 		}
 	}
@@ -1370,7 +1373,7 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
+			let (_block_import, _, _, _, link, _) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
 			let grandpa_params = GrandpaParams {

@@ -819,6 +819,7 @@ pub trait TestNetFactory: Sized {
 	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
+	type TestPool: Default;
 
 	/// These two need to be implemented!
 	fn from_config(config: &ProtocolConfig) -> Self;
@@ -840,9 +841,10 @@ pub trait TestNetFactory: Sized {
 			Option<SharedFinalityProofImport<Block>>,
 			Option<SharedFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
+			Self::TestPool,
 		)
 	{
-		(client.as_block_import(), None, None, None, Default::default())
+		(client.as_block_import(), None, None, None, Default::default(), Default::default())
 	}
 
 	/// Get finality proof provider (if supported).
@@ -1037,7 +1039,7 @@ pub trait TestNetFactory: Sized {
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
-		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
+		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data, _)
 			= self.make_block_import(PeersClient::Full(client.clone()));
 		let (network_sender, network_port) = mpsc::unbounded();
 
@@ -1093,7 +1095,7 @@ pub trait TestNetFactory: Sized {
 
 		let client = Arc::new(test_client::new_light());
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
-		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
+		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data, _)
 			= self.make_block_import(PeersClient::Light(client.clone()));
 		let (network_sender, network_port) = mpsc::unbounded();
 
@@ -1283,6 +1285,7 @@ impl TestNetFactory for TestNet {
 	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
+	type TestPool = ();
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -1341,6 +1344,7 @@ impl TestNetFactory for JustificationTestNet {
 	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
+	type TestPool = ();
 
 	fn from_config(config: &ProtocolConfig) -> Self {
 		JustificationTestNet(TestNet::from_config(config))
@@ -1379,8 +1383,9 @@ impl TestNetFactory for JustificationTestNet {
 			Option<SharedFinalityProofImport<Block>>,
 			Option<SharedFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
+			Self::TestPool,
 		)
 	{
-		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, None, Default::default())
+		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, None, Default::default(), Default::default())
 	}
 }
