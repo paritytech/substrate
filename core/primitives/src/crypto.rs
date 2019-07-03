@@ -308,7 +308,7 @@ pub trait Public: PartialEq + Eq {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: Clone + Sized + 'static
+pub trait Pair: Sized + 'static
 {
 	/// TThe type which is used to encode a public key.
 	type Public: Public + Hash;
