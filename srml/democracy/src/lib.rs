@@ -29,7 +29,7 @@
 //! - **Proposal:** A proposal can take several forms. In a spending proposal, a proposer proposes to send funds to a
 //! beneficiary account (which may be a normal account or a smart contract). A proposal may include `set_code`, which
 //! would upgrade the runtime. The proposer must attach a bond with the proposal, which will be taken if it is rejected.
-//! - **Referendum:** A mechanism for voting on proposals. A referendum includes a single proposal, as well as a block
+//! - **Referendum:** A mechanism for voting on proposals. A referendum includes a single proposal, a block
 //! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying the associated
 //! proposal (if successfully passed). Referenda can be started in three ways: from the public, from a unanimous
 //! [Council](../srml_council/index.html) vote, or a majority Council vote. Each method of starting a referendum
@@ -399,7 +399,7 @@ decl_storage! {
 		/// The delay before enactment for all public referenda.
 		pub PublicDelay get(public_delay) config(): T::BlockNumber;
 		/// The maximum number of additional lock periods a voter may offer to strengthen
-		/// his or her vote. Multiples of `PublicDelay`.
+		/// their vote. Multiples of `PublicDelay`.
 		pub MaxLockPeriods get(max_lock_periods) config(): LockPeriods;
 
 		/// How often (in blocks) to check for new votes.
@@ -906,7 +906,7 @@ mod tests {
 			// 2 cannot fire 1's proxy:
 			assert_noop!(Democracy::remove_proxy(Origin::signed(2), 10), "wrong proxy");
 
-			// 1 fires his proxy:
+			// 1 fires their proxy:
 			assert_ok!(Democracy::remove_proxy(Origin::signed(1), 10));
 			assert_eq!(Democracy::proxy(10), None);
 			assert_eq!(Democracy::proxy(11), Some(2));
