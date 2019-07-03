@@ -326,13 +326,13 @@ mod tests {
 			AuthorityKeyring::Bob.to_raw_public(),
 			AuthorityKeyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new((map![
+		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 			}
-		], Default::default()))
+		])
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {

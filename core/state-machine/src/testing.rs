@@ -43,13 +43,23 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
-	/// Create a new instance of `TestExternalities`
-	pub fn new(storage: StorageTuple) -> Self {
-		Self::new_with_code(&[], storage)
+	/// Create a new instance of `TestExternalities` with storage.
+	pub fn new(storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_children((storage, Default::default()))
 	}
 
-	/// Create a new instance of `TestExternalities`
-	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
+	/// Create a new instance of `TestExternalities` with storage and children.
+	pub fn new_with_children(storage: StorageTuple) -> Self {
+		Self::new_with_code_with_children(&[], storage)
+	}
+
+	/// Create a new instance of `TestExternalities` with code and storage.
+	pub fn new_with_code(code: &[u8], storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_code_with_children(code, (storage, Default::default()))
+	}
+
+	/// Create a new instance of `TestExternalities` with code, storage and children.
+	pub fn new_with_code_with_children(code: &[u8], mut storage: StorageTuple) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
 		super::set_changes_trie_config(
@@ -123,7 +133,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, N> {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
-		Self::new((iter.into_iter().collect(), Default::default()))
+		Self::new(iter.into_iter().collect())
 	}
 }
 
@@ -139,7 +149,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<HashMap<Vec<u8>, Vec<u8>>> for T
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
 	fn from(storage: StorageTuple) -> Self {
-		Self::new(storage)
+		Self::new_with_children(storage)
 	}
 }
 

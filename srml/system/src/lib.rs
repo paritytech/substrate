@@ -597,11 +597,11 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new((map![
+		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-		], Default::default()))
+		])
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

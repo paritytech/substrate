@@ -484,7 +484,7 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,

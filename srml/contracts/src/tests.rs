@@ -265,7 +265,7 @@ impl ExtBuilder {
 			current_schedule: Default::default(),
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new(t)
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 }
 
