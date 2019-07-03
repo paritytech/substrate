@@ -16,7 +16,7 @@
 
 //! Test utilities
 
-use std::{collections::HashSet, cell::RefCell, marker::PhantomData};
+use std::{collections::HashSet, cell::RefCell};
 use primitives::Perbill;
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
@@ -92,17 +92,6 @@ impl FindAuthor<u64> for Author11 {
 		Some(11)
 	}
 }
-pub struct NoFilter<P>(PhantomData<P>);
-impl<Header, Author> authorship::FilterUncle<Header, Author> for NoFilter<(Header, Author)> {
-	type Accumulator = ();
-
-	fn filter_uncle(_header: &Header, _acc: ()) -> Result<(Option<Author>, ()), &'static str> {
-		unimplemented!();
-	}
-}
-pub type TestNoFilter = NoFilter<
-	(<Test as system::Trait>::Header, <Test as system::Trait>::AccountId)
->;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -153,7 +142,7 @@ impl session::Trait for Test {
 impl authorship::Trait for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
-	type FilterUncle = TestNoFilter;
+	type FilterUncle = ();
 	type EventHandler = Module<Test>;
 }
 impl timestamp::Trait for Test {
