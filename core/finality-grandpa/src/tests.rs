@@ -43,12 +43,15 @@ use parity_codec::Decode;
 use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Header as HeaderT, Block as BlockT
 };
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic::{BlockId, DigestItem}};
+use runtime_primitives::testing::{Header, Digest};
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
 	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation,
-	Challenge
+	Challenge, ChallengedVoteSet, ChallengedVote, FinalizedBlockProof, Commit,
+	SignedPrecommit
 };
+use srml_grandpa::Signal;
 use authorities::AuthoritySet;
 use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker
@@ -1174,7 +1177,39 @@ fn challenge_digest_produces_answer() {
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-	let block = builder.bake().unwrap();
+	let mut block = builder.bake().unwrap();
+
+	let challenge = Challenge::<H256, u64, Header, AuthoritySignature, AuthorityId, Prevote<Block>> {
+		finalized_block: (Default::default(), Default::default()),
+		finalized_block_proof: FinalizedBlockProof {
+			commit: Commit {
+				target_hash: Default::default(),
+				target_number: Default::default(),
+				precommits: vec![
+					SignedPrecommit {
+						precommit: Precommit::<Block> {
+							target_hash: Default::default(),
+							target_number: Default::default(),
+						},
+						signature: Default::default(),
+						id: Default::default(),
+					}
+				],
+			},
+			headers: vec![],
+		},
+		challenged_votes: ChallengedVoteSet {
+			challenged_votes: vec![],
+			set_id: 0,
+			round: 0,
+		},
+		previous_challenge: None,
+	};
+	let signal = Signal::PrevoteChallenge(challenge);
+
+	block.header.digest_mut().push(DigestItem::Consensus(GRANDPA_ENGINE_ID, signal.encode()));
+
+	println!("Digest = {:?}", block.header.digest());
 
 	let block = || {
 		let block = block.clone();
