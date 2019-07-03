@@ -1250,6 +1250,12 @@ macro_rules! impl_outer_dispatch {
 					}
 				}
 			}
+
+			impl From<<$camelcase as $crate::dispatch::Callable>::Call> for $call_type {
+				fn from(call: <$camelcase as $crate::dispatch::Callable>::Call) -> Self {
+					$call_type::$camelcase(call)
+				}
+			}
 		)*
 	}
 }
