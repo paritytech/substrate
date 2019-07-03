@@ -274,7 +274,6 @@ mod benches;
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
-use rstd::convert::TryInto;
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
@@ -1077,10 +1076,8 @@ impl<T: Trait> Module<T> {
 			let total_payout = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
-				<BalanceOf<T>>::from(
-					// Era of duration more than u32::MAX is rewarded as u32::MAX.
-					TryInto::<u32>::try_into(era_duration).unwrap_or(u32::max_value())
-				),
+				// Era of duration more than u32::MAX is rewarded as u32::MAX.
+				<BalanceOf<T>>::from(era_duration.saturated_into::<u32>()),
 			);
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
