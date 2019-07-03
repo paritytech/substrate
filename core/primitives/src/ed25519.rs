@@ -29,7 +29,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
+use crate::crypto::{Pair as TraitPair, Public as TraitPublic, DeriveJunction, SecretStringError, Derive, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{key_types, KeyTypeId, UncheckedFrom, TypedKey};
@@ -282,16 +282,6 @@ impl Public {
 		Public(data)
 	}
 
-	/// A new instance from the given slice that should be 32 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		Public(r)
-	}
-
 	/// A new instance from an H256.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -300,22 +290,34 @@ impl Public {
 		Public(x.into())
 	}
 
+	/// Return a slice filled with raw data.
+	pub fn as_array_ref(&self) -> &[u8; 32] {
+		self.as_ref()
+	}
+}
+
+impl TraitPublic for Public {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 32];
+		r.copy_from_slice(data);
+		Public(r)
+	}
+
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	pub fn to_raw_vec(self) -> Vec<u8> {
+	fn to_raw_vec(&self) -> Vec<u8> {
 		let r: &[u8; 32] = self.as_ref();
 		r.to_vec()
 	}
 
 	/// Return a slice filled with raw data.
-	pub fn as_slice(&self) -> &[u8] {
+	fn as_slice(&self) -> &[u8] {
 		let r: &[u8; 32] = self.as_ref();
 		&r[..]
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
-		self.as_ref()
 	}
 }
 

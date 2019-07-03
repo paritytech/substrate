@@ -26,6 +26,8 @@ use parity_codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
+#[cfg(feature = "std")]
+use std::hash::Hash;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -286,6 +288,22 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 }
 
+/// Trait suitable for typical cryptographic PKI key public type.
+pub trait Public: PartialEq + Eq {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self;
+
+	/// Return a `Vec<u8>` filled with raw data.
+	#[cfg(feature = "std")]
+	fn to_raw_vec(&self) -> Vec<u8>;
+
+	/// Return a slice filled with raw data.
+	fn as_slice(&self) -> &[u8];
+}
+
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
@@ -293,7 +311,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 pub trait Pair: Clone + Sized + 'static
 {
 	/// TThe type which is used to encode a public key.
-	type Public;
+	type Public: Public + Hash;
 
 	/// The type used to (minimally) encode the data required to securely create
 	/// a new key pair.
