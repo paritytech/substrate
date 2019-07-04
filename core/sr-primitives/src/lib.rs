@@ -43,7 +43,7 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Zero, CheckedAdd, CheckedSub, Saturating};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -237,6 +237,84 @@ where
 	}
 }
 
+/// These implementation will never panic and will always return a _per_thing_ which is in the range
+/// `[0, 1] (inclusive)`.
+impl Saturating for Permill {
+	fn saturating_add(self, rhs: Self) -> Self {
+		// defensive inner saturation:
+		// both u32 values are below a billion. sum won't overflow for u32.
+		Self::from_parts((self.0 + rhs.0).min(1_000_000))
+	}
+
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self::from_parts(self.0.checked_sub(rhs.0).unwrap_or(0))
+	}
+
+	/// A the multiplication of two numbers in [0, 1] is always within that range
+	fn saturating_mul(self, rhs: Self) -> Self {
+		self * rhs
+	}
+
+}
+
+/// Panics if the result is more than a million parts.
+impl ops::Add for Permill {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self {
+		let r = &self.0 + rhs.0;
+		if r <= 1_000_000 {
+			return Self::from_parts(r);
+		}
+		panic!("Attempted to add (permill) with overflow");
+	}
+}
+
+/// Panics if `self` is smaller than `rhs`.
+impl ops::Sub for Permill {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self {
+		Self::from_parts(&self.0 - rhs.0)
+	}
+}
+
+/// This is likely to collapse to zero, as the result will become significantly smaller.
+///
+/// 10^18 will fit in u64, hence it is safe to use it as the intermediary type.
+impl ops::Mul for Permill {
+	type Output = Self;
+
+	fn mul(self, rhs: Self) -> Self {
+		let p = self.0 as u64;
+		let q = rhs.0 as u64;
+
+		// This will never overflow (given that p and q are valid perbill)
+		let n = p * q;
+		// billion always fits in u32.
+		Self::from_parts((n / 1_000_000).min(1_000_000) as u32)
+	}
+}
+
+impl CheckedAdd for Permill {
+	fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		if self.0 + rhs.0 <= 1_000_000 {
+			return Some(Self::from_parts(self.0 + rhs.0));
+		}
+		None
+	}
+}
+
+impl CheckedSub for Permill {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_sub(rhs.0) {
+			return Some(Self::from_parts(v));
+		}
+		None
+	}
+}
+
+
 #[cfg(feature = "std")]
 impl From<f64> for Permill {
 	fn from(x: f64) -> Permill {
@@ -270,7 +348,7 @@ impl From<codec::Compact<Permill>> for Permill {
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Perbill(u32);
 
 impl Perbill {
@@ -344,6 +422,83 @@ where
 	}
 }
 
+/// These implementation will never panic and will always return a _per_thing_ which is in the range
+/// `[0, 1] (inclusive)`.
+impl Saturating for Perbill {
+	fn saturating_add(self, rhs: Self) -> Self {
+		// defensive inner saturation:
+		// both u32 values are below a billion. sum won't overflow for u32.
+		Self::from_parts((self.0 + rhs.0).min(1_000_000_000))
+	}
+
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self::from_parts(self.0.checked_sub(rhs.0).unwrap_or(0))
+	}
+
+	/// A the multiplication of two numbers in [0, 1] is always within that range
+	fn saturating_mul(self, rhs: Self) -> Self {
+		self * rhs
+	}
+
+}
+
+/// Panics if the result is more than a billion parts.
+impl ops::Add for Perbill {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self {
+		let r = &self.0 + rhs.0;
+		if r <= 1_000_000_000 {
+			return Self::from_parts(r);
+		}
+		panic!("Attempted to add (perbill) with overflow");
+	}
+}
+
+/// Panics if `self` is smaller than `rhs`.
+impl ops::Sub for Perbill {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self {
+		Self::from_parts(&self.0 - rhs.0)
+	}
+}
+
+/// This is likely to collapse to zero, as the result will become significantly smaller.
+///
+/// 10^18 will fit in u64, hence it is safe to use it as the intermediary type.
+impl ops::Mul for Perbill {
+	type Output = Self;
+
+	fn mul(self, rhs: Self) -> Self {
+		let p = self.0 as u64;
+		let q = rhs.0 as u64;
+
+		// This will never overflow (given that p and q are valid perbill)
+		let n = p * q;
+		// billion always fits in u32.
+		Self::from_parts((n / 1_000_000_000).min(1_000_000_000) as u32)
+	}
+}
+
+impl CheckedAdd for Perbill {
+	fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		if self.0 + rhs.0 <= 1_000_000_000 {
+			return Some(Self::from_parts(self.0 + rhs.0));
+		}
+		None
+	}
+}
+
+impl CheckedSub for Perbill {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_sub(rhs.0) {
+			return Some(Self::from_parts(v));
+		}
+		None
+	}
+}
+
 #[cfg(feature = "std")]
 impl From<f64> for Perbill {
 	fn from(x: f64) -> Perbill {
@@ -371,6 +526,109 @@ impl codec::CompactAs for Perbill {
 impl From<codec::Compact<Perbill>> for Perbill {
 	fn from(x: codec::Compact<Perbill>) -> Perbill {
 		x.0
+	}
+}
+
+/// Representation of a sign bit.
+///
+/// Note that the ordering matters for proper ordering.
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub enum Sign {
+	/// Negative
+	N,
+	/// Positive
+	P,
+}
+
+/// A fixed point number in the range of `[-(u64::max+1), u64::max]`.
+///
+/// Composed of one `u64` _natural_ part and a `Perbill` _decimal_ part.
+///
+/// It only supports addition and subtraction (through `a - n = a + (-b)`).
+///
+/// Note that a positive instance is always greater than
+/// a negative instance, even if both have `0` as their natural and decimal part.
+///
+/// Note that internal Perbill supports an inclusive range of of [0, 1], hence the number actually
+/// be `n` + `perbill::one()`, which is technically `n + 1`.
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fixed64 {
+	/// Sign of the number
+	sign: Sign,
+	/// The natural part.
+	n: u64,
+	/// The decimal part.
+	decimal: Perbill,
+}
+
+#[allow(dead_code)]
+impl Fixed64 {
+	fn positive(&self) -> bool {
+		self.sign == Sign::P
+	}
+
+	fn negative(&self) -> bool {
+		self.sign != Sign::N
+	}
+
+	fn new(sign: Sign, n: u64, decimal: Perbill) -> Self {
+		Self { sign, decimal, n }
+	}
+
+	fn abs(&self) -> Self {
+		Self { sign: Sign::P, n: self.n, decimal: self.decimal }
+	}
+
+	fn from_perbill(decimal: Perbill) -> Self {
+		Self { decimal, ..Default::default() }
+	}
+}
+
+impl ops::Add for Fixed64 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self {
+		if self.sign == rhs.sign {
+			// sign will not change. Simply add them ignoring the sign
+			let new_decimal = match self.decimal.checked_add(&rhs.decimal) {
+				Some(d) => d,
+				None => Perbill::from_parts((self.decimal.0 + rhs.decimal.0) % 1_000_000_000)
+			};
+			Self {
+				sign: self.sign,
+				n: self.n.saturating_add(rhs.n), /// TODO
+				decimal: new_decimal
+			}
+		} else {
+			// Find the bigger one.
+			if self.abs() >= rhs.abs() {
+				let mut r = 0;
+				// check underflow
+				let new_decimal = match self.decimal.checked_sub(&rhs.decimal) {
+					Some(d) => d,
+					None => {
+						r += 1;
+						Perbill::from_parts(self.decimal.0 + 1_000_000_000 - rhs.decimal.0)
+					}
+				};
+				Self {
+					sign: self.sign,
+					n: self.n - rhs.n - r,
+					decimal: new_decimal
+				}
+			} else {
+				// addition is asymmetric.
+				rhs + self
+			}
+		}
+	}
+}
+
+impl Default for Fixed64 {
+	fn default() -> Fixed64 {
+		Fixed64 { sign: Sign::P, decimal: Perbill::zero(), n: Zero::zero() }
 	}
 }
 
@@ -751,7 +1009,43 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
+	use std::panic::catch_unwind;
 	use crate::codec::{Encode, Decode};
+	use super::{Fixed64, Perbill, Sign, Permill};
+	use super::{CheckedAdd, CheckedSub, Saturating};
+
+	macro_rules! test_per_things_ops {
+		($per:tt, $mul:expr) => {
+			// add
+			assert_eq!($per::from_percent(20) + $per::from_percent(0), $per::from_percent(20));
+			assert_eq!($per::from_percent(20) + $per::from_percent(30), $per::from_percent(50));
+			assert_eq!($per::from_percent(40) + $per::from_percent(30), $per::from_percent(70));
+			assert_eq!($per::from_percent(30) + $per::from_percent(70), $per::from_percent(100));
+			assert!(catch_unwind(|| $per::from_percent(30) + $per::from_percent(80)).is_err());
+			// sub
+			assert_eq!($per::from_percent(20) - $per::from_percent(10), $per::from_percent(10));
+			assert_eq!($per::from_percent(20) - $per::from_percent(0), $per::from_percent(20));
+			assert!(catch_unwind(|| $per::from_percent(20) - $per::from_percent(30)).is_err());
+			// mull
+			assert_eq!($per::from_percent(90) * $per::from_percent(0), $per::from_parts(0));
+			assert_eq!($per::from_percent(99) * $per::from_percent(99), $per::from_parts($mul));
+			assert_eq!($per::from_parts(800) * $per::from_parts(100), $per::from_parts(0));
+
+			// checked add
+			assert!($per::from_percent(30).checked_add(&$per::from_percent(60)) == Some($per::from_percent(90)));
+			assert!($per::from_percent(30).checked_add(&$per::from_percent(80)).is_none());
+			// // checked sub
+			assert!($per::from_percent(40).checked_sub(&$per::from_percent(30)) == Some($per::from_percent(10)));
+			assert!($per::from_percent(20).checked_sub(&$per::from_percent(30)).is_none());
+
+			// // saturating add
+			assert!($per::from_percent(30).saturating_add($per::from_percent(60)) == $per::from_percent(90));
+			assert!($per::from_percent(30).saturating_add($per::from_percent(70)) == $per::one());
+			// // saturating sub
+			assert!($per::from_percent(40).saturating_sub($per::from_percent(30)) == $per::from_percent(10));
+			assert!($per::from_percent(40).saturating_sub($per::from_percent(50)) == $per::zero());
+		}
+	}
 
 	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
@@ -832,7 +1126,6 @@ mod tests {
 
 	#[test]
 	fn per_things_should_work() {
-		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
 		per_thing_upper_test!(u32, Perbill);
@@ -847,7 +1140,7 @@ mod tests {
 
 	#[test]
 	fn per_things_operate_in_output_type() {
-		assert_eq!(super::Perbill::one() * 255_u64, 255);
+		assert_eq!(Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]
@@ -855,13 +1148,81 @@ mod tests {
 		use primitive_types::U256;
 
 		assert_eq!(
-			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			Perbill::from_parts(999_999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
 		);
 
 		assert_eq!(
-			super::Permill::from_parts(999_999) * std::u128::MAX,
+			Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
+	}
+
+	#[test]
+	fn per_things_ops() {
+		test_per_things_ops!(Perbill, 980100000);
+		test_per_things_ops!(Permill, 980100);
+	}
+
+	fn f(s: Sign, n: u64, percent: u32) -> Fixed64 {
+		Fixed64::new(s, n, Perbill::from_percent(percent))
+	}
+
+	fn p(n: u64, percent: u32) -> Fixed64 {
+		f(Sign::P, n, percent)
+	}
+
+	fn n(n: u64, percent: u32) -> Fixed64 {
+		f(Sign::N, n, percent)
+	}
+
+	#[test]
+	fn fixed64_works() {
+		// eq
+		assert_eq!(f(Sign::P, 0, 0), f(Sign::P, 0, 0));
+		assert_ne!(f(Sign::P, 0, 0), f(Sign::N, 0, 0));
+		assert_ne!(f(Sign::P, 0, 0), f(Sign::P, 1, 0));
+		assert_ne!(f(Sign::P, 0, 0), f(Sign::P, 0, 1));
+
+		// ord
+		assert!(f(Sign::P, 0, 0) <= f(Sign::P, 0, 0));
+		assert!(f(Sign::P, 0, 0) < f(Sign::P, 1, 0));
+		assert!(f(Sign::P, 0, 0) > f(Sign::N, 1, 0));
+		assert!(f(Sign::P, 1, 10) < f(Sign::P, 1, 20));
+		assert!(f(Sign::P, 1, 10) < f(Sign::P, 2, 5));
+
+		// sign edge case. A bit sketchy due to derive.
+		assert!(f(Sign::P, 0, 0) > f(Sign::N, 0, 0))
+	}
+
+	#[test]
+	fn fixed64_can_add() {
+		// same sign
+		assert_eq!(p(1, 20) + p(1, 30), p(2, 50));
+		assert_eq!(p(0, 20) + p(3, 30), p(3, 50));
+		assert_eq!(n(0, 20) + n(3, 30), n(3, 50));
+
+		assert_eq!(p(1, 1) + n(0, 99), p(0, 2));
+
+		// different sign
+		assert_eq!(p(1, 40) + n(0, 20), p(1, 20));
+		assert_eq!(p(1, 40) + n(0, 40), p(1, 0));
+		assert_eq!(p(1, 40) + n(0, 70), p(0, 70));
+		assert_eq!(p(1, 40) + n(1, 40), p(0, 0));
+		assert_eq!(p(1, 40) + n(1, 70), n(0, 30));
+		assert_eq!(p(1, 40) + n(2, 40), n(1, 0));
+		assert_eq!(p(1, 40) + n(2, 60), n(1, 20));
+
+		// all are asymmetric
+		assert_eq!(n(0, 20) + p(1, 40), p(1, 20));
+		assert_eq!(n(0, 40) + p(1, 40), p(1, 0));
+		assert_eq!(n(0, 70) + p(1, 40), p(0, 70));
+		assert_eq!(n(1, 70) + p(1, 40), n(0, 30));
+		assert_eq!(n(2, 40) + p(1, 40), n(1, 0));
+		assert_eq!(n(2, 60) + p(1, 40), n(1, 20));
+
+		// except for this guy.
+		assert_eq!(n(1, 40) + p(1, 40), n(0, 0));
+
 	}
 }
