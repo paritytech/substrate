@@ -81,6 +81,8 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: u64,
+	/// Epoch.
+	pub epoch: u64,
 }
 
 impl SlotInfo {
@@ -167,6 +169,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 					timestamp,
 					ends_at,
 					inherent_data,
+					epoch: 0,
 				})))
 			}
 		}
