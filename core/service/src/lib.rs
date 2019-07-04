@@ -433,19 +433,6 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
-		struct ExecutorWithTx(mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>);
-		impl futures::future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for ExecutorWithTx {
-			fn execute(
-				&self,
-				future: Box<dyn Future<Item = (), Error = ()> + Send>
-			) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-				self.0.unbounded_send(future)
-					.map_err(|err| {
-						let kind = futures::future::ExecuteErrorKind::Shutdown;
-						futures::future::ExecuteError::new(kind, err.into_inner())
-					})
-			}
-		}
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(),
 			system_rpc_tx,
@@ -454,7 +441,7 @@ impl<Components: components::Components> Service<Components> {
 			config.rpc_ws,
 			config.rpc_ws_max_connections,
 			config.rpc_cors.clone(),
-			Arc::new(ExecutorWithTx(to_spawn_tx.clone())),
+			Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 			transaction_pool.clone(),
 		)?;
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
