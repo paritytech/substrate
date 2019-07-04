@@ -56,8 +56,13 @@ pub enum WasmBuilderSource {
 		repo: &'static str,
 		rev: &'static str,
 	},
-	/// Use the given version released on crates.io
+	/// Use the given version released on crates.io.
 	Crates(&'static str),
+	/// Use the given version released on crates.io or from the given path.
+	CratesOrPath {
+		version: &'static str,
+		path: &'static str,
+	}
 }
 
 impl WasmBuilderSource {
@@ -74,6 +79,15 @@ impl WasmBuilderSource {
 			}
 			WasmBuilderSource::Crates(version) => {
 				format!("version = \"{}\"", version)
+			}
+			WasmBuilderSource::CratesOrPath { version, path } => {
+				replace_back_slashes(
+					format!(
+						"path = \"{}\", version = \"{}\"",
+						manifest_dir.join(path).display(),
+						version
+					)
+				)
 			}
 		}
 	}
