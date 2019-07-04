@@ -1506,7 +1506,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	let voter = |local_key, peer_id, link, net| {
+	let voter = |local_key, peer_id, link, net| -> Box<dyn Future<Item=(), Error=()> + Send> {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
@@ -1521,7 +1521,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			telemetry_on_connect: None,
 		};
 
-		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
 	};
 
 	// spawn authorities
