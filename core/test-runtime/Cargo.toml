@@ -3,6 +3,7 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 log = { version = "0.4", optional = true }
@@ -29,11 +30,14 @@ cfg-if = "0.1.6"
 substrate-executor = { path = "../executor" }
 substrate-test-runtime-client = { path = "./client" }
 
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.0" }
+
 [features]
 default = [
 	"std",
-	"include-wasm-blob"
 ]
+no_std = []
 std = [
 	"log",
 	"serde",
@@ -55,5 +59,3 @@ std = [
 	"offchain-primitives/std",
 	"executive/std",
 ]
-# If enabled, the WASM blob is added to the `GenesisConfig`.
-include-wasm-blob = []

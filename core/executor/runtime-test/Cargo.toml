@@ -1,11 +1,9 @@
 [package]
-name = "runtime-test"
+name = "substrate-runtime-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-
-[lib]
-crate-type = ["cdylib"]
+build = "build.rs"
 
 [dependencies]
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
@@ -13,9 +11,10 @@ runtime_io = { package = "sr-io", path = "../../sr-io", default-features = false
 sandbox = { package = "sr-sandbox", path = "../../sr-sandbox", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
 
-[profile.release]
-panic = "abort"
-lto = true
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.0" }
 
-[workspace]
-members = []
+[features]
+default = [ "std" ]
+std = []
+no_std = []
