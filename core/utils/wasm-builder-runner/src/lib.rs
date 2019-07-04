@@ -16,12 +16,12 @@
 
 //! # WASM builder runner
 //!
-//! Since cargo contains millions of bugs when it comes to correct dependency and feature
+//! Since cargo contains many bugs when it comes to correct dependency and feature
 //! resolution, we need this little tool. See <https://github.com/rust-lang/cargo/issues/5730> for
 //! more information.
 //!
-//! It will create a project that itself will call `substrate-wasm-builder` to not let any dependency
-//! from `substrate-wasm-builder` influence the main project's dependencies.
+//! It will create a project that will call `substrate-wasm-builder` to prevent any dependencies
+//! from `substrate-wasm-builder` influencing the main project's dependencies.
 //!
 //! For more information see <https://crates.io/substrate-wasm-builder>
 
@@ -76,7 +76,7 @@ impl WasmBuilderSource {
 	}
 }
 
-/// Build the currently build project as WASM binary.
+/// Build the currently built project as WASM binary.
 ///
 /// The current project is determined using the `CARGO_MANIFEST_DIR` environment variable.
 ///
@@ -192,7 +192,7 @@ fn provide_dummy_wasm_binary(file_path: &Path) {
 }
 
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
-/// rebuild when needed.
+/// rebuilt when needed.
 fn generate_rerun_if_changed_instructions() {
 	// Make sure that the `build.rs` is called again if one of the following env variables changes.
 	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);

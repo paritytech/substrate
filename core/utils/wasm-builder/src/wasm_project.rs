@@ -95,7 +95,7 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 
 /// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
 ///
-/// If the `Cargo.lock` can not be found, we emit a warning and return `None`.
+/// If the `Cargo.lock` cannot be found, we emit a warning and return `None`.
 fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 	let mut path = build_helper::out_dir();
 
@@ -231,7 +231,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 	project_folder
 }
 
-/// Returns if the project should be build a release.
+/// Returns if the project should be built as a release.
 fn is_release_build() -> bool {
 	if let Ok(var) = env::var(crate::WASM_BUILD_TYPE_ENV) {
 		match var.as_str() {
@@ -270,7 +270,7 @@ fn build_project(project: &Path) {
 	}
 }
 
-/// Compact the WASM binary using `wasm-gc` and returns the path to the bloaty WASM binary.
+/// Compact the WASM binary using `wasm-gc`. Returns the path to the bloaty WASM binary.
 fn compact_wasm_file(
 	project: &Path,
 	cargo_manifest: &Path,
@@ -297,7 +297,7 @@ fn compact_wasm_file(
 }
 
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
-/// rebuild when needed.
+/// rebuilt when needed.
 fn generate_rerun_if_changed_instructions(
 	cargo_manifest: &Path,
 	project_folder: &Path,

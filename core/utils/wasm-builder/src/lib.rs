@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # WASM builder is an utility for building a project as a WASM binary
+//! # WASM builder is a utility for building a project as a WASM binary
 //!
 //! The WASM builder is a tool that integrates the process of building the WASM binary of your project into the main
 //! `cargo` build process.
@@ -47,7 +47,7 @@
 //! ```
 //!
 //! This will include the generated WASM binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
-//! The former is a compact WASM binary and the later is not compacted.
+//! The former is a compact WASM binary and the latter is not compacted.
 //!
 //! ## Environment variables
 //!
@@ -82,16 +82,16 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 /// Environment variable to force a certain build type when building the WASM binary.
 /// Expects "debug" or "release" as value.
 ///
-/// By default the WASM binary uses the same build type a the main cargo build.
+/// By default the WASM binary uses the same build type as the main cargo build.
 const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
 
-/// Build the currently build project as WASM binary.
+/// Build the currently built project as WASM binary.
 ///
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
 ///
 /// `file_name` - The name + path of the file being generated. The file contains the
-///               constant `WASM_BINARY` which contains the build wasm binary.
-/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be build.
+///               constant `WASM_BINARY`, which contains the built WASM binary.
+/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
 pub fn build_project(file_name: &str, cargo_manifest: &str) {
 	if check_skip_build() {
 		return;
