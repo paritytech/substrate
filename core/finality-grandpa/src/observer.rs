@@ -126,8 +126,10 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 				Err(e) => return future::err(e),
 			};
 
-			// note that we've observed completion of this round through the commit
+			// note that we've observed completion of this round through the commit,
+			// and that implies that the next round has started.
 			note_round(round);
+			note_round(round + 1);
 
 			grandpa::process_commit_validation_result(validation_result, callback);
 
