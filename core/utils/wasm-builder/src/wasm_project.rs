@@ -252,9 +252,17 @@ fn is_release_build() -> bool {
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = crate::get_nightly_cargo();
+
+	// Note that we set the stack-size to 1MB explicitly even though it is set
+	// to this value by default. This is because some of our tests (`restoration_of_globals`)
+	// depend on the stack-size.
+	const RUSTFLAGS: &'static str = "
+		-C link-arg=--export-table \
+		-C link-arg=-zstack-size=1048576";
+
 	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
-		.env("RUSTFLAGS", "-C link-arg=--export-table")
+		.env("RUSTFLAGS", RUSTFLAGS)
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
