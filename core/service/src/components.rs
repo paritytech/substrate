@@ -21,7 +21,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service, maybe_start_server};
+use crate::{error, Service, maybe_start_server, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -267,6 +267,7 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -282,6 +283,7 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,

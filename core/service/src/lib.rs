@@ -78,7 +78,7 @@ pub struct Service<Components: components::Components> {
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Keystore,
+	keystore: AuthorityKeyProvider,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -97,6 +97,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
+		AuthorityKeyProvider,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -237,6 +238,11 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
+		let keystore_authority_key = AuthorityKeyProvider {
+			roles: config.roles,
+			password: config.password.clone(),
+			keystore: Arc::new(keystore),
+		};
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -244,6 +250,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
+					keystore_authority_key.clone(),
 					config.password.clone(),
 				)))
 			},
@@ -510,7 +517,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
+			keystore: keystore_authority_key,
 			config,
 			exit,
 			_rpc: Box::new(rpc),
@@ -522,15 +529,9 @@ impl<Components: components::Components> Service<Components> {
 
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
-		if self.config.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, self.config.password.as_ref())))
-		{
-			Some(key)
-		} else {
-			None
-		}
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.authority_key()
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -579,7 +580,7 @@ impl<Components: components::Components> Service<Components> {
 
 	/// Get shared keystore.
 	pub fn keystore(&self) -> &Keystore {
-		&self.keystore
+		&*self.keystore.keystore
 	}
 
 	/// Get a handle to a future that will resolve on exit.
@@ -803,6 +804,30 @@ fn build_system_rpc_handler<Components: components::Components>(
 
 		Ok(())
 	})
+}
+
+/// A provider of current authority key.
+#[derive(Clone)]
+pub struct AuthorityKeyProvider {
+	roles: Roles,
+	keystore: Arc<Keystore>,
+	password: primitives::crypto::Protected<String>,
+}
+
+impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
+	type Pair = primitives::ed25519::Pair;
+
+	fn authority_key(&self) -> Option<Self::Pair> {
+		if self.roles != Roles::AUTHORITY { return None }
+		let keystore = &self.keystore;
+		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+				.map(|k| keystore.load(k, self.password.as_ref())))
+		{
+			Some(key)
+		} else {
+			None
+		}
+	}
 }
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.

@@ -43,7 +43,7 @@ use client::runtime_api::ApiExt;
 use log::{debug, warn};
 use primitives::{
 	ExecutionContext,
-	crypto::Protected,
+	crypto,
 };
 use runtime_primitives::{
 	generic::BlockId,
@@ -58,41 +58,74 @@ pub mod testing;
 
 pub use offchain_primitives::OffchainWorkerApi;
 
+/// Provides currently configured authority key.
+pub trait AuthorityKeyProvider {
+	/// A key type.
+	type Pair: crypto::Pair;
+
+	/// Returns currently configured authority key.
+	fn authority_key(&self) -> Option<Self::Pair>;
+}
+
 /// An offchain workers manager.
-pub struct OffchainWorkers<C, S, Block: traits::Block> {
-	client: Arc<C>,
-	db: S,
-	keys_password: Protected<String>,
+pub struct OffchainWorkers<
+	Client,
+	Storage,
+	KeyProvider,
+	Block: traits::Block,
+> {
+	client: Arc<Client>,
+	db: Storage,
+	authority_key: KeyProvider,
+	keys_password: crypto::Protected<String>,
 	_block: PhantomData<Block>,
 }
 
-impl<C, S, Block: traits::Block> OffchainWorkers<C, S, Block> {
+impl<Client, Storage, KeyProvider, Block: traits::Block> OffchainWorkers<
+	Client,
+	Storage,
+	KeyProvider,
+	Block,
+> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
-		client: Arc<C>,
-		db: S,
-		keys_password: Protected<String>,
+		client: Arc<Client>,
+		db: Storage,
+		authority_key: KeyProvider,
+		keys_password: crypto::Protected<String>,
 	) -> Self {
 		Self {
 			client,
 			db,
+			authority_key,
 			keys_password,
 			_block: PhantomData,
 		}
 	}
 }
 
-impl<C, S, Block: traits::Block> fmt::Debug for OffchainWorkers<C, S, Block> {
+impl<Client, Storage, KeyProvider, Block: traits::Block> fmt::Debug for OffchainWorkers<
+	Client,
+	Storage,
+	KeyProvider,
+	Block,
+> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
 }
 
-impl<C, S, Block> OffchainWorkers<C, S, Block> where
+impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
+	Client,
+	Storage,
+	KeyProvider,
+	Block,
+> where
 	Block: traits::Block,
-	S: client::backend::OffchainStorage + 'static,
-	C: ProvideRuntimeApi,
-	C::Api: OffchainWorkerApi<Block>,
+	Client: ProvideRuntimeApi,
+	Client::Api: OffchainWorkerApi<Block>,
+	KeyProvider: AuthorityKeyProvider,
+	Storage: client::backend::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
@@ -113,6 +146,7 @@ impl<C, S, Block> OffchainWorkers<C, S, Block> where
 				pool.clone(),
 				self.db.clone(),
 				self.keys_password.clone(),
+				self.authority_key.authority_key(),
 				at.clone(),
 			);
 			debug!("Running offchain workers at {:?}", at);
@@ -130,6 +164,12 @@ mod tests {
 	use super::*;
 	use futures::Future;
 
+	struct TestProvider;
+	impl AuthorityKeyProvider for TestProvider {
+		type Pair = primitives::ed25519::Pair;
+		fn authority_key(&self) -> Option<Self::Pair> { None }
+	}
+
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
@@ -140,7 +180,7 @@ mod tests {
 		let db = client_db::offchain::LocalStorage::new_test();
 
 		// when
-		let offchain = OffchainWorkers::new(client, db, "".to_owned().into());
+		let offchain = OffchainWorkers::new(client, db, TestProvider, "".to_owned().into());
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then
