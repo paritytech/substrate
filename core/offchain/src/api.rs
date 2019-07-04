@@ -206,7 +206,6 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		}
 	}
 
-	// TODO [ToDr] Change the definition to take two `Option`s instead?
 	fn local_storage_compare_and_set(
 		&mut self,
 		kind: StorageKind,
