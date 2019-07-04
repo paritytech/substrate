@@ -17,9 +17,5 @@
 use wasm_builder_runner::{build_current_project, WasmBuilderSource};
 
 fn main() {
-	/// TODO: this will not work with a released `node-template`.
-	build_current_project(
-		"wasm_binary.rs",
-		WasmBuilderSource::Path("../../core/utils/wasm-builder"),
-	);
+	build_current_project("wasm_binary.rs", WasmBuilderSource::Crates("1.0.1"));
 }
