@@ -253,7 +253,7 @@ cfg_if! {
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
-				fn allocates_huge_stack_array(trap: bool);
+				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -286,7 +286,7 @@ cfg_if! {
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
-				fn allocates_stack_alot(trap: bool);
+				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -463,7 +463,7 @@ cfg_if! {
 					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
 
-				fn allocates_stack_alot(_trap: bool) {
+				fn allocates_huge_stack_array(_trap: bool) -> Vec<u8> {
 					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
 
@@ -619,7 +619,7 @@ cfg_if! {
 					}
 				}
 
-				fn allocates_stack_alot(trap: bool) {
+				fn allocates_huge_stack_array(trap: bool) -> Vec<u8> {
 					// Allocate a stack frame that is approx. 75% of the stack (assuming it is 1MB).
 					// This will just decrease (stacks in wasm32-u-u grow downwards) the stack
 					// pointer. This won't trap on the current compilers.
@@ -643,6 +643,8 @@ cfg_if! {
 						// the probability of that is rather low.
 						panic!()
 					}
+
+					data.to_vec()
 				}
 
 				fn get_block_number() -> u64 {

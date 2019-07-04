@@ -220,10 +220,10 @@ fn restoration_of_globals() {
 	let block_id = BlockId::Number(client.info().chain.best_number);
 
 	// On the first invocation we allocate approx. 75% of stack and then trap.
-	let ret = runtime_api.allocates_stack_alot(&block_id, true);
+	let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
 	assert!(ret.is_err());
 
-	// On the second invocation we allocate yet another 75% of stack 
-	let ret = runtime_api.allocates_stack_alot(&block_id, false);
+	// On the second invocation we allocate yet another 75% of stack
+	let ret = runtime_api.allocates_huge_stack_array(&block_id, false);
 	assert!(ret.is_ok());
 }
