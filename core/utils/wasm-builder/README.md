@@ -1,13 +1,13 @@
 # substrate-wasm-builder
 
-## WASM builder is an utility for building a project as a WASM binary
+## WASM builder is a utility for building a project as a WASM binary
 
 The WASM builder is a tool that integrates the building of a WASM binary of your project into the main
 `cargo` build process.
 
 ### Project setup
 
-A project that should be compiled as WASM binary needs to add a `build.rs`, add
+A project that should be compiled as a WASM binary needs to add a `build.rs`, add
 `substrate-wasm-builder-runner` as dependency into `build-dependencies` and requires to have a
 feature called `no-std`. The `build.rs` needs to contain the following code:
 
@@ -26,18 +26,18 @@ fn main() {
 
 The `no-std` feature will be enabled by WASM builder while compiling your project to WASM.
 
-As a last step you need to add the following to your project:
+As a last step, you need to add the following to your project:
 
 ```rust,nocompile
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 ```
 
-This will include the generated wasm binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
-The former is the WASM binary compacted and the later without compaction.
+This will include the generated WASM binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
+The former is the WASM binary compacted and the latter without compaction.
 
 ### Environment variables
 
-By using environment variables, you can configure which WASM binaries are build and how:
+By using environment variables, you can configure which WASM binaries to build and how:
 
 - `SKIP_WASM_BUILD` - Skips building any WASM binary. This is useful when only native should be recompiled.
 - `BUILD_DUMMY_WASM_BINARY` - Builds dummy WASM binaries. These dummy binaries are empty and useful
