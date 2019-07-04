@@ -2402,11 +2402,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "autocfg 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "autocfg 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-bigint 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3549,7 +3569,7 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
  "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.5 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)",
 ]
 
 [[package]]
@@ -4340,6 +4360,7 @@ dependencies = [
  "libsecp256k1 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-version 2.0.0",
@@ -4353,7 +4374,7 @@ dependencies = [
  "substrate-trie 2.0.0",
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.5 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)",
 ]
 
 [[package]]
@@ -4555,7 +4576,7 @@ dependencies = [
  "substrate-serializer 2.0.0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.5 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)",
 ]
 
 [[package]]
@@ -5599,11 +5620,22 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#7894e5e5fc8cd932aa79a38b60fd91bc761cbaa6"
 dependencies = [
+ "libc 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory_units 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-rational 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi-validation 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi-validation 0.1.0 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)",
+]
+
+[[package]]
+name = "wasmi-validation"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#7894e5e5fc8cd932aa79a38b60fd91bc761cbaa6"
+dependencies = [
+ "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6039,7 +6071,9 @@ dependencies = [
 "checksum nodrop 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "2f9667ddcc6cc8a43afc9b7917599d7216aa09c463919ea32c59ed6cac8bc945"
 "checksum nohash-hasher 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0d138afcce92d219ccb6eb53d9b1e8a96ac0d633cfd3c53cd9856d96d1741bb8"
 "checksum nom 4.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2ad2a91a8e869eeb30b9cb3119ae87773a8f4ae617f41b1eb9c154b2905f7bd6"
+"checksum num-bigint 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "57450397855d951f1a41305e54851b1a7b8f5d2e349543a02a2effe25459f718"
 "checksum num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)" = "b85e541ef8255f6cf42bbfe4ef361305c6c135d10919ecc26126c4e5ae94bc09"
+"checksum num-rational 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f2885278d5fe2adc2f75ced642d52d879bffaceb5a2e0b1d4309ffdfb239b454"
 "checksum num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "6ba9a427cfca2be13aa6f6403b0b7e7368fe982bfa16fccc450ce74c46cd9b32"
 "checksum num_cpus 1.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "bcef43580c035376c0705c42792c294b66974abbfd2789b511784023f71f3273"
 "checksum numtoa 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
@@ -6249,7 +6283,8 @@ dependencies = [
 "checksum wasm-bindgen-shared 0.2.47 (registry+https://github.com/rust-lang/crates.io-index)" = "15de16ddb30cfd424a87598b30021491bae1607d32e52056979865c98b7913b4"
 "checksum wasm-bindgen-webidl 0.2.47 (registry+https://github.com/rust-lang/crates.io-index)" = "21724123084234fff2f986018b790afc5d6f45c9a3903025e6c55d0068cb7d15"
 "checksum wasm-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3d6101df9a5987df809216bdda7289f52b58128e6b6a6546e9ee3e6b632b4921"
-"checksum wasmi 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "aebbaef470840d157a5c47c8c49f024da7b1b80e90ff729ca982b2b80447e78b"
+"checksum wasmi 0.4.5 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)" = "<none>"
+"checksum wasmi-validation 0.1.0 (git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc)" = "<none>"
 "checksum wasmi-validation 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ab380192444b3e8522ae79c0a1976e42a82920916ccdfbce3def89f456ea33f3"
 "checksum web-sys 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)" = "22306ce642c58266cb5c5938150194911322bc179aa895146076217410ddbc82"
 "checksum webpki 0.19.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4f7e1cd7900a3a6b65a3e8780c51a3e6b59c0e2c55c6dc69578c288d69f7d082"
