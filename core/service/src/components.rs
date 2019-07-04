@@ -160,10 +160,6 @@ impl<C: Components> StartRPC<Self> for C where
 		client: Arc<ComponentClient<C>>,
 		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
-		/*rpc_http: Option<SocketAddr>,
-		rpc_ws: Option<SocketAddr>,
-		rpc_ws_max_connections: Option<usize>,
-		rpc_cors: Option<Vec<String>>,*/
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> rpc::RpcHandler {
