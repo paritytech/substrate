@@ -28,6 +28,7 @@ members = [
 	"core/consensus/rhd",
 	"core/consensus/slots",
 	"core/executor",
+	"core/executor/runtime-test",
 	"core/finality-grandpa",
 	"core/finality-grandpa/primitives",
 	"core/inherents",
@@ -55,7 +56,9 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"core/trie",
-	"core/util/fork-tree",
+	"core/utils/fork-tree",
+	"core/utils/wasm-builder",
+	"core/utils/wasm-builder-runner",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
@@ -88,11 +91,6 @@ members = [
 	"node-template",
 	"subkey",
 	"test-utils/chain-spec-builder",
-]
-exclude = [
-	"node/runtime/wasm",
-	"core/executor/wasm",
-	"core/test-runtime/wasm",
 ]
 
 [badges]
