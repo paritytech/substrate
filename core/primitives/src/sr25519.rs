@@ -381,7 +381,7 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 
 /// The raw `MiniSecretKey` bytes.
 #[cfg(feature = "std")]
-pub type Seed = [u8; MINI_SECRET_KEY_LENGTH];
+type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
 #[cfg(feature = "std")]
 impl TraitPair for Pair {

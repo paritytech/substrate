@@ -38,7 +38,7 @@ use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, Unche
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
 /// will need it later (such as for HDKD).
 #[cfg(feature = "std")]
-pub type Seed = [u8; 32];
+type Seed = [u8; 32];
 
 /// A public key.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
