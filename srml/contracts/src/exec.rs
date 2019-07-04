@@ -15,13 +15,14 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf, ContractInfoOf};
+	TrieId, BalanceOf, ContractInfo};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
+use crate::rent;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use srml_support::{StorageMap, traits::{WithdrawReason, Currency}};
+use srml_support::traits::{WithdrawReason, Currency};
 use timestamp;
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -267,11 +268,11 @@ where
 {
 	/// Create the top level execution context.
 	///
-	/// The specified `origin` address will be used as `sender` for
+	/// The specified `origin` address will be used as `sender` for. The `origin` must be a regular
+	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			self_trie_id: <ContractInfoOf<T>>::get(&origin)
-				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
+			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
@@ -283,10 +284,11 @@ where
 		}
 	}
 
-	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
+	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId, trie_id: Option<TrieId>)
+		-> Self
+	{
 		ExecutionContext {
-			self_trie_id: <ContractInfoOf<T>>::get(&dest)
-				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
+			self_trie_id: trie_id,
 			self_account: dest,
 			overlay,
 			depth: self.depth + 1,
@@ -321,14 +323,20 @@ where
 		// Assumption: pay_rent doesn't collide with overlay because
 		// pay_rent will be done on first call and dest contract and balance
 		// cannot be changed before the first call
-		crate::rent::pay_rent::<T>(&dest);
+		let contract_info = rent::pay_rent::<T>(&dest);
+
+		// Calls to dead contracts always fail.
+		if let Some(ContractInfo::Tombstone(_)) = contract_info {
+			return Err("contract has been evicted");
+		};
 
 		let mut output_data = Vec::new();
 
 		let (change_set, events, calls) = {
 			let mut nested = self.nested(
 				OverlayAccountDb::new(&self.overlay),
-				dest.clone()
+				dest.clone(),
+				contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()))
 			);
 
 			if value > BalanceOf::<T>::zero() {
@@ -342,6 +350,8 @@ where
 				)?;
 			}
 
+			// If code_hash is not none, then the destination account is a live contract, otherwise
+			// it is a regular account since tombstone accounts have already been rejected.
 			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
 				let executable = self.loader.load_main(&dest_code_hash)?;
 				output_data = self
@@ -400,7 +410,8 @@ where
 
 			overlay.create_contract(&dest, code_hash.clone())?;
 
-			let mut nested = self.nested(overlay, dest.clone());
+			// TrieId has not been generated yet and storage is empty since contract is new.
+			let mut nested = self.nested(overlay, dest.clone(), None);
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.

@@ -26,7 +26,7 @@ consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../.
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.0" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.1" }
 
 [features]
 default = ["std"]

@@ -25,7 +25,7 @@
 //!
 //! For more information see <https://crates.io/substrate-wasm-builder>
 
-use std::{env, process::Command, fs, path::{PathBuf, Path}};
+use std::{env, process::{Command, self}, fs, path::{PathBuf, Path}};
 
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
@@ -56,8 +56,13 @@ pub enum WasmBuilderSource {
 		repo: &'static str,
 		rev: &'static str,
 	},
-	/// Use the given version released on crates.io
+	/// Use the given version released on crates.io.
 	Crates(&'static str),
+	/// Use the given version released on crates.io or from the given path.
+	CratesOrPath {
+		version: &'static str,
+		path: &'static str,
+	}
 }
 
 impl WasmBuilderSource {
@@ -75,6 +80,15 @@ impl WasmBuilderSource {
 			WasmBuilderSource::Crates(version) => {
 				format!("version = \"{}\"", version)
 			}
+			WasmBuilderSource::CratesOrPath { version, path } => {
+				replace_back_slashes(
+					format!(
+						"path = \"{}\", version = \"{}\"",
+						manifest_dir.join(path).display(),
+						version
+					)
+				)
+			}
 		}
 	}
 }
@@ -87,9 +101,9 @@ impl WasmBuilderSource {
 ///               constant `WASM_BINARY` which contains the build wasm binary.
 /// `wasm_builder_path` - Path to the wasm-builder project, relative to `CARGO_MANIFEST_DIR`.
 pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSource) {
-	generate_rerun_if_changed_instructions();
-
 	if check_skip_build() {
+		// If we skip the build, we still want to make sure to be called when an env variable changes
+		generate_rerun_if_changed_instructions();
 		return;
 	}
 
@@ -110,6 +124,10 @@ pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSo
 		create_project(&project_folder, &file_path, &manifest_dir, wasm_builder_source, &cargo_toml_path);
 		run_project(&project_folder);
 	}
+
+	// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
+	// want to spam the output!
+	generate_rerun_if_changed_instructions();
 }
 
 fn create_project(
@@ -164,7 +182,8 @@ fn run_project(project_folder: &Path) {
 	}
 
 	if !cmd.status().map(|s| s.success()).unwrap_or(false) {
-		panic!("Running WASM build runner failed!");
+		// Don't spam the output with backtraces when a build failed!
+		process::exit(1);
 	}
 }
 
