@@ -445,7 +445,7 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	// exposed immutables.
+	// Exposed immutables.
 
 	/// Get the balance locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
@@ -569,7 +569,7 @@ impl<T: Trait> Module<T> {
 		<Module<T>>::clear_referendum(ref_index);
 	}
 
-	// private.
+	// Private functions.
 
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
@@ -628,7 +628,7 @@ impl<T: Trait> Module<T> {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
 
-			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (BalanceOf<T>, Vec<T::AccountId>) =
+			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
 				// refund depositors
 				for d in &depositors {
 					T::Currency::unreserve(d, deposit);
