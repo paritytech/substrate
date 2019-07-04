@@ -212,10 +212,15 @@ macro_rules! impl_session_handlers {
 
 for_each_tuple!(impl_session_handlers);
 
+/// Handler for selecting the genesis validator set.
 pub trait SelectInitialValidators<T: Trait> {
+	/// Returns the initial validator set. If `None` is returned
+	/// all accounts that have session keys set in the genesis block
+	/// will be validators.
 	fn select_initial_validators() -> Option<Vec<T::AccountId>>;
 }
 
+/// Implementation of `SelectInitialValidators` that does nothing.
 pub struct AllValidators;
 impl<T: Trait> SelectInitialValidators<T> for AllValidators {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
