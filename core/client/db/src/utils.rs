@@ -17,7 +17,9 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{io, convert::TryInto, sync::Arc};
+#[cfg(feature = "kvdb-rocksdb")]
+use std::sync::Arc;
+use std::{io, convert::TryInto};
 
 use kvdb::{KeyValueDB, DBTransaction};
 #[cfg(feature = "kvdb-rocksdb")]
@@ -32,11 +34,12 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, UniqueSaturatedFrom,
 	UniqueSaturatedInto, CheckedConversion
 };
+#[cfg(feature = "kvdb-rocksdb")]
 use crate::DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-pub const NUM_COLUMNS: u32 = 9;
+pub const NUM_COLUMNS: u32 = 10;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: Option<u32> = Some(0);
 

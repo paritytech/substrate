@@ -126,6 +126,7 @@ impl session::Trait for Test {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type SelectInitialValidators = Staking;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
@@ -148,26 +149,26 @@ impl Trait for Test {
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	current_era: EraIndex,
 	reward: u64,
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
 	fair: bool,
+	num_validators: Option<u32>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			current_era: 0,
 			reward: 10,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			fair: true
+			fair: true,
+			num_validators: None,
 		}
 	}
 }
@@ -175,10 +176,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn _current_era(mut self, current_era: EraIndex) -> Self {
-		self.current_era = current_era;
 		self
 	}
 	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
@@ -201,6 +198,10 @@ impl ExtBuilder {
 		self.fair = is_fair;
 		self
 	}
+	pub fn num_validators(mut self, num_validators: u32) -> Self {
+		self.num_validators = Some(num_validators);
+		self
+	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
@@ -212,12 +213,12 @@ impl ExtBuilder {
 		} else {
 			1
 		};
-		let validators = if self.validator_pool { vec![10, 20, 30, 40] } else { vec![10, 20] };
-		let _ = session::GenesisConfig::<Test>{
-			// NOTE: if config.nominate == false then 100 is also selected in the initial round.
-			validators,
-			keys: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+
+		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		let validators = (0..num_validators)
+			.map(|x| ((x + 1) * 10) as u64)
+			.collect::<Vec<_>>();
+
 		let _ = balances::GenesisConfig::<Test>{
 			balances: vec![
 					(1, 10 * balance_factor),
@@ -237,6 +238,7 @@ impl ExtBuilder {
 			],
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
 		let status_41 = if self.validator_pool {
@@ -246,7 +248,7 @@ impl ExtBuilder {
 		};
 		let nominated = if self.nominate { vec![11, 21] } else { vec![] };
 		let _ = GenesisConfig::<Test>{
-			current_era: self.current_era,
+			current_era: 0,
 			stakers: vec![
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
@@ -263,9 +265,15 @@ impl ExtBuilder {
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+
 		let _ = timestamp::GenesisConfig::<Test>{
 			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
+
+		let _ = session::GenesisConfig::<Test> {
+			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
+		}.assimilate_storage(&mut t, &mut c);
+
 		let mut ext = t.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
@@ -346,6 +354,8 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 }
 
 pub fn start_session(session_index: session::SessionIndex) {
+	// Compensate for session delay
+	let session_index = session_index + 1;
 	for i in 0..(session_index - Session::current_index()) {
 		System::set_block_number((i + 1).into());
 		Session::on_initialize(System::block_number());

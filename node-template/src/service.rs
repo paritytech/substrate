@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
+use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
@@ -27,7 +27,7 @@ native_executor_instance!(
 	pub Executor,
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
-	include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm")
+	WASM_BINARY
 );
 
 #[derive(Default)]

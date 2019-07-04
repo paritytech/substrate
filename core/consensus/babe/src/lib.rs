@@ -23,7 +23,8 @@
 //! This crate is highly unstable and experimental.  Breaking changes may
 //! happen at any point.  This crate is also missing features, such as banning
 //! of malicious validators, that are essential for a production network.
-#![forbid(unsafe_code, missing_docs)]
+#![forbid(unsafe_code, missing_docs, unused_must_use)]
+#![cfg_attr(not(test), forbid(dead_code))]
 extern crate core;
 mod digest;
 use digest::CompatibleDigestItem;
@@ -120,17 +121,17 @@ impl Config {
 	}
 }
 
-struct BabeSlotCompatible;
-
-impl SlotCompatible for BabeSlotCompatible {
+impl SlotCompatible for BabeLink {
 	fn extract_timestamp_and_slot(
-		data: &InherentData
-	) -> Result<(TimestampInherent, u64), consensus_common::Error> {
+		&self,
+		data: &InherentData,
+	) -> Result<(TimestampInherent, u64, std::time::Duration), consensus_common::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
+			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
 	}
 }
 
@@ -164,6 +165,9 @@ pub struct BabeParams<C, E, I, SO, SC> {
 
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
+
+	/// The source of timestamps for relative slots
+	pub time_source: BabeLink,
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
@@ -177,6 +181,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	sync_oracle,
 	inherent_data_providers,
 	force_authoring,
+	time_source,
 }: BabeParams<C, E, I, SO, SC>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
@@ -203,12 +208,13 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		threshold: config.threshold(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
-	Ok(slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible>(
+	Ok(slots::start_slot_worker::<_, _, _, _, _, _>(
 		config.0,
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers
+		inherent_data_providers,
+		time_source,
 	))
 }
 
@@ -279,7 +285,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let proposal_work = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -312,7 +318,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let inherent_digest = BabePreDigest {
 				proof,
 				vrf_output: inout.to_output(),
-				author: pair.public(),
+				index: index as u64,
 				slot_num,
 			};
 
@@ -459,17 +465,17 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	})?;
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
-	let BabePreDigest { slot_num, ref author, ref proof, ref vrf_output } = pre_digest;
+	let BabePreDigest { slot_num, index, ref proof, ref vrf_output } = pre_digest;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_num))
-	} else if !authorities.contains(&author) {
+	} else if index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
-		let pre_hash = header.hash();
+		let (pre_hash, author): (_, &sr25519::Public) = (header.hash(), &authorities[index as usize]);
 
-		if sr25519::Pair::verify(&sig, pre_hash, author) {
+		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -513,12 +519,16 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	}
 }
 
+/// State that must be shared between the import queue and the authoring logic.
+#[derive(Default, Clone, Debug)]
+pub struct BabeLink(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
+
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<C> {
 	client: Arc<C>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
-	timestamps: Mutex<(Option<Duration>, Vec<(Instant, u64)>)>,
+	time_source: BabeLink,
 }
 
 impl<C> BabeVerifier<C> {
@@ -551,11 +561,11 @@ fn median_algorithm(
 	slot_duration: u64,
 	slot_num: u64,
 	slot_now: u64,
-	timestamps: &mut (Option<Duration>, Vec<(Instant, u64)>),
+	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
 ) {
-	let num_timestamps = timestamps.1.len();
+	let num_timestamps = time_source.1.len();
 	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
-		let mut new_list: Vec<_> = timestamps.1.iter().map(|&(t, sl)| {
+		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
 				let offset: u128 = u128::from(slot_duration)
 					.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
 					.and_then(|x| x.checked_mul(u128::from(slot_num).saturating_sub(u128::from(sl))))
@@ -570,11 +580,11 @@ fn median_algorithm(
 		let &median = new_list
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
-		timestamps.1.clear();
+		time_source.1.clear();
 		// FIXME #2927: pass this to the block authoring logic somehow
-		timestamps.0.replace(Instant::now() - median);
+		time_source.0.replace(Instant::now() - median);
 	} else {
-		timestamps.1.push((Instant::now(), slot_now))
+		time_source.1.push((Instant::now(), slot_now))
 	}
 }
 
@@ -604,7 +614,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.inherent_data_providers
 			.create_inherent_data()
 			.map_err(String::from)?;
-		let (_, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -672,7 +682,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					self.config.get(),
 					slot_num,
 					slot_now,
-					&mut *self.timestamps.lock(),
+					&mut *self.time_source.0.lock(),
 				);
 				// FIXME #1019 extract authorities
 				Ok((import_block, maybe_keys))
@@ -765,8 +775,9 @@ fn claim_slot(
 	authorities: &[AuthorityId],
 	key: &sr25519::Pair,
 	threshold: u64,
-) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
-	if !authorities.contains(&key.public()) { return None }
+) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
+	let public = &key.public();
+	let index = authorities.iter().position(|s| s == public)?;
 	let transcript = make_transcript(
 		randomness,
 		slot_number,
@@ -780,7 +791,9 @@ fn claim_slot(
 	// be empty.  Therefore, this division is safe.
 	let threshold = threshold / authorities.len() as u64;
 
-	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
+	get_keypair(key)
+		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
+		.map(|s|(s, index))
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
@@ -822,7 +835,7 @@ pub fn import_queue<B, C, E>(
 	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<BabeImportQueue<B>, consensus_common::Error> where
+) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
@@ -832,28 +845,27 @@ pub fn import_queue<B, C, E>(
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*client)?;
 
-	let verifier = Arc::new(
-		BabeVerifier {
-			client: client,
-			inherent_data_providers,
-			timestamps: Default::default(),
-			config,
-		}
-	);
-	Ok(BasicQueue::new(
-		verifier,
+	let verifier = BabeVerifier {
+		client: client,
+		inherent_data_providers,
+		time_source: Default::default(),
+		config,
+	};
+	let timestamp_core = verifier.time_source.clone();
+	Ok((BasicQueue::new(
+		Arc::new(verifier),
 		block_import,
 		justification_import,
 		finality_proof_import,
 		finality_proof_request_builder,
-	))
+	), timestamp_core))
 }
 
-#[cfg(test)]
-#[allow(dead_code, unused_imports, deprecated)]
 // FIXME #2532: need to allow deprecated until refactor is done
 // https://github.com/paritytech/substrate/issues/2532
-
+#[cfg(test)]
+#[allow(unused_imports, deprecated)]
+#[cfg_attr(test, allow(dead_code))]
 mod tests {
 	use super::*;
 
@@ -947,7 +959,7 @@ mod tests {
 				client,
 				inherent_data_providers,
 				config,
-				timestamps: Default::default(),
+				time_source: Default::default(),
 			})
 		}
 
@@ -1028,7 +1040,7 @@ mod tests {
 			#[allow(deprecated)]
 			let select_chain = LongestChain::new(client.backend().clone());
 
-			let babe = start_babe(BabeParams {
+			runtime.spawn(start_babe(BabeParams {
 				config,
 				local_key: Arc::new(key.clone().into()),
 				block_import: client.clone(),
@@ -1038,9 +1050,8 @@ mod tests {
 				sync_oracle: DummyOracle,
 				inherent_data_providers,
 				force_authoring: false,
-			}).expect("Starts babe");
-
-			runtime.spawn(babe);
+			    time_source: Default::default(),
+			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");
 

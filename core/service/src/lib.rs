@@ -32,7 +32,7 @@ use std::time::Duration;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend};
+use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -51,11 +51,10 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
-use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient,
+	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
@@ -79,7 +78,7 @@ pub struct Service<Components: components::Components> {
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Keystore,
+	keystore: Option<Keystore>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -94,8 +93,12 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
+		ComponentClient<Components>,
+		ComponentOffchainStorage<Components>,
+		ComponentBlock<Components>>
+	>>,
 }
 
 /// Creates bare client without any networking.
@@ -116,10 +119,17 @@ pub struct SpawnTaskHandle {
 	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
-impl SpawnTaskHandle {
-	/// Spawn a task to run the given future.
-	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.sender.unbounded_send(Box::new(task));
+impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.sender.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -153,24 +163,40 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+			match Keystore::open(keystore_path.clone()) {
+				Ok(ks) => Some(ks),
+				Err(err) => {
+					error!("Failed to initialize keystore: {}", err);
+					None
+				}
+			}
+		} else {
+			None
+		};
+
+		// Keep the public key for telemetry
+		let public_key: String;
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed::<ed25519::Pair>(seed)?;
-		}
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
-			Some(public_key) => public_key.to_owned(),
-			None => {
-				let key: ed25519::Pair = keystore.generate(&config.password)?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
-
-				public_key
+		if let Some(keystore) = keystore.as_mut() {
+			for seed in &config.keys {
+				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
 			}
-		};
+
+			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
+				Some(public_key) => public_key.to_string(),
+				None => {
+					let key: ed25519::Pair = keystore.generate(&config.password)?;
+					let public_key = key.public();
+					info!("Generated a new keypair: {:?}", public_key);
+					public_key.to_string()
+				}
+			}
+		} else {
+			public_key = format!("<disabled-keystore>");
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -234,10 +260,20 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(client.clone())))
-		} else {
-			None
+		#[allow(deprecated)]
+		let offchain_storage = client.backend().offchain_storage();
+		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+			(true, Some(db)) => {
+				Some(Arc::new(offchain::OffchainWorkers::new(
+					client.clone(),
+					db,
+				)))
+			},
+			(true, None) => {
+				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				None
+			},
+			_ => None,
 		};
 
 		{
@@ -449,7 +485,6 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
-			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
@@ -470,7 +505,7 @@ impl<Components: components::Components> Service<Components> {
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
-						"pubkey" => &pubkey,
+						"pubkey" => &public_key,
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
@@ -513,11 +548,14 @@ impl<Components: components::Components> Service<Components> {
 		<TPair as Pair>::Public: Public + TypedKey,
 	{
 		if self.config.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| {
-			keys.get(0).map(|k| keystore.load::<TPair>(k, &self.config.password))
-		}) {
-			Some(key)
+		if let Some(keystore) = &self.keystore {
+			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
+					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
+			{
+				Some(key)
+			} else {
+				None
+			}
 		} else {
 			None
 		}
@@ -567,11 +605,6 @@ impl<Components: components::Components> Service<Components> {
 		self.transaction_pool.clone()
 	}
 
-	/// Get shared keystore.
-	pub fn keystore(&self) -> &Keystore {
-		&self.keystore
-	}
-
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()
@@ -602,6 +635,22 @@ impl<Components> Future for Service<Components> where Components: components::Co
 
 		// The service future never ends.
 		Ok(Async::NotReady)
+	}
+}
+
+impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	for Service<Components> where Components: components::Components
+{
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
