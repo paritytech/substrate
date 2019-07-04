@@ -1295,22 +1295,16 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(ending: SessionIndex, _start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// TODO: pass the index before our new era actually starts.
-		// this will be `start_session - 1`.
-		// https://github.com/paritytech/substrate/issues/3022
-		Self::new_session(ending).map(|(new, _old)| new)
+	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		Self::new_session(start_session - 1).map(|(new, _old)| new)
 	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(ending: SessionIndex, _start_session: SessionIndex)
+	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		// TODO: pass the index before our new era actually starts.
-		// this will be `start_session - 1`.
-		// https://github.com/paritytech/substrate/issues/3022
-		Self::new_session(ending)
+		Self::new_session(start_session - 1)
 	}
 }
 
