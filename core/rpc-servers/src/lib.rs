@@ -30,8 +30,8 @@ const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-type Metadata = apis::metadata::Metadata;
-type RpcHandler = pubsub::PubSubHandler<Metadata>;
+pub type Metadata = apis::metadata::Metadata;
+pub type RpcHandler = pubsub::PubSubHandler<Metadata>;
 pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 

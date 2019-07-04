@@ -433,17 +433,33 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
-		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(),
-			system_rpc_tx,
-			system_info,
-			config.rpc_http,
-			config.rpc_ws,
-			config.rpc_ws_max_connections,
-			config.rpc_cors.clone(),
-			Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
-			transaction_pool.clone(),
-		)?;
+		let rpc = (
+			maybe_start_server(
+				config.rpc_http,
+				|address| rpc::start_http(address, config.rpc_cors.as_ref(), Components::RuntimeServices::start_rpc(
+					client.clone(),
+					system_rpc_tx.clone(),
+					system_info.clone(),
+					Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
+					transaction_pool.clone(),
+				)),
+			)?,
+			maybe_start_server(
+				config.rpc_ws,
+				|address| rpc::start_ws(
+					address,
+					config.rpc_ws_max_connections,
+					config.rpc_cors.as_ref(),
+					Components::RuntimeServices::start_rpc(
+						client.clone(),
+						system_rpc_tx.clone(),
+						system_info.clone(),
+						Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
+						transaction_pool.clone(),
+					),
+				),
+			)?.map(Mutex::new),
+		);
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
