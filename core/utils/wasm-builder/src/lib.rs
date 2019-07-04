@@ -16,7 +16,7 @@
 
 //! # WASM builder is an utility for building a project as a WASM binary
 //!
-//! The WASM builder is a tool that integrates the building of a WASM binary of your project into the main
+//! The WASM builder is a tool that integrates the process of building the WASM binary of your project into the main
 //! `cargo` build process.
 //!
 //! ## Project setup

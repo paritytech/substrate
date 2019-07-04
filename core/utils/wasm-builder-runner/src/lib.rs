@@ -16,7 +16,7 @@
 
 //! # WASM builder runner
 //!
-//! As cargo just contains millions of bugs when it comes to correct dependency and feature
+//! Since cargo contains millions of bugs when it comes to correct dependency and feature
 //! resolution, we need this little tool. See <https://github.com/rust-lang/cargo/issues/5730> for
 //! more information.
 //!

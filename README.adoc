@@ -310,7 +310,7 @@ Additional Substrate CLI usage options are available and may be shown by running
 
 == WASM binaries
 
-The WASM binaries are build in the normal `cargo build` process. To control the WASM binary building,
+The WASM binaries are built during the normal `cargo build` process. To control the WASM binary building,
 we support multiple environment variables:
 
 * `SKIP_WASM_BUILD` - Skips building any WASM binary. This is useful when only native should be recompiled.
