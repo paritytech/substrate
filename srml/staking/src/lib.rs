@@ -928,7 +928,7 @@ impl<T: Trait> Module<T> {
 
 	/// Slash a given validator by a specific amount. Removes the slash from the validator's
 	/// balance by preference, and reduces the nominators' balance if needed.
-	fn slash_validator(stash: &T::AccountId, slash: BalanceOf<T>) {
+	pub fn slash_validator(stash: &T::AccountId, slash: BalanceOf<T>) {
 		// The exposure (backing stake) information of the validator to be slashed.
 		let exposure = Self::stakers(stash);
 		// The amount we are actually going to slash (can't be bigger than the validator's total
