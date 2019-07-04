@@ -120,10 +120,17 @@ pub struct SpawnTaskHandle {
 	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
-impl SpawnTaskHandle {
-	/// Spawn a task to run the given future.
-	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.sender.unbounded_send(Box::new(task));
+impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.sender.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -157,24 +164,40 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+			match Keystore::open(keystore_path.clone()) {
+				Ok(ks) => Some(ks),
+				Err(err) => {
+					error!("Failed to initialize keystore: {}", err);
+					None
+				}
+			}
+		} else {
+			None
+		};
+
+		// Keep the public key for telemetry
+		let public_key: String;
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
-			None => {
-				let key = keystore.generate(config.password.as_ref())?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
-
-				public_key
+		if let Some(keystore) = keystore.as_mut() {
+			for seed in &config.keys {
+				keystore.generate_from_seed(seed)?;
 			}
-		};
+
+			public_key = match keystore.contents()?.get(0) {
+				Some(public_key) => public_key.to_string(),
+				None => {
+					let key = keystore.generate(&config.password.as_ref())?;
+					let public_key = key.public();
+					info!("Generated a new keypair: {:?}", public_key);
+					public_key.to_string()
+				}
+			}
+		} else {
+			public_key = format!("<disabled-keystore>");
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -470,7 +493,6 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
-			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
@@ -491,7 +513,7 @@ impl<Components: components::Components> Service<Components> {
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
-						"pubkey" => &pubkey,
+						"pubkey" => &public_key,
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
@@ -578,11 +600,14 @@ impl<Components: components::Components> Service<Components> {
 		self.transaction_pool.clone()
 	}
 
+<<<<<<< HEAD
 	/// Get shared keystore.
 	pub fn keystore(&self) -> &Keystore {
 		&*self.keystore.keystore
 	}
 
+=======
+>>>>>>> master
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()
@@ -613,6 +638,22 @@ impl<Components> Future for Service<Components> where Components: components::Co
 
 		// The service future never ends.
 		Ok(Async::NotReady)
+	}
+}
+
+impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	for Service<Components> where Components: components::Components
+{
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -810,7 +851,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 #[derive(Clone)]
 pub struct AuthorityKeyProvider {
 	roles: Roles,
-	keystore: Arc<Keystore>,
+	keystore: Option<Arc<Keystore>>,
 	password: primitives::crypto::Protected<String>,
 }
 
@@ -818,11 +859,22 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 	type Pair = primitives::ed25519::Pair;
 
 	fn authority_key(&self) -> Option<Self::Pair> {
-		if self.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, self.password.as_ref())))
-		{
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+				.contents()
+				.map(|keys| keys.get(0)
+					.map(|k| keystore.load(k, self.password.as_ref()))
+				);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
 			Some(key)
 		} else {
 			None

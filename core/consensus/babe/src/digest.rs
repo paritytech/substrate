@@ -16,15 +16,12 @@
 
 //! Private implementation details of BABE digests.
 
-use primitives::sr25519::{Public, Signature};
-use babe_primitives::BABE_ENGINE_ID;
+use primitives::sr25519::Signature;
+use babe_primitives::{self, BABE_ENGINE_ID};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
-use schnorrkel::{
-	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
-	PUBLIC_KEY_LENGTH,
-};
+use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}};
 
 /// A BABE pre-digest.  It includes:
 ///
@@ -36,26 +33,26 @@ use schnorrkel::{
 pub struct BabePreDigest {
 	pub(super) vrf_output: VRFOutput,
 	pub(super) proof: VRFProof,
-	pub(super) author: Public,
+	pub(super) index: u64,
 	pub(super) slot_num: u64,
 }
 
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
-type TmpDecode = (
+type RawBabePreDigest = (
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
-	[u8; PUBLIC_KEY_LENGTH],
+	u64,
 	u64,
 );
 
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
-		let tmp: TmpDecode = (
+		let tmp: RawBabePreDigest = (
 			*self.vrf_output.as_bytes(),
 			self.proof.to_bytes(),
-			self.author.0,
+			self.index,
 			self.slot_num,
 		);
 		parity_codec::Encode::encode(&tmp)
@@ -64,11 +61,15 @@ impl Encode for BabePreDigest {
 
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, public_key, slot_num): TmpDecode = Decode::decode(i)?;
+		let (output, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
+
+		// Verify (at compile time) that the sizes in babe_primitives are correct
+		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;
+		let _: [u8; babe_primitives::VRF_PROOF_LENGTH] = proof;
 		Some(BabePreDigest {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			author: Public(public_key),
+			index,
 			slot_num,
 		})
 	}
