@@ -344,8 +344,6 @@ pub trait ServiceFactory: 'static + Sized {
 	type LightImportQueue: ImportQueue<Self::Block> + 'static;
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
-	/// The type of cryptography used by the consensus engine.
-	type ConsensusCrypto: primitives::crypto::Pair + Clone + Send + Sync + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
