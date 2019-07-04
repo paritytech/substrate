@@ -59,12 +59,9 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// Provides currently configured authority key.
-pub trait AuthorityKeyProvider {
-	/// A key type.
-	type Pair: crypto::Pair;
-
+pub trait AuthorityKeyProvider: Clone + 'static {
 	/// Returns currently configured authority key.
-	fn authority_key(&self) -> Option<Self::Pair>;
+	fn authority_key<TPair: crypto::Pair>(&self) -> Option<TPair>;
 }
 
 /// An offchain workers manager.
@@ -146,7 +143,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 				pool.clone(),
 				self.db.clone(),
 				self.keys_password.clone(),
-				self.authority_key.authority_key(),
+				self.authority_key.clone(),
 				at.clone(),
 			);
 			debug!("Running offchain workers at {:?}", at);
@@ -163,11 +160,22 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 mod tests {
 	use super::*;
 	use futures::Future;
+	use primitives::{ed25519, sr25519, crypto::{TypedKey, Pair}};
 
-	struct TestProvider;
+	#[derive(Clone, Default)]
+	pub(crate) struct TestProvider {
+		pub(crate) sr_key: Option<sr25519::Pair>,
+		pub(crate) ed_key: Option<ed25519::Pair>,
+	}
+
 	impl AuthorityKeyProvider for TestProvider {
-		type Pair = primitives::ed25519::Pair;
-		fn authority_key(&self) -> Option<Self::Pair> { None }
+		fn authority_key<TPair: crypto::Pair>(&self) -> Option<TPair> {
+			TPair::from_seed_slice(&match TPair::KEY_TYPE {
+				sr25519::Pair::KEY_TYPE => self.sr_key.as_ref().map(|key| key.to_raw_vec()),
+				ed25519::Pair::KEY_TYPE => self.ed_key.as_ref().map(|key| key.to_raw_vec()),
+				_ => None,
+			}?).ok()
+		}
 	}
 
 	#[test]
@@ -180,7 +188,7 @@ mod tests {
 		let db = client_db::offchain::LocalStorage::new_test();
 
 		// when
-		let offchain = OffchainWorkers::new(client, db, TestProvider, "".to_owned().into());
+		let offchain = OffchainWorkers::new(client, db, TestProvider::default(), "".to_owned().into());
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then

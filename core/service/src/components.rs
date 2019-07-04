@@ -138,9 +138,6 @@ pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
 /// Extrinsic pool API type for `Components`.
 pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 
-/// Consensus cryto.
-pub type ComponentConsensusCrypto<C> = <<C as Components>::Factory as ServiceFactory>::ConsensusCrypto;
-
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
@@ -270,7 +267,7 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			AuthorityKeyProvider<ComponentConsensusCrypto<C>>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -286,7 +283,7 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			AuthorityKeyProvider<ComponentConsensusCrypto<C>>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,

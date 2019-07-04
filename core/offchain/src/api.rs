@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 use client::backend::OffchainStorage;
+use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::{Encode, Decode};
@@ -25,7 +26,7 @@ use primitives::offchain::{
 	CryptoKind, CryptoKeyId,
 	StorageKind,
 };
-use primitives::crypto::{Pair, Protected, Public};
+use primitives::crypto::{Pair, Protected};
 use primitives::{ed25519, sr25519};
 use runtime_primitives::{
 	generic::BlockId,
@@ -45,20 +46,19 @@ struct CryptoKey {
 	phrase: String,
 }
 
-enum Key<'a, AuthorityKey> {
+enum Key {
 	Sr25519(sr25519::Pair),
 	Ed25519(ed25519::Pair),
-	AuthorityKey(&'a AuthorityKey),
 }
 
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api<Storage, AuthorityKey> {
+pub(crate) struct Api<Storage, KeyProvider> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
 	keys_password: Protected<String>,
-	authority_key: Option<AuthorityKey>,
+	key_provider: KeyProvider,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -73,9 +73,9 @@ const KEYS_PREFIX: &[u8] = b"keys";
 
 const NEXT_ID: &[u8] = b"crypto_key_id";
 
-impl<Storage, AuthorityKey> Api<Storage, AuthorityKey> where
+impl<Storage, KeyProvider> Api<Storage, KeyProvider> where
 	Storage: OffchainStorage,
-	AuthorityKey: Pair,
+	KeyProvider: AuthorityKeyProvider,
 {
 	fn keypair<P: Pair>(&self, phrase: &str) -> Result<P, ()> {
 		P::from_phrase(phrase, Some(self.keys_password.as_ref()))
@@ -86,27 +86,42 @@ impl<Storage, AuthorityKey> Api<Storage, AuthorityKey> where
 			.map(|x| x.0)
 	}
 
-	fn read_key(&self, id: Option<CryptoKeyId>) -> Result<Key<AuthorityKey>, ()> {
+	fn read_key(&self, id: Option<CryptoKeyId>, kind: CryptoKind) -> Result<Key, ()> {
 		if let Some(id) = id {
 			let key = self.db.get(KEYS_PREFIX, &id.0.encode())
 				.and_then(|key| CryptoKey::decode(&mut &*key))
 				.ok_or(())?;
+			if key.kind != kind {
+				warn!(
+					"Invalid crypto kind (got: {:?}, expected: {:?}), when requesting key {:?}",
+					key.kind,
+					kind,
+					id
+				);
+				return Err(())
+			}
+
 			Ok(match key.kind {
 				CryptoKind::Sr25519 => Key::Sr25519(self.keypair(&key.phrase)?),
 				CryptoKind::Ed25519 => Key::Ed25519(self.keypair(&key.phrase)?),
 			})
-		} else if let Some(ref key) = self.authority_key {
-			Ok(Key::AuthorityKey(key))
 		} else {
-			warn!("AuthorityKey is not configured, yet offchain worker tried to access it.");
-			Err(())
+			let key = match kind {
+				CryptoKind::Sr25519 => self.key_provider.authority_key().map(Key::Sr25519),
+				CryptoKind::Ed25519 => self.key_provider.authority_key().map(Key::Ed25519),
+			};
+
+			key.ok_or_else(|| {
+				warn!("AuthorityKey is not configured, yet offchain worker tried to access it.");
+				()
+			})
 		}
 	}
 }
 
-impl<Storage, AuthorityKey> OffchainExt for Api<Storage, AuthorityKey> where
+impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 	Storage: OffchainStorage,
-	AuthorityKey: Pair,
+	KeyProvider: AuthorityKeyProvider,
 {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
 		self.sender
@@ -143,34 +158,32 @@ impl<Storage, AuthorityKey> OffchainExt for Api<Storage, AuthorityKey> where
 		Ok(CryptoKeyId(id))
 	}
 
-	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _kind: CryptoKind, _data: &[u8]) -> Result<Vec<u8>, ()> {
 		unavailable_yet::<()>("encrypt");
 		Err(())
 	}
 
-	fn decrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn decrypt(&mut self, _key: Option<CryptoKeyId>, _kind: CryptoKind, _data: &[u8]) -> Result<Vec<u8>, ()> {
 		unavailable_yet::<()>("decrypt");
 		Err(())
 
 	}
 
-	fn sign(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
-		let key = self.read_key(key)?;
+	fn sign(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
+		let key = self.read_key(key, kind)?;
 
 		Ok(match key {
 			Key::Sr25519(pair) => pair.sign(data).0.to_vec(),
 			Key::Ed25519(pair) => pair.sign(data).0.to_vec(),
-			Key::AuthorityKey(pair) => pair.sign(data).as_ref().to_vec(),
 		})
 	}
 
-	fn verify(&mut self, key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		let key = self.read_key(key)?;
+	fn verify(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		let key = self.read_key(key, kind)?;
 
 		Ok(match key {
 			Key::Sr25519(pair) => sr25519::Pair::verify_weak(signature, msg, pair.public()),
 			Key::Ed25519(pair) => ed25519::Pair::verify_weak(signature, msg, pair.public()),
-			Key::AuthorityKey(pair) => AuthorityKey::verify_weak(signature, msg, pair.public().as_slice()),
 		})
 	}
 
@@ -284,11 +297,11 @@ pub(crate) struct AsyncApi<A: ChainApi> {
 
 impl<A: ChainApi> AsyncApi<A> {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
-	pub fn new<S: OffchainStorage, P: Pair>(
+	pub fn new<S: OffchainStorage, P: AuthorityKeyProvider>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
 		keys_password: Protected<String>,
-		authority_key: Option<P>,
+		key_provider: P,
 		at: BlockId<A::Block>,
 	) -> (Api<S, P>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
@@ -297,7 +310,7 @@ impl<A: ChainApi> AsyncApi<A> {
 			sender,
 			db,
 			keys_password,
-			authority_key,
+			key_provider,
 		};
 
 		let async_api = AsyncApi {
@@ -344,8 +357,9 @@ impl<A: ChainApi> AsyncApi<A> {
 mod tests {
 	use super::*;
 	use client_db::offchain::LocalStorage;
+	use crate::tests::TestProvider;
 
-	fn offchain_api() -> (Api<LocalStorage, ed25519::Pair>, AsyncApi<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage, TestProvider>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
@@ -353,8 +367,7 @@ mod tests {
 			Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone()))
 		);
 
-		let authority_key: Option<ed25519::Pair> = None;
-		AsyncApi::new(pool, db, "pass".to_owned().into(), authority_key, BlockId::Number(0))
+		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0))
 	}
 
 	#[test]
@@ -398,15 +411,21 @@ mod tests {
 
 			// when
 			let key_id = api.new_crypto_key(kind).unwrap();
-			let signature = api.sign(Some(key_id), msg).unwrap();
+			let signature = api.sign(Some(key_id), kind, msg).unwrap();
 
 			// then
-			let res = api.verify(Some(key_id), msg, &signature).unwrap();
+			let res = api.verify(Some(key_id), kind, msg, &signature).unwrap();
 			assert_eq!(res, true);
-			let res = api.verify(Some(key_id), msg, &[]).unwrap();
+			let res = api.verify(Some(key_id), kind, msg, &[]).unwrap();
 			assert_eq!(res, false);
-			let res = api.verify(Some(key_id), b"Different msg", &signature).unwrap();
+			let res = api.verify(Some(key_id), kind, b"Different msg", &signature).unwrap();
 			assert_eq!(res, false);
+
+			assert_eq!(
+				api.verify(Some(key_id), CryptoKind::Sr25519, msg, &signature).is_err(),
+				kind != CryptoKind::Sr25519
+			);
+
 		};
 
 		test(CryptoKind::Ed25519);
@@ -417,18 +436,24 @@ mod tests {
 	fn should_sign_and_verify_with_authority_key() {
 		// given
 		let mut api = offchain_api().0;
-		api.authority_key = Some(ed25519::Pair::generate().0);
+		api.key_provider.ed_key = Some(ed25519::Pair::generate().0);
 		let msg = b"Hello world!";
+		let kind = CryptoKind::Ed25519;
 
 		// when
-		let signature = api.sign(None, msg).unwrap();
+		let signature = api.sign(None, kind, msg).unwrap();
 
 		// then
-		let res = api.verify(None, msg, &signature).unwrap();
+		let res = api.verify(None, kind, msg, &signature).unwrap();
 		assert_eq!(res, true);
-		let res = api.verify(None, msg, &[]).unwrap();
+		let res = api.verify(None, kind, msg, &[]).unwrap();
 		assert_eq!(res, false);
-		let res = api.verify(None, b"Different msg", &signature).unwrap();
+		let res = api.verify(None, kind, b"Different msg", &signature).unwrap();
 		assert_eq!(res, false);
+
+		assert!(
+			api.verify(None, CryptoKind::Sr25519, msg, &signature).is_err(),
+			"Invalid kind should trigger a missing key error."
+		);
 	}
 }

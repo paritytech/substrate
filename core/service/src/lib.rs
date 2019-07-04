@@ -38,7 +38,7 @@ use futures::prelude::*;
 use keystore::Store as Keystore;
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, ed25519};
+use primitives::{Pair, ed25519, crypto};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -58,7 +58,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, ComponentConsensusCrypto
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -78,7 +78,7 @@ pub struct Service<Components: components::Components> {
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: AuthorityKeyProvider<ComponentConsensusCrypto<Components>>,
+	keystore: AuthorityKeyProvider,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -97,7 +97,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
-		AuthorityKeyProvider<ComponentConsensusCrypto<Components>>,
+		AuthorityKeyProvider,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -265,7 +265,6 @@ impl<Components: components::Components> Service<Components> {
 			roles: config.roles,
 			password: config.password.clone(),
 			keystore: keystore.map(Arc::new),
-			_key: Default::default(),
 		};
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
@@ -551,7 +550,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<ComponentConsensusCrypto<Components>> {
+	pub fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
 		use offchain::AuthorityKeyProvider;
 
 		self.keystore.authority_key()
@@ -842,17 +841,14 @@ fn build_system_rpc_handler<Components: components::Components>(
 
 /// A provider of current authority key.
 #[derive(Clone)]
-pub struct AuthorityKeyProvider<Pair> {
+pub struct AuthorityKeyProvider {
 	roles: Roles,
 	keystore: Option<Arc<Keystore>>,
-	password: primitives::crypto::Protected<String>,
-	_key: std::marker::PhantomData<Pair>,
+	password: crypto::Protected<String>,
 }
 
-impl<Pair: primitives::crypto::Pair> offchain::AuthorityKeyProvider for AuthorityKeyProvider<Pair> {
-	type Pair = Pair;
-
-	fn authority_key(&self) -> Option<Self::Pair> {
+impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
+	fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
 		if self.roles != Roles::AUTHORITY {
 			return None
 		}
@@ -896,7 +892,7 @@ impl<Pair: primitives::crypto::Pair> offchain::AuthorityKeyProvider for Authorit
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
-/// # use node_primitives::Block;
+/// # use node_primitives::{Block};
 /// # use runtime_primitives::Justification;
 /// # use runtime_primitives::traits::Block as BlockT;
 /// # use grandpa;

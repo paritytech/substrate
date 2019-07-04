@@ -275,27 +275,44 @@ impl OffchainApi for () {
 		}, "new_crypto_key can be called only in the offchain worker context")
 	}
 
-	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn encrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.encrypt(key, data)
+			ext.encrypt(key, kind, data)
 		}, "encrypt can be called only in the offchain worker context")
 	}
 
-	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn decrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.decrypt(key, data)
+			ext.decrypt(key, kind, data)
 		}, "decrypt can be called only in the offchain worker context")
 	}
 
-	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn sign(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.sign(key, data)
+			ext.sign(key, kind, data)
 		}, "sign can be called only in the offchain worker context")
 	}
 
-	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+	fn verify(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		msg: &[u8],
+		signature: &[u8],
+	) -> Result<bool, ()> {
 		with_offchain(|ext| {
-			ext.verify(key, msg, signature)
+			ext.verify(key, kind, msg, signature)
 		}, "verify can be called only in the offchain worker context")
 	}
 
