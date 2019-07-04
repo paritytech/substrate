@@ -214,28 +214,28 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			})
 	},
 	ext_set_child_trie(
-			a: *const u8,
-			b: u32,
-			c: *const u8,
-			d: u32,
-			e: *const u8,
-			f: u32,
-			g: *const u8,
-			h: u32
+			keyspace: *const u8,
+			keyspace_len: u32,
+			root: *const u8,
+			root_len: u32,
+			parent: *const u8,
+			parent_len: u32,
+			extension: *const u8,
+			extension_len: u32
 	) -> u32 => {
-		let f1 = this.memory.get(a, b as usize)
-			.map_err(|_| "Invalid attempt to determine f1 in ext_set_child_trie")?;
-		let f2 = if d == u32::max_value() {
+		let keyspace = this.memory.get(keyspace, keyspace_len as usize)
+			.map_err(|_| "Invalid attempt to determine keyspace in ext_set_child_trie")?;
+		let root = if root_len == u32::max_value() {
 			None
 		} else {
-			Some(this.memory.get(c, d as usize)
-				.map_err(|_| "Invalid attempt to determine f2 in ext_set_child_trie")?)
+			Some(this.memory.get(root, root_len as usize)
+				.map_err(|_| "Invalid attempt to determine root in ext_set_child_trie")?)
 		};
-		let f3 = this.memory.get(e, f as usize)
-			.map_err(|_| "Invalid attempt to determine f3 in ext_set_child_trie")?;
-		let f4 = this.memory.get(g, h as usize)
+		let parent = this.memory.get(parent, parent_len as usize)
+			.map_err(|_| "Invalid attempt to determine parent in ext_set_child_trie")?;
+		let extension = this.memory.get(extension, extension_len as usize)
 			.map_err(|_| "Invalid attempt to determine f4 in ext_set_child_trie")?;
-		let ct = ChildTrie::unsafe_from_ptr_vecs(f1, f2, f3, f4);
+		let ct = ChildTrie::unsafe_from_ptr_vecs(keyspace, root, parent, extension);
 		Ok(if this.ext.set_child_trie(ct) { 1 } else { 0 })
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {

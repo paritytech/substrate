@@ -736,7 +736,7 @@ decl_module! {
 					.sum::<u32>();
 
 			} else {
-				return Err("Corrupted contract");
+				return Err("Corrupted contract is missing child storage trie");
 			}
 
 			<ContractInfoOf<T>>::remove(&origin);

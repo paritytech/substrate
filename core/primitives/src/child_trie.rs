@@ -356,16 +356,17 @@ impl ChildTrie {
 			ChildTrie { keyspace, root, parent, extension }
 		}
 	}
+
 	/// Function to rebuild child trie accessed from mem copied field.
 	/// This is unsafe to use because it allows to build invalid
 	/// child trie object: duplicate keyspace or invalid root.
 	pub fn unsafe_from_ptr_vecs(
-		a: Vec<u8>,
-		b: Option<Vec<u8>>,
-		c: Vec<u8>,
-		d: Vec<u8>,
+		keyspace: Vec<u8>,
+		root: Option<Vec<u8>>,
+		parent: Vec<u8>,
+		extension: Vec<u8>,
 	) -> Self {
-		ChildTrie { keyspace: a, root: b , parent: c, extension: d }
+		ChildTrie { keyspace, root, parent, extension }
 	}
 
 }

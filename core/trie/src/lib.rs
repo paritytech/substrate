@@ -175,7 +175,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 
 	let (root, keyspace) = match child_trie {
 		ChildTrieReadRef::Existing(root, keyspace) => (root, keyspace),
-		ChildTrieReadRef::New(keyspace) => (&default_root[..], keyspace),
+		ChildTrieReadRef::New(keyspace) => (default_root, keyspace),
 	};
 	// keyspaced is needed (db can be init from this operation, this is not only root calculation)
 	let mut db = KeySpacedDBMut::new(&mut *db, Some(keyspace));
@@ -335,8 +335,9 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	}
 
 	fn insert(&mut self, prefix: &[u8], value: &[u8]) -> H::Out {
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		let key = H::hash(value);
-		Self::emplace(self, key.clone(), prefix, value.into());
+		self.0.emplace(key.clone(), &derived_prefix, value.into());
 		key
 	}
 
