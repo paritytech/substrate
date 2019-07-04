@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use client::backend::OffchainStorage;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::Decode;
@@ -22,6 +23,7 @@ use primitives::offchain::{
 	Timestamp, HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKeyId,
+	StorageKind,
 };
 use runtime_primitives::{
 	generic::BlockId,
@@ -37,17 +39,24 @@ enum ExtMessage {
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct AsyncApi(mpsc::UnboundedSender<ExtMessage>);
+pub(crate) struct Api<S> {
+	sender: mpsc::UnboundedSender<ExtMessage>,
+	db: S,
+}
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!("This {:?} API is not available for offchain workers yet. Follow
+	error!("The {:?} API is not available for offchain workers yet. Follow \
 		   https://github.com/paritytech/substrate/issues/1458 for details", name);
 	Default::default()
 }
 
-impl OffchainExt for AsyncApi {
+const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
+const STORAGE_PREFIX: &[u8] = b"storage";
+
+impl<S: OffchainStorage> OffchainExt for Api<S> {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
-		self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
+		self.sender
+			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
 			.map(|_| ())
 			.map_err(|_| ())
 	}
@@ -89,16 +98,33 @@ impl OffchainExt for AsyncApi {
 		unavailable_yet("random_seed")
 	}
 
-	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
-		unavailable_yet("local_storage_set")
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		match kind {
+			StorageKind::PERSISTENT => self.db.set(STORAGE_PREFIX, key, value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
-	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
-		unavailable_yet("local_storage_compare_and_set")
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
+		match kind {
+			StorageKind::PERSISTENT => {
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+			},
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
-	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
-		unavailable_yet("local_storage_get")
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		match kind {
+			StorageKind::PERSISTENT => self.db.get(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
 	}
 
 	fn http_request_start(
@@ -159,24 +185,35 @@ impl OffchainExt for AsyncApi {
 }
 
 /// Offchain extensions implementation API
-pub(crate) struct Api<A: ChainApi> {
+///
+/// This is the asynchronous processing part of the API.
+pub(crate) struct AsyncApi<A: ChainApi> {
 	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
 	transaction_pool: Arc<Pool<A>>,
 	at: BlockId<A::Block>,
 }
 
-impl<A: ChainApi> Api<A> {
-	pub fn new(
+impl<A: ChainApi> AsyncApi<A> {
+	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
+	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
+		db: S,
 		at: BlockId<A::Block>,
-	) -> (AsyncApi, Self) {
-		let (tx, rx) = mpsc::unbounded();
-		let api = Self {
+	) -> (Api<S>, AsyncApi<A>) {
+		let (sender, rx) = mpsc::unbounded();
+
+		let api = Api {
+			sender,
+			db,
+		};
+
+		let async_api = AsyncApi {
 			receiver: Some(rx),
 			transaction_pool,
 			at,
 		};
-		(AsyncApi(tx), api)
+
+		(api, async_api)
 	}
 
 	/// Run a processing task for the API
@@ -207,5 +244,54 @@ impl<A: ChainApi> Api<A> {
 				debug!("Couldn't submit transaction: {:?}", e);
 			},
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use client_db::offchain::LocalStorage;
+
+	fn offchain_api() -> (Api<LocalStorage>, AsyncApi<impl ChainApi>) {
+		let _ = env_logger::try_init();
+		let db = LocalStorage::new_test();
+		let client = Arc::new(test_client::new());
+		let pool = Arc::new(
+			Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone()))
+		);
+
+		AsyncApi::new(pool, db, BlockId::Number(0))
+	}
+
+	#[test]
+	fn should_set_and_get_local_storage() {
+		// given
+		let kind = StorageKind::PERSISTENT;
+		let mut api = offchain_api().0;
+		let key = b"test";
+
+		// when
+		assert_eq!(api.local_storage_get(kind, key), None);
+		api.local_storage_set(kind, key, b"value");
+
+		// then
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
+	}
+
+	#[test]
+	fn should_compare_and_set_local_storage() {
+		// given
+		let kind = StorageKind::PERSISTENT;
+		let mut api = offchain_api().0;
+		let key = b"test";
+		api.local_storage_set(kind, key, b"value");
+
+		// when
+		assert_eq!(api.local_storage_compare_and_set(kind, key, b"val", b"xxx"), false);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
+
+		// when
+		assert_eq!(api.local_storage_compare_and_set(kind, key, b"value", b"xxx"), true);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"xxx".to_vec()));
 	}
 }
