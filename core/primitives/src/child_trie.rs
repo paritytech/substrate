@@ -48,7 +48,7 @@ pub const NO_CHILD_KEYSPACE: [u8;2] = [0, 0];
 #[cfg(feature = "legacy-trie")]
 // Keyspace to use for the parent trie key.
 const NO_CHILD_KEYSPACE: [u8;0] = [];
-const CHILD_KEYSPACE_HEAD: u8 = 1;
+
 
 /// Generate a new keyspace for a child trie.
 pub fn generate_keyspace<N>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8>
@@ -65,7 +65,8 @@ pub fn generate_keyspace<N>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8>
 	let mut block_nb = block_nb.clone();
 	// Note that this algo only work if conversion failure are related to out of bound and
 	// implemented when possible.
-	if let Ok(v) = block_nb.clone().try_into() {
+	loop {
+		if let Ok(v) = block_nb.clone().try_into() {
 			if v < u128::max_value() {
 				parity_codec::Encode::encode_to(&Compact(v), &mut result);
 				break;
