@@ -56,7 +56,7 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig,
 		System, SystemConfig, GrandpaConfig, IndicesConfig, ContractsConfig, Event,
-		SessionKeys, Treasury, CENTS, DOLLARS, MILLICENTS
+		SessionKeys, CENTS, DOLLARS, MILLICENTS
 	};
 	use wabt;
 	use primitives::map;

@@ -264,7 +264,7 @@ impl<Components: components::Components> Service<Components> {
 		let keystore_authority_key = AuthorityKeyProvider {
 			roles: config.roles,
 			password: config.password.clone(),
-			keystore: Arc::new(keystore),
+			keystore: keystore.map(Arc::new),
 		};
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
@@ -600,14 +600,6 @@ impl<Components: components::Components> Service<Components> {
 		self.transaction_pool.clone()
 	}
 
-<<<<<<< HEAD
-	/// Get shared keystore.
-	pub fn keystore(&self) -> &Keystore {
-		&*self.keystore.keystore
-	}
-
-=======
->>>>>>> master
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()

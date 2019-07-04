@@ -468,9 +468,9 @@ mod tests {
 	}
 
 	impl Pair for TestPair {
-		type Public = ();
+		type Public = [u8; 0];
 		type Seed = [u8; 0];
-		type Signature = ();
+		type Signature = [u8; 0];
 		type DeriveError = ();
 
 		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, []) }
@@ -491,7 +491,7 @@ mod tests {
 			Err(())
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
-		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
+		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
 		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
 			_sig: &Self::Signature,
 			_message: M,
@@ -502,7 +502,7 @@ mod tests {
 			_message: M,
 			_pubkey: P
 		) -> bool { true }
-		fn public(&self) -> Self::Public { () }
+		fn public(&self) -> Self::Public { [] }
 		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
 			phrase: &str,
 			password: Option<&str>,

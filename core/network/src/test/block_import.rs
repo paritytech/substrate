@@ -22,10 +22,6 @@ use test_client::runtime::{Block, Hash};
 use runtime_primitives::generic::BlockId;
 use super::*;
 
-struct TestLink {}
-
-impl Link<Block> for TestLink {}
-
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let client = test_client::new();
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
@@ -77,7 +73,7 @@ fn async_import_queue_drops() {
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = Arc::new(PassThroughVerifier(true));
-		let mut queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None, None, None);
+		let queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None, None, None);
 		drop(queue);
 	}
 }

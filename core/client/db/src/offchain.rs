@@ -139,7 +139,6 @@ mod tests {
 		let mut storage = LocalStorage::new_test();
 		let prefix = b"prefix";
 		let key = b"key";
-		let value = b"value";
 
 		assert_eq!(storage.compare_and_set(prefix, key, None, b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
