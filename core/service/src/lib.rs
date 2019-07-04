@@ -545,6 +545,20 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
+	/// Starts an RPC query.
+	///
+	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
+	/// would for example send.
+	///
+	/// Returns a `Future` that contains the optional response.
+	///
+	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
+	/// send back spontaneous events.
+	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
+	-> impl Future<Item = Option<String>, Error = ()> {
+		self.rpc_handlers.handle_request(request, mem.metadata.clone())
+	}
+
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -735,6 +749,26 @@ fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
+}
+
+/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
+/// the HTTP or WebSockets server).
+pub struct RpcSession {
+	metadata: rpc::Metadata,
+}
+
+impl RpcSession {
+	/// Creates an RPC session.
+	///
+	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
+	/// messages.
+	///
+	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
+	pub fn new(sender: mpsc::Sender<String>) -> RpcSession {
+		RpcSession {
+			metadata: rpc::Metadata::new(sender)
+		}
+	}
 }
 
 /// Transaction pool adapter.
