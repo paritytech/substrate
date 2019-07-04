@@ -525,7 +525,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.as_str().into(),
+			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
 		Ok((Arc::new(client_db::new_client(
@@ -627,7 +627,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.as_str().into(),
+			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;

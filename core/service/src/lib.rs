@@ -78,7 +78,7 @@ pub struct Service<Components: components::Components> {
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Keystore,
+	keystore: Option<Keystore>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -163,24 +163,40 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+			match Keystore::open(keystore_path.clone()) {
+				Ok(ks) => Some(ks),
+				Err(err) => {
+					error!("Failed to initialize keystore: {}", err);
+					None
+				}
+			}
+		} else {
+			None
+		};
+
+		// Keep the public key for telemetry
+		let public_key: String;
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
-			None => {
-				let key = keystore.generate(&config.password)?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
-
-				public_key
+		if let Some(keystore) = keystore.as_mut() {
+			for seed in &config.keys {
+				keystore.generate_from_seed(seed)?;
 			}
-		};
+
+			public_key = match keystore.contents()?.get(0) {
+				Some(public_key) => public_key.to_string(),
+				None => {
+					let key = keystore.generate(&config.password)?;
+					let public_key = key.public();
+					info!("Generated a new keypair: {:?}", public_key);
+					public_key.to_string()
+				}
+			}
+		} else {
+			public_key = format!("<disabled-keystore>");
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -469,7 +485,6 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
-			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
@@ -490,7 +505,7 @@ impl<Components: components::Components> Service<Components> {
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
-						"pubkey" => &pubkey,
+						"pubkey" => &public_key,
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
@@ -529,11 +544,14 @@ impl<Components: components::Components> Service<Components> {
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
 		if self.config.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, &self.config.password)))
-		{
-			Some(key)
+		if let Some(keystore) = &self.keystore {
+			if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+					.map(|k| keystore.load(k, &self.config.password)))
+			{
+				Some(key)
+			} else {
+				None
+			}
 		} else {
 			None
 		}
@@ -581,11 +599,6 @@ impl<Components: components::Components> Service<Components> {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared keystore.
-	pub fn keystore(&self) -> &Keystore {
-		&self.keystore
 	}
 
 	/// Get a handle to a future that will resolve on exit.
