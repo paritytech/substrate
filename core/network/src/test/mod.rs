@@ -21,10 +21,10 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{AlwaysBadChecker, build_multiaddr};
+use crate::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
@@ -32,16 +32,15 @@ use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
 use crate::config::Roles;
-use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
+use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
-	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
+	SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
 use consensus::block_import::BlockImport;
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
-use futures::{prelude::*, sync::{mpsc, oneshot}};
+use futures::prelude::*;
 use crate::{NetworkWorker, NetworkService, ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
@@ -49,7 +48,7 @@ use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, ProtocolConfig};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
-use runtime_primitives::{Justification, ConsensusEngineId};
+use runtime_primitives::Justification;
 use crate::service::TransactionPool;
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
@@ -279,7 +278,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			);
 			let header = block.header.clone();
 			let (import_block, cache) = self.verifier.verify(
-				BlockOrigin::Own,
+				origin,
 				header.clone(),
 				None,
 				Some(block.extrinsics)
@@ -602,7 +601,7 @@ pub trait TestNetFactory: Sized {
 			match (highest, peer.client.info().chain.best_number) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
-				(Some(ref a), ref b) => return Async::NotReady,
+				(Some(_), _) => return Async::NotReady,
 			}
 		}
 		Async::Ready(())
