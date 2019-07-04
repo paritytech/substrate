@@ -78,6 +78,7 @@ members = [
 	"srml/indices",
 	"srml/metadata",
 	"srml/session",
+	"srml/slashing",
 	"srml/staking",
 	"srml/sudo",
 	"srml/system",
