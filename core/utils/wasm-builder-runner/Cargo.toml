@@ -6,5 +6,6 @@ description = "Runner for substrate-wasm-builder"
 edition = "2018"
 readme = "README.md"
 repository = "https://github.com/paritytech/substrate"
+license = "GPL-3.0"
 
 [dependencies]
