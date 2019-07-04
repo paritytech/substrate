@@ -21,7 +21,7 @@ use parity_codec::Decode;
 use hash_db::Hasher;
 use num_traits::One;
 use crate::backend::Backend;
-use crate::overlayed_changes::OverlayedChanges;
+use crate::overlayed_changes::{OverlayedChanges, OverlayedValueResult};
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::build_iterator::digest_build_iterator;
 use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
@@ -79,10 +79,14 @@ fn prepare_extrinsics_input<B, H, Number>(
 
 		// ignore values that have null value at the end of operation AND are not in storage
 		// at the beginning of operation
-		if !changes.storage(key).map(|v| v.is_some()).unwrap_or_default() {
-			if !backend.exists_storage(key).map_err(|e| format!("{}", e))? {
-				continue;
-			}
+		match changes.storage(key) {
+			OverlayedValueResult::NotFound
+			| OverlayedValueResult::Deleted => {
+				if !backend.exists_storage(key).map_err(|e| format!("{}", e))? {
+					continue;
+				}
+			},
+			OverlayedValueResult::Modified(_val) => (),
 		}
 
 		extrinsic_map.entry(key.clone()).or_default()

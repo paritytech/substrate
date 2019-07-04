@@ -88,6 +88,20 @@ impl OverlayedChangeSet {
 	}
 }
 
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
+/// Possible result from value
+/// query in the overlay.
+pub enum OverlayedValueResult<'a> {
+	/// The key is unknown (i.e. and the query should be refered
+	/// to the backend)
+	NotFound,
+	/// The key has been deleted.
+	Deleted,
+	/// Current value set in the overlay.
+	Modified(&'a[u8]),
+}
+
 impl OverlayedChanges {
 	/// Whether the overlayed changes are empty.
 	pub fn is_empty(&self) -> bool {
@@ -110,33 +124,34 @@ impl OverlayedChanges {
 		true
 	}
 
-	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
-	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
-	/// value has been set.
-	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		self.prospective.top.get(key)
-			.or_else(|| self.committed.top.get(key))
-			.map(|x| x.value.as_ref().map(AsRef::as_ref))
+	/// Get the `OverlayedValueResult` for a given key.
+	pub fn storage(&self, key: &[u8]) -> OverlayedValueResult {
+		match self.prospective.top.get(key).or_else(|| self.committed.top.get(key)) {
+			Some(OverlayedValue { value: Some(val), .. }) => OverlayedValueResult::Modified(val.as_ref()),
+			Some(OverlayedValue { value: None, .. }) => OverlayedValueResult::Deleted,
+			None => OverlayedValueResult::NotFound,
+		}
 	}
 
-	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
-	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
-	/// value has been set.
-	pub fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Option<&[u8]>> {
+	/// Get the `OverlayedValueResult` for a given child key.
+	pub fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> OverlayedValueResult {
 		let keyspace = child_trie.keyspace();
-		if let Some(map) = self.prospective.children.get(keyspace) {
-			if let Some(val) = map.1.get(key) {
-				return Some(val.as_ref().map(AsRef::as_ref));
-			}
+		match self.prospective.children.get(keyspace).and_then(|map| map.1.get(key)) {
+			Some(Some(val)) =>
+				return OverlayedValueResult::Modified(val.as_ref()),
+			Some(None) =>
+				return OverlayedValueResult::Deleted,
+			None => (),
 		}
 
-		if let Some(map) = self.committed.children.get(keyspace) {
-			if let Some(val) = map.1.get(key) {
-				return Some(val.as_ref().map(AsRef::as_ref));
-			}
+		match self.committed.children.get(keyspace).and_then(|map| map.1.get(key)) {
+			Some(Some(val)) =>
+				return OverlayedValueResult::Modified(val.as_ref()),
+			Some(None) =>
+				return OverlayedValueResult::Deleted,
+			None => OverlayedValueResult::NotFound,
 		}
 
-		None
 	}
 
 	/// returns a child trie if present
@@ -380,9 +395,13 @@ impl OverlayedChanges {
 	fn extrinsic_index(&self) -> Option<u32> {
 		match self.changes_trie_config.is_some() {
 			true => Some(
-				self.storage(EXTRINSIC_INDEX)
-					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx)))
-					.unwrap_or(NO_EXTRINSIC_INDEX)),
+				match self.storage(EXTRINSIC_INDEX) {
+					OverlayedValueResult::Modified(idx) => Decode::decode(&mut &*idx)
+						.unwrap_or(NO_EXTRINSIC_INDEX),
+					OverlayedValueResult::Deleted
+					| OverlayedValueResult::NotFound => NO_EXTRINSIC_INDEX,
+				}
+			),
 			false => None,
 		}
 	}
@@ -418,26 +437,26 @@ mod tests {
 
 		let key = vec![42, 69, 169, 142];
 
-		assert!(overlayed.storage(&key).is_none());
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::NotFound);
 
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Modified(&[1, 2, 3][..]));
 
 		overlayed.commit_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Modified(&[1, 2, 3][..]));
 
 		overlayed.set_storage(key.clone(), Some(vec![]));
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[][..]));
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Modified(&[][..]));
 
 		overlayed.set_storage(key.clone(), None);
-		assert!(overlayed.storage(&key).unwrap().is_none());
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Deleted);
 
 		overlayed.discard_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Modified(&[1, 2, 3][..]));
 
 		overlayed.set_storage(key.clone(), None);
 		overlayed.commit_prospective();
-		assert!(overlayed.storage(&key).unwrap().is_none());
+		assert_eq!(overlayed.storage(&key), OverlayedValueResult::Deleted);
 	}
 
 	#[test]

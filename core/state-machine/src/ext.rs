@@ -20,7 +20,7 @@ use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
 use crate::changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
-use crate::{Externalities, OverlayedChanges};
+use crate::{Externalities, OverlayedChanges, OverlayedValueResult};
 use hash_db::Hasher;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -176,14 +176,22 @@ where
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		match self.overlay.storage(key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some(value.to_vec()),
+		}
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
-			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		match self.overlay.storage(key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some( H::hash(value)),
+		}
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -204,23 +212,31 @@ where
 
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.child_storage(child_trie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		match self.overlay.child_storage(child_trie.clone(), key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some( value.to_vec()),
+		}
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
 		match self.overlay.storage(key) {
-			Some(x) => x.is_some(),
-			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::NotFound =>
+				self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => false,
+			OverlayedValueResult::Modified(_value) => true,
 		}
 	}
 
 	fn exists_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
 		match self.overlay.child_storage(child_trie.clone(), key) {
-			Some(x) => x.is_some(),
-			_ => self.backend.exists_child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::NotFound =>
+				self.backend.exists_child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => false,
+			OverlayedValueResult::Modified(_value) => true,
 		}
 	}
 

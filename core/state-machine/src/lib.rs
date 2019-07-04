@@ -37,7 +37,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-use overlayed_changes::OverlayedChangeSet;
+use overlayed_changes::{OverlayedChangeSet, OverlayedValueResult};
 pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB, Recorder as ProofRecorder};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
@@ -907,11 +907,11 @@ where
 	H: Hasher,
 	B: Backend<H>,
 {
-	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
-		Some(value) => Ok(value),
-		None => backend
-			.storage(key)
+	match overlay.storage(key) {
+		OverlayedValueResult::NotFound => backend.storage(key)
 			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<dyn Error>),
+		OverlayedValueResult::Deleted => Ok(None),
+		OverlayedValueResult::Modified(value) => Ok(Some(value.to_vec())),
 	}
 }
 

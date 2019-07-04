@@ -30,7 +30,7 @@ use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use parity_codec::Encode;
-use super::{Externalities, OverlayedChanges};
+use super::{Externalities, OverlayedChanges, OverlayedValueResult};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -141,8 +141,12 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		H::Out: Ord + 'static
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		match self.overlay.storage(key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some(value.to_vec()),
+		}
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -150,9 +154,12 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	}
 
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.child_storage(child_trie.clone(), key)
-			.map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		match self.overlay.child_storage(child_trie.clone(), key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some( value.to_vec()),
+		}
 	}
 
 	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
