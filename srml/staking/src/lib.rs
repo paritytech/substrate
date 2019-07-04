@@ -281,7 +281,7 @@ use srml_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get
 	}
 };
-use session::{OnSessionEnding, SessionIndex};
+use session::{OnSessionEnding, SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded
@@ -442,6 +442,9 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
+pub const DEFAULT_SESSIONS_PER_ERA: u32 = 3;
+pub const DEFAULT_BONDING_DURATION: u32 = 1;
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
@@ -583,10 +586,6 @@ decl_storage! {
 							)
 						}, _ => Ok(())
 					};
-				}
-
-				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					<session::Validators<T>>::put(&validators);
 				}
 			});
 		});
@@ -1250,5 +1249,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+}
+
+impl<T: Trait> SelectInitialValidators<T> for Module<T> {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
+		<Module<T>>::select_validators().1
 	}
 }

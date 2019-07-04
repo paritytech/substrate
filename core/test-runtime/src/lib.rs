@@ -56,6 +56,10 @@ pub type AuraId = AuthorityId;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type BabeId = AuthorityId;
 
+// Inlucde the WASM binary
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("test"),

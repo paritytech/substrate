@@ -139,6 +139,14 @@ use proc_macro::TokenStream;
 /// Accessing the structure no requires the instance as generic parameter:
 /// * `Foo::<I>` if the value type is not generic
 /// * `Foo::<T, I>` if the value type is generic
+///
+/// ## Where clause
+///
+/// This macro supports a where clause which will be replicated to all generated types.
+///
+/// ```nocompile
+/// trait Store for Module<T: Trait> as Example where T::AccountId: std::fmt::Display {}
+/// ```
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
+use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use srml_support::traits::{Currency, ExistenceRequirement, WithdrawReason};
+use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -75,14 +75,14 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	// An amount of funds to charge per block for storage taken up by the contract.
 	let fee_per_block = {
 		let free_storage = balance
-			.checked_div(&<Module<T>>::rent_deposit_offset())
+			.checked_div(&T::RentDepositOffset::get())
 			.unwrap_or_else(Zero::zero);
 
 		let effective_storage_size =
 			<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
 
 		effective_storage_size
-			.checked_mul(&<Module<T>>::rent_byte_price())
+			.checked_mul(&T::RentByteFee::get())
 			.unwrap_or(<BalanceOf<T>>::max_value())
 	};
 
@@ -93,7 +93,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	}
 
 	// The minimal amount of funds required for a contract not to be evicted.
-	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
+	let subsistence_threshold = T::Currency::minimum_balance() + T::TombstoneDeposit::get();
 
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.

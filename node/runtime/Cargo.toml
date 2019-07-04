@@ -3,6 +3,7 @@ name = "node-runtime"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 integer-sqrt = { version = "0.1.2" }
@@ -16,6 +17,7 @@ offchain-primitives = { package = "substrate-offchain-primitives", path = "../..
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
+authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 council = { package = "srml-council", path = "../../srml/council", default-features = false }
@@ -36,9 +38,12 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
 
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.0" }
+
 [features]
 default = ["std"]
-core = [
+no_std = [
 	"contracts/core",
 ]
 std = [
@@ -48,6 +53,7 @@ std = [
 	"runtime_primitives/std",
 	"support/std",
 	"aura/std",
+	"authorship/std",
 	"balances/std",
 	"contracts/std",
 	"council/std",

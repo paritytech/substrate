@@ -51,7 +51,7 @@ mod local_executor {
 		pub LocalExecutor,
 		runtime::api::dispatch,
 		runtime::native_version,
-		include_bytes!("../../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
+		runtime::WASM_BINARY
 	);
 }
 

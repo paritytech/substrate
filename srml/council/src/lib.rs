@@ -17,6 +17,7 @@
 //! Council system: Handles the voting in and maintenance of council members.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit="128"]
 
 pub mod motions;
 pub mod seats;
@@ -39,11 +40,12 @@ mod tests {
 	pub use super::*;
 	pub use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
+	use srml_support::traits::Get;
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
-	pub use primitives::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::{Digest, DigestItem, Header}
-	};
+	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
+	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use {seats, motions};
+	use std::cell::RefCell;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {
@@ -64,6 +66,33 @@ mod tests {
 		}
 	}
 
+	thread_local! {
+		static VOTER_BOND: RefCell<u64> = RefCell::new(0);
+		static VOTING_FEE: RefCell<u64> = RefCell::new(0);
+		static PRESENT_SLASH_PER_VOTER: RefCell<u64> = RefCell::new(0);
+		static DECAY_RATIO: RefCell<u32> = RefCell::new(0);
+	}
+
+	pub struct VotingBond;
+	impl Get<u64> for VotingBond {
+		fn get() -> u64 { VOTER_BOND.with(|v| *v.borrow()) }
+	}
+
+	pub struct VotingFee;
+	impl Get<u64> for VotingFee {
+		fn get() -> u64 { VOTING_FEE.with(|v| *v.borrow()) }
+	}
+
+	pub struct PresentSlashPerVoter;
+	impl Get<u64> for PresentSlashPerVoter {
+		fn get() -> u64 { PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow()) }
+	}
+
+	pub struct DecayRatio;
+	impl Get<u32> for DecayRatio {
+		fn get() -> u32 { DECAY_RATIO.with(|v| *v.borrow()) }
+	}
+
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
@@ -78,14 +107,26 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
+		type OnFreeBalanceZero = ();
 		type Event = Event;
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 1;
@@ -110,6 +151,12 @@ mod tests {
 		type VetoOrigin = motions::EnsureMember<u64>;
 		type CooloffPeriod = CooloffPeriod;
 	}
+	parameter_types! {
+		pub const CandidacyBond: u64 = 3;
+		pub const CarryCount: u32 = 2;
+		pub const InactiveGracePeriod: u32 = 1;
+		pub const CouncilVotingPeriod: u64 = 4;
+	}
 	impl seats::Trait for Test {
 		type Event = Event;
 		type BadPresentation = ();
@@ -117,6 +164,14 @@ mod tests {
 		type BadVoterIndex = ();
 		type LoserCandidate = ();
 		type OnMembersChanged = CouncilMotions;
+		type CandidacyBond = CandidacyBond;
+		type VotingBond = VotingBond;
+		type VotingFee = VotingFee;
+		type PresentSlashPerVoter = PresentSlashPerVoter;
+		type CarryCount = CarryCount;
+		type InactiveGracePeriod = InactiveGracePeriod;
+		type CouncilVotingPeriod = CouncilVotingPeriod;
+		type DecayRatio = DecayRatio;
 	}
 	impl motions::Trait for Test {
 		type Origin = Origin;
@@ -171,11 +226,16 @@ mod tests {
 			self.voter_bond = fee;
 			self
 		}
+		pub fn set_associated_consts(&self) {
+			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
+			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
+			PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
+			DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
+		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+			self.set_associated_consts();
 			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-			t.extend(balances::GenesisConfig::<Test> {
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
+			t.extend(balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
@@ -184,27 +244,16 @@ mod tests {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-				existential_deposit: 0,
-				transfer_fee: 0,
-				creation_fee: 0,
 				vesting: vec![],
 			}.build_storage().unwrap().0);
 			t.extend(seats::GenesisConfig::<Test> {
-				candidacy_bond: 3,
-				voter_bond: self.voter_bond,
-				present_slash_per_voter: self.bad_presentation_punishment,
-				carry_count: 2,
-				inactive_grace_period: 1,
 				active_council: if self.with_council { vec![
 					(1, 10),
 					(2, 10),
 					(3, 10)
 				] } else { vec![] },
-				approval_voting_period: 4,
-				presentation_duration: 2,
 				desired_seats: 2,
-				decay_ratio: self.decay_ratio,
-				voting_fee: self.voting_fee,
+				presentation_duration: 2,
 				term_duration: 5,
 			}.build_storage().unwrap().0);
 			runtime_io::TestExternalities::new(t)

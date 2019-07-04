@@ -16,7 +16,7 @@
 
 //! Service configuration.
 
-use std::net::SocketAddr;
+use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
 pub use client::ExecutionStrategies;
@@ -44,9 +44,9 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
-	pub keystore_path: String,
+	pub keystore_path: Option<PathBuf>,
 	/// Path to the database.
-	pub database_path: String,
+	pub database_path: PathBuf,
 	/// Cache Size for internal database in MiB
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes

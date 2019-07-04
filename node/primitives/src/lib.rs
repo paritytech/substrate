@@ -41,6 +41,9 @@ pub type AccountIndex = u32;
 /// Balance of an account.
 pub type Balance = u128;
 
+/// Type used for expressing timestamp.
+pub type Moment = u64;
+
 /// Alias to the signature scheme used for Aura authority signatures.
 pub type AuraSignature = primitives::ed25519::Signature;
 
