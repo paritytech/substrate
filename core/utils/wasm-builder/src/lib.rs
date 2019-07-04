@@ -29,7 +29,7 @@
 //!
 //! The `build.rs` file needs to contain the following code:
 //!
-//! ```rust,nocompile
+//! ```ignore
 //! use wasm_builder_runner::{build_current_project, WasmBuilderSource};
 //!
 //! fn main() {
@@ -46,7 +46,7 @@
 //!
 //! As the final step, you need to add the following to your project:
 //!
-//! ```rust,nocompile
+//! ```ignore
 //! include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 //! ```
 //!
