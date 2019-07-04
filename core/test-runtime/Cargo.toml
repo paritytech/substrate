@@ -21,7 +21,7 @@ runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", def
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../srml/support", default-features = false }
 substrate-trie = { path = "../trie", default-features = false }
-trie-db = { version = "0.12", default-features = false }
+trie-db = { version = "0.14.0", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.6"
