@@ -91,6 +91,7 @@ pub struct Service<Components: components::Components> {
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
+	rpc_handlers: rpc::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
@@ -442,6 +443,7 @@ impl<Components: components::Components> Service<Components> {
 				transaction_pool.clone(),
 			)
 		};
+		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
@@ -505,6 +507,7 @@ impl<Components: components::Components> Service<Components> {
 			keystore,
 			config,
 			exit,
+			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
