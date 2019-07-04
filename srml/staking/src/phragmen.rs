@@ -105,7 +105,8 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 
 	// 1- Pre-process candidates and place them in a container, optimisation and add phantom votes.
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
-	let mut nominators: Vec<Nominator<T::AccountId>> = Vec::with_capacity(validator_iter.size_hint().0 + nominator_iter.size_hint().0);
+	let mut nominators: Vec<Nominator<T::AccountId>> =
+		Vec::with_capacity(validator_iter.size_hint().0 + nominator_iter.size_hint().0);
 	let mut candidates = validator_iter.map(|(who, _)| {
 		let stash_balance = stash_of(&who);
 		(Candidate { who, ..Default::default() }, stash_balance)

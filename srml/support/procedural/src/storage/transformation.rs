@@ -217,7 +217,7 @@ fn decl_store_extra_genesis(
 
 		let type_infos = get_type_infos(storage_type);
 
-		let mut opt_build;
+		let opt_build;
 		// need build line
 		if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
@@ -606,7 +606,7 @@ fn decl_storage_items(
 				i.linked_map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
-				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher)
+				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher.into_storage_hasher_struct())
 			},
 		};
 		impls.extend(implementation)
@@ -758,14 +758,14 @@ fn store_functions_to_metadata (
 				let hasher = hasher.into_metadata();
 				let k1ty = clean_type_string(&quote!(#key1_type).to_string());
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
-				let k2_hasher = clean_type_string(&key2_hasher.to_string());
+				let k2_hasher = key2_hasher.into_metadata();
 				quote!{
 					#scrate::metadata::StorageFunctionType::DoubleMap {
 						hasher: #scrate::metadata::#hasher,
 						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
-						key2_hasher: #scrate::metadata::DecodeDifferent::Encode(#k2_hasher),
+						key2_hasher: #scrate::metadata::#k2_hasher,
 					}
 				}
 			},
@@ -870,7 +870,7 @@ enum DeclStorageTypeInfosKind<'a> {
 		hasher: HasherKind,
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
-		key2_hasher: TokenStream2,
+		key2_hasher: HasherKind,
 	}
 }
 
@@ -900,7 +900,7 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
-			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },
+			key2_hasher: (&map.key2_hasher).into(),
 		}),
 	};
 

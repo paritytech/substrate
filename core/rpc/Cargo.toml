@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.14.0"
+futures = "0.1"
 jsonrpc-core = "12.0.0"
 jsonrpc-core-client = "12.0.0"
 jsonrpc-pubsub = "12.0.0"
@@ -29,7 +30,5 @@ tokio = "0.1.7"
 assert_matches = "1.1"
 futures = "0.1.17"
 sr-io = { path = "../sr-io" }
-test_client = { package = "substrate-test-client", path = "../test-client" }
-test_runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
-consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 rustc-hex = "2.0"

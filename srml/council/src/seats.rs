@@ -171,6 +171,12 @@ decl_module! {
 		///
 		/// Note that any trailing `false` votes in `votes` is ignored; In approval voting, not voting for a candidate
 		/// and voting false, are equal.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two extra DB entries, one DB change.
+		/// - Argument `votes` is limited in length to number of candidates.
+		/// # </weight>
 		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, hint: SetIndex) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint)
@@ -178,6 +184,10 @@ decl_module! {
 
 		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
+		///
+		/// # <weight>
+		/// - Same as `set_approvals` with one additional storage read.
+		/// # </weight>
 		fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, hint: SetIndex) -> Result {
 			let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index, hint)
@@ -190,6 +200,11 @@ decl_module! {
 		/// Both indices must be provided as explained in [`voter_at`] function.
 		///
 		/// May be called by anyone. Returns the voter deposit to `signed`.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two fewer DB entries, one DB change.
+		/// # </weight>
 		fn reap_inactive_voter(
 			origin,
 			#[compact] reporter_index: u32,
@@ -258,6 +273,11 @@ decl_module! {
 		/// The index must be provided as explained in [`voter_at`] function.
 		///
 		/// Also removes the lock on the balance of the voter. See [`do_set_approvals()`].
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two fewer DB entries, one DB change.
+		/// # </weight>
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -280,6 +300,11 @@ decl_module! {
 		/// it will NOT have any usable funds to pass candidacy bond and must first retract.
 		/// Note that setting approvals will lock the entire balance of the voter until
 		/// retraction or being reported.
+		///
+		/// # <weight>
+		/// - Independent of input.
+		/// - Three DB changes.
+		/// # </weight>
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -310,6 +335,11 @@ decl_module! {
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
 		/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()`
 		/// `signed` should have at least
+		///
+		/// # <weight>
+		/// - O(voters) compute.
+		/// - One DB change.
+		/// # </weight>
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,

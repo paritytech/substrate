@@ -280,7 +280,7 @@ pub enum StorageFunctionType {
 		key1: DecodeDifferentStr,
 		key2: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-		key2_hasher: DecodeDifferentStr,
+		key2_hasher: StorageHasher,
 	},
 }
 
@@ -311,8 +311,10 @@ pub enum RuntimeMetadata {
 	V2(RuntimeMetadataDeprecated),
 	/// Version 3 for runtime metadata. No longer used.
 	V3(RuntimeMetadataDeprecated),
-	/// Version 4 for runtime metadata.
-	V4(RuntimeMetadataV4),
+	/// Version 4 for runtime metadata. No longer used.
+	V4(RuntimeMetadataDeprecated),
+	/// Version 5 for runtime metadata.
+	V5(RuntimeMetadataV5),
 }
 
 /// Enum that should fail.
@@ -335,7 +337,7 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV4 {
+pub struct RuntimeMetadataV5 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 

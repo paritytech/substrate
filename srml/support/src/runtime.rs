@@ -30,13 +30,13 @@
 ///
 /// ```nocompile
 /// construct_runtime!(
-///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) where
+///     pub enum Runtime where
 ///         Block = Block,
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
 ///         System: system,
-///         Test: test::{default, Log(Test)},
+///         Test: test::{default},
 ///         Test2: test_with_long_module::{Module},
 ///
 ///         // Module with instances
@@ -50,8 +50,8 @@
 /// The identifier `System` is the name of the module and the lower case identifier `system` is the
 /// name of the Rust module/crate for this Substrate module.
 ///
-/// The module `Test: test::{default, Log(Test)}` will expand to
-/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>, Log(Test)}`.
+/// The module `Test: test::{default}` will expand to
+/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>}`.
 ///
 /// The module `Test2: test_with_long_module::{Module}` will expand to
 /// `Test2: test_with_long_module::{Module}`.
@@ -64,7 +64,6 @@
 /// - `Event` or `Event<T>` (if the event is generic) or `Event<T, I>` (if also over instance)
 /// - `Origin` or `Origin<T>` (if the origin is generic) or `Origin<T, I>` (if also over instance)
 /// - `Config` or `Config<T>` (if the config is generic) or `Config<T, I>` (if also over instance)
-/// - `Log( $(IDENT),* )`
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
 ///                             inherent.
@@ -82,7 +81,7 @@ macro_rules! construct_runtime {
 	// form)
 
 	(
-		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
+		pub enum $runtime:ident
 			where
 				Block = $block:ident,
 				NodeBlock = $node_block:ty,
@@ -97,7 +96,6 @@ macro_rules! construct_runtime {
 				$block;
 				$node_block;
 				$uncheckedextrinsic;
-				$log_internal < $( $log_genarg ),* >;
 			};
 			{};
 			$( $rest )*
@@ -111,7 +109,8 @@ macro_rules! construct_runtime {
 	) => {
 		$crate::construct_runtime!(
 			{ $( $preset )* };
-			{ $( $expanded )* $name: $module::{Module, Call, Storage, Event<T>, Config<T>}, };
+			{ $( $expanded )* };
+			$name: $module::{default},
 			$( $rest )*
 		);
 	};
@@ -119,27 +118,25 @@ macro_rules! construct_runtime {
 		{ $( $preset:tt )* };
 		{ $( $expanded:tt )* };
 		$name:ident: $module:ident::{
-			default,
-			$(
+			default
+			$(,
 				$modules:ident
 					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
 					$( ( $( $modules_args:ident ),* ) )*
-			),*
+			)*
 		},
 		$( $rest:tt )*
 	) => {
 		$crate::construct_runtime!(
 			{ $( $preset )* };
-			{
-				$( $expanded )*
-				$name: $module::{
-					Module, Call, Storage, Event<T>, Config<T>,
-					$(
-						$modules $( <$modules_generic $(, $modules_instance)?> )*
-						$( ( $( $modules_args ),* ) )*
-					),*
-				},
-			};
+			{ $( $expanded )* };
+			$name: $module::{
+				Module, Call, Storage, Event<T>, Config<T>
+				$(,
+					$modules $( <$modules_generic $(, $modules_instance)?> )*
+					$( ( $( $modules_args ),* ) )*
+				)*
+			},
 			$( $rest )*
 		);
 	};
@@ -204,7 +201,6 @@ macro_rules! construct_runtime {
 			$block:ident;
 			$node_block:ty;
 			$uncheckedextrinsic:ident;
-			$log_internal:ident <$( $log_genarg:ty ),+>;
 		};
 		{
 			$(
@@ -262,14 +258,6 @@ macro_rules! construct_runtime {
 			{};
 			$(
 				$name: $module:: $( < $module_instance >:: )? { $( $modules )* }
-			)*
-		);
-		$crate::__decl_outer_log!(
-			$runtime;
-			$log_internal < $( $log_genarg ),* >;
-			{};
-			$(
-				$name: $module:: $( < $module_instance >:: )? { $( $modules $( ( $( $modules_args )* ) )* )* }
 			)*
 		);
 		$crate::__decl_outer_config!(
@@ -542,26 +530,6 @@ macro_rules! __decl_outer_dispatch {
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		System: $module:ident::{
-			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		$crate::__decl_outer_dispatch!(
-			$runtime;
-			$( $parsed_modules :: $parsed_name ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			Call $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
@@ -698,75 +666,6 @@ macro_rules! __decl_runtime_metadata {
 				$( $parsed_modules::Module $( < $module_instance > )? with $( $withs )* , )*
 		);
 	}
-
-}
-/// A private macro that generates Log enum for the runtime. See impl_outer_log macro.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __decl_outer_log {
-	(
-		$runtime:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		{ $( $parsed:tt )* };
-		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
-			Log ( $( $args:ident )* ) $( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
-		}
-		$( $rest:tt )*
-	) => {
-		$crate::__decl_outer_log!(
-			$runtime;
-			$log_internal < $( $log_genarg ),* >;
-			{ $( $parsed )* $module $(<$module_instance>)? ( $( $args )* )};
-			$( $rest )*
-		);
-	};
-	(
-		$runtime:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		{ $( $parsed:tt )* };
-		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
-			$ignore:ident $( ( $( $args_ignore:ident )* ) )*
-			$( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
-		}
-		$( $rest:tt )*
-	) => {
-		$crate::__decl_outer_log!(
-			$runtime;
-			$log_internal < $( $log_genarg ),* >;
-			{ $( $parsed )* };
-			$name: $module:: $(<$module_instance>::)? { $( $modules $( ( $( $modules_args )* ) )* )* }
-			$( $rest )*
-		);
-	};
-	(
-		$runtime:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		{ $( $parsed:tt )* };
-		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {}
-		$( $rest:tt )*
-	) => {
-		$crate::__decl_outer_log!(
-			$runtime;
-			$log_internal < $( $log_genarg ),* >;
-			{ $( $parsed )* };
-			$( $rest )*
-		);
-	};
-	(
-		$runtime:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		{ $(
-			$parsed_modules:ident $(< $parsed_instance:ident >)? ( $( $parsed_args:ident )* )
-		)* };
-	) => {
-		$crate::paste::item! {
-			$crate::runtime_primitives::impl_outer_log!(
-				pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
-					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
-				}
-			);
-		}
-	};
 }
 
 /// A private macro that generates GenesisConfig for the runtime. See impl_outer_config macro.

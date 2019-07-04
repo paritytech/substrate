@@ -21,13 +21,14 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT, Header as _};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
-use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
+use super::{
+	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
+};
 use primitives::{Blake2Hasher, storage::well_known_keys};
-use primitives::sr25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -39,6 +40,7 @@ storage_items! {
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 	StorageDigest: b"sys:digest" => Digest;
+	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -51,17 +53,6 @@ pub fn balance_of(who: AccountId) -> u64 {
 
 pub fn nonce_of(who: AccountId) -> u64 {
 	storage::hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
-}
-
-/// Get authorities at given block.
-pub fn authorities() -> Vec<AuthorityId> {
-	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
-		.expect("There are always authorities in test-runtime");
-	(0..len)
-		.map(|i| storage::unhashed::get(&i.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX))
-			.expect("Authority is properly encoded in test-runtime")
-		)
-		.collect()
 }
 
 pub fn initialize_block(header: &Header) {
@@ -80,8 +71,25 @@ pub fn take_block_number() -> Option<BlockNumber> {
 	Number::take()
 }
 
+#[derive(Copy, Clone)]
+enum Mode {
+	Verify,
+	Overwrite,
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn polish_block(block: &mut Block) {
+	execute_block_with_state_root_handler(block, Mode::Overwrite);
+}
+
+pub fn execute_block(mut block: Block) {
+	execute_block_with_state_root_handler(&mut block, Mode::Verify);
+}
+
+fn execute_block_with_state_root_handler(
+	block: &mut Block,
+	mode: Mode,
+) {
 	let header = &mut block.header;
 
 	// check transaction trie root represents the transactions.
@@ -89,7 +97,11 @@ pub fn polish_block(block: &mut Block) {
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
-	header.extrinsics_root = txs_root;
+	if let Mode::Overwrite = mode {
+		header.extrinsics_root = txs_root;
+	} else {
+		assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
+	}
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
@@ -98,7 +110,14 @@ pub fn polish_block(block: &mut Block) {
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
-	header.state_root = storage_root().into();
+	if let Mode::Overwrite = mode {
+		header.state_root = storage_root().into();
+	} else {
+		// check storage root.
+		let storage_root = storage_root().into();
+		info_expect_equal_hash(&storage_root, &header.state_root);
+		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
+	}
 
 	// check digest
 	let digest = &mut header.digest;
@@ -106,39 +125,8 @@ pub fn polish_block(block: &mut Block) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
-	}
-}
-
-pub fn execute_block(mut block: Block) {
-	let header = &mut block.header;
-
-	// check transaction trie root represents the transactions.
-	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
-	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
-	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
-
-	// execute transactions
-	block.extrinsics.into_iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
-	});
-
-	// check storage root.
-	let storage_root = storage_root().into();
-	info_expect_equal_hash(&storage_root, &header.state_root);
-	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
-
-	// check digest
-	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
-	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
+		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
 }
 
@@ -224,7 +212,8 @@ pub fn finalize_block() -> Header {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
+		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
 
 	Header {
@@ -249,6 +238,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
+		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
 	}
 }
 
@@ -284,6 +274,14 @@ fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResu
 	Ok(ApplyOutcome::Success)
 }
 
+fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
+	match value {
+		Some(value) => storage::unhashed::put_raw(key, value),
+		None => storage::unhashed::kill(key),
+	}
+	Ok(ApplyOutcome::Success)
+}
+
 #[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use primitives::hexdisplay::HexDisplay;
@@ -309,25 +307,27 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, twox_128, blake2_256, TestExternalities};
-	use parity_codec::{Joiner, KeyedVec};
-	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
+	use runtime_io::{with_externalities, TestExternalities};
+	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
 	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
-	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
 
 	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
+		let authorities = vec![
+			AuthorityKeyring::Alice.to_raw_public(),
+			AuthorityKeyring::Bob.to_raw_public(),
+			AuthorityKeyring::Charlie.to_raw_public()
+		];
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Alice.to_raw_public().to_vec(),
-			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Bob.to_raw_public().to_vec(),
-			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Charlie.to_raw_public().to_vec(),
-			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(b"sys:auth").to_vec() => authorities.encode(),
+			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			}
 		])
 	}
 

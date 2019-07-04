@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Democratic system: Handles administration of general stakeholder voting.
-
+#![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
@@ -321,6 +321,11 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Propose a sensitive action to be taken.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Two DB changes, one DB entry.
+		/// # </weight>
 		fn propose(origin,
 			proposal: Box<T::Proposal>,
 			#[compact] value: BalanceOf<T>
@@ -343,6 +348,11 @@ decl_module! {
 		}
 
 		/// Propose a sensitive action to be taken.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - One DB entry.
+		/// # </weight>
 		fn second(origin, #[compact] proposal: PropIndex) {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
@@ -355,6 +365,11 @@ decl_module! {
 
 		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - One DB change, one DB entry.
+		/// # </weight>
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
@@ -365,6 +380,11 @@ decl_module! {
 
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
 		/// the proposal;  otherwise it is a vote to keep the status quo.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - One DB change, one DB entry.
+		/// # </weight>
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
@@ -492,6 +512,10 @@ decl_module! {
 		}
 
 		/// Specify a proxy. Called by the stash.
+		///
+		/// # <weight>
+		/// - One extra DB entry.
+		/// # </weight>
 		fn set_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<Proxy<T>>::exists(&proxy), "already a proxy");
@@ -499,12 +523,20 @@ decl_module! {
 		}
 
 		/// Clear the proxy. Called by the proxy.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// # </weight>
 		fn resign_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			<Proxy<T>>::remove(who);
 		}
 
 		/// Clear the proxy. Called by the stash.
+		///
+		/// # <weight>
+		/// - One DB clear.
+		/// # </weight>
 		fn remove_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(&Self::proxy(&proxy).ok_or("not a proxy")? == &who, "wrong proxy");
@@ -512,6 +544,10 @@ decl_module! {
 		}
 
 		/// Delegate vote.
+		///
+		/// # <weight>
+		/// - One extra DB entry.
+		/// # </weight>
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), conviction));
@@ -527,6 +563,10 @@ decl_module! {
 		}
 
 		/// Undelegate vote.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(<Delegations<T>>::exists(&who), "not delegated");
@@ -879,7 +919,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, Bounded};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::testing::Header;
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 
@@ -908,12 +948,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

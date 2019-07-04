@@ -10,6 +10,7 @@ substrate-primitives = { path = "../../primitives", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [features]
 default = ["std"]
@@ -19,4 +20,5 @@ std = [
 	"parity-codec/std",
 	"sr-primitives/std",
 	"rstd/std",
+	"serde",
 ]

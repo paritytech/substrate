@@ -13,7 +13,7 @@ use substrate_service::{
 	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
@@ -99,14 +99,13 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
-					import_queue::<_, _, _, Pair>(
+					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
 						None,
 						None,
 						client,
-						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}
@@ -115,14 +114,13 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-					import_queue::<_, _, _, Pair>(
+					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
 						None,
 						None,
 						client,
-						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}

@@ -214,7 +214,13 @@ enum HasherKind {
 
 impl From<&SetHasher> for HasherKind {
 	fn from(set_hasher: &SetHasher) -> Self {
-		match set_hasher.inner.content {
+		(&set_hasher.inner.content).into()
+	}
+}
+
+impl From<&Hasher> for HasherKind {
+	fn from(hasher: &Hasher) -> Self {
+		match hasher {
 			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
 			Hasher::Twox256(_) => HasherKind::Twox256,
@@ -223,6 +229,7 @@ impl From<&SetHasher> for HasherKind {
 		}
 	}
 }
+
 impl HasherKind {
 	fn into_storage_hasher_struct(&self) -> TokenStream2 {
 		match self {

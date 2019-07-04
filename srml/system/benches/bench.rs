@@ -21,7 +21,7 @@ use runtime_io::{with_externalities, Blake2Hasher};
 use substrate_primitives::H256;
 use primitives::{
 	BuildStorage, traits::{BlakeTwo256, IdentityLookup},
-	testing::{Digest, DigestItem, Header},
+	testing::Header,
 };
 
 mod module {
@@ -62,12 +62,10 @@ impl system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type Log = DigestItem;
 }
 
 impl module::Trait for Runtime {

@@ -1062,7 +1062,6 @@ mod tests {
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
-				println!("HELLO!");
 				we
 			}),
 			true,

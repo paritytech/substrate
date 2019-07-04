@@ -21,7 +21,6 @@ futures = "0.1.17"
 fdlimit = "0.1"
 exit-future = "0.1"
 serde_json = "1.0"
-sysinfo = "0.8.0"
 panic-handler = { package = "substrate-panic-handler", path = "../../core/panic-handler" }
 client = { package = "substrate-client", path = "../../core/client" }
 network = { package = "substrate-network", path = "../../core/network" }

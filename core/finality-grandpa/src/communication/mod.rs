@@ -37,7 +37,6 @@ use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
@@ -55,8 +54,7 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
-/// The consensus engine ID of GRANDPA.
-pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+pub use fg_primitives::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
 mod cost {
@@ -127,9 +125,10 @@ pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
+impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	B: BlockT,
 	S: network::specialization::NetworkSpecialization<B>,
+	H: network::ExHashT,
 {
 	type In = NetworkStream;
 

@@ -6,40 +6,54 @@ license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
-[lib]
-
 [dependencies]
+bytes = "0.4"
 derive_more = "0.14.0"
 log = "0.4"
 parking_lot = "0.8.0"
 bitflags = "1.0"
+fnv = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
 linked_hash_set = "0.1.3"
 lru-cache = "0.1.1"
 rustc-hex = "2.0"
 rand = "0.6"
+libp2p = { version = "0.9.1", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 fork-tree = { path = "../../core/util/fork-tree" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 parity-codec = { version = "3.3", features = ["derive"] }
-network_libp2p = { package = "substrate-network-libp2p", path = "../../core/network-libp2p" }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
+serde = { version = "1.0.70", features = ["derive"] }
+serde_json = "1.0.24"
+slog = { version = "^2", features = ["nested-values"] }
+slog_derive = "0.1.1"
+smallvec = "0.6"
+tokio-io = "0.1"
 tokio-timer = "0.2.11"
 tokio = { version = "0.1.11", optional = true }
+unsigned-varint = { version = "0.2.1", features = ["codec"] }
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client", optional = true }
+erased-serde = "0.3.9"
 void = "1.0"
+zeroize = "0.6.0"
 
 [dev-dependencies]
 env_logger = { version = "0.6" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+quickcheck = "0.8.5"
+rand = "0.6.5"
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
+test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common", features = ["test-helpers"] }
+tempdir = "0.3"
 tokio = "0.1.11"
 
 [features]
 default = []
-test-helpers = ["keyring", "test_client", "consensus/test-helpers", "tokio"]
+test-helpers = ["keyring", "test-client", "consensus/test-helpers", "tokio"]

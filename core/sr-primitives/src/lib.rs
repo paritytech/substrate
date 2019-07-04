@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
@@ -38,11 +38,15 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 pub mod testing;
 
+pub mod weights;
 pub mod traits;
 use traits::{SaturatedConversion, UniqueSaturatedInto};
 
 pub mod generic;
 pub mod transaction_validity;
+
+/// Re-export these since they're only "kind of" generic.
+pub use generic::{DigestItem, Digest};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -158,6 +162,21 @@ impl Permill {
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per million fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/million)) < million
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
+
+		Permill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Permill
@@ -250,6 +269,21 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per billion fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
+
+		Perbill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -314,8 +348,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
@@ -613,216 +646,6 @@ macro_rules! impl_outer_config {
 	}
 }
 
-// NOTE [`PreRuntime` and `Consensus` are special]
-//
-// We MUST treat `PreRuntime` and `Consensus` variants specially, as they:
-//
-// * have more parameters (both in `generic::DigestItem` and in runtimes)
-// * have a `PhantomData` parameter in the runtime, but not in `generic::DigestItem`
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __parse_pattern_2 {
-	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::PreRuntime(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
-	};
-	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::Consensus(ref $v1, ref $v2, $crate::rstd::marker::PhantomData))
-	};
-	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$internal::$module($module::RawLog::$name(ref $v1))
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __parse_pattern {
-	(PreRuntime $engine_id:pat, $binder:pat) => {
-		$crate::generic::DigestItem::PreRuntime($engine_id, $binder)
-	};
-	(Consensus $engine_id:pat, $binder:pat) => {
-		$crate::generic::DigestItem::Consensus($engine_id, $binder)
-	};
-	($name:ident $engine_id:pat, $binder:pat) => {
-		$crate::generic::DigestItem::$name($binder)
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __parse_expr {
-	(PreRuntime $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::PreRuntime($engine_id, $binder, Default::default()))
-	};
-	(Consensus $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::Consensus($engine_id, $binder, Default::default()))
-	};
-	($name:ident $engine_id:expr, $module:ident $internal:ident $binder:expr) => {
-		$internal::$module($module::RawLog::$name($binder))
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __parse_expr_2 {
-	(PreRuntime $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$crate::generic::DigestItemRef::PreRuntime($v1, $v2)
-	};
-	(Consensus $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$crate::generic::DigestItemRef::Consensus($v1, $v2)
-	};
-	($name:ident $module:ident $internal:ident $v1:ident $v2:ident) => {
-		$crate::generic::DigestItemRef::$name($v1)
-	};
-}
-
-/// Generates enum that contains all possible log entries for the runtime.
-/// Every individual module of the runtime that is mentioned, must
-/// expose a `Log` and `RawLog` enums.
-///
-/// Generated enum is binary-compatible with and could be interpreted
-/// as `generic::DigestItem`.
-///
-/// Runtime requirements:
-/// 1) binary representation of all supported 'system' log items should stay
-///    the same. Otherwise, the native code will be unable to read log items
-///    generated by previous runtime versions
-/// 2) the support of 'system' log items should never be dropped by runtime.
-///    Otherwise, native code will lost its ability to read items of this type
-///    even if they were generated by the versions which have supported these
-///    items.
-#[macro_export]
-macro_rules! impl_outer_log {
-	(
-		$(#[$attr:meta])*
-		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident $(<$instance:path>)? ( $( $sitem:tt ),* ) ),*
-		}
-	) => {
-		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
-		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub struct $name($internal);
-
-		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
-		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum InternalLog {
-			$(
-				$module($module::Log <$trait $(, $instance)?>),
-			)*
-		}
-
-		impl $name {
-			/// Try to convert `$name` into `generic::DigestItemRef`. Returns Some when
-			/// `self` is a 'system' log && it has been marked as 'system' in macro call.
-			/// Otherwise, None is returned.
-			#[allow(unreachable_patterns)]
-			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
-				match self.0 {
-					$($(
-					$crate::__parse_pattern_2!($sitem $module $internal a b) =>
-						Some($crate::__parse_expr_2!($sitem $module $internal a b)),
-					)*)*
-					_ => None,
-				}
-			}
-		}
-
-		impl $crate::traits::DigestItem for $name {
-			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
-			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
-
-			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-				self.dref().and_then(|dref| dref.as_authorities_change())
-			}
-
-			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-				self.dref().and_then(|dref| dref.as_changes_trie_root())
-			}
-
-			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
-				self.dref().and_then(|dref| dref.as_pre_runtime())
-			}
-		}
-
-		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
-			/// Converts `generic::DigestItem` into `$name`. If
-			/// `generic::DigestItem` represents a system item which is
-			/// supported by the runtime, it is returned. Otherwise we expect a
-			/// `Other`, `PreDigest`, or `Consensus` log item. Trying to convert
-			/// from anything else will lead to panic at runtime, since the
-			/// runtime does not supports this 'system' log item.
-			#[allow(unreachable_patterns)]
-			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
-				match gen {
-					$($(
-					$crate::__parse_pattern!($sitem b, a) =>
-						$name($crate::__parse_expr!($sitem b, $module $internal a)),
-					)*)*
-					_ => {
-						if let Some(s) = gen.as_other()
-							.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
-							.map($name)
-						{
-							s
-						} else {
-							panic!("we only reach here if the runtime did not handle a digest; \
-									runtimes are required to handle all digests they receive; qed"
-									)
-						}
-					}
-				}
-			}
-		}
-
-		impl $crate::codec::Decode for $name {
-			/// `generic::DigestItem` binary compatible decode.
-			fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
-				let gen: $crate::generic::DigestItem<$($genarg),*> =
-					$crate::codec::Decode::decode(input)?;
-				Some($name::from(gen))
-			}
-		}
-
-		impl $crate::codec::Encode for $name {
-			/// `generic::DigestItem` binary compatible encode.
-			fn encode(&self) -> Vec<u8> {
-				match self.dref() {
-					Some(dref) => dref.encode(),
-					None => {
-						let gen: $crate::generic::DigestItem<$($genarg),*> =
-							$crate::generic::DigestItem::Other(self.0.encode());
-						gen.encode()
-					},
-				}
-			}
-		}
-
-		$(
-			impl From<$module::Log<$trait $(, $instance)?>> for $name {
-				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
-					$name(x.into())
-				}
-			}
-
-			impl From<$module::Log<$trait $(, $instance)?>> for InternalLog {
-				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait $(, $instance)?>) -> Self {
-					InternalLog::$module(x)
-				}
-			}
-		)*
-	};
-}
-
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
@@ -850,49 +673,11 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::{H256, H512};
 	use crate::codec::{Encode, Decode};
-	use crate::traits::DigestItem;
 
-	pub trait RuntimeT {
-		type AuthorityId;
-	}
-
-	pub struct Runtime;
-
-	impl RuntimeT for Runtime {
-		type AuthorityId = u64;
-	}
-
-	mod a {
-		use super::RuntimeT;
-		use crate::codec::{Encode, Decode};
-		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
-	}
-
-	mod b {
-		use super::RuntimeT;
-		use crate::codec::{Encode, Decode};
-		use serde::Serialize;
-		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
-	}
-
-	impl_outer_log! {
-		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
-			a(AuthoritiesChange), b()
-		}
-	}
-
-	macro_rules! per_thing_mul_upper_test {
+	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
-			// all sort of from_percent
+			// multiplication from all sort of from_percent
 			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 			assert_eq!(
 				$per::from_percent(99) * $num_type::max_value(),
@@ -902,45 +687,24 @@ mod tests {
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
 
-			// bounds
+			// multiplication with bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
+
+			// from_rational_approximation
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
+				$per::one(),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value()/3, u128::max_value()),
+				$per::from_parts($per::one().0/3),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(1, u128::max_value()),
+				$per::zero(),
+			);
 		}
-	}
-
-	#[test]
-	fn impl_outer_log_works() {
-		// encode/decode regular item
-		let b1: Log = b::RawLog::B1::<u64>(777).into();
-		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		assert_eq!(b1, decoded_b1);
-
-		// encode/decode system item
-		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
-		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		assert_eq!(auth_change, decoded_auth_change);
-
-		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_b1[..]).unwrap();
-		match generic_b1 {
-			super::generic::DigestItem::Other(_) => (),
-			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
-		}
-
-		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
-		match generic_auth_change {
-			super::generic::DigestItem::AuthoritiesChange::<H256, u64, H512>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
-			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
-		}
-
-		// check that as-style methods are working with system items
-		assert!(auth_change.as_authorities_change().is_some());
-
-		// check that as-style methods are not working with regular items
-		assert!(b1.as_authorities_change().is_none());
 	}
 
 	#[test]
@@ -993,13 +757,14 @@ mod tests {
 		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
-		per_thing_mul_upper_test!(u32, Perbill);
-		per_thing_mul_upper_test!(u64, Perbill);
-		per_thing_mul_upper_test!(u128, Perbill);
+		per_thing_upper_test!(u32, Perbill);
+		per_thing_upper_test!(u64, Perbill);
+		per_thing_upper_test!(u128, Perbill);
 
-		per_thing_mul_upper_test!(u32, Permill);
-		per_thing_mul_upper_test!(u64, Permill);
-		per_thing_mul_upper_test!(u128, Permill);
+		per_thing_upper_test!(u32, Permill);
+		per_thing_upper_test!(u64, Permill);
+		per_thing_upper_test!(u128, Permill);
+
 	}
 
 	#[test]

@@ -110,6 +110,12 @@ decl_module! {
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - No DB writes.
+		/// # </weight>
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -129,6 +135,12 @@ decl_module! {
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
