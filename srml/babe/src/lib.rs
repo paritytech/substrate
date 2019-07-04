@@ -17,13 +17,14 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code)]
+#![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue};
+use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating}};
+use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
+use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -31,8 +32,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::BABE_ENGINE_ID;
-
-pub use babe_primitives::AuthorityId;
+pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -67,6 +67,7 @@ pub struct InherentDataProvider {
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
+	/// Constructs `Self`
 	pub fn new(slot_duration: u64) -> Self {
 		Self {
 			slot_duration
@@ -106,6 +107,9 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+/// The length of the BABE randomness
+pub const RANDOMNESS_LENGTH: usize = 32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// The last timestamp.
@@ -113,11 +117,75 @@ decl_storage! {
 
 		/// The current authorities set.
 		Authorities get(authorities): Vec<AuthorityId>;
+
+		/// The epoch randomness.
+		///
+		/// # Security
+		///
+		/// This MUST NOT be used for gambling, as it can be influenced by a
+		/// malicious validator in the short term. It MAY be used in many
+		/// cryptographic protocols, however, so long as one remembers that this
+		/// (like everything else on-chain) it is public. For example, it can be
+		/// used where a number is needed that cannot have been chosen by an
+		/// adversary, for purposes such as public-coin zero-knowledge proofs.
+		EpochRandomness get(epoch_randomness): [u8; 32];
+
+		/// The randomness under construction
+		UnderConstruction: [u8; 32];
+
+		/// The randomness for the next epoch
+		NextEpochRandomness: [u8; 32];
+
+		/// The current epoch
+		EpochIndex get(epoch_index): u64;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	/// The BABE SRML module
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Initialization
+		fn on_initialize() {
+			for i in Self::get_inherent_digests()
+				.logs
+				.iter()
+				.filter_map(|s| s.as_pre_runtime())
+				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+					<[u8; VRF_OUTPUT_LENGTH]>::decode(&mut data)
+				} else {
+					None
+				}) {
+				Self::deposit_vrf_output(&i);
+			}
+		}
+	}
+}
+
+impl<T: Trait> RandomnessBeacon for Module<T> {
+	fn random() -> [u8; 32] {
+		Self::epoch_randomness()
+	}
+}
+
+/// A BABE public key
+pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
+
+impl<T: Trait> FindAuthor<u64> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u64> where
+		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		for (id, mut data) in digests.into_iter() {
+			if id == BABE_ENGINE_ID {
+				let (_, _, i): (
+					[u8; VRF_OUTPUT_LENGTH],
+					[u8; VRF_PROOF_LENGTH],
+					u64,
+				) = Decode::decode(&mut data)?;
+				return Some(i)
+			}
+		}
+		return None
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -127,25 +195,31 @@ impl<T: Trait> Module<T> {
 		// the majority of their slot.
 		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
-}
 
-impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(_moment: T::Moment) { }
-}
-
-impl<T: Trait> Module<T> {
 	fn change_authorities(new: Vec<AuthorityId>) {
 		Authorities::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
+
+	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
+		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
+	}
+
+	fn get_inherent_digests() -> system::DigestOf<T> {
+		<system::Module<T>>::digest()
+	}
+}
+
+impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
+	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-	where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// instant changes
 		if changed {
@@ -155,6 +229,20 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 				Self::change_authorities(next_authorities);
 			}
 		}
+
+		let rho = UnderConstruction::get();
+		UnderConstruction::put([0; 32]);
+		let last_epoch_randomness = EpochRandomness::get();
+		let epoch_index = EpochIndex::get()
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+		EpochIndex::put(epoch_index);
+		EpochRandomness::put(NextEpochRandomness::get());
+		let mut s = [0; 72];
+		s[..32].copy_from_slice(&last_epoch_randomness);
+		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
+		s[40..].copy_from_slice(&rho);
+		NextEpochRandomness::put(runtime_io::blake2_256(&s))
 	}
 	fn on_disabled(_i: usize) {
 		// ignore?

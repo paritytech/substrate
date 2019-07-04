@@ -865,7 +865,7 @@ pub struct Schedule {
 	/// Base gas cost to call into a contract.
 	pub call_base_cost: Gas,
 
- 	/// Base gas cost to instantiate a contract.
+	/// Base gas cost to instantiate a contract.
 	pub instantiate_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
