@@ -215,15 +215,26 @@ fn returns_mutable_static() {
 // See https://github.com/paritytech/substrate/issues/2967 for details
 #[test]
 fn restoration_of_globals() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	// Allocate 32 pages (of 65536 bytes) which gives the runtime 2048KB of heap to operate on
+	// (plus some additional space unused from the initial pages requested by the wasm runtime
+	// module).
+	//
+	// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
+	// to our allocator algorithm there are inefficiencies.
+	const REQUIRED_MEMORY_PAGES: u64 = 32;
+
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+		.set_heap_pages(REQUIRED_MEMORY_PAGES)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);
 
-	// On the first invocation we allocate approx. 75% of stack and then trap.
+	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 	let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
 	assert!(ret.is_err());
 
-	// On the second invocation we allocate yet another 75% of stack
+	// On the second invocation we allocate yet another 768KB (75%) of stack
 	let ret = runtime_api.allocates_huge_stack_array(&block_id, false);
 	assert!(ret.is_ok());
 }
