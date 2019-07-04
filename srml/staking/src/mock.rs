@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, cell::RefCell};
 use primitives::Perbill;
-use primitives::traits::{IdentityLookup, Convert, Identity, OpaqueKeys, OnInitialize};
+use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -103,7 +103,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
-	type Balance = u64;
+	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
@@ -129,6 +129,12 @@ impl session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 }
+
+impl session::historical::Trait for Test {
+	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
+}
+
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -146,7 +152,7 @@ impl Trait for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
-	type AsValidatorId = Identity;
+	type SessionInterface = Self;
 }
 
 pub struct ExtBuilder {

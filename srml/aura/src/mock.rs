@@ -56,7 +56,6 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type HandleReport = ();
 	type AuthorityId = UintAuthorityId;
-	const KEY_ID: KeyTypeId = UINT_DUMMY_KEY;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
