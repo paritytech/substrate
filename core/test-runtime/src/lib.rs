@@ -253,7 +253,7 @@ cfg_if! {
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
-				fn allocates_stack_alot(trap: bool);
+				fn allocates_huge_stack_array(trap: bool);
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.

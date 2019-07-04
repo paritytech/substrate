@@ -1374,7 +1374,7 @@ impl WasmExecutor {
 			.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
-		// extract a reference to a linear memory, optional reference to a table
+		// extract a reference to a linear memory and extract the `__heap_base` start
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
 		let _heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;

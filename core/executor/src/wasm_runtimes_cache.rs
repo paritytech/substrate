@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -56,8 +56,7 @@ struct CachedRuntime {
 /// It is used for restoring the state of the module after execution.
 #[derive(Clone)]
 struct StateSnapshot {
-	/// The offset and the contents of the memory segments that should be copied at
-	/// to restore the snapshot.
+	/// The offset and the content of the memory segments that should be used to restore the snapshot
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
@@ -287,7 +286,7 @@ impl RuntimesCache {
 				"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;
 				qed
-			",
+				",
 			);
 
 		let version = wasm_executor
