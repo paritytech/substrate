@@ -1178,11 +1178,12 @@ fn voter_persists_its_votes() {
 				let net = net.clone();
 				let voter_tx = voter_tx.clone();
 				let round_tx = round_tx.clone();
-				future::Either::A(futures::future::poll_fn::<(), (), _>(move || Ok(net2.lock().poll_until_sync()))
+				future::Either::A(tokio_timer::Interval::new_interval(Duration::from_millis(200))
+					.take_while(move |_| {
+						Ok(net2.lock().peer(1).client().info().chain.best_number != 40)
+					})
+					.for_each(|_| Ok(()))
 					.and_then(move |_| {
-						assert_eq!(net.lock().peer(0).client().info().chain.best_number, 40,
-								"Peer #{} failed to sync", 0);
-
 						#[allow(deprecated)]
 						let block_30_hash =
 							net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();

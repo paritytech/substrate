@@ -292,6 +292,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 			at = hash;
 		}
 
+		self.network.service().announce_block(at.clone());
 		at
 	}
 
