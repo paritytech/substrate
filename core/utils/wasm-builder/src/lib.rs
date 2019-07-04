@@ -40,18 +40,18 @@
 //!
 //! The `no-std` feature will be enabled by WASM builder while compiling your project to WASM.
 //!
-//! As a last step you need to add the following to your project:
+//! As the final step, you need to add the following to your project:
 //!
 //! ```rust,nocompile
 //! include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 //! ```
 //!
-//! This will include the generated wasm binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
-//! The former is the WASM binary compacted and the later without compaction.
+//! This will include the generated WASM binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
+//! The former is a compact WASM binary and the later is not compacted.
 //!
 //! ## Environment variables
 //!
-//! By using environment variables, you can configure which WASM binaries are build and how:
+//! By using environment variables, you can configure which WASM binaries are built and how:
 //!
 //! - `SKIP_WASM_BUILD` - Skips building any WASM binary. This is useful when only native should be recompiled.
 //! - `BUILD_DUMMY_WASM_BINARY` - Builds dummy WASM binaries. These dummy binaries are empty and useful
