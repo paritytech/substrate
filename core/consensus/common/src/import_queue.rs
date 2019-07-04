@@ -92,7 +92,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 ///
 /// The `import_*` methods can be called in order to send elements for the import queue to verify.
 /// Afterwards, call `poll_actions` to determine how to respond to these elements.
-pub trait ImportQueue<B: BlockT>: Send + Sync {		// TODO: remove Sync
+pub trait ImportQueue<B: BlockT>: Send {
 	/// Import bunch of blocks.
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
@@ -132,11 +132,11 @@ pub struct BasicQueue<B: BlockT> {
 	/// the task to spawn here, then extract it as soon as we are in a tokio context.
 	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
 	/// been spawned.
-	future_to_spawn: Option<Box<dyn Future<Item = (), Error = ()> + Send + Sync>>,		// TODO: remove Sync
+	future_to_spawn: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
 	/// "no std" environment), we instead put it in `manual_poll`. It is then polled manually from
 	/// `poll_actions`.
-	manual_poll: Option<Box<dyn Future<Item = (), Error = ()> + Send + Sync>>,		// TODO: remove Sync
+	manual_poll: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
 }
 
 impl<B: BlockT> BasicQueue<B> {

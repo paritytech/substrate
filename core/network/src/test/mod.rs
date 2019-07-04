@@ -217,7 +217,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// instead of going through the import queue.
 	block_import: Arc<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
-	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send + Sync>; 2]>,		// TODO: remove Sync
+	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send>; 2]>,
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
