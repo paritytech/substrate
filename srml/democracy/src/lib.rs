@@ -72,7 +72,7 @@
 //! - **Maturity:** A mature referendum is one that expires at the current block.
 //! - **Vote tallying, passing, and execution:** When a block is finalized, the Democracy module will search
 //!  for mature referenda and tally their votes, then remove them from the Table of Referenda. If a referendum's
-//!  vote tally meets its vote threshold, then it will be passed and executed. Last, increment `NextTally`
+//!  vote tally meets its vote threshold, then it will be passed and executed. Lastly, `NextTally` is incremented
 //!  to determine the next public referendum index to tally.
 //!
 //! ### Goals
