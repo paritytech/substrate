@@ -23,6 +23,37 @@ use rstd::convert::TryFrom;
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(C)]
+pub enum StorageKind {
+	/// Persistent storage is non-revertible and not fork-aware. It means that any value
+	/// set by the offchain worker triggered at block `N(hash1)` is persisted even
+	/// if that block is reverted as non-canonical and is available for the worker
+	/// that is re-run at block `N(hash2)`.
+	/// This storage can be used by offchain workers to handle forks
+	/// and coordinate offchain workers running on different forks.
+	PERSISTENT = 1,
+	/// Local storage is revertible and fork-aware. It means that any value
+	/// set by the offchain worker triggered at block `N(hash1)` is reverted
+	/// if that block is reverted as non-canonical and is NOT available for the worker
+	/// that is re-run at block `N(hash2)`.
+	LOCAL = 2,
+}
+
+impl TryFrom<u32> for StorageKind {
+	type Error = ();
+
+	fn try_from(kind: u32) -> Result<Self, Self::Error> {
+		match kind {
+			e if e == u32::from(StorageKind::PERSISTENT as u8) => Ok(StorageKind::PERSISTENT),
+			e if e == u32::from(StorageKind::LOCAL as u8) => Ok(StorageKind::LOCAL),
+			_ => Err(()),
+		}
+	}
+}
+
+/// A type of supported crypto.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[repr(C)]
 pub enum CryptoKind {
 	/// SR25519 crypto (Schnorrkel)
 	Sr25519 = 1,
@@ -37,7 +68,7 @@ impl TryFrom<u32> for CryptoKind {
 		match kind {
 			e if e == u32::from(CryptoKind::Sr25519 as u8) => Ok(CryptoKind::Sr25519),
 			e if e == u32::from(CryptoKind::Ed25519 as u8) => Ok(CryptoKind::Ed25519),
-			_ => Err(())
+			_ => Err(()),
 		}
 	}
 }
@@ -227,23 +258,31 @@ pub trait Externalities {
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_set(&mut self, key: &[u8], value: &[u8]);
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
 
 	/// Sets a value in the local storage if it matches current value.
 	///
 	/// Since multiple offchain workers may be running concurrently, to prevent
 	/// data races use CAS to coordinate between them.
 	///
+	/// Returns `true` if the value has been set, `false` otherwise.
+	///
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]);
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool;
 
 	/// Gets a value from the local storage.
 	///
 	/// If the value does not exist in the storage `None` will be returned.
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>>;
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Initiaties a http request given HTTP verb and the URL.
 	///
@@ -348,16 +387,22 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).random_seed()
 	}
 
-	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) {
-		(&mut **self).local_storage_set(key, value)
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		(&mut **self).local_storage_set(kind, key, value)
 	}
 
-	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) {
-		(&mut **self).local_storage_compare_and_set(key, old_value, new_value)
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
+		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 
-	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		(&mut **self).local_storage_get(key)
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		(&mut **self).local_storage_get(kind, key)
 	}
 
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
