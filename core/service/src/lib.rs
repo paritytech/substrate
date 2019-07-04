@@ -766,7 +766,7 @@ impl RpcSession {
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
-			metadata: rpc::Metadata::new(sender)
+			metadata: rpc::Metadata::new(sender),
 		}
 	}
 }
