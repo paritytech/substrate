@@ -244,11 +244,12 @@ where
 
 	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
-		// do check for backend
+		// do check for backend, theorically this could be skip
+		// (`ChildTrie` being initiated from backend, this is
+		// still here for safety but removal can be considered
+		// in the future).
 		let ct = match self.child_trie(ct.parent_slice()) {
-			Some(ct_old) => if
-				(ct_old.root_initial_value() != ct.root_initial_value()
-				&& !ct.is_new()) ||
+			Some(ct_old) => if ct_old.root_initial_value() != ct.root_initial_value() ||
 				ct_old.keyspace() != ct.keyspace() {
 				return false;
 			} else {

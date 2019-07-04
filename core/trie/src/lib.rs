@@ -164,7 +164,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	child_trie: ChildTrieReadRef,
 	db: &mut DB,
-	default_root: &Vec<u8>,
+	default_root: &[u8],
 	delta: I
 ) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
@@ -179,7 +179,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	};
 	// keyspaced is needed (db can be init from this operation, this is not only root calculation)
 	let mut db = KeySpacedDBMut::new(&mut *db, Some(keyspace));
-	let mut root = child_trie_root_as_hash::<H,_>(root);
+	let mut root = trie_root_as_hash::<H,_>(root);
 	{
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 		for (key, change) in delta {
@@ -202,7 +202,7 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
-		let root = child_trie_root_as_hash::<H,_>(root);
+		let root = trie_root_as_hash::<H,_>(root);
 
 		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		let trie = TrieDB::<H>::new(&db, &root)?;
@@ -250,7 +250,7 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
-		let root = child_trie_root_as_hash::<H,_>(root);
+		let root = trie_root_as_hash::<H,_>(root);
 		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
@@ -268,71 +268,12 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	if let ChildTrieReadRef::Existing(root, keyspace) = child_trie {
-		let root = child_trie_root_as_hash::<H,_>(root);
+		let root = trie_root_as_hash::<H,_>(root);
 		let db = KeySpacedDB::new(&*db, Some(keyspace));
 		Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 	} else {
 		Ok(None)
 	}
-}
-
-
-// Utilities (not exported):
-
-
-const EMPTY_TRIE: u8 = 0;
-const LEAF_NODE_OFFSET: u8 = 1;
-const LEAF_NODE_BIG: u8 = 127;
-const EXTENSION_NODE_OFFSET: u8 = 128;
-const EXTENSION_NODE_BIG: u8 = 253;
-const BRANCH_NODE_NO_VALUE: u8 = 254;
-const BRANCH_NODE_WITH_VALUE: u8 = 255;
-const LEAF_NODE_THRESHOLD: u8 = LEAF_NODE_BIG - LEAF_NODE_OFFSET;
-const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;	//125
-const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
-const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
-
-pub fn child_trie_root_as_hash<H: Hasher, R: AsRef<[u8]>> (root: R) -> H::Out {
-	let mut res = H::Out::default();
-	let max = rstd::cmp::min(res.as_ref().len(), root.as_ref().len());
-	res.as_mut()[..max].copy_from_slice(&root.as_ref()[..max]);
-	res
-}
-
-fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
-	if input.len() < count {
-		return None
-	}
-	let r = &(*input)[..count];
-	*input = &(*input)[count..];
-	Some(r)
-}
-
-fn partial_to_key(partial: &[u8], offset: u8, big: u8) -> Vec<u8> {
-	let nibble_count = (partial.len() - 1) * 2 + if partial[0] & 16 == 16 { 1 } else { 0 };
-	let (first_byte_small, big_threshold) = (offset, (big - offset) as usize);
-	let mut output = [first_byte_small + nibble_count.min(big_threshold) as u8].to_vec();
-	if nibble_count >= big_threshold { output.push((nibble_count - big_threshold) as u8) }
-	if nibble_count % 2 == 1 {
-		output.push(partial[0] & 0x0f);
-	}
-	output.extend_from_slice(&partial[1..]);
-	output
-}
-
-fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
-	let first = if has_value {
-		BRANCH_NODE_WITH_VALUE
-	} else {
-		BRANCH_NODE_NO_VALUE
-	};
-	let mut bitmap: u16 = 0;
-	let mut cursor: u16 = 1;
-	for v in has_children {
-		if v { bitmap |= cursor }
-		cursor <<= 1;
-	}
-	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
 /// `HashDB` implementation that append a encoded `KeySpace` (unique id in as bytes) with the
@@ -421,6 +362,67 @@ impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	}
 
 }
+
+
+// Utilities (not exported):
+
+
+const EMPTY_TRIE: u8 = 0;
+const LEAF_NODE_OFFSET: u8 = 1;
+const LEAF_NODE_BIG: u8 = 127;
+const EXTENSION_NODE_OFFSET: u8 = 128;
+const EXTENSION_NODE_BIG: u8 = 253;
+const BRANCH_NODE_NO_VALUE: u8 = 254;
+const BRANCH_NODE_WITH_VALUE: u8 = 255;
+const LEAF_NODE_THRESHOLD: u8 = LEAF_NODE_BIG - LEAF_NODE_OFFSET;
+const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;	//125
+const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
+const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
+
+fn trie_root_as_hash<H: Hasher, R: AsRef<[u8]>> (trie_root: R) -> H::Out {
+	let mut root = H::Out::default();
+	// root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(trie_root.as_ref());
+	root
+}
+
+fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
+	if input.len() < count {
+		return None
+	}
+	let r = &(*input)[..count];
+	*input = &(*input)[count..];
+	Some(r)
+}
+
+fn partial_to_key(partial: &[u8], offset: u8, big: u8) -> Vec<u8> {
+	let nibble_count = (partial.len() - 1) * 2 + if partial[0] & 16 == 16 { 1 } else { 0 };
+	let (first_byte_small, big_threshold) = (offset, (big - offset) as usize);
+	let mut output = [first_byte_small + nibble_count.min(big_threshold) as u8].to_vec();
+	if nibble_count >= big_threshold { output.push((nibble_count - big_threshold) as u8) }
+	if nibble_count % 2 == 1 {
+		output.push(partial[0] & 0x0f);
+	}
+	output.extend_from_slice(&partial[1..]);
+	output
+}
+
+fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
+	let first = if has_value {
+		BRANCH_NODE_WITH_VALUE
+	} else {
+		BRANCH_NODE_NO_VALUE
+	};
+	let mut bitmap: u16 = 0;
+	let mut cursor: u16 = 1;
+	for v in has_children {
+		if v { bitmap |= cursor }
+		cursor <<= 1;
+	}
+	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
+}
+
+
 
 #[cfg(test)]
 mod tests {

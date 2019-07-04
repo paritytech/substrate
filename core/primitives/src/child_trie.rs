@@ -59,23 +59,17 @@ pub fn generate_keyspace<N: Encode>(block_nb: &N, parent_trie: &ParentTrie) -> V
 }
 
 // see FIXME #2741 for removal of this allocation on every operation.
-// Simpliest would be to put an additional optional field in prefix.
+// Simplest would be to put an additional optional field in prefix.
 /// Utility function used for merging `KeySpace` data and `prefix` data
 /// before calling key value database primitives.
-/// Note that it currently does a costy append operation resulting in bigger
+/// Note that it currently does a costly append operation resulting in bigger
 /// key length but possibly allowing prefix related operation at lower level.
 pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: &[u8]) -> Vec<u8> {
-	if let Some(ks) = ks {
-		let mut res = rstd::vec![0; ks.len() + prefix.len()];
-		res[..ks.len()].copy_from_slice(&ks);
-		res[ks.len()..].copy_from_slice(prefix);
-		res
-	} else {
-		let mut res = rstd::vec![0; NO_CHILD_KEYSPACE.len() + prefix.len()];
-		res[..NO_CHILD_KEYSPACE.len()].copy_from_slice(&NO_CHILD_KEYSPACE[..]);
-		res[NO_CHILD_KEYSPACE.len()..].copy_from_slice(prefix);
-		res
-	}
+	let ks = ks.map(|ks| ks.as_slice()).unwrap_or(&NO_CHILD_KEYSPACE[..]);
+	let mut res = rstd::vec![0; ks.len() + prefix.len()];
+	res[..ks.len()].copy_from_slice(ks);
+	res[ks.len()..].copy_from_slice(prefix);
+	res
 }
 
 /// Make database key from hash and prefix.
@@ -201,7 +195,7 @@ impl ChildTrie {
 	/// Method for fetching or initiating a new child trie.
 	///
 	/// Note that call back could do nothing, which will allow unspecified behavior,
-	/// but can be usefull in case we create a child trie at a known unused location,
+	/// but can be useful in case we create a child trie at a known unused location,
 	/// or for performance purpose (later write).
 	///
 	/// We also provide an encodable value specific to the creation state (block number).

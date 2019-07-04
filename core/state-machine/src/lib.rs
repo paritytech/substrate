@@ -831,8 +831,12 @@ where
 	H::Out: Ord
 {
 	// no need to use keyspace with proof
-	if let ChildTrieReadRef::Existing(root, _keyspace) = child_trie {
-		let root = trie::child_trie_root_as_hash::<H,_>(root);
+	if let ChildTrieReadRef::Existing(trie_root, _keyspace) = child_trie {
+		let mut root = H::Out::default();
+		// root is fetched from DB, not writable by runtime, so it's always valid.
+		root.as_mut().copy_from_slice(trie_root.as_ref());
+
+		let root = root;
 		let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
 		read_child_proof_check_on_proving_backend(&proving_backend, child_trie, key)
 	} else {

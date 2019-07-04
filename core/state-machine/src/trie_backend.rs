@@ -166,7 +166,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<H, _, _, _, _>(child_trie.node_ref(), &mut eph, &default_root, delta) {
+			match child_delta_trie_root::<H, _, _, _, _>(
+				child_trie.node_ref(),
+				&mut eph,
+				default_root.as_slice(),
+				delta,
+			) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}

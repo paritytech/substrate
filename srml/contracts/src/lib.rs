@@ -266,11 +266,13 @@ where
 		});
 
 		let mut buf = Vec::new();
-		buf.extend_from_slice(CHILD_CONTRACT_PREFIX);
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
-		T::Hashing::hash(&buf[..]).as_ref().into()
+		b"default:".iter()
+			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
+			.cloned()
+			.collect()
 	}
 }
 

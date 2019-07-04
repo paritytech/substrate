@@ -781,9 +781,8 @@ impl StorageApi for () {
 	}
 
 	fn exists_child_storage(child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
-		let empty_byte: [u8;0] = [];
 		let (keyspace, root) = match child_trie {
-			ChildTrieReadRef::New(keyspace) => (keyspace, &empty_byte[..]),
+			ChildTrieReadRef::New(keyspace) => (keyspace, &[][..]),
 			ChildTrieReadRef::Existing (root, keyspace) => (keyspace, root),
 		};
 		unsafe {
