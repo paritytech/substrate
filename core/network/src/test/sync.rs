@@ -16,9 +16,8 @@
 
 use client::{backend::Backend, blockchain::HeaderBackend};
 use crate::config::Roles;
-use crate::message;
 use consensus::BlockOrigin;
-use std::{collections::HashSet, time::Duration, time::Instant};
+use std::{time::Duration, time::Instant};
 use tokio::runtime::current_thread;
 use super::*;
 
@@ -366,7 +365,6 @@ fn own_blocks_are_announced() {
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap(); // connect'em
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
 
-	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
 
 	assert_eq!(net.peer(0).client.as_in_memory_backend().blockchain().info().best_number, 1);
