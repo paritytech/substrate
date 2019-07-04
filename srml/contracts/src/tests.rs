@@ -927,7 +927,11 @@ fn deduct_blocks() {
 
 #[test]
 fn call_contract_removals() {
-	removals(|| Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()).is_ok());
+	removals(|| {
+		// Call on already-removed account might fail, and this is fine.
+		Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null());
+		true
+	});
 }
 
 #[test]
@@ -1115,6 +1119,45 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	);
 }
 
+#[test]
+fn call_removed_contract() {
+	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+
+	// Balance reached and superior to subsistence threshold
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			));
+
+			// Calling contract should succeed.
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+
+			// Calling contract should remove contract and fail.
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
+
+ 			// Subsequent contract calls should also fail.
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
+		}
+	)
+}
+
 const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
@@ -1294,7 +1337,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	// same copy of this (modulo hex notation differences) in `CODE_RESTORATION`.
 	//
 	// When this assert is triggered make sure that you update the literals here and in
-	// `CODE_RESTORATION`. Hopefully, we switch to automatical injection of the code.
+	// `CODE_RESTORATION`. Hopefully, we switch to automatic injection of the code.
 	const ENCODED_CALL_LITERAL: &str =
 		"0105020000000000000069aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf320000\
 		0000000000080100000000000000000000000000000000000000000000000000000000000000010000000000000\
@@ -1368,7 +1411,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 			// we expect that it will get removed leaving tombstone.
-			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
 			/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.

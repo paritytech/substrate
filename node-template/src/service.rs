@@ -65,8 +65,8 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService, key: Option<Arc<Pair>>| {
-				if let Some(key) = key {
+			|service: Self::FullService| {
+				if let Some(key) = service.authority_key::<Pair>() {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
@@ -77,7 +77,7 @@ construct_service_factory! {
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						key.clone(),
+						Arc::new(key),
 						client.clone(),
 						select_chain,
 						client,

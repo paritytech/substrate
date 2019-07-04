@@ -45,7 +45,7 @@ use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
-use primitives::{crypto::Pair, sr25519};
+use primitives::{Pair, Public, sr25519};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
