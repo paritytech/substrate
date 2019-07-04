@@ -459,17 +459,22 @@ pub mod ext {
 		fn ext_random_seed(data: *mut u8);
 
 		/// Write a value to local storage.
-		fn ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32);
+		fn ext_local_storage_set(kind: u32, key: *const u8, key_len: u32, value: *const u8, value_len: u32);
 
 		/// Write a value to local storage in atomic fashion.
+		///
+		/// # Returns
+		/// - `0` in case the value has been set
+		/// - `1` if the `old_value` didn't match
 		fn ext_local_storage_compare_and_set(
+			kind: u32,
 			key: *const u8,
 			key_len: u32,
 			old_value: *const u8,
 			old_value_len: u32,
 			new_value: *const u8,
 			new_value_len: u32
-		);
+		) -> u32;
 
 		/// Read a value from local storage.
 		///
@@ -478,7 +483,7 @@ pub mod ext {
 		///
 		/// - 0 if the value has not been found, the `value_len` is set to `u32::max_value`.
 		/// - Otherwise, pointer to the value in memory. `value_len` contains the length of the value.
-		fn ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
+		fn ext_local_storage_get(kind: u32, key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
 		/// Initiaties a http request.
 		///
@@ -932,7 +937,7 @@ impl OffchainApi for () {
 		})
 	}
 
-	fn sleep_until(deadline: Timestamp) {
+	fn sleep_until(deadline: offchain::Timestamp) {
 		unsafe {
 			ext_sleep_until.get()(deadline.unix_millis())
 		}
@@ -946,9 +951,10 @@ impl OffchainApi for () {
 		result
 	}
 
-	fn local_storage_set(key: &[u8], value: &[u8]) {
+	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		unsafe {
 			ext_local_storage_set.get()(
+				kind as u8 as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				value.as_ptr(),
@@ -957,23 +963,25 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(kind: offchain::StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		unsafe {
 			ext_local_storage_compare_and_set.get()(
+				kind as u8 as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				old_value.as_ptr(),
 				old_value.len() as u32,
 				new_value.as_ptr(),
 				new_value.len() as u32,
-			)
+			) == 0
 		}
 	}
 
-	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(kind: offchain::StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let mut len = 0u32;
 		unsafe {
 			let ptr = ext_local_storage_get.get()(
+				kind as u8 as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				&mut len,
