@@ -21,9 +21,12 @@
 //!
 //! ## Project setup
 //!
-//! A project that should be compiled as WASM binary needs to add a `build.rs`, add
-//! `substrate-wasm-builder-runner` as dependency into `build-dependencies` and requires to have a
-//! feature called `no-std`. The `build.rs` needs to contain the following code:
+//! A project that should be compiled as WASM binary needs to:
+//! 1. Add a `build.rs` file
+//! 2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`
+//! 3. Add a feature called `no-std`
+//!
+//! The `build.rs` file needs to contain the following code:
 //!
 //! ```rust,nocompile
 //! use wasm_builder_runner::{build_current_project, WasmBuilderSource};
