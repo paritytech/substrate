@@ -32,7 +32,10 @@ const WS_MAX_CONNECTIONS: usize = 100;
 
 pub type Metadata = apis::metadata::Metadata;
 pub type RpcHandler = pubsub::PubSubHandler<Metadata>;
+
+#[cfg(not(target_os = "unknown"))]
 pub type HttpServer = http::Server;
+#[cfg(not(target_os = "unknown"))]
 pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
@@ -58,6 +61,9 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 }
 
 /// Start HTTP server listening on given address.
+///
+/// **Note**: Only available if `not(target_os = "unknown")`.
+#[cfg(not(target_os = "unknown"))]
 pub fn start_http(
 	addr: &std::net::SocketAddr,
 	cors: Option<&Vec<String>>,
@@ -78,6 +84,9 @@ pub fn start_http(
 }
 
 /// Start WS server listening on given address.
+///
+/// **Note**: Only available if `not(target_os = "unknown")`.
+#[cfg(not(target_os = "unknown"))]
 pub fn start_ws(
 	addr: &std::net::SocketAddr,
 	max_connections: Option<usize>,
@@ -100,12 +109,14 @@ pub fn start_ws(
 		})
 }
 
+#[cfg(not(target_os = "unknown"))]
 fn map_cors<T: for<'a> From<&'a str>>(
 	cors: Option<&Vec<String>>
 ) -> http::DomainsValidation<T> {
 	cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
 }
 
+#[cfg(not(target_os = "unknown"))]
 fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
 	if enable {
 		// NOTE The listening address is whitelisted by default.

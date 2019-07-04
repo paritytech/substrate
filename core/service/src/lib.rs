@@ -688,10 +688,29 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+#[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	config: &FactoryFullConfiguration<F>,
 	mut gen_handler: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
+		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
+	{
+		Ok(match address {
+			Some(mut address) => Some(start(&address)
+				.or_else(|e| match e.kind() {
+					io::ErrorKind::AddrInUse |
+					io::ErrorKind::PermissionDenied => {
+						warn!("Unable to bind server to {}. Trying random port.", address);
+						address.set_port(0);
+						start(&address)
+					},
+					_ => Err(e),
+				})?),
+			None => None,
+		})
+	}
+
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
@@ -709,22 +728,13 @@ fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	)))
 }
 
-fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-	where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-{
-	Ok(match address {
-		Some(mut address) => Some(start(&address)
-			.or_else(|e| match e.kind() {
-				io::ErrorKind::AddrInUse |
-				io::ErrorKind::PermissionDenied => {
-					warn!("Unable to bind server to {}. Trying random port.", address);
-					address.set_port(0);
-					start(&address)
-				},
-				_ => Err(e),
-			})?),
-		None => None,
-	})
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+#[cfg(target_os = "unknown")]
+fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
+	_: &FactoryFullConfiguration<F>,
+	_: H
+) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+	Ok(Box::new(()))
 }
 
 /// Transaction pool adapter.
