@@ -25,7 +25,7 @@ use primitives::offchain::{
 	CryptoKind, CryptoKeyId,
 	StorageKind,
 };
-use primitives::crypto::{Pair, Protected};
+use primitives::crypto::{Pair, Protected, Public};
 use primitives::{ed25519, sr25519};
 use runtime_primitives::{
 	generic::BlockId,
@@ -170,7 +170,7 @@ impl<Storage, AuthorityKey> OffchainExt for Api<Storage, AuthorityKey> where
 		Ok(match key {
 			Key::Sr25519(pair) => sr25519::Pair::verify_weak(signature, msg, pair.public()),
 			Key::Ed25519(pair) => ed25519::Pair::verify_weak(signature, msg, pair.public()),
-			Key::AuthorityKey(pair) => AuthorityKey::verify_weak(signature, msg, pair.public()),
+			Key::AuthorityKey(pair) => AuthorityKey::verify_weak(signature, msg, pair.public().as_slice()),
 		})
 	}
 
