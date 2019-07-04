@@ -289,6 +289,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
+			self.network.service().on_block_imported(hash, header);
 			at = hash;
 		}
 
