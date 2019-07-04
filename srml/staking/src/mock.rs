@@ -121,7 +121,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 impl session::Trait for Test {
-	type OnSessionEnding = Staking;
+	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
@@ -364,18 +364,20 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 
 pub fn start_session(session_index: session::SessionIndex) {
 	// Compensate for session delay
-	println!("moving to session {} from {}", session_index, Session::current_index());
-	println!("validators before: {:?}", Session::validators());
 	let session_index = session_index + 1;
 	for i in 0..(session_index - Session::current_index()) {
 		System::set_block_number((i + 1).into());
 		Session::on_initialize(System::block_number());
 	}
-	println!("validators after: {:?}", Session::validators());
+
 	assert_eq!(Session::current_index(), session_index);
 }
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
 	assert_eq!(Staking::current_era(), era_index);
+}
+
+pub fn validator_controllers() -> Vec<AccountId> {
+	Session::validators().into_iter().filter_map(|s| Staking::bonded(&s)).collect()
 }

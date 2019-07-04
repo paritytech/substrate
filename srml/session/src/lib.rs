@@ -174,6 +174,8 @@ pub trait OnSessionEnding<ValidatorId> {
 	///
 	/// `ending_index` is the index of the currently ending session.
 	/// The returned validator set, if any, will not be applied until `next_index`.
+	/// `next_index` is guaranteed to be at least `ending_index + 1`, since session indices don't
+	/// repeat.
 	fn on_session_ending(ending_index: SessionIndex, next_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
@@ -411,13 +413,12 @@ impl<T: Trait> Module<T> {
 		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
+		println!("starting session {}", session_index);
 
 		// Queue next session keys.
 		let queued_amalgamated = next_validators.into_iter()
 			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
-
-		println!("rotating session. starting {:?}, queued {:?}", session_keys, queued_amalgamated);
 
 		<QueuedKeys<T>>::put(queued_amalgamated);
 		QueuedChanged::put(next_changed);

@@ -1081,6 +1081,8 @@ impl<T: Trait> Module<T> {
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 		let bonding_duration = T::BondingDuration::get();
 
+		println!("starting new era {} at session {}", current_era, start_session_index);
+
 		if current_era > bonding_duration {
 			let first_kept = current_era - bonding_duration;
 			BondedEras::mutate(|bonded| {
@@ -1293,18 +1295,22 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
-		// pass the index where the session will actually end.
-		Self::new_session(start_session).map(|(new, _old)| new)
+	fn on_session_ending(ending: SessionIndex, _start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		// TODO: pass the index before our new era actually starts.
+		// this will be `start_session - 1`.
+		// https://github.com/paritytech/substrate/issues/3022
+		Self::new_session(ending).map(|(new, _old)| new)
 	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(_: SessionIndex, start_session: SessionIndex)
+	fn on_session_ending(ending: SessionIndex, _start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		// pass the index where the session will actually end.
-		Self::new_session(start_session)
+		// TODO: pass the index before our new era actually starts.
+		// this will be `start_session - 1`.
+		// https://github.com/paritytech/substrate/issues/3022
+		Self::new_session(ending)
 	}
 }
 
