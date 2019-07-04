@@ -39,6 +39,7 @@ use consensus_common::import_queue::{
 };
 use std::collections::{HashMap, HashSet};
 use std::result;
+use parking_lot::RwLock;
 use parity_codec::Decode;
 use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Header as HeaderT, Block as BlockT
@@ -556,12 +557,21 @@ fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Pu
 		.collect()
 }
 
-#[derive(Debug, Encode, Decode, Clone, Default)]
-pub struct TestPool;
-
+#[derive(Debug, Default)]
+pub struct TestPool {
+	pool: RwLock<Vec<u32>>,
+}
+	
 impl<C, Block> SubmitReport<C, Block> for TestPool
+where
+	Block: BlockT,
+	C: HeaderBackend<Block>
 {
-	fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
+	fn submit_report_call(&self, _client: &C, mut extrinsic: &[u8]) {
+		if let Some(num) = Decode::decode(&mut extrinsic) {
+			let mut pool = self.pool.write();
+			pool.push(num);
+		}
 	}
 }
 
@@ -575,8 +585,6 @@ fn run_to_completion_with<F>(
 ) -> u64 where
 	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Item=(), Error=()>>>
 {
-	use parking_lot::RwLock;
-
 	let mut wait_for = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
@@ -627,7 +635,9 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TestPool),
+			transaction_pool: Arc::new(TestPool {
+				pool: RwLock::new(vec![])
+			}),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -729,7 +739,9 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TestPool),
+			transaction_pool: Arc::new(TestPool {
+				pool: RwLock::new(vec![])
+			}),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -899,7 +911,9 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TestPool),
+			transaction_pool: Arc::new(TestPool {
+				pool: RwLock::new(vec![])
+			}),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1391,7 +1405,9 @@ fn voter_persists_its_votes() {
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
 				telemetry_on_connect: None,
-				transaction_pool: Arc::new(TestPool),
+				transaction_pool: Arc::new(TestPool {
+					pool: RwLock::new(vec![])
+				}),
 			};
 			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 

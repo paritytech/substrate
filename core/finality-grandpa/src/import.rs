@@ -389,29 +389,39 @@ where
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
-		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
 		let maybe_challenge = api.grandpa_prevote_challenge(&at, digest);
 
 		match maybe_challenge {
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
 			Ok(Some(challenge)) => {
-				// do something with it
-				println!("got a challenge!");
-				let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+
+				let challenged_votes = challenge.challenge_vote_set.challenged_votes;
 				
-				self.api.runtime_api()
-					.construct_report_unjustified_prevotes_call(
-						&block_id,
-						challenge,
-					)
-					.map(|call| {
-						self.transaction_pool.as_ref().map(|txpool|
-							txpool.submit_report_call(self.api.as_ref(), call.as_slice())
+				let challenged = false;
+				for ChallengedVote { vote, authority, signature } in  {
+					if me == authority {
+						challenged = true;
+						break;
+					}
+				}
+
+				if challenged {
+					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+					
+					self.api.runtime_api()
+						.construct_report_unjustified_prevotes_call(
+							&block_id,
+							challenge,
+						)
+						.map(|call| {
+							self.transaction_pool.as_ref().map(|txpool|
+								txpool.submit_report_call(self.api.as_ref(), call.as_slice())
+							);
+							info!(target: "afg", "Unjustified prevotes report has been submitted")
+						}).unwrap_or_else(|err|
+							error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
 						);
-						info!(target: "afg", "Unjustified prevotes report has been submitted")
-					}).unwrap_or_else(|err|
-						error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
-					);
+				}
 
 				Ok(Some(()))
 			},

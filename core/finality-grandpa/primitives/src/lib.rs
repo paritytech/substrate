@@ -196,7 +196,7 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 pub struct Challenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
-	pub challenged_votes: ChallengedVoteSet<Vote>,
+	pub challenged_vote_set: ChallengedVoteSet<Vote>,
 	pub previous_challenge: Option<H>,
 }
 
@@ -214,7 +214,6 @@ pub struct ChallengedVoteSet<Vote> {
 	pub set_id: u64,
 	pub round: u64,
 }
-
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
