@@ -21,9 +21,8 @@ use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
 	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
 	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
-	SystemConfig, TimestampConfig,
-	Perbill, SessionKeys, StakerStatus,
-	DAYS, DOLLARS, MILLICENTS, SECS_PER_BLOCK,
+	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
+	MILLICENTS, SECS_PER_BLOCK,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -97,7 +96,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
@@ -230,7 +229,7 @@ pub fn testnet_genesis(
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
