@@ -49,8 +49,8 @@ use tokio_timer::{Delay, clock::Clock};
 //! ## Usage
 //!
 //! The `DiscoveryBehaviour` generates events of type `DiscoveryOut`, most notably
-//! `DiscoveryOut::Discovered` that is generated whenever we discovery the identity of a node.
-//! Only the identity of the node is returned. A node's addresses are stored within the
+//! `DiscoveryOut::Discovered` that is generated whenever we discover the identity of a node.
+//! Only the identity of the node is returned. The node's addresses are stored within the
 //! `DiscoveryBehaviour` and can be queried through the `NetworkBehaviour` trait.
 //!
 //! **Important**: In order for the discovery mechanism to work properly, there needs to be an
