@@ -21,10 +21,11 @@
 //!
 //! ## Project setup
 //!
-//! A project that should be compiled as WASM binary needs to:
-//! 1. Add a `build.rs` file
-//! 2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`
-//! 3. Add a feature called `no-std`
+//! A project that should be compiled as a WASM binary needs to:
+//!
+//! 1. Add a `build.rs` file.
+//! 2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`.
+//! 3. Add a feature called `no-std`.
 //!
 //! The `build.rs` file needs to contain the following code:
 //!
@@ -61,6 +62,9 @@
 //!                              for `cargo check` runs.
 //! - `WASM_BUILD_TYPE` - Sets the build type for building WASM binaries. Supported values are `release` or `debug`.
 //!                       By default the build type is equal to the build type used by the main build.
+//! - `TRIGGER_WASM_BUILD` - Can be set to trigger a WASM build. On subsequent calls the value of the variable
+//!                          needs to change. As WASM builder instructs `cargo` to watch for file changes
+//!                          this environment variable should only be required in certain circumstances.
 //!
 //! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 //! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -70,7 +74,7 @@
 //!
 //! WASM builder requires the following prerequisities for building the WASM binary:
 //!
-//! - rust nightly + wasm32-unknown-unknown toolchain
+//! - rust nightly + `wasm32-unknown-unknown` toolchain
 //! - wasm-gc
 //!
 
