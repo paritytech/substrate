@@ -25,7 +25,8 @@
 mod slots;
 mod aux_schema;
 
-pub use slots::{SignedDuration, SlotInfo, Slots};
+pub use slots::{SignedDuration, SlotInfo};
+use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
@@ -41,6 +42,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ApiRef, Block, ProvideRuntimeApi};
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::num::NonZeroU64;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
@@ -76,6 +78,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
+	slots_per_epoch: NonZeroU64,
 ) -> impl Future<Item = (), Error = ()>
 where
 	B: Block,
@@ -92,6 +95,7 @@ where
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
+		slots_per_epoch,
 	).map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
 		.for_each(move |slot_info| {
 			// only propose when we are not syncing.

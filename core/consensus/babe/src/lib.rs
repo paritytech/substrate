@@ -41,7 +41,7 @@ use runtime_primitives::traits::{
 	Block, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}, num::NonZeroU64};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
@@ -168,6 +168,9 @@ pub struct BabeParams<C, E, I, SO, SC> {
 
 	/// The source of timestamps for relative slots
 	pub time_source: BabeLink,
+
+	/// The number of slots per epoch
+	pub slots_per_epoch: NonZeroU64,
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
@@ -182,6 +185,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	inherent_data_providers,
 	force_authoring,
 	time_source,
+	slots_per_epoch,
 }: BabeParams<C, E, I, SO, SC>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
@@ -215,6 +219,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		time_source,
+		slots_per_epoch,
 	))
 }
 
@@ -1051,6 +1056,7 @@ mod tests {
 				inherent_data_providers,
 				force_authoring: false,
 			    time_source: Default::default(),
+				slots_per_epoch: 20,
 			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");

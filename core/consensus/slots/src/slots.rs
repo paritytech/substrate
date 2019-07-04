@@ -25,6 +25,7 @@ use futures::try_ready;
 use inherents::{InherentData, InherentDataProviders};
 
 use std::time::{Duration, Instant};
+use std::num::NonZeroU64;
 use tokio_timer::Delay;
 
 /// Returns current duration since unix epoch.
@@ -98,12 +99,13 @@ impl SlotInfo {
 }
 
 /// A stream that returns every time there is a new slot.
-pub struct Slots<SC> {
+pub(crate) struct Slots<SC> {
 	last_slot: u64,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
+	slots_per_epoch: NonZeroU64,
 }
 
 impl<SC> Slots<SC> {
@@ -112,6 +114,7 @@ impl<SC> Slots<SC> {
 		slot_duration: u64,
 		inherent_data_providers: InherentDataProviders,
 		timestamp_extractor: SC,
+		slots_per_epoch: NonZeroU64,
 	) -> Self {
 		Slots {
 			last_slot: 0,
@@ -119,6 +122,7 @@ impl<SC> Slots<SC> {
 			inner_delay: None,
 			inherent_data_providers,
 			timestamp_extractor,
+			slots_per_epoch,
 		}
 	}
 }
@@ -169,7 +173,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 					timestamp,
 					ends_at,
 					inherent_data,
-					epoch: 0,
+					epoch: slot_num % u64::from(self.slots_per_epoch),
 				})))
 			}
 		}
