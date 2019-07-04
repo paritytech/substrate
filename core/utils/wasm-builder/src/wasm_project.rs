@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::Command, env};
+use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::{Command, self}, env};
 
 use toml::value::Table;
 
@@ -266,7 +266,8 @@ fn build_project(project: &Path) {
 
 	match build_cmd.status().map(|s| s.success()) {
 		Ok(true) => {},
-		_ => panic!("Failed to compile WASM binary"),
+		// Use `process.exit(1)` to have a clean error output.
+		_ => process::exit(1),
 	}
 }
 
