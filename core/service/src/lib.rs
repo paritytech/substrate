@@ -860,7 +860,6 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
 /// # use client::{self, LongestChain};
-/// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
@@ -907,7 +906,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 			{ |config| <FullComponents<Factory>>::new(config) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, key: Option<Arc<ed25519::Pair>>| {
+/// 			|service: Self::FullService| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
