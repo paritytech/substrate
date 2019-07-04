@@ -232,18 +232,19 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		let child_storage_tries =
 			self.overlay.prospective.children.values()
 				.chain(self.overlay.committed.children.values())
-				.map(|v|&v.2);
+				.map(|v|&v.child_trie);
 
-		let child_delta_iter = child_storage_tries.map(|child_trie|
-			(child_trie, {
-				let keyspace = child_trie.keyspace();
-				self.overlay.committed.children
-					.get(keyspace).into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-					.chain(self.overlay.prospective.children.get(keyspace).into_iter()
-						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))
-			})
-		);
+		let child_delta_iter = child_storage_tries.map(|child_trie| {
+			let keyspace = child_trie.keyspace();
+			let committed_iter = self.overlay.committed.children
+				.get(keyspace).into_iter()
+				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())));
+			let prospective_iter = self.overlay.prospective.children
+				.get(keyspace).into_iter()
+				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())));
+
+			(child_trie, committed_iter.chain(prospective_iter))
+    });
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -256,10 +257,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		let keyspace = child_trie.keyspace();
 		let delta = self.overlay.committed.children.get(keyspace)
 			.into_iter()
-			.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())))
 			.chain(self.overlay.prospective.children.get(keyspace)
 				.into_iter()
-				.flat_map(|map| map.1.clone().into_iter()));
+				.flat_map(|map| map.values.clone().into_iter()));
 		self.backend.child_storage_root(child_trie, delta).0
 	}
 
