@@ -518,7 +518,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
 		let finalized_number = self.backend.blockchain().info().finalized_number;
-		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
+		let oldest = storage.oldest_changes_trie_block(activation_block, config, finalized_number);
 		let oldest = ::std::cmp::max(activation_block + One::one(), oldest);
 		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
