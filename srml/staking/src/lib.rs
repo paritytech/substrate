@@ -281,7 +281,7 @@ use srml_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get
 	}
 };
-use session::{OnSessionEnding, SessionIndex};
+use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
@@ -449,8 +449,6 @@ pub const DEFAULT_BONDING_DURATION: u32 = 1;
 ///
 /// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
-	/// Store the set of validators.
-	fn put_validators(validators: &Vec<AccountId>);
 	/// Disable a given validator.
 	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
 	/// Get the validators from session.
@@ -463,16 +461,13 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
 	T: session::historical::Trait<
 		FullIdentification = Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>,
-		FullIdentificationOf=ExposureOf<T>,
+		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
 	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
-	fn put_validators(validators: &Vec<<T as system::Trait>::AccountId>) {
-		<session::Validators<T>>::put(validators);
-	}
-
 	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
 		<session::Module<T>>::disable(validator)
 	}
@@ -624,10 +619,6 @@ decl_storage! {
 							)
 						}, _ => Ok(())
 					};
-				}
-
-				if let (_, Some(validators)) = <Module<T>>::select_validators() {
-					T::SessionInterface::put_validators(&validators);
 				}
 			});
 		});
@@ -1045,14 +1036,22 @@ impl<T: Trait> Module<T> {
 		T::Reward::on_unbalanced(imbalance);
 	}
 
-	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
-	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
+	/// with the exposure of the prior validator set.
+	fn new_session(session_index: SessionIndex)
+		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
+	{
 		// accumulate good session reward
 		let reward = Self::current_session_reward();
 		<CurrentEraReward<T>>::mutate(|r| *r += reward);
 
 		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
-			Self::new_era(session_index)
+			let validators = T::SessionInterface::validators();
+			let prior = validators.into_iter()
+				.map(|v| { let e = Self::stakers(&v); (v, e) })
+				.collect();
+
+			Self::new_era(session_index).map(move |new| (new, prior))
 		} else {
 			None
 		}
@@ -1293,9 +1292,19 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(i: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::new_session(i + 1)
+impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
+	fn on_session_ending(ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		// pass the index where the session will actually end.
+		Self::new_session(start_session).map(|(new, _old)| new)
+	}
+}
+
+impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+	fn on_session_ending(_: SessionIndex, start_session: SessionIndex)
+		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
+	{
+		// pass the index where the session will actually end.
+		Self::new_session(start_session)
 	}
 }
 
@@ -1330,5 +1339,11 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		Some(<Module<T>>::stakers(&validator))
+	}
+}
+
+impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
+		<Module<T>>::select_validators().1
 	}
 }

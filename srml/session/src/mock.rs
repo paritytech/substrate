@@ -25,6 +25,7 @@ use primitives::{
 	testing::{Header, UintAuthorityId}
 };
 
+
 impl_outer_origin! {
 	pub enum Origin for Test {}
 }
@@ -35,6 +36,8 @@ thread_local! {
 		RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 	pub static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
 	pub static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
+	pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static TEST_SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
 }
 
 pub struct TestShouldEndSession;
@@ -47,21 +50,38 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
-	fn on_new_session<T: OpaqueKeys>(_changed: bool, validators: &[(u64, T)]) {
-		AUTHORITIES.with(|l| {
-			let key_id = <UintAuthorityId as TypedKey>::KEY_TYPE;
-			*l.borrow_mut() = validators.iter().map(|(_, keys)| {
-				keys.get::<UintAuthorityId>(key_id).unwrap_or_default()
-			}).collect()
-		});
+	fn on_new_session<T: OpaqueKeys>(changed: bool, validators: &[(u64, T)]) {
+		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
+		AUTHORITIES.with(|l|
+			*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
+		);
 	}
 	fn on_disabled(_validator_index: usize) {}
 }
 
 pub struct TestOnSessionEnding;
 impl OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_: SessionIndex) -> Option<Vec<u64>> {
-		Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
+	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<u64>> {
+		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
+			Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
+		} else {
+			None
+		}
+	}
+}
+
+#[cfg(feature = "historical")]
+impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
+	fn on_session_ending(_: SessionIndex, _: SessionIndex)
+		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
+	{
+		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
+			let last_validators = Session::validators();
+			let last_identifications = last_validators.into_iter().map(|v| (v, v)).collect();
+			Some((NEXT_VALIDATORS.with(|l| l.borrow().clone()), last_identifications))
+		} else {
+			None
+		}
 	}
 }
 
@@ -77,12 +97,12 @@ pub fn set_session_length(x: u64) {
 	SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
 }
 
-pub fn set_next_validators(next: Vec<u64>) {
-	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
+pub fn session_changed() -> bool {
+	SESSION_CHANGED.with(|l| *l.borrow())
 }
 
-pub fn next_validators() -> Vec<u64> {
-	NEXT_VALIDATORS.with(|v| v.borrow().clone())
+pub fn set_next_validators(next: Vec<u64>) {
+	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -103,11 +123,6 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 }
 
-#[cfg(feature = "historical")]
-impl crate::historical::Trait for Test {
-	type FullIdentification = u64;
-	type FullIdentificationOf = primitives::traits::ConvertInto;
-}
 
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
@@ -120,6 +135,13 @@ impl Trait for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
+	type SelectInitialValidators = crate::ConfigValidators;
+}
+
+#[cfg(feature = "historical")]
+impl crate::historical::Trait for Test {
+	type FullIdentification = u64;
+	type FullIdentificationOf = primitives::traits::ConvertInto;
 }
 
 pub type System = system::Module<Test>;

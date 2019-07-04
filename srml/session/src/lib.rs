@@ -173,11 +173,12 @@ pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
 	///
 	/// `ending_index` is the index of the currently ending session.
-	fn on_session_ending(ending_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// The returned validator set, if any, will not be applied until `next_index`.
+	fn on_session_ending(ending_index: SessionIndex, next_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
 impl<A> OnSessionEnding<A> for () {
-	fn on_session_ending(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
 }
 
 /// Handler for when a session keys set changes.
@@ -228,6 +229,21 @@ macro_rules! impl_session_handlers {
 
 for_each_tuple!(impl_session_handlers);
 
+/// Handler for selecting the genesis validator set.
+pub trait SelectInitialValidators<ValidatorId> {
+	/// Returns the initial validator set. If `None` is returned
+	/// all accounts that have session keys set in the genesis block
+	/// will be validators.
+	fn select_initial_validators() -> Option<Vec<ValidatorId>>;
+}
+
+/// Implementation of `SelectInitialValidators` that does nothing.
+pub struct ConfigValidators;
+impl<V> SelectInitialValidators<V> for ConfigValidators {
+	fn select_initial_validators() -> Option<Vec<V>> {
+		None
+	}
+}
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -250,6 +266,9 @@ pub trait Trait: system::Trait {
 
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
+
+	/// Select initial validators.
+	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
 
 const DEDUP_KEY_LEN: usize = 13;
@@ -258,18 +277,21 @@ const DEDUP_KEY_PREFIX: &[u8; DEDUP_KEY_LEN] = b":session:keys";
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		pub Validators get(validators) config(): Vec<T::ValidatorId>;
+		Validators get(validators): Vec<T::ValidatorId>;
 
 		/// Current index of the session.
-		pub CurrentIndex get(current_index): SessionIndex;
+		CurrentIndex get(current_index): SessionIndex;
 
 		/// True if anything has changed in this session.
 		Changed: bool;
 
-		// The next key for a given validator.
-		// NextKeyFor build(|config: &GenesisConfig<T>| {
-		// 	config.keys.clone()
-		// }): map T::ValidatorId => Option<T::Keys>;
+		/// Queued keys changed.
+		QueuedChanged: bool;
+
+		/// The queued keys for the next session. When the next session begins, these keys
+		/// will be used to determine the validator's session keys.
+		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -280,9 +302,29 @@ decl_storage! {
 		| {
 			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
+					assert!(
+						<Module<T>>::load_keys(&who).is_none(),
+						"genesis config contained duplicate validator {:?}", who,
+					);
+
 					<Module<T>>::do_set_keys(&who, keys)
 						.expect("genesis config must not contain duplicates; qed");
 				}
+
+				let initial_validators = T::SelectInitialValidators::select_initial_validators()
+					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+
+				let queued_keys: Vec<_> = initial_validators
+					.iter()
+					.cloned()
+					.map(|v| (
+						v.clone(),
+						<Module<T>>::load_keys(&v).unwrap_or_default(),
+					))
+					.collect();
+
+				<Validators<T>>::put(initial_validators);
+				<QueuedKeys<T>>::put(queued_keys);
 			});
 		});
 	}
@@ -339,34 +381,52 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Move on to next session: register the new authority set.
+	/// Move on to next session. Register new validator set and session keys. Changes
+	/// to the validator set have a session of delay to take effect. This allows for
+	/// equivocation punishment after a fork.
 	pub fn rotate_session() {
-		// Increment current session index.
 		let session_index = CurrentIndex::get();
 
-		let mut changed = Changed::take();
+		let changed = QueuedChanged::get();
+		let mut next_changed = Changed::take();
 
-		// See if we have a new validator set.
-		let validators = if let Some(new) = T::OnSessionEnding::on_session_ending(session_index) {
-			changed = true;
-			<Validators<T>>::put(&new);
-			new
+		// Get queued session keys and validators.
+		let session_keys = <QueuedKeys<T>>::get();
+		let validators = session_keys.iter()
+			.map(|(validator, _)| validator.clone())
+			.collect::<Vec<_>>();
+		<Validators<T>>::put(&validators);
+
+		let applied_at = session_index + 2;
+
+		// Get next validator set.
+		let maybe_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
+		let next_validators = if let Some(validators) = maybe_validators {
+			next_changed = true;
+			validators
 		} else {
 			<Validators<T>>::get()
 		};
 
+		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
+
+		// Queue next session keys.
+		let queued_amalgamated = next_validators.into_iter()
+			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
+			.collect::<Vec<_>>();
+
+		println!("rotating session. starting {:?}, queued {:?}", session_keys, queued_amalgamated);
+
+		<QueuedKeys<T>>::put(queued_amalgamated);
+		QueuedChanged::put(next_changed);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		let amalgamated = validators.into_iter()
-			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
-			.collect::<Vec<_>>();
-
-		T::SessionHandler::on_new_session::<T::Keys>(changed, &amalgamated);
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys);
 	}
 
 	/// Disable the validator of index `i`.
@@ -498,23 +558,28 @@ mod tests {
 		testing::UintAuthorityId,
 	};
 	use mock::{
-		NEXT_VALIDATORS, authorities, force_new_session, next_validators,
-		set_next_validators, set_session_length, Test, Origin, System, Session,
+		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session, next_validators,
+		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
 	};
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
-		let (storage, _child_storage) = GenesisConfig::<Test> {
-			validators: next_validators(),
+		t.extend(GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap();
-		t.extend(storage);
+		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
+	}
+
+	fn initialize_block(block: u64) {
+		SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
+		System::set_block_number(block);
+		Session::on_initialize(block);
 	}
 
 	#[test]
@@ -556,27 +621,44 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
+			initialize_block(1);
+			assert_eq!(Session::queued_keys(), vec![
+				(1, UintAuthorityId(1)),
+				(2, UintAuthorityId(2)),
+			]);
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			force_new_session();
+			initialize_block(2);
+			assert_eq!(Session::queued_keys(), vec![
+				(1, UintAuthorityId(1)),
+				(2, UintAuthorityId(2)),
+			]);
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 
 			set_next_validators(vec![1, 2, 4]);
 			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4), vec![]));
+			force_new_session();
+			initialize_block(3);
+			assert_eq!(Session::queued_keys(), vec![
+				(1, UintAuthorityId(1)),
+				(2, UintAuthorityId(2)),
+				(4, UintAuthorityId(4)),
+			]);
+			assert_eq!(Session::validators(), vec![1, 2]);
+			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 
 			force_new_session();
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(4);
+			assert_eq!(Session::queued_keys(), vec![
+				(1, UintAuthorityId(1)),
+				(2, UintAuthorityId(2)),
+				(4, UintAuthorityId(4)),
+			]);
 			assert_eq!(Session::validators(), vec![1, 2, 4]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
-
-			set_next_validators(vec![1, 2, 3]);
-			force_new_session();
-			System::set_block_number(3);
-			Session::on_initialize(3);
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		});
 	}
 
@@ -585,25 +667,20 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			set_session_length(10);
 
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			initialize_block(1);
 			assert_eq!(Session::current_index(), 0);
 
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(2);
 			assert_eq!(Session::current_index(), 0);
+
 			force_new_session();
-
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(3);
 			assert_eq!(Session::current_index(), 1);
 
-			System::set_block_number(9);
-			Session::on_initialize(9);
+			initialize_block(9);
 			assert_eq!(Session::current_index(), 1);
 
-			System::set_block_number(10);
-			Session::on_initialize(10);
+			initialize_block(10);
 			assert_eq!(Session::current_index(), 2);
 		});
 	}
@@ -612,24 +689,28 @@ mod tests {
 	fn session_change_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: No change
-			System::set_block_number(1);
-			Session::on_initialize(1);
+			initialize_block(1);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 2: Session rollover, but no change.
-			System::set_block_number(2);
-			Session::on_initialize(2);
+			initialize_block(2);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 3: Set new key for validator 2; no visible change.
-			System::set_block_number(3);
-			Session::on_initialize(3);
+			initialize_block(3);
 			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
-			// Block 4: Session rollover, authority 2 changes.
-			System::set_block_number(4);
-			Session::on_initialize(4);
+			// Block 4: Session rollover; no visible change.
+			initialize_block(4);
+			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+
+			// Block 5: No change.
+			initialize_block(5);
+			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+
+			// Block 6: Session rollover; authority 2 changes.
+			initialize_block(6);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
 		});
 	}
@@ -644,6 +725,43 @@ mod tests {
 
 			// is fine now that 1 has migrated off.
 			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_ok());
+		});
+	}
+
+	#[test]
+	fn session_changed_flag_works() {
+		with_externalities(&mut new_test_ext(), || {
+			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
+
+			force_new_session();
+			initialize_block(1);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(2);
+			assert!(!session_changed());
+
+			Session::disable_index(0);
+			force_new_session();
+			initialize_block(3);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(4);
+			assert!(session_changed());
+
+			force_new_session();
+			initialize_block(5);
+			assert!(!session_changed());
+
+			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
+			force_new_session();
+			initialize_block(6);
+			assert!(!session_changed());
+
+			force_new_session();
+			initialize_block(7);
+			assert!(session_changed());
 		});
 	}
 

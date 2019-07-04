@@ -32,7 +32,7 @@ use srml_support::{
 use srml_support::{Parameter, print};
 use substrate_trie::{MemoryDB, Trie, TrieMut, TrieDBMut, TrieDB, Recorder};
 
-use super::{SessionIndex, OnSessionEnding, Module as SessionModule};
+use super::{SessionIndex, Module as SessionModule};
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
@@ -44,6 +44,9 @@ pub trait Trait: super::Trait {
 	/// This should contain any references to economic actors associated with the
 	/// validator, since they may be outdated by the time this is queried from a
 	/// historical trie.
+	///
+	/// This mapping is expected to remain stable in between calls to
+	/// `Self::OnSessionEnding::on_session_ending` which return new validators.
 	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 
@@ -51,6 +54,9 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash.
 		HistoricalSessions get(historical_root): map SessionIndex => Option<T::Hash>;
+		/// Queued full identifications for queued sessions whose validators have become obsolete.
+		CachedObsolete get(cached_obsolete): map SessionIndex
+			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 	}
@@ -90,27 +96,55 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// Specialization of the crate-level `OnSessionEnding` which returns the old
+/// set of full identification when changing the validator set.
+pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEnding<ValidatorId> {
+	/// Returns the set of new validators, if any, along with the old validators
+	/// and their full identifications.
+	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex)
+		-> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
+}
+
 /// An `OnSessionEnding` implementation that wraps an inner `I` and also
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
 
-impl<T: Trait, I> OnSessionEnding<T::AccountId> for NoteHistoricalRoot<T, I>
-	where I: OnSessionEnding<T::AccountId>
+impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
+	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
 {
-	fn on_session_ending(i: SessionIndex) -> Option<Vec<T::AccountId>> {
+	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
-			range.get_or_insert_with(|| (i, i)).1 = i + 1;
+			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
 		});
 
-		match ProvingTrie::<T>::generate_now() {
-			Ok(trie) => <HistoricalSessions<T>>::insert(i, &trie.root),
+		// do all of thie _before_ calling the other `on_session_ending` impl
+		// so that we have e.g. correct exposures from the _current_.
+
+		match ProvingTrie::<T>::generate_for(ending) {
+			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &trie.root),
 			Err(reason) => {
 				print("Failed to generate historical ancestry-inclusion proof.");
 				print(reason);
 			}
-		}
+		};
 
-		I::on_session_ending(i)
+		// trie has been generated for this session, so it's no longer queued.
+		<CachedObsolete<T>>::remove(&ending);
+
+		if let Some((new_validators, old_exposures))
+			= <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)
+		{
+			// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
+			// now that a new validator election has occurred.
+			// we cache these in the trie until those sessions themselves end.
+			for obsolete in (ending + 1) .. applied_at {
+				<CachedObsolete<T>>::insert(obsolete, &old_exposures);
+			}
+
+			Some(new_validators)
+		} else {
+			None
+		}
 	}
 }
 
@@ -123,21 +157,23 @@ pub struct ProvingTrie<T: Trait> {
 }
 
 impl<T: Trait> ProvingTrie<T> {
-	fn generate_now() -> Result<Self, &'static str> {
-		let validators = <SessionModule<T>>::validators();
+	fn generate_for(now: SessionIndex) -> Result<Self, &'static str> {
 		let mut db = MemoryDB::default();
 		let mut root = Default::default();
 
+		fn build<T: Trait, I>(root: &mut T::Hash, db: &mut MemoryDB<HasherOf<T>>, validators: I)
+			-> Result<(), &'static str>
+			where I: IntoIterator<Item=(T::ValidatorId, Option<T::FullIdentification>)>
 		{
-			let mut trie = TrieDBMut::new(&mut db, &mut root);
-
-			for validator in validators.into_iter() {
+			let mut trie = TrieDBMut::new(db, root);
+			for (validator, full_id) in validators {
 				let keys = match <SessionModule<T>>::load_keys(&validator) {
 					None => continue,
 					Some(k) => k,
 				};
 
-				let full_id = match T::FullIdentificationOf::convert(validator) {
+				let full_id = full_id.or_else(move || T::FullIdentificationOf::convert(validator));
+				let full_id = match full_id {
 					None => return Err("no full identification for a current validator"),
 					Some(full) => full,
 				};
@@ -153,6 +189,17 @@ impl<T: Trait> ProvingTrie<T> {
 					let _ = res.map_err(|_| "failed to insert into trie")?;
 				}
 			}
+
+			Ok(())
+		}
+
+		// if the current session's full identifications are obsolete but cached,
+		// use those.
+		if let Some(obsolete) = <CachedObsolete<T>>::get(&now) {
+			build::<T, _>(&mut root, &mut db, obsolete.into_iter().map(|(v, f)| (v, Some(f))))?
+		} else {
+			let validators = <SessionModule<T>>::validators();
+			build::<T, _>(&mut root, &mut db, validators.into_iter().map(|v| (v, None)))?
 		}
 
 		Ok(ProvingTrie {
@@ -217,8 +264,8 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 	type FullIdentification = T::FullIdentification;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
-		let trie = ProvingTrie::<T>::generate_now().ok()?;
 		let session = <SessionModule<T>>::current_index();
+		let trie = ProvingTrie::<T>::generate_for(session).ok()?;
 
 		let (id, data) = key;
 
@@ -252,7 +299,7 @@ mod tests {
 		testing::{UintAuthorityId, UINT_DUMMY_KEY},
 	};
 	use crate::mock::{
-		NEXT_VALIDATORS, force_new_session, next_validators,
+		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
 	use srml_support::traits::KeyOwnerProofSystem;
@@ -265,7 +312,6 @@ mod tests {
 			minimum_period: 5,
 		}.build_storage().unwrap().0);
 		let (storage, _child_storage) = crate::GenesisConfig::<Test> {
-			validators: next_validators(),
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
