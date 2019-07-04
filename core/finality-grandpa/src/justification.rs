@@ -25,12 +25,11 @@ use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use substrate_primitives::{H256, ed25519, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher};
+use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};
 use crate::communication;
-
-use ed25519::Public as AuthorityId;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -72,6 +71,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			loop {
 				if current_hash == commit.target_hash { break; }
 
+				#[allow(deprecated)]
 				match client.backend().blockchain().header(BlockId::Hash(current_hash))? {
 					Some(current_header) => {
 						if *current_header.number() <= commit.target_number {
@@ -95,17 +95,16 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs finalize the given block.
 	pub(crate) fn decode_and_verify_finalizes(
-		encoded: Vec<u8>,
+		encoded: &[u8],
 		finalized_target: (Block::Hash, NumberFor<Block>),
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
-		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
-			let msg = "failed to decode grandpa justification".to_string();
-			ClientError::from(ClientError::BadJustification(msg))
-		})?;
+
+		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
+			.ok_or(ClientError::JustificationDecode)?;
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
 			let msg = "invalid commit target in grandpa justification".to_string();

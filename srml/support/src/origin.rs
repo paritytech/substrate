@@ -112,12 +112,12 @@ macro_rules! impl_outer_origin {
 				$name::system(x)
 			}
 		}
-		impl Into<Option<$system::Origin<$runtime>>> for $name {
-			fn into(self) -> Option<$system::Origin<$runtime>> {
+		impl Into<$crate::rstd::result::Result<$system::Origin<$runtime>, $name>> for $name {
+			fn into(self) -> $crate::rstd::result::Result<$system::Origin<$runtime>, Self> {
 				if let $name::system(l) = self {
-					Some(l)
+					Ok(l)
 				} else {
-					None
+					Err(self)
 				}
 			}
 		}
@@ -132,12 +132,18 @@ macro_rules! impl_outer_origin {
 					$name::$module(x)
 				}
 			}
-			impl Into<Option<$module::Origin $( <$generic_param $(, $generic_instance )? > )*>> for $name {
-				fn into(self) -> Option<$module::Origin $( <$generic_param $(, $generic_instance )? > )*> {
+			impl Into<$crate::rstd::result::Result<
+				$module::Origin $( <$generic_param $(, $generic_instance )? > )*,
+				$name
+			>> for $name {
+				fn into(self) -> $crate::rstd::result::Result<
+					$module::Origin $( <$generic_param $(, $generic_instance )? > )*,
+					Self
+				> {
 					if let $name::$module(l) = self {
-						Some(l)
+						Ok(l)
 					} else {
-						None
+						Err(self)
 					}
 				}
 			}

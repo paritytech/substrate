@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT, AuthorityIdFor};
+use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use client::runtime_api::{self, RuntimeApiInfo};
 use client::{error::Result, decl_runtime_apis, impl_runtime_apis};
@@ -74,9 +74,6 @@ impl_runtime_apis! {
 		fn initialize_block(_: &<Block as BlockT>::Header) {
 			unimplemented!()
 		}
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
-			unimplemented!()
-		}
 	}
 }
 
@@ -122,7 +119,7 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 
 #[test]
 fn check_runtime_api_versions() {
-	check_runtime_api_versions_contains::<Api<Block>>();
-	check_runtime_api_versions_contains::<ApiWithCustomVersion<Block>>();
-	check_runtime_api_versions_contains::<runtime_api::Core<Block>>();
+	check_runtime_api_versions_contains::<dyn Api<Block>>();
+	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<dyn runtime_api::Core<Block>>();
 }

@@ -77,7 +77,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &KeyValueDB, column: Option<u32>, prefix: &[u8]) -> error::Result<Self> {
+	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> error::Result<Self> {
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {

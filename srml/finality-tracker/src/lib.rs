@@ -26,7 +26,7 @@ use inherents::{
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use primitives::traits::{As, One, Zero};
+use primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
 use srml_system::{ensure_none, Trait as SystemTrait};
@@ -34,8 +34,8 @@ use srml_system::{ensure_none, Trait as SystemTrait};
 #[cfg(feature = "std")]
 use parity_codec::Encode;
 
-const DEFAULT_WINDOW_SIZE: u64 = 101;
-const DEFAULT_DELAY: u64 = 1000;
+const DEFAULT_WINDOW_SIZE: u32 = 101;
+const DEFAULT_DELAY: u32 = 1000;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
@@ -100,9 +100,9 @@ decl_storage! {
 		/// The median.
 		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 		/// The number of recent samples to keep from this chain. Default is n-100
-		pub WindowSize get(window_size) config(window_size): T::BlockNumber = T::BlockNumber::sa(DEFAULT_WINDOW_SIZE);
+		pub WindowSize get(window_size) config(window_size): T::BlockNumber = DEFAULT_WINDOW_SIZE.into();
 		/// The delay after which point things become suspicious.
-		pub ReportLatency get(report_latency) config(report_latency): T::BlockNumber = T::BlockNumber::sa(DEFAULT_DELAY);
+		pub ReportLatency get(report_latency) config(report_latency): T::BlockNumber = DEFAULT_DELAY.into();
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
@@ -154,7 +154,7 @@ impl<T: Trait> Module<T> {
 		// the sample size has just been shrunk.
 		{
 			// take into account the item we haven't pushed yet.
-			let to_prune = (recent.len() + 1).saturating_sub(window_size.as_() as usize);
+			let to_prune = (recent.len() + 1).saturating_sub(window_size.saturated_into::<usize>());
 
 			for drained in recent.drain(..to_prune) {
 				let idx = ordered.binary_search(&drained)
@@ -188,13 +188,13 @@ impl<T: Trait> Module<T> {
 			}
 		};
 
-		let our_window_size = recent.len();
+		let our_window_size = recent.len() as u32;
 
 		<Self as Store>::RecentHints::put(recent);
 		<Self as Store>::OrderedHints::put(ordered);
 		<Self as Store>::Median::put(median);
 
-		if T::BlockNumber::sa(our_window_size as u64) == window_size {
+		if T::BlockNumber::from(our_window_size) == window_size {
 			let now = srml_system::Module::<T>::block_number();
 			let latency = Self::report_latency();
 
@@ -202,7 +202,7 @@ impl<T: Trait> Module<T> {
 			let delay = latency + (window_size / two);
 			// median may be at most n - delay
 			if median + delay <= now {
-				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one());
+				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one(), median);
 			}
 		}
 	}
@@ -212,20 +212,20 @@ impl<T: Trait> Module<T> {
 pub trait OnFinalizationStalled<N> {
 	/// The parameter here is how many more blocks to wait before applying
 	/// changes triggered by finality stalling.
-	fn on_stalled(further_wait: N);
+	fn on_stalled(further_wait: N, median: N);
 }
 
 macro_rules! impl_on_stalled {
 	() => (
 		impl<N> OnFinalizationStalled<N> for () {
-			fn on_stalled(_: N) {}
+			fn on_stalled(_: N, _: N) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(further_wait: NUM) {
-				$($t::on_stalled(further_wait.clone());)*
+			fn on_stalled(further_wait: NUM, median: NUM) {
+				$($t::on_stalled(further_wait.clone(), median.clone());)*
 			}
 		}
 	}
@@ -263,7 +263,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::testing::Header;
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
 	use lazy_static::lazy_static;
@@ -290,12 +290,10 @@ mod tests {
 				type BlockNumber = u64;
 				type Hash = H256;
 				type Hashing = BlakeTwo256;
-				type Digest = Digest;
 				type AccountId = u64;
 				type Lookup = IdentityLookup<u64>;
 				type Header = Header;
 				type Event = ();
-				type Log = DigestItem;
 			}
 
 			type System = system::Module<Test>;
@@ -306,7 +304,7 @@ mod tests {
 
 			pub struct StallTracker;
 			impl OnFinalizationStalled<u64> for StallTracker {
-				fn on_stalled(further_wait: u64) {
+				fn on_stalled(further_wait: u64, _median: u64) {
 					let now = System::block_number();
 					NOTIFICATIONS.lock().push(StallEvent { at: now, further_wait });
 				}
@@ -344,7 +342,7 @@ mod tests {
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialize(&i, &parent_hash, &Default::default());
+				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();
 				parent_hash = hdr.hash();
@@ -369,7 +367,7 @@ mod tests {
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialize(&i, &parent_hash, &Default::default());
+				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
 				assert_ok!(FinalityTracker::dispatch(
 					Call::final_hint(i-1),
 					Origin::NONE,

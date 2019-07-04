@@ -17,6 +17,7 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
+test-client = { package = "substrate-test-client", path = "../../core/test-client" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
@@ -24,10 +25,9 @@ balances = { package = "srml-balances", path = "../../srml/balances" }
 session = { package = "srml-session", path = "../../srml/session" }
 staking = { package = "srml-staking", path = "../../srml/staking" }
 system = { package = "srml-system", path = "../../srml/system" }
-consensus = { package = "srml-consensus", path = "../../srml/consensus" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../srml/treasury" }
-contract = { package = "srml-contract", path = "../../srml/contract" }
+contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 wabt = "~0.7.4"

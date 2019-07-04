@@ -18,21 +18,23 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header}};
-use primitives::generic::DigestItem as GenDigestItem;
+use primitives::{
+	BuildStorage, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}
+};
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{GenesisConfig, Trait, Module, RawLog};
+use crate::{AuthorityId, GenesisConfig, Trait, Module, Signal};
+use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<RawLog<u64, u64>> for DigestItem {
-	fn from(log: RawLog<u64, u64>) -> DigestItem {
-		GenDigestItem::Other(log.encode())
+impl From<Signal<u64>> for DigestItem<H256> {
+	fn from(log: Signal<u64>) -> DigestItem<H256> {
+		DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 	}
 }
 
@@ -40,9 +42,8 @@ impl From<RawLog<u64, u64>> for DigestItem {
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
 impl Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = u64;
 	type Event = TestEvent;
+
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -50,12 +51,10 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
-	type Log = DigestItem;
 }
 
 mod grandpa {
@@ -64,14 +63,19 @@ mod grandpa {
 
 impl_outer_event!{
 	pub enum TestEvent for Test {
-		grandpa<T>,
+		grandpa,
 	}
+}
+
+pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
+	vec.into_iter().map(|(id, weight)| (UintAuthorityId(id).into(), weight)).collect()
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test> {
-		authorities,
+		_genesis_phantom_data: Default::default(),
+		authorities: to_authorities(authorities),
 	}.build_storage().unwrap().0);
 	t.into()
 }

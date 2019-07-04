@@ -17,7 +17,7 @@
 //! Substrate system API helpers.
 
 use std::fmt;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use serde_json::{Value, map::Map};
 
 /// Node properties
@@ -37,7 +37,7 @@ pub struct SystemInfo {
 }
 
 /// Health struct returned by the RPC
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Health {
 	/// Number of connected peers
@@ -51,7 +51,7 @@ pub struct Health {
 }
 
 /// Network Peer information
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerInfo<Hash, Number> {
 	/// Peer ID

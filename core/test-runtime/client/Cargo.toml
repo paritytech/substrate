@@ -1,0 +1,20 @@
+[package]
+name = "substrate-test-runtime-client"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+generic-test-client = { package = "substrate-test-client", path = "../../test-client" }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
+runtime = { package = "substrate-test-runtime", path = "../../test-runtime", default-features = false }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+
+[features]
+default = [
+	"std",
+	"runtime/include-wasm-blob",
+]
+std = [
+	"runtime/std",
+]

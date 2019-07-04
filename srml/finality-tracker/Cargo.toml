@@ -17,7 +17,7 @@ srml-system = { path = "../system", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 lazy_static = "1.0"
-parking_lot = "0.7"
+parking_lot = "0.8.0"
 
 [features]
 default = ["std"]

@@ -53,6 +53,8 @@ pub use core::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
+pub use core::convert;
+pub use core::default;
 pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;
@@ -61,10 +63,10 @@ pub use core::mem;
 pub use core::num;
 pub use core::ops;
 pub use core::ptr;
-pub use core::slice;
-pub use core::default;
 pub use core::result;
-pub use core::convert;
+pub use core::slice;
+// Allow intepreting vectors of bytes as strings, but not constructing them.
+pub use core::str;
 // We are trying to avoid certain things here, such as `core::string`
 // (if you need `String` you most probably doing something wrong, since
 // runtime doesn't require anything human readable).

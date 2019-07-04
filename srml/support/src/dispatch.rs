@@ -22,10 +22,8 @@ pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
 pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use srml_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
-};
+pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
+pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -203,8 +201,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// [`OffchainWorker`](../sr_primitives/traits/trait.OffchainWorker.html) trait.
 #[macro_export]
 macro_rules! decl_module {
-	// Macro transformations (to convert invocations with incomplete parameters to the canonical
-	// form)
+	// Entry point #1.
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -224,6 +221,7 @@ macro_rules! decl_module {
 			$($t)*
 		);
 	};
+	// Entry point #2.
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -244,6 +242,7 @@ macro_rules! decl_module {
 		);
 	};
 
+	// Normalization expansions. Fills the defaults.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -405,9 +404,13 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// This puts the function statement into the [], decreasing `$rest` and moving toward finishing the parse.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
@@ -415,6 +418,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -422,7 +426,9 @@ macro_rules! decl_module {
 	) => {
 		$crate::decl_module!(@normalize
 			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
@@ -431,6 +437,7 @@ macro_rules! decl_module {
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
+				#[weight = $weight]
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -439,6 +446,45 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Add #[weight] if none is defined.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$fn_vis:vis fn $fn_name:ident(
+			$from:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+		) $( -> $result:ty )* { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			[ $($t)* ]
+			$(#[doc = $doc_attr])*
+			#[weight = $crate::dispatch::TransactionWeight::default()]
+			$fn_vis fn $fn_name(
+				$from $(, $(#[$codec_attr])* $param_name : $param )*
+			) $( -> $result )* { $( $impl )* }
+			$($rest)*
+		);
+	};
+	// Ignore any ident which is not `origin` with type `T::Origin`.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -449,6 +495,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -460,6 +507,7 @@ macro_rules! decl_module {
 			not use the `T::Origin` type.)"
 		)
 	};
+	// Ignore any ident which is `origin` but has a type, regardless of the type token itself.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -470,6 +518,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -481,6 +530,7 @@ macro_rules! decl_module {
 			not use the `T::Origin` type.)"
 		)
 	};
+	// Add root if no origin is defined.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -491,6 +541,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -504,17 +555,18 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			[
-				$($t)*
-				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name(
-					root $( , $(#[$codec_attr])* $param_name : $param )*
-				) $( -> $result )* { $( $impl )* }
-				{ $($instance: $instantiable)? }
-			]
+			[ $($t)* ]
+
+			$(#[doc = $doc_attr])*
+			$(#[weight = $weight])?
+			$fn_vis fn $fn_name(
+				root $( , $(#[$codec_attr])* $param_name : $param )*
+			) $( -> $result )* { $( $impl )* }
+
 			$($rest)*
 		);
 	};
+	// Last normalize step. Triggers `@imp` expansion which is the real expansion.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -689,6 +741,7 @@ macro_rules! decl_module {
 		{}
 	};
 
+	// Expansion for root dispatch functions with no specified result type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -697,12 +750,14 @@ macro_rules! decl_module {
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		$(#[doc = $doc_attr])*
+		#[allow(unreachable_code)]
 		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
 			{ $( $impl )* }
 			Ok(())
 		}
 	};
 
+	// Expansion for root dispatch functions with explicit return types.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -718,6 +773,7 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Expansion for _origin_ dispatch functions with no return type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -736,6 +792,7 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Expansion for _origin_ dispatch functions with explicit return type.
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
@@ -776,6 +833,7 @@ macro_rules! decl_module {
 				$type,
 			}
 			variant $fn_name;
+			$( #[doc = $doc_attr] )*
 			$( $rest )*
 		}
 	};
@@ -803,6 +861,7 @@ macro_rules! decl_module {
 				$type,
 			}
 			variant $fn_name;
+			$( #[doc = $doc_attr] )*
 			$( $rest )*
 		}
 	};
@@ -862,10 +921,14 @@ macro_rules! decl_module {
 
 	(@imp
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
+				#[weight = $weight:expr]
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
@@ -877,10 +940,17 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 	) => {
+		$crate::__check_reserved_fn_name! {
+			$($fn_name)*
+		}
+
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
-		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
+		pub struct $mod_type<
+			$trait_instance: $trait_name
+			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
+		>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
 
 		$crate::decl_module! {
 			@impl_on_initialize
@@ -899,7 +969,6 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$( $offchain )*
 		}
-
 		$crate::decl_module! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
@@ -940,6 +1009,18 @@ macro_rules! decl_module {
 					$param;
 				)*
 			)*
+		}
+
+		// Implement weight calculation function for Call
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weighable
+			for $call_type<$trait_instance $(, $instance)?>
+		{
+			fn weight(&self, _len: usize) -> $crate::dispatch::Weight {
+				match self {
+					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::weight(&$weight, _len), )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				}
+			}
 		}
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
@@ -1063,14 +1144,19 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
+		impl $crate::dispatch::Weighable for $call_type {
+			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
+				match self {
+					$( $call_type::$camelcase(call) => call.weight(len), )*
+				}
+			}
+		}
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
 			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result {
 				match self {
-					$(
-						$call_type::$camelcase(call) => call.dispatch(origin),
-					)*
+					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
 				}
 			}
 		}
@@ -1204,6 +1290,38 @@ macro_rules! __function_to_metadata {
 	}
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __check_reserved_fn_name {
+	(deposit_event $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error deposit_event);
+	};
+	(on_initialize $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_initialize);
+	};
+	(on_initialise $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_initialise);
+	};
+	(on_finalize $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
+	};
+	(on_finalise $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_finalise);
+	};
+	(offchain_worker $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);
+	};
+	($t:ident $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!($( $rest )*);
+	};
+	() => {};
+	(@compile_error $ident:ident) => {
+		compile_error!(concat!("Invalid call fn name: `", stringify!($ident),
+		"`, name is reserved and doesn't match expected signature, please refer to `decl_module!`",
+		" documentation to see the appropriate usage, or rename it to an unreserved keyword."));
+	};
+}
+
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
@@ -1230,6 +1348,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
+			#[weight = TransactionWeight::Basic(10, 100)]
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1237,6 +1356,9 @@ mod tests {
 			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
+
+			#[weight = TransactionWeight::Max]
+			fn weighted() { unreachable!() }
 		}
 	}
 
@@ -1301,6 +1423,11 @@ mod tests {
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
+				FunctionMetadata {
+					name: DecodeDifferent::Encode("weighted"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
 			];
 
 	struct TraitImpl {}
@@ -1354,5 +1481,15 @@ mod tests {
 	#[should_panic(expected = "on_finalize")]
 	fn on_finalize_should_work() {
 		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
+	}
+
+	#[test]
+	fn weight_should_attach_to_call_enum() {
+		// max weight. not dependent on input.
+		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 3 * 1024 * 1024);
+		// default weight.
+		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
+		// custom basic
+		assert_eq!(Call::<TraitImpl>::aux_3().weight(5), 10 + 100 * 5 );
 	}
 }

@@ -51,7 +51,8 @@
 //! deleted, then the account is said to be dead.
 //! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
 //! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-//! return an object of the `Imbalance` trait that must be handled.
+//! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
+//! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
@@ -141,11 +142,15 @@
 //! ## Genesis config
 //!
 //! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//!
+//! ## Assumptions
+//!
+//! * Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, mem};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
@@ -155,7 +160,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub,
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
@@ -167,7 +172,8 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + MaybeSerializeDebug;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+		MaybeSerializeDebug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -181,7 +187,8 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + MaybeSerializeDebug;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+		MaybeSerializeDebug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -236,10 +243,12 @@ pub struct VestingSchedule<Balance> {
 	pub per_block: Balance,
 }
 
-impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
+impl<Balance: SimpleArithmetic + Copy> VestingSchedule<Balance> {
 	/// Amount locked at block `n`.
-	pub fn locked_at<BlockNumber: As<u64>>(&self, n: BlockNumber) -> Balance {
-		if let Some(x) = Balance::sa(n.as_()).checked_mul(&self.per_block) {
+	pub fn locked_at<BlockNumber>(&self, n: BlockNumber) -> Balance
+		where Balance: From<BlockNumber>
+	{
+		if let Some(x) = Balance::from(n).checked_mul(&self.per_block) {
 			self.offset.max(x) - x
 		} else {
 			Zero::zero()
@@ -276,10 +285,8 @@ decl_storage! {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
 			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
-				let begin: u64 = begin.as_();
-				let length: u64 = length.as_();
-				let begin: T::Balance = As::sa(begin);
-				let length: T::Balance = As::sa(length);
+				let begin = <T::Balance as From<T::BlockNumber>>::from(begin);
+				let length = <T::Balance as From<T::BlockNumber>>::from(length);
 
 				config.balances.iter()
 					.find(|&&(ref w, _)| w == who)
@@ -343,6 +350,21 @@ decl_module! {
 		/// of the transfer, the account will be reaped.
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
+		///
+		/// # <weight>
+		/// - Dependent on arguments but not critical, given proper implementations for
+		///   input config types. See related functions below.
+		/// - It contains a limited number of reads and writes internally and no complex computation.
+		///
+		/// Related functions:
+		///
+		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
+		///   - Transferring balances to accounts that did not exist before will cause
+		///      `T::OnNewAccount::on_new_account` to be called.
+		///   - Removing enough funds from an account will trigger
+		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///
+		/// # </weight>
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -355,20 +377,39 @@ decl_module! {
 
 		/// Set the balances of a given account.
 		///
-		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
+		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
+		/// also decrease the total issuance of the system (`TotalIssuance`).
 		/// If the new free or reserved balance is below the existential deposit,
-		/// it will also decrease the total issuance of the system (`TotalIssuance`)
-		/// and reset the account nonce (`system::AccountNonce`).
+		/// it will reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
+		///
+		/// # <weight>
+		/// - Independent of the arguments.
+		/// - Contains a limited number of reads and writes.
+		/// # </weight>
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] free: T::Balance,
-			#[compact] reserved: T::Balance
+			#[compact] new_free: T::Balance,
+			#[compact] new_reserved: T::Balance
 		) {
 			let who = T::Lookup::lookup(who)?;
-			Self::set_free_balance(&who, free);
-			Self::set_reserved_balance(&who, reserved);
+
+			let current_free = <FreeBalance<T, I>>::get(&who);
+			if new_free > current_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - current_free));
+			} else if new_free < current_free {
+				mem::drop(NegativeImbalance::<T, I>::new(current_free - new_free));
+			}
+			Self::set_free_balance(&who, new_free);
+
+			let current_reserved = <ReservedBalance<T, I>>::get(&who);
+			if new_reserved > current_reserved {
+				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - current_reserved));
+			} else if new_reserved < current_reserved {
+				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
+			}
+			Self::set_reserved_balance(&who, new_reserved);
 		}
 	}
 }
@@ -380,7 +421,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
-			Self::free_balance(who).min(v.locked_at(<system::Module<T>>::block_number()))
+			Self::free_balance(who)
+				.min(v.locked_at::<T::BlockNumber>(<system::Module<T>>::block_number()))
 		} else {
 			Zero::zero()
 		}
@@ -651,12 +693,10 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	type Hashing = T::Hashing;
-	type Digest = T::Digest;
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
-	type Log = T::Log;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -696,6 +736,10 @@ where
 		<FreeBalance<T, I>>::get(who)
 	}
 
+	// # <weight>
+	// Despite iterating over a list of locks, they are limited by the number of
+	// lock IDs, which means the number of runtime modules that intend to use and create locks.
+	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
@@ -1013,7 +1057,7 @@ where
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let encoded_len = <T::Balance as As<u64>>::sa(encoded_len as u64);
+		let encoded_len = T::Balance::from(encoded_len as u32);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
 		let imbalance = Self::withdraw(
 			transactor,

@@ -120,6 +120,7 @@ mod tests {
 			valid_till: 1,
 			requires: vec![],
 			provides: vec![],
+			propagate: true,
 		};
 
 		(hash, tx)
@@ -185,6 +186,7 @@ mod tests {
 				valid_till,
 				requires: vec![],
 				provides: vec![],
+				propagate: true,
 			}
 		}
 

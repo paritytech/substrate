@@ -84,6 +84,7 @@ mod test_empty_call {
 	pub enum Call {
 	}
 
+	#[allow(unused)]
 	pub struct Runtime;
 
 	impl_outer_validate_unsigned! {

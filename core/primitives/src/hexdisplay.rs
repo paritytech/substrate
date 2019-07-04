@@ -21,7 +21,7 @@ pub struct HexDisplay<'a>(&'a [u8]);
 
 impl<'a> HexDisplay<'a> {
 	/// Create new instance that will display `d` as a hex string when displayed.
-	pub fn from(d: &'a AsBytesRef) -> Self { HexDisplay(d.as_bytes_ref()) }
+	pub fn from(d: &'a dyn AsBytesRef) -> Self { HexDisplay(d.as_bytes_ref()) }
 }
 
 impl<'a> ::core::fmt::Display for HexDisplay<'a> {
@@ -79,7 +79,7 @@ pub fn ascii_format(asciish: &[u8]) -> String {
 	let mut latch = false;
 	for c in asciish {
 		match (latch, *c) {
-			(false, 32...127) => r.push(*c as char),
+			(false, 32..=127) => r.push(*c as char),
 			_ => {
 				if !latch {
 					r.push('#');

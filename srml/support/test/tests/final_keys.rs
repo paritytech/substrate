@@ -18,11 +18,11 @@ use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
 use srml_support::runtime_primitives::BuildStorage;
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 
 pub trait Trait {
 	type Origin;
-	type BlockNumber;
+	type BlockNumber: Encode + Decode + Default + Clone;
 }
 
 srml_support::decl_module! {
@@ -41,6 +41,9 @@ srml_support::decl_storage!{
 
 		pub DoubleMap: double_map u32, blake2_256(u32) => u32;
 		pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
+
+		pub Foo get(foo) config(): Option<T::BlockNumber>;
+		pub Foo2 get(foo2) config(): double_map u32, blake2_256(T::BlockNumber) => Option<u32>;
 	}
 }
 

@@ -19,35 +19,36 @@
 use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind, bail};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
-type BlockNumber = u64;
+// This is just a best effort to encode the number. None indicated that it's too big to encode
+// in a u128.
+type BlockNumber = Option<u128>;
 
-error_chain! {
-	errors {
-		BadProposalFormat {
-			description("Proposal provided not a block."),
-			display("Proposal provided not a block."),
-		}
-		WrongParentHash(expected: String, got: String) {
-			description("Proposal had wrong parent hash."),
-			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
-		}
-		WrongNumber(expected: BlockNumber, got: BlockNumber) {
-			description("Proposal had wrong number."),
-			display("Proposal had wrong number. Expected {}, got {}", expected, got),
-		}
-		ProposalTooLarge(size: usize) {
-			description("Proposal exceeded the maximum size."),
-			display(
-				"Proposal exceeded the maximum size of {} by {} bytes.",
-				MAX_BLOCK_SIZE, size.saturating_sub(MAX_BLOCK_SIZE)
-			),
-		}
-	}
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type.
+#[derive(Debug, derive_more::Display)]
+pub enum Error {
+	/// Proposal provided not a block.
+	#[display(fmt="Proposal provided not a block.")]
+	BadProposalFormat,
+	/// Proposal had wrong parent hash.
+	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
+	WrongParentHash { expected: String, got: String },
+	/// Proposal had wrong number.
+	#[display(fmt="Proposal had wrong number. Expected {:?}, got {:?}", expected, got)]
+	WrongNumber { expected: BlockNumber, got: BlockNumber },
+	/// Proposal exceeded the maximum size.
+	#[display(
+		fmt="Proposal exceeded the maximum size of {} by {} bytes.",
+		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE)"
+	)]
+	ProposalTooLarge(usize),
 }
+
+impl std::error::Error for Error {}
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
@@ -59,21 +60,24 @@ pub fn evaluate_initial<Block: BlockT>(
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
-		.ok_or_else(|| ErrorKind::BadProposalFormat)?;
+		.ok_or_else(|| Error::BadProposalFormat)?;
 
 	if encoded.len() > MAX_BLOCK_SIZE {
-		bail!(ErrorKind::ProposalTooLarge(encoded.len()))
+		return Err(Error::ProposalTooLarge(encoded.len()))
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
-		bail!(ErrorKind::WrongParentHash(
-			format!("{:?}", *parent_hash),
-			format!("{:?}", proposal.header().parent_hash())
-		));
+		return Err(Error::WrongParentHash {
+			expected: format!("{:?}", *parent_hash),
+			got: format!("{:?}", proposal.header().parent_hash())
+		});
 	}
 
-	if parent_number.as_() + 1 != proposal.header().number().as_() {
-		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header().number().as_()));
+	if parent_number + One::one() != *proposal.header().number() {
+		return Err(Error::WrongNumber {
+			expected: parent_number.checked_into::<u128>().map(|x| x + 1),
+			got: (*proposal.header().number()).checked_into::<u128>(),
+		});
 	}
 
 	Ok(())

@@ -17,12 +17,13 @@
 //! Different types of changes trie input pairs.
 
 use parity_codec::{Decode, Encode, Input, Output};
+use crate::changes_trie::BlockNumber;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExtrinsicIndex {
+pub struct ExtrinsicIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
-	pub block: u64,
+	pub block: Number,
 	/// Storage key this node is responsible for.
 	pub key: Vec<u8>,
 }
@@ -32,35 +33,35 @@ pub type ExtrinsicIndexValue = Vec<u32>;
 
 /// Key of { changed key => block/digest block numbers } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DigestIndex {
+pub struct DigestIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
-	pub block: u64,
+	pub block: Number,
 	/// Storage key this node is responsible for.
 	pub key: Vec<u8>,
 }
 
 /// Value of { changed key => block/digest block numbers } mapping.
-pub type DigestIndexValue = Vec<u64>;
+pub type DigestIndexValue<Number> = Vec<Number>;
 
 /// Single input pair of changes trie.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum InputPair {
+pub enum InputPair<Number: BlockNumber> {
 	/// Element of { key => set of extrinsics where key has been changed } element mapping.
-	ExtrinsicIndex(ExtrinsicIndex, ExtrinsicIndexValue),
+	ExtrinsicIndex(ExtrinsicIndex<Number>, ExtrinsicIndexValue),
 	/// Element of { key => set of blocks/digest blocks where key has been changed } element mapping.
-	DigestIndex(DigestIndex, DigestIndexValue),
+	DigestIndex(DigestIndex<Number>, DigestIndexValue<Number>),
 }
 
 /// Single input key of changes trie.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum InputKey {
+pub enum InputKey<Number: BlockNumber> {
 	/// Key of { key => set of extrinsics where key has been changed } element mapping.
-	ExtrinsicIndex(ExtrinsicIndex),
+	ExtrinsicIndex(ExtrinsicIndex<Number>),
 	/// Key of { key => set of blocks/digest blocks where key has been changed } element mapping.
-	DigestIndex(DigestIndex),
+	DigestIndex(DigestIndex<Number>),
 }
 
-impl Into<(Vec<u8>, Vec<u8>)> for InputPair {
+impl<Number: BlockNumber> Into<(Vec<u8>, Vec<u8>)> for InputPair<Number> {
 	fn into(self) -> (Vec<u8>, Vec<u8>) {
 		match self {
 			InputPair::ExtrinsicIndex(key, value) => (key.encode(), value.encode()),
@@ -69,8 +70,8 @@ impl Into<(Vec<u8>, Vec<u8>)> for InputPair {
 	}
 }
 
-impl Into<InputKey> for InputPair {
-	fn into(self) -> InputKey {
+impl<Number: BlockNumber> Into<InputKey<Number>> for InputPair<Number> {
+	fn into(self) -> InputKey<Number> {
 		match self {
 			InputPair::ExtrinsicIndex(key, _) => InputKey::ExtrinsicIndex(key),
 			InputPair::DigestIndex(key, _) => InputKey::DigestIndex(key),
@@ -78,15 +79,15 @@ impl Into<InputKey> for InputPair {
 	}
 }
 
-impl ExtrinsicIndex {
-	pub fn key_neutral_prefix(block: u64) -> Vec<u8> {
+impl<Number: BlockNumber> ExtrinsicIndex<Number> {
+	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
 		let mut prefix = vec![1];
 		prefix.extend(block.encode());
 		prefix
 	}
 }
 
-impl Encode for ExtrinsicIndex {
+impl<Number: BlockNumber> Encode for ExtrinsicIndex<Number> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		dest.push_byte(1);
 		self.block.encode_to(dest);
@@ -94,8 +95,8 @@ impl Encode for ExtrinsicIndex {
 	}
 }
 
-impl DigestIndex {
-	pub fn key_neutral_prefix(block: u64) -> Vec<u8> {
+impl<Number: BlockNumber> DigestIndex<Number> {
+	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
 		let mut prefix = vec![2];
 		prefix.extend(block.encode());
 		prefix
@@ -103,7 +104,7 @@ impl DigestIndex {
 }
 
 
-impl Encode for DigestIndex {
+impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		dest.push_byte(2);
 		self.block.encode_to(dest);
@@ -111,7 +112,7 @@ impl Encode for DigestIndex {
 	}
 }
 
-impl Decode for InputKey {
+impl<Number: BlockNumber> Decode for InputKey<Number> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			1 => Some(InputKey::ExtrinsicIndex(ExtrinsicIndex {
@@ -133,17 +134,17 @@ mod tests {
 
 	#[test]
 	fn extrinsic_index_serialized_and_deserialized() {
-		let original = ExtrinsicIndex { block: 777, key: vec![42] };
+		let original = ExtrinsicIndex { block: 777u64, key: vec![42] };
 		let serialized = original.encode();
-		let deserialized: InputKey = Decode::decode(&mut &serialized[..]).unwrap();
+		let deserialized: InputKey<u64> = Decode::decode(&mut &serialized[..]).unwrap();
 		assert_eq!(InputKey::ExtrinsicIndex(original), deserialized);
 	}
 
 	#[test]
 	fn digest_index_serialized_and_deserialized() {
-		let original = DigestIndex { block: 777, key: vec![42] };
+		let original = DigestIndex { block: 777u64, key: vec![42] };
 		let serialized = original.encode();
-		let deserialized: InputKey = Decode::decode(&mut &serialized[..]).unwrap();
+		let deserialized: InputKey<u64> = Decode::decode(&mut &serialized[..]).unwrap();
 		assert_eq!(InputKey::DigestIndex(original), deserialized);
 	}
 }

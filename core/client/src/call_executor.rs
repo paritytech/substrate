@@ -26,9 +26,7 @@ use state_machine::{
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{
-	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
-};
+use primitives::{offchain, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
@@ -48,7 +46,7 @@ where
 	///
 	/// No changes are made.
 	fn call<
-		O: OffchainExt,
+		O: offchain::Externalities,
 	>(
 		&self,
 		id: &BlockId<B>,
@@ -65,7 +63,7 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -96,7 +94,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -119,17 +117,17 @@ where
 	/// No changes are made.
 	fn prove_at_state<S: state_machine::Backend<H>>(
 		&self,
-		state: S,
+		mut state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		let trie_state = state.try_into_trie_backend()
+		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<state_machine::Error>
+					as Box<dyn state_machine::Error>
 			)?;
-		self.prove_at_trie_state(&trie_state, overlay, method, call_data)
+		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
 
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
@@ -181,7 +179,7 @@ where
 {
 	type Error = E::Error;
 
-	fn call<O: OffchainExt>(
+	fn call<O: offchain::Externalities>(
 		&self,
 		id: &BlockId<Block>,
 		method: &str,
@@ -211,7 +209,7 @@ where
 
 	fn contextual_call<
 		'a,
-		O: OffchainExt,
+		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -241,18 +239,18 @@ where
 			_ => {},
 		}
 
-		let state = self.backend.state_at(*at)?;
+		let mut state = self.backend.state_at(*at)?;
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.try_into_trie_backend()
+				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<state_machine::Error>
+							as Box<dyn state_machine::Error>
 					)?;
 
 				let backend = state_machine::ProvingBackend::new_with_recorder(
-					&trie_state,
+					trie_state,
 					recorder.clone()
 				);
 
@@ -300,7 +298,7 @@ where
 	}
 
 	fn call_at_state<
-		O: OffchainExt,
+		O: offchain::Externalities,
 		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,

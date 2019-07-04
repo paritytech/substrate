@@ -19,6 +19,9 @@ environmental = { version = "1.0.1", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 
+[dev-dependencies]
+substrate-offchain = { path = "../offchain" }
+
 [features]
 default = ["std"]
 std = [

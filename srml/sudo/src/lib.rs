@@ -88,7 +88,10 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{
+	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
+	decl_storage, ensure
+};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -107,18 +110,37 @@ decl_module! {
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - No DB writes.
+		/// # </weight>
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
-			Self::deposit_event(RawEvent::Sudid(ok));
+			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
+				Ok(_) => true,
+				Err(e) => {
+					sr_io::print(e);
+					false
+				}
+			};
+
+			Self::deposit_event(RawEvent::Sudid(res));
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

@@ -16,40 +16,33 @@
 
 //! System RPC module errors.
 
-use error_chain::*;
-
 use crate::rpc;
-use crate::errors;
 use crate::system::helpers::Health;
 
-error_chain! {
-	errors {
-		/// Node is not fully functional
-		NotHealthy(h: Health) {
-			description("node is not healthy"),
-			display("Node is not fully functional: {}", h)
-		}
+/// System RPC Result type.
+pub type Result<T> = std::result::Result<T, Error>;
 
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
-		}
-	}
+/// System RPC errors.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Provided block range couldn't be resolved to a list of blocks.
+	#[display(fmt = "Node is not fully functional: {}", _0)]
+	NotHealthy(Health),
 }
 
-const ERROR: i64 = 2000;
+impl std::error::Error for Error {}
+
+/// Base code for all system errors.
+const BASE_ERROR: i64 = 2000;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			Error(ErrorKind::NotHealthy(h), _) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(ERROR + 1),
-				message: "node is not healthy".into(),
-				data:serde_json::to_value(h).ok(),
+			Error::NotHealthy(ref h) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+				message: format!("{}", e),
+				data: serde_json::to_value(h).ok(),
 			},
-			e => errors::internal(e),
 		}
 	}
 }

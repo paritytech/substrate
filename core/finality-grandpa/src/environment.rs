@@ -34,7 +34,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -45,12 +45,13 @@ use crate::{
 	PrimaryPropose, NewAuthoritySet, VoterCommand, HistoricalVotes,
 };
 
-use crate::authorities::SharedAuthoritySet;
+use consensus_common::SelectChain;
+
+use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-
-use ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
@@ -65,11 +66,13 @@ pub struct CompletedRound<Block: BlockT> {
 	pub votes: HistoricalVotes<Block>,
 }
 
-// Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
+// Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
 // contains data about at least one round (genesis).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletedRounds<Block: BlockT> {
-	inner: VecDeque<CompletedRound<Block>>,
+	rounds: VecDeque<CompletedRound<Block>>,
+	set_id: u64,
+	voters: Vec<AuthorityId>,
 }
 
 
@@ -80,25 +83,53 @@ const NUM_LAST_COMPLETED_ROUNDS: usize = 2;
 
 impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	fn encode(&self) -> Vec<u8> {
-		Vec::from_iter(&self.inner).encode()
+		let v = Vec::from_iter(&self.rounds);
+		(&v, &self.set_id, &self.voters).encode()
 	}
 }
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
-		Vec::<CompletedRound<Block>>::decode(value)
-			.map(|completed_rounds| CompletedRounds {
-				inner: completed_rounds.into(),
+		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
+			.map(|(rounds, set_id, voters)| CompletedRounds {
+				rounds: rounds.into(),
+				set_id,
+				voters,
 			})
 	}
 }
 
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
+<<<<<<< HEAD
 	pub fn new(genesis: CompletedRound<Block>) -> Self {
 		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		inner.push_back(genesis);
 		CompletedRounds { inner }
+=======
+	pub(crate) fn new(
+		genesis: CompletedRound<Block>,
+		set_id: u64,
+		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+	)
+		-> CompletedRounds<Block>
+	{
+		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
+		rounds.push_back(genesis);
+
+		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
+		CompletedRounds { rounds, set_id, voters }
+	}
+
+	/// Get the set-id and voter set of the completed rounds.
+	pub fn set_info(&self) -> (u64, &[AuthorityId]) {
+		(self.set_id, &self.voters[..])
+	}
+
+	/// Iterate over all completed rounds.
+	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
+		self.rounds.iter()
+>>>>>>> master
 	}
 
 	/// Create a new completed rounds tracker initialized with the rounds in `completed_rounds`.
@@ -108,7 +139,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 	/// Returns the last (latest) completed round.
 	pub fn last(&self) -> &CompletedRound<Block> {
-		self.inner.back()
+		self.rounds.back()
 			.expect("inner is never empty; always contains at least genesis; qed")
 	}
 
@@ -119,11 +150,11 @@ impl<Block: BlockT> CompletedRounds<Block> {
 			return false;
 		}
 
-		if self.inner.len() == NUM_LAST_COMPLETED_ROUNDS {
-			self.inner.pop_front();
+		if self.rounds.len() == NUM_LAST_COMPLETED_ROUNDS {
+			self.rounds.pop_front();
 		}
 
-		self.inner.push_back(completed_round);
+		self.rounds.push_back(completed_round);
 
 		true
 	}
@@ -400,6 +431,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
 	let tree_route_res = ::client::blockchain::tree_route(
+		#[allow(deprecated)]
 		client.backend().blockchain(),
 		BlockId::Hash(block),
 		BlockId::Hash(base),
@@ -522,6 +554,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -563,6 +596,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -602,6 +636,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -645,6 +680,7 @@ where
 				current_round: HasVoted::No,
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -656,8 +692,10 @@ where
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
 		use client::blockchain::HeaderBackend;
 
-		let status = self.inner.backend().blockchain().info()?;
-		if number <= status.finalized_number && self.inner.backend().blockchain().hash(number)? == Some(hash) {
+		#[allow(deprecated)]
+		let blockchain = self.inner.backend().blockchain();
+		let status = blockchain.info();
+		if number <= status.finalized_number && blockchain.hash(number)? == Some(hash) {
 			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
 			// finalized block.
@@ -674,7 +712,7 @@ where
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
-			Some(As::sa(self.config.justification_period)),
+			Some(self.config.justification_period.into()),
 			hash,
 			number,
 			(round, commit).into(),
@@ -806,7 +844,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				// finalization to remote nodes
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info()?.chain.finalized_number;
+						let last_finalized_number = client.info().chain.finalized_number;
 						justification_required =
 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
 							(last_finalized_number / justification_period != number / justification_period);
@@ -975,6 +1013,7 @@ where B: Backend<Block, Blake2Hasher>,
 		}
 
 		let tree_route = client::blockchain::tree_route(
+			#[allow(deprecated)]
 			client.backend().blockchain(),
 			BlockId::Hash(*hash),
 			BlockId::Hash(*base),

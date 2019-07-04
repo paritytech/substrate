@@ -1,0 +1,25 @@
+error: Two traits with the same name detected! The trait name is used to generate its ID. Please rename one trait at the declaration!
+  --> $DIR/impl_two_traits_with_same_name.rs:31:15
+   |
+31 |     impl second::Api<Block> for Runtime {
+   |                  ^^^
+
+error: cannot find macro `decl_runtime_apis!` in this scope
+  --> $DIR/impl_two_traits_with_same_name.rs:19:2
+   |
+19 |     decl_runtime_apis! {
+   |     ^^^^^^^^^^^^^^^^^
+
+error[E0433]: failed to resolve: could not find `runtime_decl_for_Api` in `second`
+  --> $DIR/impl_two_traits_with_same_name.rs:26:1
+   |
+26 | / impl_runtime_apis! {
+27 | |     impl self::Api<Block> for Runtime {
+28 | |         fn test(data: u64) {}
+29 | |     }
+...  |
+33 | |     }
+34 | | }
+   | |_^ could not find `runtime_decl_for_Api` in `second`
+
+For more information about this error, try `rustc --explain E0433`.

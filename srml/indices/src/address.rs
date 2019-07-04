@@ -18,7 +18,8 @@
 
 #[cfg(feature = "std")]
 use std::fmt;
-use crate::{Member, Decode, Encode, As, Input, Output};
+use rstd::convert::TryInto;
+use crate::{Member, Decode, Encode, Input, Output};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
@@ -59,14 +60,20 @@ fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Decode,
-	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + From<u32> + Copy,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
-			x @ 0x00...0xef => Address::Index(As::sa(x)),
-			0xfc => Address::Index(As::sa(need_more_than(0xef, u16::decode(input)?)?)),
-			0xfd => Address::Index(As::sa(need_more_than(0xffff, u32::decode(input)?)?)),
-			0xfe => Address::Index(need_more_than(As::sa(0xffffffffu32), Decode::decode(input)?)?),
+			x @ 0x00..=0xef => Address::Index(AccountIndex::from(x as u32)),
+			0xfc => Address::Index(AccountIndex::from(
+				need_more_than(0xef, u16::decode(input)?)? as u32
+			)),
+			0xfd => Address::Index(AccountIndex::from(
+				need_more_than(0xffff, u32::decode(input)?)?
+			)),
+			0xfe => Address::Index(
+				need_more_than(0xffffffffu32.into(), Decode::decode(input)?)?
+			),
 			0xff => Address::Id(Decode::decode(input)?),
 			_ => return None,
 		})
@@ -75,7 +82,7 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 
 impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Encode,
-	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + From<u32> + TryInto<u32>,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
@@ -83,19 +90,26 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 				dest.push_byte(255);
 				dest.push(i);
 			}
-			Address::Index(i) if i > As::sa(0xffffffffu32) => {
-				dest.push_byte(254);
-				dest.push(&i);
-			}
-			Address::Index(i) if i > As::sa(0xffffu32) => {
-				dest.push_byte(253);
-				dest.push(&As::<u32>::as_(i));
-			}
-			Address::Index(i) if i >= As::sa(0xf0u32) => {
-				dest.push_byte(252);
-				dest.push(&As::<u16>::as_(i));
-			}
-			Address::Index(i) => dest.push_byte(As::<u8>::as_(i)),
+			Address::Index(i) => {
+				let maybe_u32: Result<u32, _> = i.try_into();
+				if let Ok(x) = maybe_u32 {
+					if x > 0xffff {
+						dest.push_byte(253);
+						dest.push(&x);
+					}
+					else if x >= 0xf0 {
+						dest.push_byte(252);
+						dest.push(&(x as u16));
+					}
+					else {
+						dest.push_byte(x as u8);
+					}
+
+				} else {
+					dest.push_byte(254);
+					dest.push(&i);
+				}
+			},
 		}
 	}
 }

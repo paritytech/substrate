@@ -14,7 +14,6 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
-consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 finality-tracker = { package = "srml-finality-tracker", path = "../finality-tracker", default-features = false }
 
 [dev-dependencies]
@@ -31,7 +30,6 @@ std = [
 	"srml-support/std",
 	"primitives/std",
 	"system/std",
-	"consensus/std",
 	"session/std",
 	"finality-tracker/std",
 ]

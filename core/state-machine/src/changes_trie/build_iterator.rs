@@ -17,13 +17,16 @@
 //! Structures and functions to return blocks whose changes are to be included
 //! in given block' changes trie.
 
-use crate::changes_trie::Configuration;
+use crate::changes_trie::{Configuration, BlockNumber};
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block.
-pub fn digest_build_iterator(config: &Configuration, block: u64) -> DigestBuildIterator {
+pub fn digest_build_iterator<Number: BlockNumber>(
+	config: &Configuration,
+	block: Number,
+) -> DigestBuildIterator<Number> {
 	// prepare digest build parameters
-	let (_, _, digest_step) = match config.digest_level_at_block(block) {
+	let (_, _, digest_step) = match config.digest_level_at_block(block.clone()) {
 		Some((current_level, digest_interval, digest_step)) =>
 			(current_level, digest_interval, digest_step),
 		None => return DigestBuildIterator::empty(),
@@ -35,24 +38,26 @@ pub fn digest_build_iterator(config: &Configuration, block: u64) -> DigestBuildI
 /// Changes trie build iterator that returns numbers of OTHER blocks that are
 /// required for inclusion into changes trie of given block.
 #[derive(Debug)]
-pub struct DigestBuildIterator {
+pub struct DigestBuildIterator<Number: BlockNumber> {
 	/// Block we're building changes trie for.
-	block: u64,
+	block: Number,
 	/// Interval for creation digest blocks.
-	digest_interval: u64,
-	/// Step of current blocks range.
-	current_step: u64,
-	/// Current blocks range.
-	current_range: Option<::std::iter::StepBy<::std::ops::Range<u64>>>,
+	digest_interval: u32,
 	/// Max step of blocks range.
-	max_step: u64,
+	max_step: u32,
+	/// Step of current blocks range.
+	current_step: u32,
+	/// Current blocks range.
+	current_range: Option<BlocksRange<Number>>,
 }
 
-impl DigestBuildIterator {
+impl<Number: BlockNumber> DigestBuildIterator<Number> {
 	/// Create new digest build iterator.
-	pub fn new(block: u64, digest_interval: u64, max_step: u64) -> Self {
+	pub fn new(block: Number, digest_interval: u32, max_step: u32) -> Self {
 		DigestBuildIterator {
-			block, digest_interval, max_step,
+			block,
+			digest_interval,
+			max_step,
 			current_step: 0,
 			current_range: None,
 		}
@@ -60,12 +65,12 @@ impl DigestBuildIterator {
 
 	/// Create empty digest build iterator.
 	pub fn empty() -> Self {
-		Self::new(0, 0, 0)
+		Self::new(0.into(), 0, 0)
 	}
 }
 
-impl Iterator for DigestBuildIterator {
-	type Item = u64;
+impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
+	type Item = Number;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(next) = self.current_range.as_mut().and_then(|iter| iter.next()) {
@@ -82,10 +87,11 @@ impl Iterator for DigestBuildIterator {
 		}
 
 		self.current_step = next_step;
-		self.current_range = Some(
-			((self.block - self.current_step * self.digest_interval + self.current_step)..self.block)
-				.step_by(self.current_step as usize)
-		);
+		self.current_range = Some(BlocksRange::new(
+			self.block.clone() - (self.current_step * self.digest_interval - self.current_step).into(),
+			self.block.clone(),
+			self.current_step.into(),
+		));
 
 		Some(self.current_range.as_mut()
 			.expect("assigned one line above; qed")
@@ -94,20 +100,52 @@ impl Iterator for DigestBuildIterator {
 	}
 }
 
+/// Blocks range iterator with builtin step_by support.
+#[derive(Debug)]
+struct BlocksRange<Number: BlockNumber> {
+	current: Number,
+	end: Number,
+	step: Number,
+}
+
+impl<Number: BlockNumber> BlocksRange<Number> {
+	pub fn new(begin: Number, end: Number, step: Number) -> Self {
+		BlocksRange {
+			current: begin,
+			end,
+			step,
+		}
+	}
+}
+
+impl<Number: BlockNumber> Iterator for BlocksRange<Number> {
+	type Item = Number;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.current >= self.end {
+			return None;
+		}
+
+		let current = Some(self.current.clone());
+		self.current += self.step.clone();
+		current
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	fn digest_build_iterator(digest_interval: u64, digest_levels: u32, block: u64) -> DigestBuildIterator {
+	fn digest_build_iterator(digest_interval: u32, digest_levels: u32, block: u64) -> DigestBuildIterator<u64> {
 		super::digest_build_iterator(&Configuration { digest_interval, digest_levels }, block)
 	}
 
-	fn digest_build_iterator_basic(digest_interval: u64, digest_levels: u32, block: u64) -> (u64, u64, u64) {
+	fn digest_build_iterator_basic(digest_interval: u32, digest_levels: u32, block: u64) -> (u64, u32, u32) {
 		let iter = digest_build_iterator(digest_interval, digest_levels, block);
 		(iter.block, iter.digest_interval, iter.max_step)
 	}
 
-	fn digest_build_iterator_blocks(digest_interval: u64, digest_levels: u32, block: u64) -> Vec<u64> {
+	fn digest_build_iterator_blocks(digest_interval: u32, digest_levels: u32, block: u64) -> Vec<u64> {
 		digest_build_iterator(digest_interval, digest_levels, block).collect()
 	}
 
@@ -122,7 +160,11 @@ mod tests {
 		assert_eq!(digest_build_iterator_basic(4, 16, 2), empty, "digest is not required for this block");
 		assert_eq!(digest_build_iterator_basic(4, 16, 15), empty, "digest is not required for this block");
 		assert_eq!(digest_build_iterator_basic(4, 16, 17), empty, "digest is not required for this block");
-		assert_eq!(digest_build_iterator_basic(::std::u64::MAX / 2 + 1, 16, ::std::u64::MAX), empty, "digest_interval * 2 is greater than u64::MAX");
+		assert_eq!(digest_build_iterator_basic(
+			::std::u32::MAX / 2 + 1,
+			16,
+			::std::u64::MAX,
+		), empty, "digest_interval * 2 is greater than u64::MAX");
 	}
 
 	#[test]

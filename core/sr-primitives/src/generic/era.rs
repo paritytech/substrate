@@ -21,7 +21,10 @@ use serde::{Serialize, Deserialize};
 
 use crate::codec::{Decode, Encode, Input, Output};
 
+/// Era period
 pub type Period = u64;
+
+/// Era phase
 pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.

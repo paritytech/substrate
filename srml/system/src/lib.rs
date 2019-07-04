@@ -76,16 +76,20 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
-};
+use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
+	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+}};
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
-use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{
+	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
+	StorageMap, Parameter, for_each_tuple, traits::Contains
+};
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
+use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -99,9 +103,23 @@ pub trait OnNewAccount<AccountId> {
 	fn on_new_account(who: &AccountId);
 }
 
-impl<AccountId> OnNewAccount<AccountId> for () {
-	fn on_new_account(_who: &AccountId) {}
+macro_rules! impl_on_new_account {
+	() => (
+		impl<AccountId> OnNewAccount<AccountId> for () {
+			fn on_new_account(_: &AccountId) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<AccountId, $($t: OnNewAccount<AccountId>),*> OnNewAccount<AccountId> for ($($t,)*) {
+			fn on_new_account(who: &AccountId) {
+				$($t::on_new_account(who);)*
+			}
+		}
+	}
 }
+
+for_each_tuple!(impl_on_new_account);
 
 /// Determiner to say whether a given account is unused.
 pub trait IsDeadAccount<AccountId> {
@@ -128,7 +146,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
-	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
@@ -148,10 +166,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
-	/// Collection of (light-client-relevant) logs for a block to be included verbatim in the block header.
-	type Digest:
-		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
-
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 
@@ -166,33 +180,51 @@ pub trait Trait: 'static + Eq + Clone {
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
-		Digest = Self::Digest
 	>;
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
-
-	/// A piece of information that can be part of the digest (as a digest item).
-	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
-pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
+pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+
+pub type Key = Vec<u8>;
+pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {
-			let extrinsic_index = Self::extrinsic_index();
-			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let event = EventRecord { phase, event };
+			Self::deposit_event_indexed(&[], event);
+		}
 
-			// Appending can only fail if `Events<T>` can not be decoded or
-			// when we try to insert more than `u32::max_value()` events.
-			// If one of these conditions is met, we just insert the new event.
-			let events = [event];
-			if <Events<T>>::append(&events).is_err() {
-				let [event] = events;
-				<Events<T>>::put(vec![event]);
+		/// Make some on-chain remark.
+		fn remark(origin, _remark: Vec<u8>) {
+			ensure_signed(origin)?;
+		}
+
+		/// Set the number of pages in the WebAssembly environment's heap.
+		fn set_heap_pages(pages: u64) {
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+		}
+
+		/// Set the new code.
+		pub fn set_code(new: Vec<u8>) {
+			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+		}
+
+		/// Set some items of storage.
+		fn set_storage(items: Vec<KeyValue>) {
+			for i in &items {
+				storage::unhashed::put_raw(&i.0, &i.1);
+			}
+		}
+
+		/// Kill some items from storage.
+		fn kill_storage(keys: Vec<Key>) {
+			for key in &keys {
+				storage::unhashed::kill(&key);
 			}
 		}
 	}
@@ -211,11 +243,13 @@ pub enum Phase {
 /// Record of an event happening.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
-pub struct EventRecord<E: Parameter + Member> {
+pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
+	/// The list of the topics this event has.
+	pub topics: Vec<T>,
 }
 
 decl_event!(
@@ -254,38 +288,6 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 /// Exposed trait-generic origin type.
 pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
 
-pub type Log<T> = RawLog<
-	<T as Trait>::Hash,
->;
-
-/// A log in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<Hash> {
-	/// Changes trie has been computed for this block. Contains the root of
-	/// changes trie.
-	ChangesTrieRoot(Hash),
-}
-
-impl<Hash: Member> RawLog<Hash> {
-	/// Try to cast the log entry as ChangesTrieRoot log entry.
-	pub fn as_changes_trie_root(&self) -> Option<&Hash> {
-		match *self {
-			RawLog::ChangesTrieRoot(ref item) => Some(item),
-		}
-	}
-}
-
-// Implementation for tests outside of this crate.
-#[cfg(any(feature = "std", test))]
-impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
-	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
-		match log {
-			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot(root),
-		}
-	}
-}
-
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
 #[cfg(feature = "std")]
@@ -295,14 +297,20 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	h
 }
 
+/// This type alias represents an index of an event.
+///
+/// We use `u32` here because this index is used as index for `Events<T>`
+/// which can't contain more than `u32::max_value()` items.
+type EventIndex = u32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total length in bytes for all extrinsics put together, for the current block.
-		AllExtrinsicsLen: Option<u32>;
+		/// Total weight for all extrinsics put together, for the current block.
+		AllExtrinsicsWeight: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -311,22 +319,48 @@ decl_storage! {
 		/// ring buffer with the `i8` prefix being the index into the `Vec` of the oldest hash.
 		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
 		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
 		/// Extrinsics root of the current block, also part of the block header.
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
-		Digest get(digest): T::Digest;
+		Digest get(digest): DigestOf<T>;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event>>;
+		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
+		/// The number of events in the `Events<T>` list.
+		EventCount get(event_count): EventIndex;
+
+		// TODO: https://github.com/paritytech/substrate/issues/2553
+		// Possibly, we can improve it by using something like:
+		// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
+		// `EventTopics::append`.
+
+		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
+		/// of events in the `<Events<T>>` list.
+		///
+		/// The first key serves no purpose. This field is declared as double_map just
+		/// for convenience of using `remove_prefix`.
+		///
+		/// All topic vectors have deterministic storage locations depending on the topic. This
+		/// allows light-clients to leverage the changes trie storage tracking mechanism and
+		/// in case of changes fetch the list of events of interest.
+		///
+		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+		/// the `EventIndex` then in case if the topic has the same contents on the next block
+		/// no notification will be triggered thus the event might be lost.
+		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
+		#[serde(with = "substrate_primitives::bytes")]
+		config(code): Vec<u8>;
 
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use parity_codec::Encode;
 
+			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
@@ -339,45 +373,150 @@ decl_storage! {
 }
 
 pub struct EnsureRoot<AccountId>(::rstd::marker::PhantomData<AccountId>);
-impl<O: Into<Option<RawOrigin<AccountId>>>, AccountId> EnsureOrigin<O> for EnsureRoot<AccountId> {
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureRoot<AccountId> {
 	type Success = ();
-	fn ensure_origin(o: O) -> Result<Self::Success, &'static str> {
-		ensure_root(o)
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Root => Ok(()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureSigned<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureSigned<AccountId> {
+	type Success = AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(who) => Ok(who),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureSignedBy<Who, AccountId>(::rstd::marker::PhantomData<(Who, AccountId)>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	Who: Contains<AccountId>,
+	AccountId: PartialEq + Clone,
+> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
+	type Success = AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureNone<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+> EnsureOrigin<O> for EnsureNone<AccountId> {
+	type Success = ();
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::None => Ok(()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
+impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
+	type Success = T;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		Err(o)
 	}
 }
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::Signed(t)) => Ok(t),
+		Ok(RawOrigin::Signed(t)) => Ok(t),
 		_ => Err("bad origin: expected to be a signed origin"),
 	}
 }
 
 /// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::Root) => Ok(()),
+		Ok(RawOrigin::Root) => Ok(()),
 		_ => Err("bad origin: expected to be a root origin"),
 	}
 }
 
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	where OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>
 {
 	match o.into() {
-		Some(RawOrigin::None) => Ok(()),
+		Ok(RawOrigin::None) => Ok(()),
 		_ => Err("bad origin: expected to be no origin"),
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event into this block's event record adding this event
+	/// to the corresponding topic indexes.
+	///
+	/// This will update storage entries that correspond to the specified topics.
+	/// It is expected that light-clients could subscribe to this topics.
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let event = EventRecord {
+			phase,
+			event,
+			topics: topics.iter().cloned().collect::<Vec<_>>(),
+		};
+
+		// Index of the to be added event.
+		let event_idx = {
+			let old_event_count = <EventCount<T>>::get();
+			let new_event_count = match old_event_count.checked_add(1) {
+				// We've reached the maximum number of events at this block, just
+				// don't do anything and leave the event_count unaltered.
+				None => return,
+				Some(nc) => nc,
+			};
+			<EventCount<T>>::put(new_event_count);
+			old_event_count
+		};
+
+		// Appending can only fail if `Events<T>` can not be decoded or
+		// when we try to insert more than `u32::max_value()` events.
+		//
+		// We perform early return if we've reached the maximum capacity of the event list,
+		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
+		// (since the event list is cleared at the block initialization).
+		if <Events<T>>::append(&[event]).is_err() {
+			// The most sensible thing to do here is to just ignore this event and wait until the
+			// new block.
+			return;
+		}
+
+		let block_no = Self::block_number();
+		for topic in topics {
+			// The same applies here.
+			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
+				return;
+			}
+		}
+	}
+
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
@@ -388,16 +527,22 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicCount<T>>::get().unwrap_or_default()
 	}
 
-	/// Gets a total length of all executed extrinsics.
-	pub fn all_extrinsics_len() -> u32 {
-		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	/// Gets a total weight of all executed extrinsics.
+	pub fn all_extrinsics_weight() -> u32 {
+		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
+	pub fn initialize(
+		number: &T::BlockNumber,
+		parent_hash: &T::Hash,
+		txs_root: &T::Hash,
+		digest: &DigestOf<T>,
+	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
+		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
@@ -408,37 +553,44 @@ impl<T: Trait> Module<T> {
 			*index = (*index + 1) % 81;
 		});
 		<Events<T>>::kill();
+		<EventCount<T>>::kill();
+		<EventTopics<T>>::remove_prefix(&());
 	}
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsLen<T>>::kill();
+		<AllExtrinsicsWeight<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
+		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
-			let item = RawLog::ChangesTrieRoot(storage_changes_root);
-			let item = <T as Trait>::Log::from(item).into();
+			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
 			digest.push(item);
 		}
 
-		// <Events<T>> stays to be inspected by the client.
+		// The following fields
+		//
+		// - <Events<T>>
+		// - <EventCount<T>>
+		// - <EventTopics<T>>
+		//
+		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	pub fn deposit_log(item: <T::Digest as traits::Digest>::Item) {
+	pub fn deposit_log(item: DigestItemOf<T>) {
 		let mut l = <Digest<T>>::get();
-		traits::Digest::push(&mut l, item);
+		l.push(item);
 		<Digest<T>>::put(l);
 	}
 
@@ -474,38 +626,51 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a subject for the
-	/// random result and whose value will be independently low-influence random from any other such seeds.
+	/// In general you won't want to use this, but rather `Self::random` which
+	/// allows you to give a subject for the random result and whose value will
+	/// be independently low-influence random from any other such seeds.
 	pub fn random_seed() -> T::Hash {
 		Self::random(&[][..])
 	}
 
 	/// Get a low-influence "random" value.
 	///
-	/// Being a deterministic block chain, real randomness is difficult to come by. This gives you something that
-	/// approximates it. `subject` is a context identifier and allows you to get a different result to other callers
-	/// of this function; use it like `random(&b"my context"[..])`.
+	/// Being a deterministic block chain, real randomness is difficult to come
+	/// by. This gives you something that approximates it. `subject` is a
+	/// context identifier and allows you to get a different result to other
+	/// callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// This is initially implemented through a low-influence "triplet mix" convolution of previous block hash values.
-	/// In the future it will be generated from a secure "VRF".
+	/// This is initially implemented through a low-influence "triplet mix"
+	/// convolution of previous block hash values. In the future it will be
+	/// generated from a secure verifiable random function (VRF).
 	///
 	/// ### Security Notes
-	/// This randomness uses a low-influence function, drawing upon the block hashes from the previous 81 blocks. Its
-	/// result for any given subject will be known in advance by the block producer of this block (and, indeed, anyone
-	/// who knows the block's `parent_hash`). However, it is mostly impossible for the producer of this block *alone*
-	/// to influence the value of this hash. A sizable minority of dishonest and coordinating block producers would be
-	/// required in order to affect this value. If that is an insufficient security guarantee then two things can be
-	/// used to improve this randomness:
-	/// - Name, in advance, the block number whose random value will be used; ensure your module retains a buffer of
-	/// previous random values for its subject and then index into these in order to obviate the ability of your user
-	/// to look up the parent hash and choose when to transact based upon it.
-	/// - Require your user to first commit to an additional value by first posting its hash. Require them to reveal
-	/// the value to determine the final result, hashing it with the output of this random function. This reduces the
-	/// ability of a cabal of block producers from conspiring against individuals.
 	///
-	/// WARNING: Hashing the result of this function will remove any low-infleunce properties it has and mean that
-	/// all bits of the resulting value are entirely manipulatable by the author of the parent block, who can determine
-	/// the value of `parent_hash`.
+	/// This randomness uses a low-influence function, drawing upon the block
+	/// hashes from the previous 81 blocks. Its result for any given subject
+	/// will be known in advance by the block producer of this block (and,
+	/// indeed, anyone who knows the block's `parent_hash`). However, it is
+	/// mostly impossible for the producer of this block *alone* to influence
+	/// the value of this hash. A sizable minority of dishonest and coordinating
+	/// block producers would be required in order to affect this value. If that
+	/// is an insufficient security guarantee then two things can be used to
+	/// improve this randomness:
+	///
+	/// - Name, in advance, the block number whose random value will be used;
+	///   ensure your module retains a buffer of previous random values for its
+	///   subject and then index into these in order to obviate the ability of
+	///   your user to look up the parent hash and choose when to transact based
+	///   upon it.
+	/// - Require your user to first commit to an additional value by first
+	///   posting its hash. Require them to reveal the value to determine the
+	///   final result, hashing it with the output of this random function. This
+	///   reduces the ability of a cabal of block producers from conspiring
+	///   against individuals.
+	///
+	/// WARNING: Hashing the result of this function will remove any
+	/// low-influnce properties it has and mean that all bits of the resulting
+	/// value are entirely manipulatable by the author of the parent block, who
+	/// can determine the value of `parent_hash`.
 	pub fn random(subject: &[u8]) -> T::Hash {
 		let (index, hash_series) = <RandomMaterial<T>>::get();
 		if hash_series.len() > 0 {
@@ -527,8 +692,9 @@ impl<T: Trait> Module<T> {
 		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
 
-	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
-	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	/// Note what the extrinsic data of the current extrinsic index is. If this
+	/// is called, then ensure `derive_extrinsics` is also called before
+	/// block-building is completed.
 	///
 	/// NOTE: This function is called only when the block is being constructed locally.
 	/// `execute_block` doesn't note any extrinsics.
@@ -544,10 +710,10 @@ impl<T: Trait> Module<T> {
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsLen<T>>::put(&total_length);
+		<AllExtrinsicsWeight<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -602,7 +768,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::testing::Header;
 	use srml_support::impl_outer_origin;
 
 	impl_outer_origin!{
@@ -617,12 +783,10 @@ mod tests {
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
-		type Log = DigestItem;
 	}
 
 	impl From<Event> for u16 {
@@ -641,18 +805,31 @@ mod tests {
 	}
 
 	#[test]
+	fn origin_works() {
+		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
+		let x: Result<RawOrigin<u64>, Origin> = o.into();
+		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+	}
+
+	#[test]
 	fn deposit_event_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: vec![],
+					}
+				]
 			);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0);
 			System::note_applied_extrinsic(&Err(""), 0);
@@ -660,11 +837,71 @@ mod tests {
 			System::deposit_event(3u16);
 			System::finalize();
 			assert_eq!(System::events(), vec![
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16 },
-				EventRecord { phase: Phase::Finalization, event: 3u16 }
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
+				EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
 			]);
+		});
+	}
+
+	#[test]
+	fn deposit_event_topics() {
+		with_externalities(&mut new_test_ext(), || {
+			const BLOCK_NUMBER: u64 = 1;
+
+			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::note_finished_extrinsics();
+
+			let topics = vec![
+				H256::repeat_byte(1),
+				H256::repeat_byte(2),
+				H256::repeat_byte(3),
+			];
+
+			// We deposit a few events with different sets of topics.
+			System::deposit_event_indexed(&topics[0..3], 1u16);
+			System::deposit_event_indexed(&topics[0..1], 2u16);
+			System::deposit_event_indexed(&topics[1..2], 3u16);
+
+			System::finalize();
+
+			// Check that topics are reflected in the event record.
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: topics[0..3].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 2u16,
+						topics: topics[0..1].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 3u16,
+						topics: topics[1..2].to_vec(),
+					}
+				]
+			);
+
+			// Check that the topic-events mapping reflects the deposited topics.
+			// Note that these are indexes of the events.
+			assert_eq!(
+				System::event_topics(&(), &topics[0]),
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[1]),
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[2]),
+				vec![(BLOCK_NUMBER, 0)],
+			);
 		});
 	}
 }
