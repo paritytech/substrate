@@ -237,12 +237,12 @@ where
 	}
 }
 
-/// These implementation will never panic and will always return a _per_thing_ which is in the range
+/// These implementation will never panic and will always return a _per-thing_ which is in the range
 /// `[0, 1] (inclusive)`.
 impl Saturating for Permill {
 	fn saturating_add(self, rhs: Self) -> Self {
 		// defensive inner saturation:
-		// both u32 values are below a billion. sum won't overflow for u32.
+		// both u32 values are below a million. sum won't overflow in u32.
 		Self::from_parts((self.0 + rhs.0).min(1_000_000))
 	}
 
@@ -257,6 +257,8 @@ impl Saturating for Permill {
 
 }
 
+/// Standard add operation.
+///
 /// Panics if the result is more than a million parts.
 impl ops::Add for Permill {
 	type Output = Self;
@@ -270,6 +272,8 @@ impl ops::Add for Permill {
 	}
 }
 
+/// Standard subtraction operation.
+///
 /// Panics if `self` is smaller than `rhs`.
 impl ops::Sub for Permill {
 	type Output = Self;
@@ -422,7 +426,7 @@ where
 	}
 }
 
-/// These implementation will never panic and will always return a _per_thing_ which is in the range
+/// These implementation will never panic and will always return a _per-thing_ which is in the range
 /// `[0, 1] (inclusive)`.
 impl Saturating for Perbill {
 	fn saturating_add(self, rhs: Self) -> Self {
@@ -442,6 +446,8 @@ impl Saturating for Perbill {
 
 }
 
+/// Standard add operation.
+///
 /// Panics if the result is more than a billion parts.
 impl ops::Add for Perbill {
 	type Output = Self;
@@ -455,6 +461,8 @@ impl ops::Add for Perbill {
 	}
 }
 
+/// Standard subtraction operation.
+///
 /// Panics if `self` is smaller than `rhs`.
 impl ops::Sub for Perbill {
 	type Output = Self;
@@ -531,7 +539,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 
 /// Representation of a sign bit.
 ///
-/// Note that the ordering matters for proper ordering.
+/// Note that the ordering matters for proper `Ord` derive.
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum Sign {
@@ -541,14 +549,11 @@ pub enum Sign {
 	P,
 }
 
-/// A fixed point number in the range of `[-(u64::max+1), u64::max]`.
+/// A fixed point number in the range of `[-(u64::max+1), u64::max+1]`. Composed of one `u64`
+///  _natural_ part and a `Perbill` _decimal_ part.
 ///
-/// Composed of one `u64` _natural_ part and a `Perbill` _decimal_ part.
-///
-/// It only supports addition and subtraction (through `a - n = a + (-b)`).
-///
-/// Note that a positive instance is always greater than
-/// a negative instance, even if both have `0` as their natural and decimal part.
+/// Note that a positive instance is always greater than a negative instance, even if both have `0`
+///  as their natural and decimal part.
 ///
 /// Note that internal Perbill supports an inclusive range of of [0, 1], hence the number actually
 /// be `n` + `perbill::one()`, which is technically `n + 1`.
@@ -584,6 +589,19 @@ impl Fixed64 {
 	fn from_perbill(decimal: Perbill) -> Self {
 		Self { decimal, ..Default::default() }
 	}
+}
+
+impl ops::Neg for Fixed64 {
+	type Output = Self;
+
+    fn neg(self) -> Self::Output {
+		let mut r = self;
+        match r.sign {
+            Sign::P => r.sign = Sign::N,
+            Sign::N => r.sign = Sign::P,
+        };
+		r
+    }
 }
 
 impl ops::Add for Fixed64 {
@@ -623,6 +641,14 @@ impl ops::Add for Fixed64 {
 				rhs + self
 			}
 		}
+	}
+}
+
+impl ops::Sub for Fixed64 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self {
+		self + -rhs
 	}
 }
 
@@ -1223,6 +1249,26 @@ mod tests {
 
 		// except for this guy.
 		assert_eq!(n(1, 40) + p(1, 40), n(0, 0));
-
 	}
+
+	#[test]
+	fn fixed64_can_sub() {
+		// different sign
+		assert_eq!(p(1, 40) - p(0, 20), p(1, 20));
+		assert_eq!(p(1, 40) - p(0, 40), p(1, 0));
+		assert_eq!(p(1, 40) - p(0, 70), p(0, 70));
+		assert_eq!(p(1, 40) - p(1, 40), p(0, 0));
+		assert_eq!(p(1, 40) - p(1, 70), n(0, 30));
+		assert_eq!(p(1, 40) - p(2, 40), n(1, 0));
+		assert_eq!(p(1, 40) - p(2, 60), n(1, 20));
+
+		// not symmetric
+		assert_eq!(n(0, 20) - n(1, 40), p(1, 20));
+		assert_eq!(n(0, 40) - n(1, 40), p(1, 0));
+		assert_eq!(n(0, 70) - n(1, 40), p(0, 70));
+		assert_eq!(n(1, 70) - n(1, 40), n(0, 30));
+		assert_eq!(n(2, 40) - n(1, 40), n(1, 0));
+		assert_eq!(n(2, 60) - n(1, 40), n(1, 20));
+	}
+
 }
