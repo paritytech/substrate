@@ -17,7 +17,7 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo,
 	Trait, prefixed_trie_id, AliveContractInfo};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
-	SaturatedConversion};
+	SaturatedConversion, Hash as HashT};
 use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::{storage::child, StorageMap};
 
@@ -101,11 +101,10 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
 		let p_key = prefixed_trie_id(&contract.trie_id);
-		let child_trie = child::fetch_or_new(
-			p_key.as_ref(),
-			&current_block_number,
-		);
-		runtime_io::kill_child_storage(&child_trie);
+
+		if let Some(child_trie) = child::child_trie(p_key.as_ref()) {
+			runtime_io::kill_child_storage(&child_trie);
+		}
 		return (RentOutcome::Evicted, None);
 	}
 
@@ -150,21 +149,25 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// threshold, so it leaves a tombstone.
 
 		let p_key = prefixed_trie_id(&contract.trie_id);
-		let child_trie = child::fetch_or_new(
-			p_key.as_ref(),
-			&current_block_number,
-		);
-
-		// Note: this operation is heavy.
-		let child_storage_root = runtime_io::child_storage_root(&child_trie);
-
+		let (o_ct, child_storage_root) = if let Some(child_trie) = child::child_trie(p_key.as_ref()) {
+			// Note: this operation is heavy.
+			let child_storage_root = runtime_io::child_storage_root(&child_trie);
+			(Some(child_trie), child_storage_root)
+		} else {
+			// Note that this will fail as soon as we support multiple type
+			// of hashing for child trie.
+			let child_storage_root =
+				<<T as system::Trait>::Hashing as HashT>::enumerated_trie_root(&[]);
+			let child_storage_root_ref: &[u8] = child_storage_root.as_ref();
+			(None, child_storage_root_ref.to_vec())
+		};
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			&child_storage_root[..],
 			contract.code_hash,
 		);
 		let tombstone_info = ContractInfo::Tombstone(tombstone);
 		<ContractInfoOf<T>>::insert(account, &tombstone_info);
-		runtime_io::kill_child_storage(&child_trie);
+		o_ct.map(|child_trie| runtime_io::kill_child_storage(&child_trie));
 
 		return (RentOutcome::Evicted, Some(tombstone_info));
 	}

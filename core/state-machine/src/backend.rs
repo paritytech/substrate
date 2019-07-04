@@ -407,7 +407,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 		let is_default = root == default_child_trie_root::<H>();
 
-		(root, is_default, full_transaction)
+		(root, is_default && child_trie.extension().is_empty(), full_transaction)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

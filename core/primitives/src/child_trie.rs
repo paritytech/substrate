@@ -216,6 +216,7 @@ impl ChildTrie {
 	pub fn parent_key_slice(p: &ParentTrie) -> &[u8] {
 		&p[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
+
 	/// Method for fetching or initiating a new child trie.
 	///
 	/// Note that call back could do nothing, which will allow unspecified behavior,
@@ -297,6 +298,11 @@ impl ChildTrie {
 	pub fn keyspace(&self) -> &KeySpace {
 		&self.keyspace
 	}
+	/// Getter function for extension content of child trie.
+	pub fn extension(&self) -> &[u8] {
+		&self.extension[..]
+	}
+
 	/// Encoder for the child trie, with a new root value.
 	/// The child trie current root value is not updated (if
 	/// content is commited the child trie will need to be fetch
