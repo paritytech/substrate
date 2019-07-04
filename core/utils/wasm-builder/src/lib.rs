@@ -78,7 +78,7 @@
 //! - wasm-gc
 //!
 
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{env, fs, path::PathBuf, process::{Command, Stdio}};
 
 mod prerequisites;
 mod wasm_project;
@@ -156,8 +156,12 @@ fn create_out_file(file_name: &str, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> Command {
-	if Command::new("rustup").args(&["run", "nightly", "cargo"])
-		.status().map(|s| s.success()).unwrap_or(false)
+	if Command::new("rustup")
+		.args(&["run", "nightly", "cargo"])
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.status()
+		.map(|s| s.success()).unwrap_or(false)
 	{
 		let mut cmd = Command::new("rustup");
 		cmd.args(&["run", "nightly", "cargo"]);
