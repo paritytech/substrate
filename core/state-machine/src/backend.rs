@@ -27,15 +27,18 @@ use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,	KeySpacedDBMut};
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 
+#[derive(Default, Clone, PartialEq)]
 // see FIXME #2740 related to performance.
 /// Type alias over a in memory change cache, with support for child trie.
 /// This need to allow efficient access to value based on keys.
 /// First field is top map, second field is existing child trie map,
 /// third field is to be created child trie map.
-pub type MapTransaction = (
-	(HashMap<Vec<u8>, Vec<u8>>),
-	HashMap<KeySpace, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
-);
+pub struct MapTransaction {
+	/// Key value for top trie.
+	pub top: HashMap<Vec<u8>, Vec<u8>>,
+	/// Key value and child trie update (stored by `KeySpace`).
+	pub children: HashMap<KeySpace, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
+}
 
 // see FIXME #2740 related to performance.
 /// Type alias over a list of memory change cache, with support for child trie.
@@ -258,7 +261,7 @@ impl<H: Hasher> InMemory<H> {
 
 		for (child_trie, key, val) in changes {
 			if let Some(child_trie) = child_trie {
-				let mut entry = inner.1.entry(child_trie.keyspace().clone())
+				let mut entry = inner.children.entry(child_trie.keyspace().clone())
 						.or_insert_with(|| (Default::default(), child_trie.clone()));
 				match val {
 					Some(v) => {
@@ -272,8 +275,8 @@ impl<H: Hasher> InMemory<H> {
 				}
 			} else {
 				match val {
-					Some(v) => { let _ = inner.0.insert(key, v); },
-					None => { let _ = inner.0.remove(&key); },
+					Some(v) => { let _ = inner.top.insert(key, v); },
+					None => { let _ = inner.top.remove(&key); },
 				}
 			}
 
@@ -297,7 +300,7 @@ impl<H: Hasher> From<MapTransaction> for InMemory<H> {
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: (inner, Default::default()),
+			inner: MapTransaction { top: inner, children: Default::default() },
 			trie: None,
 			_hasher: PhantomData,
 		}
@@ -310,12 +313,12 @@ impl<H: Hasher> From<VecTransaction> for InMemory<H> {
 		for (child_key, key, value) in inner {
 			if let Some(value) = value {
 				if let Some(child_trie) = child_key {
-					let mut entry = expanded.1.entry(child_trie.keyspace().clone())
+					let mut entry = expanded.children.entry(child_trie.keyspace().clone())
 							.or_insert_with(|| (Default::default(), child_trie.clone()));
 					entry.0.insert(key, value);
 					entry.1 = child_trie;
 				} else {
-					expanded.0.insert(key, value);
+					expanded.top.insert(key, value);
 				}
 			}
 		}
@@ -329,7 +332,7 @@ impl super::Error for Void {}
 impl<H: Hasher> InMemory<H> {
 	/// Child trie in memory content iterator.
 	pub fn child_storage_child_trie(&self) -> impl Iterator<Item=&ChildTrie> {
-		self.inner.1.iter().map(|item| &(item.1).1)
+		self.inner.children.iter().map(|item| &(item.1).1)
 	}
 }
 
@@ -339,11 +342,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.0.get(key).map(Clone::clone))
+		Ok(self.inner.top.get(key).map(Clone::clone))
 	}
 
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.1.get(child_trie.keyspace()).and_then(|map| map.0.get(key).map(Clone::clone)))
+		Ok(self.inner.children.get(child_trie.keyspace()).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -351,11 +354,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.inner.0.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
+		self.inner.top.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, mut f: F) {
-		self.inner.1.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
+		self.inner.children.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -363,7 +366,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.0.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
+		let existing_pairs = self.inner.top.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let map_input = existing_pairs.chain(transaction.iter().cloned())
@@ -388,7 +391,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// all content is clone with this method, avoiding it would require changing
 		// the prototype (having a function for calculating root on reference and
 		// one for getting transaction while dropping value.
-		let existing_pairs = self.inner.1.get(
+		let existing_pairs = self.inner.children.get(
 			child_trie.keyspace()
 		).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 		let root = child_trie_root::<H, _, _, _>(
@@ -408,11 +411,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.0.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+		self.inner.top.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.0.keys().filter(|k| k.starts_with(prefix)).cloned().collect()
+		self.inner.top.keys().filter(|k| k.starts_with(prefix)).cloned().collect()
 	}
 
 	fn as_trie_backend(&mut self)-> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
@@ -420,7 +423,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// the memorydb gets incorectly use to fead keyvalue database.
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();
-		let (root_map, child_map) = std::mem::replace(&mut self.inner, Default::default());
+		let MapTransaction { top: root_map, children: child_map } =
+			std::mem::replace(&mut self.inner, Default::default());
 
 		for (_k, (map, child_trie)) in child_map.into_iter() {
 			let ch = insert_into_memory_db::<H, _>(
