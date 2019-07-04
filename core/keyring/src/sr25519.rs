@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, H256};
+use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use substrate_primitives::sr25519;
 
 /// Set of test accounts.
@@ -68,7 +68,7 @@ impl Keyring {
 	}
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
-		Public::from(self).into_raw_vec()
+		Public::from(self).to_raw_vec()
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {

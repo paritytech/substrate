@@ -38,7 +38,7 @@ use futures::prelude::*;
 use keystore::Store as Keystore;
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
-use primitives::Pair;
+use primitives::{Pair, Public, crypto::TypedKey, ed25519};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -182,13 +182,13 @@ impl<Components: components::Components> Service<Components> {
 		// FIXME #1063 remove this
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
-				keystore.generate_from_seed(seed)?;
+				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
 			}
 
-			public_key = match keystore.contents()?.get(0) {
+			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
 				Some(public_key) => public_key.to_string(),
 				None => {
-					let key = keystore.generate(&config.password)?;
+					let key: ed25519::Pair = keystore.generate(&config.password)?;
 					let public_key = key.public();
 					info!("Generated a new keypair: {:?}", public_key);
 					public_key.to_string()
@@ -542,11 +542,15 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+	pub fn authority_key<TPair>(&self) -> Option<TPair>
+	where
+		TPair: Pair + TypedKey,
+		<TPair as Pair>::Public: Public + TypedKey,
+	{
 		if self.config.roles != Roles::AUTHORITY { return None }
 		if let Some(keystore) = &self.keystore {
-			if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-					.map(|k| keystore.load(k, &self.config.password)))
+			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
+					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
 			{
 				Some(key)
 			} else {
@@ -856,7 +860,6 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
 /// # use client::{self, LongestChain};
-/// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
@@ -903,7 +906,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 			{ |config| <FullComponents<Factory>>::new(config) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, key: Option<Arc<ed25519::Pair>>| {
+/// 			|service: Self::FullService| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
@@ -1029,8 +1032,7 @@ macro_rules! construct_service_factory {
 			) -> Result<Self::FullService, $crate::Error>
 			{
 				( $( $full_service_init )* ) (config).and_then(|service| {
-					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, key)
+					($( $authority_setup )*)(service)
 				})
 			}
 		}
