@@ -2326,7 +2326,7 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.0",
+ "substrate-wasm-builder-runner 1.0.1",
 ]
 
 [[package]]
@@ -4610,7 +4610,7 @@ dependencies = [
  "sr-sandbox 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.0",
+ "substrate-wasm-builder-runner 1.0.1",
 ]
 
 [[package]]
@@ -4766,7 +4766,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
- "substrate-wasm-builder-runner 1.0.0",
+ "substrate-wasm-builder-runner 1.0.1",
  "trie-db 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4834,7 +4834,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cargo_metadata 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4847,11 +4847,11 @@ dependencies = [
 [[package]]
 name = "substrate-wasm-builder-runner"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "1.0.1"
 
 [[package]]
 name = "subtle"

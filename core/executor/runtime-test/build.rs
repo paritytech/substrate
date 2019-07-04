@@ -21,7 +21,7 @@ fn main() {
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../../utils/wasm-builder",
-			version: "1.0.1"
+			version: "1.0.2",
 		},
 	);
 }
