@@ -27,28 +27,28 @@ mod fraction;
 pub use fraction::Fraction;
 
 /// Report rolling data misconduct and apply slash accordingly
+// Pre-condition: the actual implementor of `OnSlashing` has access to
+// `session_index` and `number of validators`
 pub fn rolling_data<OS: OnSlashing<M>, M: Misconduct>(
 	who: &[M::AccountId],
-	exposure: u64,
 	misconduct: &mut M
 ) -> u8 {
-	let seve = misconduct.on_misconduct(who, exposure);
-	OS::slash(who, exposure, seve);
+	let seve = misconduct.on_misconduct(who);
+	OS::slash(who, seve);
 	misconduct.as_misconduct_level(seve)
 }
 
 /// Report era misconduct but do not perform any slashing
-pub fn era_data<OS: OnSlashing<M>, M: Misconduct>(who: &[M::AccountId], exposure: u64, misconduct: &mut M) {
-	let seve = misconduct.on_misconduct(who, exposure);
-	OS::slash(who, exposure, seve);
+pub fn era_data<OS: OnSlashing<M>, M: Misconduct>(who: &[M::AccountId], misconduct: &mut M) {
+	let seve = misconduct.on_misconduct(who);
+	OS::slash(who, seve);
 }
 
 /// Slash in the end of era
 pub fn end_of_era<OS: OnSlashing<E>, E: OnEndEra>(end_of_era: &E) -> u8 {
 	let seve = end_of_era.severity();
 	let misbehaved = end_of_era.misbehaved();
-	// TODO(niklasad1): what to do with exposure here?!
-	OS::slash(&misbehaved, 0, seve);
+	OS::slash(&misbehaved, seve);
 	end_of_era.as_misconduct_level(seve)
 }
 
@@ -58,7 +58,7 @@ pub trait Misconduct: system::Trait {
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
 	/// Report misconduct and estimates the current severity level
-	fn on_misconduct(&mut self, who: &[Self::AccountId], exposure: u64) -> Fraction<Self::Severity>;
+	fn on_misconduct(&mut self, who: &[Self::AccountId]) -> Fraction<Self::Severity>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
@@ -77,7 +77,7 @@ pub trait OnEndEra: Misconduct {
 // In practice this is likely to be the `Staking module`
 pub trait OnSlashing<M: Misconduct> {
 	/// Slash
-	fn slash(who: &[M::AccountId], exposure: u64, severity: Fraction<M::Severity>);
+	fn slash(who: &[M::AccountId], severity: Fraction<M::Severity>);
 }
 
 #[cfg(test)]
@@ -192,7 +192,7 @@ mod test {
 			1
 		}
 
-		fn on_misconduct(&mut self, _misbehaved: &[Self::AccountId], _exposure: u64) -> Fraction<Self::Severity> {
+		fn on_misconduct(&mut self, _misbehaved: &[Self::AccountId]) -> Fraction<Self::Severity> {
 			Fraction::zero()
 		}
 	}
@@ -200,7 +200,7 @@ mod test {
 	pub struct StakingSlasher<T>(PhantomData<T>);
 
 	impl<T: srml_staking::Trait + Misconduct> OnSlashing<T> for StakingSlasher<T> {
-		fn slash(to_punish: &[T::AccountId], _exposure: u64, severity: Fraction<T::Severity>) {
+		fn slash(to_punish: &[T::AccountId], severity: Fraction<T::Severity>) {
 
 			type BalanceOf<T> = <<T as srml_staking::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 			type ExtendedBalance = u128;
@@ -213,7 +213,7 @@ mod test {
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
 			for who in to_punish {
-				// WARN: exposure need to be taken in to account here which isn't here
+				// WARN: exposure need to be taken in to account here which isn't
 				let balance = to_u128(T::Currency::free_balance(who));
 				// (balance * denominator) / numerator
 				let d = balance.saturating_mul(severity.denominator().into());
@@ -231,9 +231,8 @@ mod test {
 	fn it_works() {
 		let mut misconduct = Test;
 		let misbehaved = [0_u64, 1, 2];
-		let exposure = 0;
 
-		era_data::<StakingSlasher<Test>, Test>(&misbehaved, exposure, &mut misconduct);
-		let _misconduct_level = rolling_data::<StakingSlasher<Test>, Test>(&misbehaved, exposure, &mut misconduct);
+		era_data::<StakingSlasher<Test>, Test>(&misbehaved, &mut misconduct);
+		let _misconduct_level = rolling_data::<StakingSlasher<Test>, Test>(&misbehaved, &mut misconduct);
 	}
 }
