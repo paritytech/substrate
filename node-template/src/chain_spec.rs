@@ -93,7 +93,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		system: Some(SystemConfig {
 			code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm").to_vec(),
 			changes_trie_config: Default::default(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
@@ -105,11 +104,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 			ids: endowed_accounts.clone(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			existential_deposit: 500,
-			transfer_fee: 0,
-			creation_fee: 0,
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
 		}),

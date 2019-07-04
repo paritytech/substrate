@@ -18,11 +18,13 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use crate::rstd::result;
+use crate::rstd::{result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
+use substrate_primitives::u32_trait::Value as U32;
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic
+	MaybeSerializeDebug, SimpleArithmetic, Saturating
 };
+use crate::runtime_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
@@ -100,6 +102,28 @@ pub trait MakePayment<AccountId> {
 
 impl<T> MakePayment<T> for () {
 	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+}
+
+/// A trait for finding the author of a block header based on the `PreRuntime` digests contained
+/// within it.
+pub trait FindAuthor<Author> {
+	/// Find the author of a block based on the pre-runtime digests.
+	fn find_author<'a, I>(digests: I) -> Option<Author>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>;
+}
+
+impl<A> FindAuthor<A> for () {
+	fn find_author<'a, I>(_: I) -> Option<A>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		None
+	}
+}
+
+/// A trait for verifying the seal of a header and returning the author.
+pub trait VerifySeal<Header, Author> {
+	/// Verify a header and return the author, if any.
+	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 
 /// Handler for when some currency "account" decreased in balance for
@@ -255,6 +279,34 @@ impl<
 	}
 }
 
+/// Split an unbalanced amount two ways between a common divisor.
+pub struct SplitTwoWays<
+	Balance,
+	Imbalance,
+	Part1,
+	Target1,
+	Part2,
+	Target2,
+>(PhantomData<(Balance, Imbalance, Part1, Target1, Part2, Target2)>);
+
+impl<
+	Balance: From<u32> + Saturating + Div<Output=Balance>,
+	I: Imbalance<Balance>,
+	Part1: U32,
+	Target1: OnUnbalanced<I>,
+	Part2: U32,
+	Target2: OnUnbalanced<I>,
+> OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
+{
+	fn on_unbalanced(amount: I) {
+		let total: u32 = Part1::VALUE + Part2::VALUE;
+		let amount1 = amount.peek().saturating_mul(Part1::VALUE.into()) / total.into();
+		let (imb1, imb2) = amount.split(amount1);
+		Target1::on_unbalanced(imb1);
+		Target2::on_unbalanced(imb2);
+	}
+}
+
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
@@ -283,6 +335,21 @@ pub trait Currency<AccountId> {
 	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
 	/// `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
+
+	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
+	/// typically be used to reduce an account by the same amount with e.g. `settle`.
+	///
+	/// This is infallible, but doesn't guarantee that the entire `amount` is burnt, for example
+	/// in the case of underflow.
+	fn burn(amount: Self::Balance) -> Self::PositiveImbalance;
+
+	/// Increase the total issuance by `amount` and return the according imbalance. The imbalance
+	/// will typically be used to increase an account by the same amount with e.g.
+	/// `resolve_into_existing` or `resolve_creating`.
+	///
+	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
+	/// in the case of overflow.
+	fn issue(amount: Self::Balance) -> Self::NegativeImbalance;
 
 	/// The 'free' balance of a given account.
 	///
@@ -340,17 +407,18 @@ pub trait Currency<AccountId> {
 		value: Self::Balance
 	) -> result::Result<Self::PositiveImbalance, &'static str>;
 
-	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is `KeepAlive`,
-	/// then no less than `ExistentialDeposit` must be left remaining.
-	///
-	/// This checks any locks, vesting, and liquidity requirements. If the removal is not possible, then it
-	/// returns `Err`.
-	fn withdraw(
+	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
+	/// success.
+	fn resolve_into_existing(
 		who: &AccountId,
-		value: Self::Balance,
-		reason: WithdrawReason,
-		liveness: ExistenceRequirement,
-	) -> result::Result<Self::NegativeImbalance, &'static str>;
+		value: Self::NegativeImbalance,
+	) -> result::Result<(), Self::NegativeImbalance> {
+		let v = value.peek();
+		match Self::deposit_into_existing(who, v) {
+			Ok(opposite) => Ok(drop(value.offset(opposite))),
+			_ => Err(value),
+		}
+	}
 
 	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
 	///
@@ -359,6 +427,45 @@ pub trait Currency<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance;
+
+	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
+	/// success.
+	fn resolve_creating(
+		who: &AccountId,
+		value: Self::NegativeImbalance,
+	) {
+		let v = value.peek();
+		drop(value.offset(Self::deposit_creating(who, v)));
+	}
+
+	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is
+	/// `KeepAlive`, then no less than `ExistentialDeposit` must be left remaining.
+	///
+	/// This checks any locks, vesting, and liquidity requirements. If the removal is not possible,
+	/// then it returns `Err`.
+	///
+	/// If the operation is successful, this will return `Ok` with a `NegativeImbalance` whose value
+	/// is `value`.
+	fn withdraw(
+		who: &AccountId,
+		value: Self::Balance,
+		reason: WithdrawReason,
+		liveness: ExistenceRequirement,
+	) -> result::Result<Self::NegativeImbalance, &'static str>;
+
+	/// Similar to withdraw, only accepts a `PositiveImbalance` and returns nothing on success.
+	fn settle(
+		who: &AccountId,
+		value: Self::PositiveImbalance,
+		reason: WithdrawReason,
+		liveness: ExistenceRequirement,
+	) -> result::Result<(), Self::PositiveImbalance> {
+		let v = value.peek();
+		match Self::withdraw(who, v, reason, liveness) {
+			Ok(opposite) => Ok(drop(value.offset(opposite))),
+			_ => Err(value),
+		}
+	}
 
 	/// Ensure an account's free balance equals some value; this will create the account
 	/// if needed.

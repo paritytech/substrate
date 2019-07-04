@@ -23,8 +23,8 @@ use srml_support::{
 	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
-		Currency, ReservableCurrency, OnUnbalanced, LockIdentifier,
-		LockableCurrency, WithdrawReasons, WithdrawReason, ExistenceRequirement
+		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons,
 	}
 };
 use democracy;
@@ -131,6 +131,15 @@ type ApprovalFlag = u32;
 pub const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
 pub const APPROVAL_FLAG_LEN: usize = 32;
 
+pub const DEFAULT_CANDIDACY_BOND: u32 = 9;
+pub const DEFAULT_VOTING_BOND: u32 = 0;
+pub const DEFAULT_VOTING_FEE: u32 = 0;
+pub const DEFAULT_PRESENT_SLASH_PER_VOTER: u32 = 1;
+pub const DEFAULT_CARRY_COUNT: u32 = 2;
+pub const DEFAULT_INACTIVE_GRACE_PERIOD: u32 = 1;
+pub const DEFAULT_COUNCIL_VOTING_PERIOD: u32 = 1000;
+pub const DEFAULT_DECAY_RATIO: u32 = 24;
+
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
@@ -147,10 +156,80 @@ pub trait Trait: democracy::Trait {
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
 	/// What to do when the members change.
 	type OnMembersChanged: OnMembersChanged<Self::AccountId>;
+
+	/// How much should be locked up in order to submit one's candidacy. A reasonable
+	/// default value is 9.
+	type CandidacyBond: Get<BalanceOf<Self>>;
+
+	/// How much should be locked up in order to be able to submit votes.
+	type VotingBond: Get<BalanceOf<Self>>;
+
+	/// The amount of fee paid upon each vote submission, unless if they submit a
+	/// _hole_ index and replace it.
+	type VotingFee: Get<BalanceOf<Self>>;
+
+	/// The punishment, per voter, if you provide an invalid presentation. A
+	/// reasonable default value is 1.
+	type PresentSlashPerVoter: Get<BalanceOf<Self>>;
+
+	/// How many runners-up should have their approvals persist until the next
+	/// vote. A reasonable default value is 2.
+	type CarryCount: Get<u32>;
+
+	/// How many vote indices need to go by after a target voter's last vote before
+	/// they can be reaped if their approvals are moot. A reasonable default value
+	/// is 1.
+	type InactiveGracePeriod: Get<VoteIndex>;
+
+	/// How often (in blocks) to check for new votes. A reasonable default value
+	/// is 1000.
+	type CouncilVotingPeriod: Get<Self::BlockNumber>;
+
+	/// Decay factor of weight when being accumulated. It should typically be set to
+	/// __at least__ `council_size -1` to keep the council secure.
+	/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
+	/// increment step `t`. 0 will result in no weight being added at all (normal
+	/// approval voting). A reasonable default value is 24.
+	type DecayRatio: Get<u32>;
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// How much should be locked up in order to submit one's candidacy. A reasonable
+		/// default value is 9.
+		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
+
+		/// How much should be locked up in order to be able to submit votes.
+		const VotingBond: BalanceOf<T> = T::VotingBond::get();
+
+		/// The amount of fee paid upon each vote submission, unless if they submit a
+		/// _hole_ index and replace it.
+		const VotingFee: BalanceOf<T> = T::VotingFee::get();
+
+		/// The punishment, per voter, if you provide an invalid presentation. A
+		/// reasonable default value is 1.
+		const PresentSlashPerVoter: BalanceOf<T> = T::PresentSlashPerVoter::get();
+
+		/// How many runners-up should have their approvals persist until the next
+		/// vote. A reasonable default value is 2.
+		const CarryCount: u32 = T::CarryCount::get();
+
+		/// How many vote indices need to go by after a target voter's last vote before
+		/// they can be reaped if their approvals are moot. A reasonable default value
+		/// is 1.
+		const InactiveGracePeriod: VoteIndex = T::InactiveGracePeriod::get();
+
+		/// How often (in blocks) to check for new votes. A reasonable default value
+		/// is 1000.
+		const CouncilVotingPeriod: T::BlockNumber = T::CouncilVotingPeriod::get();
+
+		/// Decay factor of weight when being accumulated. It should typically be set to
+		/// __at least__ `council_size -1` to keep the council secure.
+		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
+		/// increment step `t`. 0 will result in no weight being added at all (normal
+		/// approval voting). A reasonable default value is 24.
+		const DecayRatio: u32 = T::DecayRatio::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -223,7 +302,7 @@ decl_module! {
 
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 			ensure!(
-				assumed_vote_index > last_active+ Self::inactivity_grace_period(),
+				assumed_vote_index > last_active + T::InactiveGracePeriod::get(),
 				"cannot reap during grace period"
 			);
 
@@ -259,10 +338,10 @@ decl_module! {
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
 				// Still, it's no more harmful to propagate any error at this point.
-				T::Currency::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
+				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
-				let imbalance = T::Currency::slash_reserved(&reporter, Self::voting_bond()).0;
+				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReaper::on_unbalanced(imbalance);
 				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 			}
@@ -288,7 +367,7 @@ decl_module! {
 			ensure!(voter == who, "retraction index mismatch");
 
 			Self::remove_voter(&who, index);
-			T::Currency::unreserve(&who, Self::voting_bond());
+			T::Currency::unreserve(&who, T::VotingBond::get());
 			T::Currency::remove_lock(COUNCIL_SEATS_ID, &who);
 		}
 
@@ -318,7 +397,7 @@ decl_module! {
 				"invalid candidate slot"
 			);
 			// NOTE: This must be last as it has side-effects.
-			T::Currency::reserve(&who, Self::candidacy_bond())
+			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| "candidate has not enough funds")?;
 
 			<RegisterInfoOf<T>>::insert(&who, (Self::vote_index(), slot as u32));
@@ -329,7 +408,7 @@ decl_module! {
 				candidates[slot] = who;
 			}
 			<Candidates<T>>::put(candidates);
-			<CandidateCount<T>>::put(count as u32 + 1);
+			CandidateCount::put(count as u32 + 1);
 		}
 
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
@@ -356,7 +435,7 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
-				Self::present_slash_per_voter()
+				T::PresentSlashPerVoter::get()
 				* BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
@@ -409,7 +488,7 @@ decl_module! {
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
 		fn set_desired_seats(#[compact] count: u32) {
-			<DesiredSeats<T>>::put(count);
+			DesiredSeats::put(count);
 		}
 
 		/// Remove a particular member from the council. This is effective immediately.
@@ -449,34 +528,13 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Council {
-
 		// ---- parameters
-		/// How much should be locked up in order to submit one's candidacy.
-		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = 9.into();
-		/// How much should be locked up in order to be able to submit votes.
-		pub VotingBond get(voting_bond) config(voter_bond): BalanceOf<T>;
-		/// The amount of fee paid upon each vote submission, unless if they submit a _hole_ index and replace it.
-		pub VotingFee get(voting_fee) config(voting_fee): BalanceOf<T>;
-		/// The punishment, per voter, if you provide an invalid presentation.
-		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = 1.into();
-		/// How many runners-up should have their approvals persist until the next vote.
-		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = 1000.into();
-		/// How many vote indices need to go by after a target voter's last vote before they can be reaped if their
-		/// approvals are moot.
-		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
-		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = 1000.into();
+		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber;
 		/// How long each position is active for.
-		pub TermDuration get(term_duration) config(): T::BlockNumber = 5.into();
+		pub TermDuration get(term_duration) config(): T::BlockNumber;
 		/// Number of accounts that should be sitting on the council.
 		pub DesiredSeats get(desired_seats) config(): u32;
-		/// Decay factor of weight when being accumulated. It should typically be set to
-		/// __at least__ `council_size -1` to keep the council secure.
-		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight increment step `t`.
-		/// 0 will result in no weight being added at all (normal approval voting).
-		pub DecayRatio get(decay_ratio) config(decay_ratio): u32 = 24;
 
 		// ---- permanent state (always relevant, changes only at the finalization of voting)
 		/// The current council. When there's a vote going on, this should still be used for executive
@@ -555,7 +613,7 @@ impl<T: Trait> Module<T> {
 
 	/// Determine the block that a vote can happen on which is no less than `n`.
 	pub fn next_vote_from(n: T::BlockNumber) -> T::BlockNumber {
-		let voting_period = Self::voting_period();
+		let voting_period = T::CouncilVotingPeriod::get();
 		(n + voting_period - One::one()) / voting_period * voting_period
 	}
 
@@ -592,7 +650,7 @@ impl<T: Trait> Module<T> {
 	// Private
 	/// Check there's nothing to do this block
 	fn end_block(block_number: T::BlockNumber) -> Result {
-		if (block_number % Self::voting_period()).is_zero() {
+		if (block_number % T::CouncilVotingPeriod::get()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
 					Self::start_tally();
@@ -613,7 +671,7 @@ impl<T: Trait> Module<T> {
 		let mut set = Self::voters(set_index);
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
-		<VoterCount<T>>::mutate(|c| *c = *c - 1);
+		VoterCount::mutate(|c| *c = *c - 1);
 		Self::remove_all_approvals_of(voter);
 		<VoterInfoOf<T>>::remove(voter);
 	}
@@ -650,7 +708,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// not yet a voter. Index _could be valid_. Fee might apply. Bond will be reserved O(1).
 			ensure!(
-				T::Currency::free_balance(&who) > Self::voting_bond(),
+				T::Currency::free_balance(&who) > T::VotingBond::get(),
 				"new voter must have sufficient funds to pay the bond"
 			);
 
@@ -669,21 +727,21 @@ impl<T: Trait> Module<T> {
 					if set.is_empty() {
 						let imbalance = T::Currency::withdraw(
 							&who,
-							Self::voting_fee(),
+							T::VotingFee::get(),
 							WithdrawReason::Fee,
 							ExistenceRequirement::KeepAlive,
 						)?;
 						T::BadVoterIndex::on_unbalanced(imbalance);
 						// NOTE: this is safe since the `withdraw()` will check this.
-						locked_balance -= Self::voting_fee();
+						locked_balance -= T::VotingFee::get();
 					}
 					Self::checked_push_voter(&mut set, who.clone(), next);
 					<Voters<T>>::insert(next, set);
 				}
 			}
 
-			T::Currency::reserve(&who, Self::voting_bond())?;
-			<VoterCount<T>>::mutate(|c| *c = *c + 1);
+			T::Currency::reserve(&who, T::VotingBond::get())?;
+			VoterCount::mutate(|c| *c = *c + 1);
 		}
 
 		T::Currency::set_lock(
@@ -720,7 +778,7 @@ impl<T: Trait> Module<T> {
 			<NextFinalize<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			// initialize leaderboard.
-			let leaderboard_size = empty_seats + Self::carry_count() as usize;
+			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
 			<Leaderboard<T>>::put(vec![(Zero::zero(), T::AccountId::default()); leaderboard_size]);
 
 			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
@@ -738,7 +796,7 @@ impl<T: Trait> Module<T> {
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
-		let candidacy_bond = Self::candidacy_bond();
+		let candidacy_bond = T::CandidacyBond::get();
 		let incoming: Vec<_> = leaderboard.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
@@ -802,8 +860,8 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
-		<CandidateCount<T>>::put(count);
-		<VoteCount<T>>::put(Self::vote_index() + 1);
+		CandidateCount::put(count);
+		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
 	}
 
@@ -815,7 +873,7 @@ impl<T: Trait> Module<T> {
 
 		set.push(Some(who));
 		if len + 1 == VOTER_SET_SIZE {
-			<NextVoterSet<T>>::put(index + 1);
+			NextVoterSet::put(index + 1);
 		}
 	}
 
@@ -994,7 +1052,7 @@ impl<T: Trait> Module<T> {
 	/// to a voter's stake value to get the correct weight. Indeed, zero is
 	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
-		let decay_ratio: BalanceOf<T> = Self::decay_ratio().into();
+		let decay_ratio: BalanceOf<T> = T::DecayRatio::get().into();
 		if t > 150 { return stake * decay_ratio }
 		let mut offset = stake;
 		let mut r = Zero::zero();
@@ -1033,7 +1091,7 @@ mod tests {
 	}
 
 	fn bond() -> u64 {
-		Council::voting_bond()
+		<Test as Trait>::VotingBond::get()
 	}
 
 
@@ -1090,16 +1148,16 @@ mod tests {
 			assert_eq!(Council::next_vote_from(4), 4);
 			assert_eq!(Council::next_vote_from(5), 8);
 			assert_eq!(Council::vote_index(), 0);
-			assert_eq!(Council::candidacy_bond(), 3);
-			assert_eq!(Council::voting_bond(), 0);
-			assert_eq!(Council::voting_fee(), 0);
-			assert_eq!(Council::present_slash_per_voter(), 1);
+			assert_eq!(<Test as Trait>::CandidacyBond::get(), 3);
+			assert_eq!(<Test as Trait>::VotingBond::get(), 0);
+			assert_eq!(<Test as Trait>::VotingFee::get(), 0);
+			assert_eq!(<Test as Trait>::PresentSlashPerVoter::get(), 1);
 			assert_eq!(Council::presentation_duration(), 2);
-			assert_eq!(Council::inactivity_grace_period(), 1);
-			assert_eq!(Council::voting_period(), 4);
+			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
+			assert_eq!(<Test as Trait>::CouncilVotingPeriod::get(), 4);
 			assert_eq!(Council::term_duration(), 5);
 			assert_eq!(Council::desired_seats(), 2);
-			assert_eq!(Council::carry_count(), 2);
+			assert_eq!(<Test as Trait>::CarryCount::get(), 2);
 
 			assert_eq!(Council::active_council(), vec![]);
 			assert_eq!(Council::next_tally(), Some(4));
@@ -1356,7 +1414,7 @@ mod tests {
 		let mut t = ExtBuilder::default().build();
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);
-			<CandidateCount<Test>>::put(1);
+			CandidateCount::put(1);
 			<RegisterInfoOf<Test>>::insert(1, (0, 2));
 		});
 		t
@@ -2269,8 +2327,8 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::vote_index(), 2);
-			assert_eq!(Council::inactivity_grace_period(), 1);
-			assert_eq!(Council::voting_period(), 4);
+			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
+			assert_eq!(<Test as Trait>::CouncilVotingPeriod::get(), 4);
 			assert_eq!(Council::voter_info(4), Some(VoterInfo { last_win: 1, last_active: 0, stake: 40, pot: 0 }));
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(4),

@@ -398,7 +398,8 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
-	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
+	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
+	use srml_support::traits::Currency;
 	use system;
 	use hex_literal::hex;
 
@@ -427,6 +428,13 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
@@ -435,6 +443,11 @@ mod tests {
 		type TransactionPayment = ();
 		type DustRemoval = ();
 		type TransferPayment = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
 	}
 
 	impl ValidateUnsigned for Runtime {
@@ -466,14 +479,9 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
-			transaction_base_fee: 10,
-			transaction_byte_fee: 0,
 			balances: vec![(1, 111)],
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
@@ -487,13 +495,13 @@ mod tests {
 				Digest::default(),
 			));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}
@@ -503,7 +511,7 @@ mod tests {
 		#[cfg(not(feature = "legacy-trie"))]
 		let state_root = hex!("ed9a2c7f4bbac160123b8bd60451392ca31eac9aa4235c4bc15ada002e118fc9").into();
 		#[cfg(feature = "legacy-trie")]
-		let state_root = hex!("5ba497e45e379d80a4524f9509d224e9c175d0fa30f3491481e7e44a6a758adf").into();
+		let state_root = hex!("d75c79776d69123b65e819977b70e102482e05fd7538c1dcae1249a248ba64e4").into();
 		with_externalities(&mut new_test_ext(), || {
 			Executive::execute_block(Block {
 				header: Header {

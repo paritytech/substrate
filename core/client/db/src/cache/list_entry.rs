@@ -27,10 +27,10 @@ use crate::cache::list_storage::{Storage};
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Entry<Block: BlockT, T> {
-	/// first block, when this value became actual
+	/// first block, when this value became actual.
 	pub valid_from: ComplexBlockId<Block>,
-	/// None means that we do not know the value starting from `valid_from` block
-	pub value: Option<T>,
+	/// Value stored at this entry.
+	pub value: T,
 }
 
 /// Internal representation of the single list-based cache entry. The entry points to the
@@ -38,21 +38,24 @@ pub struct Entry<Block: BlockT, T> {
 #[derive(Debug, Encode, Decode)]
 #[cfg_attr(test, derive(Clone, PartialEq))]
 pub struct StorageEntry<Block: BlockT, T: CacheItemT> {
-	/// None if valid from the beginning
+	/// None if valid from the beginning.
 	pub prev_valid_from: Option<ComplexBlockId<Block>>,
-	/// None means that we do not know the value starting from `valid_from` block
-	pub value: Option<T>,
+	/// Value stored at this entry.
+	pub value: T,
 }
 
 impl<Block: BlockT, T: CacheItemT> Entry<Block, T> {
 	/// Returns Some if the entry should be updated with the new value.
 	pub fn try_update(&self, value: Option<T>) -> Option<StorageEntry<Block, T>> {
-		match self.value == value {
-			true => None,
-			false => Some(StorageEntry {
-				prev_valid_from: Some(self.valid_from.clone()),
-				value,
-			}),
+		match value {
+			Some(value) => match self.value == value {
+				true => None,
+				false => Some(StorageEntry {
+					prev_valid_from: Some(self.valid_from.clone()),
+					value,
+				}),
+			},
+			None => None,
 		}
 	}
 
@@ -62,7 +65,7 @@ impl<Block: BlockT, T: CacheItemT> Entry<Block, T> {
 		storage: &S,
 		block: NumberFor<Block>,
 	) -> ClientResult<Option<(ComplexBlockId<Block>, Option<ComplexBlockId<Block>>)>> {
-		Ok(self.search_best_before(storage, block, false)?
+		Ok(self.search_best_before(storage, block)?
 			.map(|(entry, next)| (entry.valid_from, next)))
 	}
 
@@ -75,13 +78,12 @@ impl<Block: BlockT, T: CacheItemT> Entry<Block, T> {
 		&self,
 		storage: &S,
 		block: NumberFor<Block>,
-		require_value: bool,
 	) -> ClientResult<Option<(Entry<Block, T>, Option<ComplexBlockId<Block>>)>> {
 		// we're looking for the best value
 		let mut next = None;
 		let mut current = self.valid_from.clone();
 		if block >= self.valid_from.number {
-			let value = if require_value { self.value.clone() } else { None };
+			let value = self.value.clone();
 			return Ok(Some((Entry { valid_from: current, value }, next)));
 		}
 
@@ -119,47 +121,41 @@ mod tests {
 
 	#[test]
 	fn entry_try_update_works() {
-		// when trying to update with the same None value
-		assert_eq!(Entry::<_, u64> { valid_from: test_id(1), value: None }.try_update(None), None);
+		// when trying to update with None value
+		assert_eq!(Entry::<_, u64> { valid_from: test_id(1), value: 42 }.try_update(None), None);
 		// when trying to update with the same Some value
-		assert_eq!(Entry { valid_from: test_id(1), value: Some(1) }.try_update(Some(1)), None);
-		// when trying to update with different None value
-		assert_eq!(Entry { valid_from: test_id(1), value: Some(1) }.try_update(None),
-			Some(StorageEntry { prev_valid_from: Some(test_id(1)), value: None }));
+		assert_eq!(Entry { valid_from: test_id(1), value: 1 }.try_update(Some(1)), None);
 		// when trying to update with different Some value
-		assert_eq!(Entry { valid_from: test_id(1), value: Some(1) }.try_update(Some(2)),
-			Some(StorageEntry { prev_valid_from: Some(test_id(1)), value: Some(2) }));
+		assert_eq!(Entry { valid_from: test_id(1), value: 1 }.try_update(Some(2)),
+			Some(StorageEntry { prev_valid_from: Some(test_id(1)), value: 2 }));
 	}
 
 	#[test]
 	fn entry_search_best_before_fails() {
 		// when storage returns error
-		assert!(Entry::<_, u64> { valid_from: test_id(100), value: None }.search_best_before(&FaultyStorage, 50, false).is_err());
+		assert!(Entry::<_, u64> { valid_from: test_id(100), value: 42 }
+			.search_best_before(&FaultyStorage, 50).is_err());
 	}
 
 	#[test]
 	fn entry_search_best_before_works() {
-		// when block is better than our best block AND value is not required
-		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: Some(100) }
-			.search_best_before(&DummyStorage::new(), 150, false).unwrap(),
-		Some((Entry::<_, u64> { valid_from: test_id(100), value: None }, None)));
-		// when block is better than our best block AND value is required
-		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: Some(100) }
-			.search_best_before(&DummyStorage::new(), 150, true).unwrap(),
-		Some((Entry::<_, u64> { valid_from: test_id(100), value: Some(100) }, None)));
+		// when block is better than our best block
+		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: 100 }
+			.search_best_before(&DummyStorage::new(), 150).unwrap(),
+		Some((Entry::<_, u64> { valid_from: test_id(100), value: 100 }, None)));
 		// when block is found between two entries
-		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: Some(100) }
+		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: 100 }
 			.search_best_before(&DummyStorage::new()
-				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: Some(100) })
-				.with_entry(test_id(50), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(50) }),
-			75, false).unwrap(),
-		Some((Entry::<_, u64> { valid_from: test_id(50), value: Some(50) }, Some(test_id(100)))));
+				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: 100 })
+				.with_entry(test_id(50), StorageEntry { prev_valid_from: Some(test_id(30)), value: 50 }),
+			75).unwrap(),
+		Some((Entry::<_, u64> { valid_from: test_id(50), value: 50 }, Some(test_id(100)))));
 		// when block is not found
-		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: Some(100) }
+		assert_eq!(Entry::<_, u64> { valid_from: test_id(100), value: 100 }
 			.search_best_before(&DummyStorage::new()
-				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: Some(100) })
-				.with_entry(test_id(50), StorageEntry { prev_valid_from: None, value: Some(50) }),
-			30, true).unwrap(),
+				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: 100 })
+				.with_entry(test_id(50), StorageEntry { prev_valid_from: None, value: 50 }),
+			30).unwrap(),
 		None);
 	}
 }
