@@ -294,7 +294,6 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let three = AccountId::from_raw([3u8; 32]);
 		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
 			aura: Some(Default::default()),
 			system: Some(SystemConfig {
@@ -319,7 +318,6 @@ mod tests {
 				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
-				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
 					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
 					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
