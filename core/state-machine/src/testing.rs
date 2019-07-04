@@ -169,10 +169,9 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
 		// do check for backend
-		let ct = match self.child_trie(ct.parent_slice()) {
-			Some(ct_old) => if
-				ct_old.root_initial_value() != ct.root_initial_value()
-				&& !ct.is_new() {
+ 		let ct = match self.child_trie(ct.parent_slice()) {
+			Some(ct_old) => if ct_old.root_initial_value() != ct.root_initial_value() ||
+				ct_old.keyspace() != ct.keyspace() {
 				return false;
 			} else {
 				ct
