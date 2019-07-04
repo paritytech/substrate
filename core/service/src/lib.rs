@@ -426,40 +426,23 @@ impl<Components: components::Components> Service<Components> {
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
-		let system_info = rpc::apis::system::SystemInfo {
-			chain_name: config.chain_spec.name().into(),
-			impl_name: config.impl_name.into(),
-			impl_version: config.impl_version.into(),
-			properties: config.chain_spec.properties(),
-		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
-		let rpc = (
-			maybe_start_server(
-				config.rpc_http,
-				|address| rpc::start_http(address, config.rpc_cors.as_ref(), Components::RuntimeServices::start_rpc(
-					client.clone(),
-					system_rpc_tx.clone(),
-					system_info.clone(),
-					Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
-					transaction_pool.clone(),
-				)),
-			)?,
-			maybe_start_server(
-				config.rpc_ws,
-				|address| rpc::start_ws(
-					address,
-					config.rpc_ws_max_connections,
-					config.rpc_cors.as_ref(),
-					Components::RuntimeServices::start_rpc(
-						client.clone(),
-						system_rpc_tx.clone(),
-						system_info.clone(),
-						Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
-						transaction_pool.clone(),
-					),
-				),
-			)?.map(Mutex::new),
-		);
+		let gen_handler = || {
+			let system_info = rpc::apis::system::SystemInfo {
+				chain_name: config.chain_spec.name().into(),
+				impl_name: config.impl_name.into(),
+				impl_version: config.impl_version.into(),
+				properties: config.chain_spec.properties(),
+			};
+			Components::RuntimeServices::start_rpc(
+				client.clone(),
+				system_rpc_tx.clone(),
+				system_info.clone(),
+				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
+				transaction_pool.clone(),
+			)
+		};
+		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
@@ -522,7 +505,7 @@ impl<Components: components::Components> Service<Components> {
 			keystore,
 			config,
 			exit,
-			_rpc: Box::new(rpc),
+			_rpc: rpc,
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
@@ -701,8 +684,30 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 	}
 }
 
-fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error>
-	where F: Fn(&SocketAddr) -> Result<T, io::Error>,
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
+	config: &FactoryFullConfiguration<F>,
+	mut gen_handler: H
+) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+	Ok(Box::new((
+		maybe_start_server(
+			config.rpc_http,
+			|address| rpc::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+		)?,
+		maybe_start_server(
+			config.rpc_ws,
+			|address| rpc::start_ws(
+				address,
+				config.rpc_ws_max_connections,
+				config.rpc_cors.as_ref(),
+				gen_handler(),
+			),
+		)?.map(Mutex::new),
+	)))
+}
+
+fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
+	where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 {
 	Ok(match address {
 		Some(mut address) => Some(start(&address)
