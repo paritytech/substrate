@@ -83,7 +83,7 @@ construct_service_factory! {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key::<AuraPair>() {
+				if let Some(aura_key) = service.authority_key() {
 					info!("Using aura key {}", aura_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
@@ -166,7 +166,7 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, AuraPair>(
+				import_queue::<_, _, >(
 					slot_duration,
 					block_import,
 					Some(justification_import),

@@ -58,7 +58,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, ComponentConsensusCrypto
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -73,12 +73,12 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: Option<<Components as components::Components>::SelectChain>,
+	select_chain: Option<Components::SelectChain>,
 	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: AuthorityKeyProvider,
+	keystore: AuthorityKeyProvider<ComponentConsensusCrypto<Components>>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -97,7 +97,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
-		AuthorityKeyProvider,
+		AuthorityKeyProvider<ComponentConsensusCrypto<Components>>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -265,6 +265,7 @@ impl<Components: components::Components> Service<Components> {
 			roles: config.roles,
 			password: config.password.clone(),
 			keystore: keystore.map(Arc::new),
+			_key: Default::default(),
 		};
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
@@ -550,11 +551,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key<TPair>(&self) -> Option<TPair>
-	where
-		TPair: Pair + TypedKey,
-		<TPair as Pair>::Public: Public + TypedKey,
-	{
+	pub fn authority_key(&self) -> Option<ComponentConsensusCrypto<Components>> {
 		use offchain::AuthorityKeyProvider;
 
 		self.keystore.authority_key()
@@ -845,14 +842,15 @@ fn build_system_rpc_handler<Components: components::Components>(
 
 /// A provider of current authority key.
 #[derive(Clone)]
-pub struct AuthorityKeyProvider {
+pub struct AuthorityKeyProvider<Pair> {
 	roles: Roles,
 	keystore: Option<Arc<Keystore>>,
 	password: primitives::crypto::Protected<String>,
+	_key: std::marker::PhantomData<Pair>,
 }
 
-impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
-	type Pair = primitives::ed25519::Pair;
+impl<Pair: primitives::crypto::Pair> offchain::AuthorityKeyProvider for AuthorityKeyProvider<Pair> {
+	type Pair = Pair;
 
 	fn authority_key(&self) -> Option<Self::Pair> {
 		if self.roles != Roles::AUTHORITY {

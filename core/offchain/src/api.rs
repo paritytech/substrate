@@ -98,7 +98,7 @@ impl<Storage, AuthorityKey> Api<Storage, AuthorityKey> where
 		} else if let Some(ref key) = self.authority_key {
 			Ok(Key::AuthorityKey(key))
 		} else {
-			// TODO warning
+			warn!("AuthorityKey is not configured, yet offchain worker tried to access it.");
 			Err(())
 		}
 	}

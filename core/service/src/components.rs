@@ -138,6 +138,9 @@ pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
 /// Extrinsic pool API type for `Components`.
 pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 
+/// Consensus cryto.
+pub type ComponentConsensusCrypto<C> = <<C as Components>::Factory as ServiceFactory>::ConsensusCrypto;
+
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
@@ -227,7 +230,7 @@ fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
 ) -> error::Result<()> where
-	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
@@ -267,7 +270,7 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			AuthorityKeyProvider,
+			AuthorityKeyProvider<ComponentConsensusCrypto<C>>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -283,7 +286,7 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			AuthorityKeyProvider,
+			AuthorityKeyProvider<ComponentConsensusCrypto<C>>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -341,6 +344,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type LightImportQueue: ImportQueue<Self::Block> + 'static;
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
+	/// The type of cryptography used by the consensus engine.
+	type ConsensusCrypto: primitives::crypto::Pair;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
