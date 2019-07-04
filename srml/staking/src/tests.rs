@@ -549,10 +549,14 @@ fn no_candidate_emergency_condition() {
 		.nominate(false)
 		.build(),
 	|| {
-		assert_eq!(Staking::validator_count(), 15);
 
 		// initial validators
 		assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
+
+		// set the minimum validator count.
+		<Staking as crate::Store>::MinimumValidatorCount::put(10);
+		<Staking as crate::Store>::ValidatorCount::put(15);
+		assert_eq!(Staking::validator_count(), 15);
 
 		let _ = Staking::chill(Origin::signed(10));
 

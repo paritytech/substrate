@@ -449,7 +449,7 @@ pub const DEFAULT_BONDING_DURATION: u32 = 1;
 ///
 /// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
-	/// Disable a given validator.
+	/// Disable a given validator by stash ID.
 	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
@@ -1080,8 +1080,6 @@ impl<T: Trait> Module<T> {
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 		let bonding_duration = T::BondingDuration::get();
-
-		println!("starting new era {} at session {}", current_era, start_session_index);
 
 		if current_era > bonding_duration {
 			let first_kept = current_era - bonding_duration;

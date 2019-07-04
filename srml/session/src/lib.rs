@@ -413,7 +413,6 @@ impl<T: Trait> Module<T> {
 		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
-		println!("starting session {}", session_index);
 
 		// Queue next session keys.
 		let queued_amalgamated = next_validators.into_iter()

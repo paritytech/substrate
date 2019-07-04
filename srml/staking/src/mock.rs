@@ -52,23 +52,24 @@ thread_local! {
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, validators: &[(AccountId, Ks)]) {
-		SESSION.with(|x|
+		SESSION.with(|x| {
+			let v = validators.iter().map(|(ref a, _)| a).cloned().collect::<Vec<_>>();
 			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
-		);
+		});
 	}
 
 	fn on_disabled(validator_index: usize) {
 		SESSION.with(|d| {
 			let mut d = d.borrow_mut();
 			let value = d.0[validator_index];
-			println!("on_disabled {} -> {}", validator_index, value);
 			d.1.insert(value);
 		})
 	}
 }
 
 pub fn is_disabled(validator: AccountId) -> bool {
-	SESSION.with(|d| d.borrow().1.contains(&validator))
+	let stash = Staking::ledger(&validator).unwrap().stash;
+	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
 pub struct ExistentialDeposit;
@@ -225,7 +226,7 @@ impl ExtBuilder {
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		let validators = (0..num_validators)
-			.map(|x| ((x + 1) * 10) as u64)
+			.map(|x| ((x + 1) * 10 + 1) as u64)
 			.collect::<Vec<_>>();
 
 		let _ = balances::GenesisConfig::<Test>{
@@ -379,5 +380,5 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn validator_controllers() -> Vec<AccountId> {
-	Session::validators().into_iter().filter_map(|s| Staking::bonded(&s)).collect()
+	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
 }
