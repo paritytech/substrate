@@ -71,8 +71,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 103,
-	impl_version: 103,
+	spec_version: 104,
+	impl_version: 104,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -197,6 +197,7 @@ impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
 	type Keys = SessionKeys;
+	type SelectInitialValidators = Staking;
 }
 
 parameter_types! {
