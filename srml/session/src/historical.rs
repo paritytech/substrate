@@ -343,8 +343,12 @@ mod tests {
 			set_next_validators(vec![1, 2, 4]);
 			force_new_session();
 
+			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_none());
+
 			System::set_block_number(2);
 			Session::on_initialize(2);
+
+			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_some());
 
 			assert!(Historical::historical_root(proof.session).is_some());
 			assert!(Session::current_index() > proof.session);
@@ -356,6 +360,14 @@ mod tests {
 					proof.clone(),
 				).is_some()
 			);
+
+			set_next_validators(vec![1, 2, 5]);
+
+			force_new_session();
+			System::set_block_number(3);
+			Session::on_initialize(3);
+
+			assert!(Historical::cached_obsolete(&(proof.session + 1)).is_none());
 		});
 	}
 

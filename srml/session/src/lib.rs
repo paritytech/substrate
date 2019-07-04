@@ -558,7 +558,7 @@ mod tests {
 		testing::UintAuthorityId,
 	};
 	use mock::{
-		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session, next_validators,
+		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
 	};
 
