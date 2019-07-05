@@ -351,13 +351,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
-	/// Send a message to the given peer. Has no effect if we're not connected to this peer.
-	///
-	/// This method is extremely poor in terms of API and should be eventually removed.
-	pub fn disconnect_peer(&self, who: PeerId) {
-		let _ = self.network_chan.unbounded_send(NetworkMsg::DisconnectPeer(who));
-	}
-
 	/// Request a justification for the given block.
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
@@ -517,8 +510,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 pub enum NetworkMsg<B: BlockT + 'static> {
 	/// Send an outgoing custom message.
 	Outgoing(PeerId, Message<B>),
-	/// Disconnect a peer we're connected to, or do nothing if we're not connected.
-	DisconnectPeer(PeerId),
 	/// Performs a reputation adjustement on a peer.
 	ReportPeer(PeerId, i32),
 }
@@ -674,8 +665,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					self.network_service.lock().user_protocol_mut().send_packet(&who, outgoing_message),
 				Ok(Async::Ready(Some(NetworkMsg::ReportPeer(who, reputation)))) =>
 					self.peerset.report_peer(who, reputation),
-				Ok(Async::Ready(Some(NetworkMsg::DisconnectPeer(who)))) =>
-					self.network_service.lock().user_protocol_mut().disconnect_peer(&who),
 				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 			}
 		}
