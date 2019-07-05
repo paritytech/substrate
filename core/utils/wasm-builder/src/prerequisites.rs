@@ -27,7 +27,12 @@ pub fn check() -> Option<&'static str> {
 		return Some("Rust nightly not installed, please install it!")
 	}
 
-	if Command::new("wasm-gc").stdout(Stdio::null()).status().map(|s| !s.success()).unwrap_or(true) {
+	if Command::new("wasm-gc")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.status()
+		.map(|s| !s.success()).unwrap_or(true)
+	{
 		return Some("wasm-gc not installed, please install it!")
 	}
 
@@ -83,6 +88,8 @@ fn check_wasm_toolchain_installed() -> bool {
 	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
 		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
 		.status()
 		.map(|s| s.success())
 		.unwrap_or(false)
