@@ -243,7 +243,7 @@ impl Saturating for Permill {
 	fn saturating_add(self, rhs: Self) -> Self {
 		// defensive inner saturation:
 		// both u32 values are below a million. sum won't overflow in u32.
-		Self::from_parts((self.0 + rhs.0).min(1_000_000))
+		Self::from_parts(self.0 + rhs.0)
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -432,7 +432,7 @@ impl Saturating for Perbill {
 	fn saturating_add(self, rhs: Self) -> Self {
 		// defensive inner saturation:
 		// both u32 values are below a billion. sum won't overflow for u32.
-		Self::from_parts((self.0 + rhs.0).min(1_000_000_000))
+		Self::from_parts(self.0 + rhs.0)
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -555,7 +555,7 @@ pub enum Sign {
 /// Note that a positive instance is always greater than a negative instance, even if both have `0`
 ///  as their natural and decimal part.
 ///
-/// Note that internal Perbill supports an inclusive range of of [0, 1], hence the number actually
+/// Note that internal Perbill supports an inclusive range of [0, 1], hence the number actually
 /// be `n` + `perbill::one()`, which is technically `n + 1`.
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -594,40 +594,43 @@ impl Fixed64 {
 impl ops::Neg for Fixed64 {
 	type Output = Self;
 
-    fn neg(self) -> Self::Output {
+	fn neg(self) -> Self::Output {
 		let mut r = self;
-        match r.sign {
-            Sign::P => r.sign = Sign::N,
-            Sign::N => r.sign = Sign::P,
-        };
+		match r.sign {
+			Sign::P => r.sign = Sign::N,
+			Sign::N => r.sign = Sign::P,
+		};
 		r
-    }
+	}
 }
 
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
 	fn add(self, rhs: Self) -> Self {
+		let mut r = 0;
 		if self.sign == rhs.sign {
 			// sign will not change. Simply add them ignoring the sign
 			let new_decimal = match self.decimal.checked_add(&rhs.decimal) {
 				Some(d) => d,
-				None => Perbill::from_parts((self.decimal.0 + rhs.decimal.0) % 1_000_000_000)
+				None => {
+					r = 1;
+					Perbill::from_parts((self.decimal.0 + rhs.decimal.0) % 1_000_000_000)
+				}
 			};
 			Self {
 				sign: self.sign,
-				n: self.n.saturating_add(rhs.n), /// TODO
+				n: self.n.saturating_add(rhs.n).saturating_add(r),
 				decimal: new_decimal
 			}
 		} else {
 			// Find the bigger one.
 			if self.abs() >= rhs.abs() {
-				let mut r = 0;
 				// check underflow
 				let new_decimal = match self.decimal.checked_sub(&rhs.decimal) {
 					Some(d) => d,
 					None => {
-						r += 1;
+						r = 1;
 						Perbill::from_parts(self.decimal.0 + 1_000_000_000 - rhs.decimal.0)
 					}
 				};
@@ -1227,6 +1230,7 @@ mod tests {
 		assert_eq!(p(1, 20) + p(1, 30), p(2, 50));
 		assert_eq!(p(0, 20) + p(3, 30), p(3, 50));
 		assert_eq!(n(0, 20) + n(3, 30), n(3, 50));
+		assert_eq!(n(0, 20) + n(0, 90), n(1, 10));
 
 		assert_eq!(p(1, 1) + n(0, 99), p(0, 2));
 
