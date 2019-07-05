@@ -254,7 +254,7 @@ decl_module! {
 			<DepositOf<T>>::insert(proposal, deposit);
 		}
 
-		/// Vote in a referendum. If `vote.is_aye`, the vote is to enact the proposal;
+		/// Vote on a referendum. If `vote.is_aye`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = ensure_signed(origin)?;
