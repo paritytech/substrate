@@ -99,7 +99,7 @@
 //! - `cancel_referendum` - Remove a referendum.
 //! - `cancel_queued` - Cancel a proposal queued for enactment.
 //! - `on_finalize` - Called when a block is finalized.
-//! - `set_proxy` - Specify a proxy. Called by the stash.
+//! - `set_proxy` - Specify a proxy account. Called by the stash account.
 //! - `resign_proxy` - Clear the proxy. Called by the proxy.
 //! - `remove_proxy` - Clear the proxy. Called by the stash.
 //! - `delegate` - Delegate vote.
