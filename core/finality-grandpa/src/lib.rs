@@ -77,6 +77,7 @@ use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::Vote
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use std::collections::VecDeque;
 
 mod authorities;
 mod aux_schema;
@@ -239,7 +240,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(::tokio::timer::Error),
+	Timer(tokio_timer::Error),
 }
 
 impl From<GrandpaError> for Error {
@@ -487,7 +488,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
+pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -499,7 +500,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
+	pub telemetry_on_connect: Option<TelemetryOnConnect>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -547,7 +548,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
-	if let Some(telemetry_on_connect) = telemetry_on_connect {
+	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = authority_set.clone();
 		let events = telemetry_on_connect.telemetry_connection_sinks
 			.for_each(move |_| {
@@ -564,10 +565,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				);
 				Ok(())
 			})
-			.then(|_| Ok(()));
-		let events = events.select(telemetry_on_connect.on_exit).then(|_| Ok(()));
-		telemetry_on_connect.executor.spawn(events);
-	}
+			.then(|_| -> Result<(), ()> { Ok(()) });
+		futures::future::Either::A(events)
+	} else {
+		futures::future::Either::B(futures::future::empty())
+	};
 
 	let voters = authority_set.current_authorities();
 	let initial_environment = Arc::new(Environment {
@@ -677,19 +679,29 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+					
+					// always start at round 0 when changing sets.
+					let completed_round = CompletedRound {
+							number: 0,
+							state: genesis_state,
+							base: (new.canon_hash, new.canon_number),
+							historical_votes: HistoricalVotes::<Block>::new(),
+					};
+
+					let mut rounds = VecDeque::new();
+					rounds.push_back(completed_round);
+
+					let voters = authority_set.inner().read()
+						.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
+					let completed_rounds = CompletedRounds::new(
+						rounds,
+						new.set_id,
+						voters,
+					);
 
 					let set_state = VoterSetState::Live {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								votes: Vec::new(),
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
+						completed_rounds,
 						current_round: HasVoted::No,
 					};
 
@@ -773,7 +785,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	let voter_work = network_startup.and_then(move |()| voter_work);
 
-	Ok(voter_work.select(on_exit).then(|_| Ok(())))
+	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
+	let telemetry_task = telemetry_task
+		.then(|_| futures::future::empty::<(), ()>());
+
+	Ok(voter_work.select(on_exit).select2(telemetry_task).then(|_| Ok(())))
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]

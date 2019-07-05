@@ -33,7 +33,12 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, HttpError, CryptoKind, CryptoKeyId};
+use primitives::offchain::{
+	Timestamp,
+	HttpRequestId, HttpRequestStatus, HttpError,
+	CryptoKind, CryptoKeyId,
+	StorageKind,
+};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -283,23 +288,25 @@ export_api! {
 		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_set(key: &[u8], value: &[u8]);
+		fn local_storage_set(kind: StorageKind, key: &[u8], value: &[u8]);
 
 		/// Sets a value in the local storage if it matches current value.
 		///
 		/// Since multiple offchain workers may be running concurrently, to prevent
 		/// data races use CAS to coordinate between them.
 		///
+		/// Returns `true` if the value has been set, `false` otherwise.
+		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]);
+		fn local_storage_compare_and_set(kind: StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
 
 		/// Gets a value from the local storage.
 		///
 		/// If the value does not exist in the storage `None` will be returned.
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_get(key: &[u8]) -> Option<Vec<u8>>;
+		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Initiaties a http request given HTTP verb and the URL.
 		///

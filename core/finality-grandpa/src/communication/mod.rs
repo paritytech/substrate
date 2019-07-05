@@ -34,6 +34,7 @@ use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
+use tokio_executor::Executor;
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
@@ -264,7 +265,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				// messages will be ignored.
 				validator.note_round(Round(round.number), |_, _| {});
 
-				for signed in round.votes.iter() {
+				for signed in round.historical_votes.seen().iter() {
 					let message = gossip::GossipMessage::VoteOrPrecommit(
 						gossip::VoteOrPrecommitMessage::<B> {
 							message: signed.clone(),
@@ -281,7 +282,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 				trace!(target: "afg",
 					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
-					round.votes.len(),
+					round.historical_votes.seen().len(),
 					topic,
 					round.number,
 					set_id,
@@ -297,25 +298,23 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
-			tokio::spawn(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(())));
-			tokio::spawn(reporting_job.select(on_exit.clone()).then(|_| Ok(())));
+			let mut executor = tokio_executor::DefaultExecutor::current();
+			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa rebroadcast job task");
+			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
 		});
 
 		(bridge, startup_work)
 	}
 
-	/// Get the round messages for a round in the current set ID. These are signature-checked.
-	pub(crate) fn round_communication(
+	/// Note the beginning of a new round to the `GossipValidator`.
+	pub(crate) fn note_round(
 		&self,
 		round: Round,
 		set_id: SetId,
-		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<ed25519::Pair>>,
-		has_voted: HasVoted<B>,
-	) -> (
-		impl Stream<Item=SignedMessage<B>,Error=Error>,
-		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+		voters: &VoterSet<AuthorityId>,
 	) {
 		// is a no-op if currently in that set.
 		self.validator.note_set(
@@ -333,6 +332,25 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				to,
 				GossipMessage::<B>::from(neighbor).encode()
 			),
+		);
+	}
+
+	/// Get the round messages for a round in the current set ID. These are signature-checked.
+	pub(crate) fn round_communication(
+		&self,
+		round: Round,
+		set_id: SetId,
+		voters: Arc<VoterSet<AuthorityId>>,
+		local_key: Option<Arc<ed25519::Pair>>,
+		has_voted: HasVoted<B>,
+	) -> (
+		impl Stream<Item=SignedMessage<B>,Error=Error>,
+		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+	) {
+		self.note_round(
+			round,
+			set_id,
+			&*voters,
 		);
 
 		let locals = local_key.and_then(|pair| {

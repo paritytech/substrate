@@ -20,7 +20,7 @@ lru-cache = "0.1.1"
 rustc-hex = "2.0"
 rand = "0.6"
 libp2p = { version = "0.10.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
-fork-tree = { path = "../../core/util/fork-tree" }
+fork-tree = { path = "../../core/utils/fork-tree" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }

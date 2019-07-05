@@ -18,6 +18,8 @@
 //!
 //! This tracks the current author of the block and recent uncles.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use rstd::prelude::*;
 use rstd::collections::btree_set::BTreeSet;
 use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
@@ -100,6 +102,15 @@ pub trait FilterUncle<Header, Author> {
 	/// filter.
 	fn filter_uncle(header: &Header, acc: Self::Accumulator)
 		-> Result<(Option<Author>, Self::Accumulator), &'static str>;
+}
+
+impl<H, A> FilterUncle<H, A> for () {
+	type Accumulator = ();
+	fn filter_uncle(_: &H, acc: Self::Accumulator)
+		-> Result<(Option<A>, Self::Accumulator), &'static str>
+	{
+		Ok((None, acc))
+	}
 }
 
 /// A filter on uncles which verifies seals and does no additional checks.
@@ -201,8 +212,8 @@ decl_module! {
 
 		fn on_finalize() {
 			// ensure we never go to trie with these values.
-			let _ = <Self as Store>::Author::take();
-			let _ = <Self as Store>::DidSetUncles::take();
+			<Self as Store>::Author::kill();
+			<Self as Store>::DidSetUncles::kill();
 		}
 
 		/// Provide a set of uncles.
@@ -312,7 +323,6 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
 	use primitives::generic::DigestItem;
@@ -421,7 +431,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.into()
 	}
 
@@ -498,9 +508,7 @@ mod tests {
 					author_a,
 				);
 
-				assert!(
-					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok();
-				);
+				assert!(Authorship::verify_and_import_uncles(vec![uncle_a.clone()]).is_ok());
 
 				assert_eq!(
 					Authorship::verify_and_import_uncles(vec![uncle_a.clone()]),
@@ -550,9 +558,7 @@ mod tests {
 					author_a,
 				);
 
-				assert!(
-					Authorship::verify_and_import_uncles(vec![other_8]).is_ok();
-				);
+				assert!(Authorship::verify_and_import_uncles(vec![other_8]).is_ok());
 			}
 		});
 	}

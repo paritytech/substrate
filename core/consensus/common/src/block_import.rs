@@ -194,8 +194,9 @@ pub trait BlockImport<B: BlockT> {
 pub trait JustificationImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
-	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
+	/// Called by the import queue when it is started. Returns a list of justifications to request
+	/// from the network.
+	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
@@ -210,8 +211,9 @@ pub trait JustificationImport<B: BlockT> {
 pub trait FinalityProofImport<B: BlockT> {
 	type Error: std::error::Error + Send + 'static;
 
-	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &mut dyn crate::import_queue::Link<B>) { }
+	/// Called by the import queue when it is started. Returns a list of finality proofs to request
+	/// from the network.
+	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(

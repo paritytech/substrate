@@ -23,10 +23,12 @@ use network::test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
+use std::collections::VecDeque;
 use keyring::AuthorityKeyring;
 use parity_codec::Encode;
 
 use crate::environment::SharedVoterSetState;
+use crate::HistoricalVotes;
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
@@ -140,24 +142,26 @@ fn config() -> crate::Config {
 
 // dummy voter set state
 fn voter_set_state() -> SharedVoterSetState<Block> {
-	use crate::authorities::AuthoritySet;
 	use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 	use grandpa::round::State as RoundState;
 	use substrate_primitives::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
-	let voters = AuthoritySet::genesis(Vec::new());
+	let voters = Vec::new();
+	let completed_round = CompletedRound {
+		state,
+		number: 0,
+		base,
+		historical_votes: HistoricalVotes::<Block>::new(),
+	};
+	let mut rounds = VecDeque::new();
+	rounds.push_back(completed_round);
 	let set_state = VoterSetState::Live {
 		completed_rounds: CompletedRounds::new(
-			CompletedRound {
-				state,
-				number: 0,
-				votes: Vec::new(),
-				base,
-			},
+			rounds,
 			0,
-			&voters,
+			voters,
 		),
 		current_round: HasVoted::No,
 	};

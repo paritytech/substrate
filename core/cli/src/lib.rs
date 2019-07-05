@@ -32,7 +32,7 @@ use service::{
 };
 use network::{
 	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, NonReservedPeerMode, NodeKeyConfig},
+	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig},
 	build_multiaddr,
 };
 use primitives::H256;
@@ -354,7 +354,10 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
-	config.enable_mdns = !is_dev && !cli.no_mdns;
+	config.transport = TransportConfig::Normal {
+		enable_mdns: !is_dev && !cli.no_mdns,
+		wasm_external_transport: None,
+	};
 
 	Ok(())
 }
@@ -399,13 +402,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path
-		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
-		.to_string_lossy()
-		.into();
+	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
 
-	config.database_path =
-		db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
 	config.state_cache_size = cli.state_cache_size;
 	config.pruning = match cli.pruning {
@@ -594,7 +593,7 @@ where
 	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	config.database_path = db_path(&base_path, spec.id()).to_string_lossy().into();
+	config.database_path = db_path(&base_path, spec.id());
 
 	Ok(config)
 }
@@ -612,7 +611,7 @@ where
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
-	info!("DB path: {}", config.database_path);
+	info!("DB path: {}", config.database_path.display());
 	let from = cli.from.unwrap_or(1);
 	let to = cli.to;
 	let json = cli.json;
@@ -645,7 +644,9 @@ where
 		None => Box::new(stdin()),
 	};
 
-	service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file).map_err(Into::into)
+	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+	tokio::run(fut);
+	Ok(())
 }
 
 fn revert_chain<F, S>(

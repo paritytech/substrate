@@ -14,19 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! `decl_storage` macro transformation
-// end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
+use srml_support_procedural_tools::{
+	generate_crate_access, generate_hidden_includes, clean_type_string
+};
 
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 
 use syn::{
 	Ident,
 	GenericParam,
+	WhereClause,
 	spanned::Spanned,
 	parse::{
 		Error,
@@ -39,6 +40,9 @@ use quote::quote;
 use super::*;
 
 const NUMBER_OF_INSTANCE: usize = 16;
+const DEFAULT_INSTANTIABLE_TRAIT_NAME: &str = "__GeneratedInstantiable";
+const DEFAULT_INSTANCE_NAME: &str = "__GeneratedInstance";
+const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
 // try macro but returning tokenized error
 macro_rules! try_tok(( $expre : expr ) => {
@@ -65,11 +69,15 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		crate_ident: cratename,
 		content: ext::Braces { content: storage_lines, ..},
 		extra_genesis,
-		extra_genesis_skip_phantom_data_field,
+		where_clause,
 		..
 	} = def;
 
-	let instance_opts = match get_instance_opts(mod_instance, mod_instantiable, mod_default_instance) {
+	let instance_opts = match get_instance_opts(
+		mod_instance,
+		mod_instantiable,
+		mod_default_instance
+	) {
 		Ok(opts) => opts,
 		Err(err) => return err.to_compile_error().into(),
 	};
@@ -104,7 +112,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&storage_lines,
 		&extra_genesis.inner,
-		extra_genesis_skip_phantom_data_field.inner.is_some(),
+		&where_clause,
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -113,7 +121,9 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&cratename,
 		&storage_lines,
+		&where_clause,
 	);
+
 	let decl_store_items = decl_store_items(
 		&storage_lines,
 	);
@@ -134,6 +144,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traittype,
 		&instance_opts,
 		&storage_lines,
+		&where_clause,
 	);
 
 	let InstanceOpts {
@@ -150,19 +161,17 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#decl_store_items
 		}
 		#store_default_struct
-		impl<#traitinstance: #traittype, #instance #bound_instantiable> #storetype for #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: #traittype, #instance #bound_instantiable> #storetype
+			for #module_ident<#traitinstance, #instance> #where_clause
+		{
 			#impl_store_items
 		}
-		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
+			#module_ident<#traitinstance, #instance> #where_clause
+		{
 			#impl_store_fns
 			#[doc(hidden)]
-			pub fn store_metadata() -> #scrate::metadata::StorageMetadata {
-				#scrate::metadata::StorageMetadata {
-					functions: #scrate::metadata::DecodeDifferent::Encode(#store_functions_to_metadata) ,
-				}
-			}
-			#[doc(hidden)]
-			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageFunctionMetadata] {
+			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageEntryMetadata] {
 				#store_functions_to_metadata
 			}
 			#[doc(hidden)]
@@ -172,7 +181,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 
 		#extra_genesis
-
 	};
 
 	expanded.into()
@@ -185,11 +193,10 @@ fn decl_store_extra_genesis(
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	extra_genesis: &Option<AddExtraGenesis>,
-	extra_genesis_skip_phantom_data_field: bool,
+	where_clause: &Option<syn::WhereClause>,
 ) -> Result<TokenStream2> {
 
 	let InstanceOpts {
-		comma_instance,
 		equal_default_instance,
 		bound_instantiable,
 		instance,
@@ -197,13 +204,14 @@ fn decl_store_extra_genesis(
 	} = instance_opts;
 
 	let mut is_trait_needed = false;
-	let mut has_trait_field = false;
 	let mut serde_complete_bound = Vec::new();
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
-	for sline in storage_lines.inner.iter() {
+	let mut assimilate_require_generic = instance.is_some();
+	let mut builders_clone_bound = Vec::new();
 
+	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			attrs,
 			name,
@@ -217,9 +225,17 @@ fn decl_store_extra_genesis(
 
 		let type_infos = get_type_infos(storage_type);
 
-		let opt_build;
+		let opt_build = build
+			.inner
+			.as_ref()
+			.map(|b| {
+				assimilate_require_generic |= ext::expr_contains_ident(&b.expr.content, traitinstance);
+				&b.expr.content
+			})
+			.map(|b| quote!( #b ));
+
 		// need build line
-		if let Some(ref config) = config.inner {
+		let builder = if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
 			} else if let Some(ref getter) = getter.inner {
@@ -234,19 +250,37 @@ fn decl_store_extra_genesis(
 					)
 				);
 			};
-			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
+
+			if ext::type_contains_ident(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
-				has_trait_field = true;
+			}
+
+			if opt_build.is_none() {
+				builders_clone_bound.push(type_infos.value_type.clone());
 			}
 
 			let value_type = &type_infos.value_type;
 			serde_complete_bound.push(quote!( #value_type ));
 			match type_infos.kind {
-				DeclStorageTypeInfosKind::Map { key_type, .. } =>
-					serde_complete_bound.push(quote!( #key_type )),
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+					serde_complete_bound.push(quote!( #key_type ));
+					is_trait_needed = is_trait_needed
+						|| ext::type_contains_ident(key_type, traitinstance);
+
+					if opt_build.is_none() {
+						builders_clone_bound.push(key_type.clone());
+					}
+				},
 				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
 					serde_complete_bound.push(quote!( #key1_type ));
 					serde_complete_bound.push(quote!( #key2_type ));
+					is_trait_needed = is_trait_needed
+						|| ext::type_contains_ident(key1_type, traitinstance)
+						|| ext::type_contains_ident(key2_type, traitinstance);
+					if opt_build.is_none() {
+						builders_clone_bound.push(key1_type.clone());
+						builders_clone_bound.push(key2_type.clone());
+					}
 				},
 				_ => {},
 			}
@@ -270,8 +304,6 @@ fn decl_store_extra_genesis(
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
 				},
 			});
-			opt_build = Some(build.inner.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
-				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance, #instance>| config.#ident.clone()) )));
 
 			let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d|
 				if type_infos.is_option {
@@ -281,48 +313,74 @@ fn decl_store_extra_genesis(
 				}).unwrap_or_else(|| quote!( Default::default() ));
 
 			config_field_default.extend(quote!( #ident: #fielddefault, ));
+
+			opt_build.or_else(|| Some(quote!( (|config: &Self| config.#ident.clone()) )))
 		} else {
-			opt_build = build.inner.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
-		}
+			opt_build
+		};
 
 		let typ = type_infos.typ;
-		if let Some(builder) = opt_build {
-			is_trait_needed = true;
+		if let Some(builder) = builder {
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
-					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance) {
+						assimilate_require_generic = true;
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
 
+					quote!{{
 						let v = (#builder)(&self);
-						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, storage);
+						<
+							#name<#struct_trait #instance> as
+							#scrate::storage::hashed::generator::StorageValue<#typ>
+						>::put(&v, storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
-					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key_type, traitinstance)
+					{
+						assimilate_require_generic = true;
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
 
+					quote!{{
 						let data = (#builder)(&self);
-						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, storage);
-						}
+						data.into_iter().for_each(|(k, v)| {
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
+							>::insert(&k, &v, storage);
+						});
 					}}
 				},
 				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
-					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key1_type, traitinstance)
+						|| ext::type_contains_ident(key2_type, traitinstance)
+					{
+						assimilate_require_generic = true;
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
 
+					quote!{{
 						let data = (#builder)(&self);
-						for (k1, k2, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, storage);
-						}
+						data.into_iter().for_each(|(k1, k2, v)| {
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::insert(&k1, &k2, &v, storage);
+						});
 					}}
 				},
 			});
 		}
-
 	}
 
 	let mut has_scall = false;
@@ -341,9 +399,8 @@ fn decl_store_extra_genesis(
 					default_value,
 					..
 				}) => {
-					if ext::has_parametric_type(&extra_type, traitinstance) {
+					if ext::type_contains_ident(&extra_type, traitinstance) {
 						is_trait_needed = true;
-						has_trait_field = true;
 					}
 
 					serde_complete_bound.push(quote!( #extra_type ));
@@ -362,6 +419,7 @@ fn decl_store_extra_genesis(
 					if has_scall {
 						return Err(Error::new(expr.span(), "Only one build expression allowed for extra genesis"));
 					}
+					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
 					scall = quote!( ( #content ) );
 					has_scall = true;
@@ -369,7 +427,6 @@ fn decl_store_extra_genesis(
 			}
 		}
 	}
-
 
 	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
@@ -393,55 +450,81 @@ fn decl_store_extra_genesis(
 		|| !config_field.is_empty()
 		|| !genesis_extrafields.is_empty()
 		|| !builders.is_empty();
-	Ok(if is_extra_genesis_needed {
-		let (fparam_struct, fparam_impl, sparam, ph_field, ph_default) = if is_trait_needed {
-			if (has_trait_field && instance.is_none()) || extra_genesis_skip_phantom_data_field {
-				// no phantom data required
-				(
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
-					quote!(<#traitinstance, #instance>),
-					quote!(),
-					quote!(),
-				)
-			} else {
-				// need phantom data
-				(
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
-					quote!(<#traitinstance, #instance>),
+	if is_extra_genesis_needed {
+		let (inherent_instance, inherent_bound_instantiable) = if instance.is_some() {
+			(instance.clone(), bound_instantiable.clone())
+		} else {
+			let instantiable = Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site());
+			(
+				Some(Ident::new(DEFAULT_INSTANCE_NAME, Span::call_site())),
+				quote!(: #instantiable),
+			)
+		};
 
-					quote!{
-						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>,
-					},
-					quote!{
-						_genesis_phantom_data: Default::default(),
-					},
-				)
-			}
+		let (fparam_struct, fparam_impl, sparam, build_storage_impl) = if is_trait_needed {
+			(
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
+				quote!(<#traitinstance, #instance>),
+				quote!(<#traitinstance: #traittype, #inherent_instance #inherent_bound_instantiable>),
+			)
 		} else {
 			// do not even need type parameter
-			(quote!(), quote!(), quote!(), quote!(), quote!())
+			(
+				quote!(),
+				quote!(),
+				quote!(),
+				quote!(<#traitinstance: #traittype, #inherent_instance #inherent_bound_instantiable>),
+			)
 		};
-		quote!{
 
+		let (fn_generic, fn_traitinstance) = if !is_trait_needed && assimilate_require_generic {
+			(
+				quote!( <#traitinstance: #traittype, #instance #bound_instantiable> ),
+				quote!( #traitinstance, #instance )
+			)
+		} else {
+			(quote!(), quote!())
+		};
+
+		let impl_trait = quote!(BuildModuleGenesisStorage<#traitinstance, #inherent_instance>);
+
+		let extend_where_clause = |to_extend: &mut WhereClause| {
+			if let Some(where_clause) = where_clause {
+				to_extend.predicates.extend(where_clause.predicates.iter().cloned());
+			}
+		};
+
+		let mut genesis_where_clause: WhereClause = syn::parse_quote!(
+			where #( #builders_clone_bound: Clone ),*
+		);
+		let mut fn_where_clause = genesis_where_clause.clone();
+
+
+		let mut build_storage_where_clause = genesis_where_clause.clone();
+		extend_where_clause(&mut build_storage_where_clause);
+
+		if is_trait_needed {
+			extend_where_clause(&mut genesis_where_clause);
+		} else if assimilate_require_generic {
+			extend_where_clause(&mut fn_where_clause);
+		}
+
+		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
 			#serde_bug_bound
-			pub struct GenesisConfig#fparam_struct {
-				#ph_field
+			pub struct GenesisConfig#fparam_struct #genesis_where_clause {
 				#config_field
 				#genesis_extrafields
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl Default for GenesisConfig#sparam {
+			impl#fparam_impl Default for GenesisConfig#sparam #genesis_where_clause {
 				fn default() -> Self {
 					GenesisConfig {
-						#ph_default
 						#config_field_default
 						#genesis_extrafields_default
 					}
@@ -449,23 +532,83 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
-				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
+				pub fn build_storage #fn_generic (self) -> std::result::Result<
+					(
+						#scrate::runtime_primitives::StorageOverlay,
+						#scrate::runtime_primitives::ChildrenStorageOverlay,
+					),
+					String
+				> #fn_where_clause {
+					let mut storage = Default::default();
+					let mut child_storage = Default::default();
+					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
+					Ok((storage, child_storage))
+				}
+
+				/// Assimilate the storage for this module into pre-existing overlays.
+				pub fn assimilate_storage #fn_generic (
+					self,
+					r: &mut #scrate::runtime_primitives::StorageOverlay,
+					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+				) -> std::result::Result<(), String> #fn_where_clause {
 					let storage = r;
 
 					#builders
 
-					let r = storage;
-
-					#scall(r, c, &self);
+					#scall(storage, c, &self);
 
 					Ok(())
 				}
 			}
-		}
+
+			#[cfg(feature = "std")]
+			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
+				for GenesisConfig#sparam #build_storage_where_clause
+			{
+				fn build_module_genesis_storage(
+					self,
+					r: &mut #scrate::runtime_primitives::StorageOverlay,
+					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+				) -> std::result::Result<(), String> {
+					self.assimilate_storage::<#fn_traitinstance> (r, c)
+				}
+			}
+		};
+
+		Ok(res)
 	} else {
-		quote!()
-	})
+		Ok(quote!())
+	}
+}
+
+fn create_and_impl_instance(
+	prefix: &str,
+	ident: &Ident,
+	doc: &TokenStream2,
+	const_names: &[(Ident, String)],
+	scrate: &TokenStream2,
+	instantiable: &Ident,
+) -> TokenStream2 {
+	let mut const_impls = TokenStream2::new();
+
+	for (const_name, partial_const_value) in const_names {
+		let const_value = format!("{}{}", partial_const_value, prefix);
+		const_impls.extend(quote! {
+			const #const_name: &'static str = #const_value;
+		});
+	}
+
+	quote! {
+		// Those trait are derived because of wrong bounds for generics
+		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
+		#doc
+		pub struct #ident;
+		impl #instantiable for #ident {
+			#const_impls
+		}
+	}
 }
 
 fn decl_storage_items(
@@ -475,6 +618,7 @@ fn decl_storage_items(
 	instance_opts: &InstanceOpts,
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+	where_clause: &Option<WhereClause>,
 ) -> TokenStream2 {
 
 	let mut impls = TokenStream2::new();
@@ -489,80 +633,101 @@ fn decl_storage_items(
 	let build_prefix = |cratename, name| format!("{} {}", cratename, name);
 
 	// Build Instantiable trait
-	if instance.is_some() {
-		let mut const_names = vec![];
+	let mut const_names = vec![];
 
-		for sline in storage_lines.inner.iter() {
-			let DeclStorageLine {
-				storage_type,
-				name,
-				..
-			} = sline;
+	for sline in storage_lines.inner.iter() {
+		let DeclStorageLine {
+			storage_type,
+			name,
+			..
+		} = sline;
 
-			let prefix = build_prefix(cratename, name);
+		let prefix = build_prefix(cratename, name);
 
-			let type_infos = get_type_infos(storage_type);
+		let type_infos = get_type_infos(storage_type);
 
-			let const_name = syn::Ident::new(&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
-			let partial_const_value = prefix.clone();
+		let const_name = syn::Ident::new(
+			&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site()
+		);
+		let partial_const_value = prefix.clone();
+		const_names.push((const_name, partial_const_value));
+
+		if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
+			let const_name = syn::Ident::new(
+				&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
+			);
+			let partial_const_value = format!("head of {}", prefix);
 			const_names.push((const_name, partial_const_value));
-
-			if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
-				let const_name = syn::Ident::new(&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site());
-				let partial_const_value = format!("head of {}", prefix);
-				const_names.push((const_name, partial_const_value));
-			}
 		}
+	}
 
-		// Declare Instance trait
-		{
-			let mut const_impls = TokenStream2::new();
-			for (const_name, _) in &const_names {
-				const_impls.extend(quote! {
-					const #const_name: &'static str;
-				});
-			}
+	let instantiable = instantiable
+		.clone()
+		.unwrap_or_else(|| Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
 
-			impls.extend(quote! {
-				/// Tag a type as an instance of a module.
-				///
-				/// Defines storage prefixes, they must be unique.
-				pub trait #instantiable: 'static {
-					#const_impls
-				}
+	// Declare Instance trait
+	{
+		let mut const_impls = TokenStream2::new();
+		for (const_name, _) in &const_names {
+			const_impls.extend(quote! {
+				const #const_name: &'static str;
 			});
 		}
 
+		let hide = if instance.is_some() {
+			quote!()
+		} else {
+			quote!(#[doc(hidden)])
+		};
+
+		impls.extend(quote! {
+			/// Tag a type as an instance of a module.
+			///
+			/// Defines storage prefixes, they must be unique.
+			#hide
+			pub trait #instantiable: 'static {
+				#const_impls
+			}
+		});
+	}
+
+	if instance.is_some() {
 		let instances = (0..NUMBER_OF_INSTANCE)
 			.map(|i| {
 				let name = format!("Instance{}", i);
-				let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+				let ident = Ident::new(&name, proc_macro2::Span::call_site());
 				(name, ident, quote! {#[doc=r"Module instance"]})
 			})
-			.chain(default_instance.clone().map(|ident| (String::new(), ident, quote! {#[doc=r"Default module instance"]})));
+			.chain(
+				default_instance
+					.clone()
+					.map(|ident|
+						(String::new(), ident, quote! {#[doc=r"Default module instance"]})
+					)
+			);
 
 		// Impl Instance trait for instances
 		for (prefix, ident, doc) in instances {
-			let mut const_impls = TokenStream2::new();
-
-			for (const_name, partial_const_value) in &const_names {
-				let const_value = format!("{}{}", partial_const_value, prefix);
-				const_impls.extend(quote! {
-					const #const_name: &'static str = #const_value;
-				});
-			}
-
-			impls.extend(quote! {
-				// Those trait are derived because of wrong bounds for generics
-				#[cfg_attr(feature = "std", derive(Debug))]
-				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
-				#doc
-				pub struct #ident;
-				impl #instantiable for #ident {
-					#const_impls
-				}
-			});
+			impls.extend(
+				create_and_impl_instance(&prefix, &ident, &doc, &const_names, scrate, &instantiable)
+			);
 		}
+	}
+
+	// The name of the inherently available instance.
+	let inherent_instance = Ident::new(INHERENT_INSTANCE_NAME, Span::call_site());
+
+	if default_instance.is_some() {
+		impls.extend(quote! {
+			#[doc(hidden)]
+			pub type #inherent_instance = #default_instance;
+		});
+	} else {
+		impls.extend(
+			create_and_impl_instance(
+				"", &inherent_instance, &quote!(#[doc(hidden)]), &const_names, scrate, &instantiable
+			)
+		);
 	}
 
 	for sline in storage_lines.inner.iter() {
@@ -593,6 +758,7 @@ fn decl_storage_items(
 			prefix: build_prefix(cratename, name),
 			name,
 			attrs,
+			where_clause,
 		};
 
 		let implementation = match kind {
@@ -630,15 +796,39 @@ fn impl_store_items(
 	instance: &Option<syn::Ident>,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 ) -> TokenStream2 {
-	storage_lines.inner.iter().map(|sline| &sline.name)
-		.fold(TokenStream2::new(), |mut items, name| {
+	storage_lines.inner
+		.iter()
+		.fold(TokenStream2::new(), |mut items, line| {
+			let name = &line.name;
+			let type_infos = get_type_infos(&line.storage_type);
+			let requires_trait = match type_infos.kind {
+				DeclStorageTypeInfosKind::Simple => {
+					ext::type_contains_ident(&type_infos.value_type, traitinstance)
+				},
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+					ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key_type, traitinstance)
+				}
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key1_type, traitinstance)
+						|| ext::type_contains_ident(key2_type, traitinstance)
+				}
+			};
+
+			let struct_trait = if requires_trait {
+				quote!(#traitinstance,)
+			} else {
+				quote!()
+			};
+
 			items.extend(
 				quote!(
-					type #name = #name<#traitinstance, #instance>;
+					type #name = #name<#struct_trait #instance>;
 				)
 			);
 			items
-	})
+		})
 }
 
 fn impl_store_fns(
@@ -669,29 +859,61 @@ fn impl_store_fns(
 			let typ = type_infos.typ;
 			let item = match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance) {
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
+
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
+							<#name<#struct_trait #instance> as
+								#scrate::storage::hashed::generator::StorageValue<#typ>> :: get(
+									&#scrate::storage::RuntimeStorage
+								)
 						}
 					}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key_type, traitinstance)
+					{
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
+
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
+							>::get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
 				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
+						|| ext::type_contains_ident(key1_type, traitinstance)
+						|| ext::type_contains_ident(key2_type, traitinstance)
+					{
+						quote!(#traitinstance,)
+					} else {
+						quote!()
+					};
+
 					quote!{
 						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
 						where
 							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
 							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
 						{
-							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
@@ -708,6 +930,7 @@ fn store_functions_to_metadata (
 	traittype: &syn::TypeParamBound,
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+	where_clause: &Option<WhereClause>,
 ) -> (TokenStream2, TokenStream2) {
 
 	let InstanceOpts {
@@ -737,7 +960,7 @@ fn store_functions_to_metadata (
 		let stype = match type_infos.kind {
 			DeclStorageTypeInfosKind::Simple => {
 				quote!{
-					#scrate::metadata::StorageFunctionType::Plain(
+					#scrate::metadata::StorageEntryType::Plain(
 						#scrate::metadata::DecodeDifferent::Encode(#styp),
 					)
 				}
@@ -746,7 +969,7 @@ fn store_functions_to_metadata (
 				let hasher = hasher.into_metadata();
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
-					#scrate::metadata::StorageFunctionType::Map {
+					#scrate::metadata::StorageEntryType::Map {
 						hasher: #scrate::metadata::#hasher,
 						key: #scrate::metadata::DecodeDifferent::Encode(#kty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
@@ -760,7 +983,7 @@ fn store_functions_to_metadata (
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
 				let k2_hasher = key2_hasher.into_metadata();
 				quote!{
-					#scrate::metadata::StorageFunctionType::DoubleMap {
+					#scrate::metadata::StorageEntryType::DoubleMap {
 						hasher: #scrate::metadata::#hasher,
 						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
@@ -772,11 +995,11 @@ fn store_functions_to_metadata (
 		};
 		let modifier = if type_infos.is_option {
 			quote!{
-				#scrate::metadata::StorageFunctionModifier::Optional
+				#scrate::metadata::StorageEntryModifier::Optional
 			}
 		} else {
 			quote!{
-				#scrate::metadata::StorageFunctionModifier::Default
+				#scrate::metadata::StorageEntryModifier::Default
 			}
 		};
 		let default = default_value.inner.as_ref().map(|d| &d.expr)
@@ -799,8 +1022,9 @@ fn store_functions_to_metadata (
 		let str_name = name.to_string();
 		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
 		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
+
 		let item = quote! {
-			#scrate::metadata::StorageFunctionMetadata {
+			#scrate::metadata::StorageEntryMetadata {
 				name: #scrate::metadata::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
@@ -813,14 +1037,21 @@ fn store_functions_to_metadata (
 			},
 		};
 		items.extend(item);
+
 		let def_get = quote! {
 			#[doc(hidden)]
-			pub struct #struct_name<#traitinstance, #instance #bound_instantiable #equal_default_instance>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
+			pub struct #struct_name<
+				#traitinstance, #instance #bound_instantiable #equal_default_instance
+			>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
+
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
 			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+
 			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
+				for #struct_name<#traitinstance, #instance> #where_clause
+			{
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
@@ -829,8 +1060,11 @@ fn store_functions_to_metadata (
 					}).clone()
 				}
 			}
+
 			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
+				for #struct_name<#traitinstance, #instance> #where_clause
+			{
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #value_type = #default;
@@ -838,6 +1072,7 @@ fn store_functions_to_metadata (
 				}
 			}
 		};
+
 		default_getter_struct_def.extend(def_get);
 	}
 	(default_getter_struct_def, quote!{
@@ -871,15 +1106,6 @@ enum DeclStorageTypeInfosKind<'a> {
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
 		key2_hasher: HasherKind,
-	}
-}
-
-impl<'a> DeclStorageTypeInfosKind<'a> {
-	fn is_simple(&self) -> bool {
-		match *self {
-			DeclStorageTypeInfosKind::Simple => true,
-			_ => false,
-		}
 	}
 }
 
@@ -919,29 +1145,29 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 
 #[derive(Default)]
 pub(crate) struct InstanceOpts {
-	pub instance: Option<syn::Ident>,
-	pub default_instance: Option<syn::Ident>,
-	pub instantiable: Option<syn::Ident>,
+	pub instance: Option<Ident>,
+	pub default_instance: Option<Ident>,
+	pub instantiable: Option<Ident>,
 	pub comma_instance: TokenStream2,
 	pub equal_default_instance: TokenStream2,
 	pub bound_instantiable: TokenStream2,
 }
 
 fn get_instance_opts(
-	instance: Option<syn::Ident>,
-	instantiable: Option<syn::Ident>,
-	default_instance: Option<syn::Ident>,
-) -> syn::Result<InstanceOpts> {
-
+	instance: Option<Ident>,
+	instantiable: Option<Ident>,
+	default_instance: Option<Ident>,
+) -> Result<InstanceOpts> {
 	let right_syntax = "Should be $Instance: $Instantiable = $DefaultInstance";
 
 	match (instance, instantiable, default_instance) {
-		(Some(instance), Some(instantiable), default_instance_def) => {
-			let (equal_default_instance, default_instance) = if let Some(default_instance) = default_instance_def {
-				(quote!{= #default_instance}, Some(default_instance))
+		(Some(instance), Some(instantiable), default_instance) => {
+			let (equal_default_instance, default_instance) = if let Some(def) = default_instance {
+				(quote!{= #def}, Some(def))
 			} else {
-				(quote!{}, None)
+				(quote!(), None)
 			};
+
 			Ok(InstanceOpts {
 				comma_instance: quote!{, #instance},
 				equal_default_instance,
@@ -952,8 +1178,35 @@ fn get_instance_opts(
 			})
 		},
 		(None, None, None) => Ok(Default::default()),
-		(Some(instance), None, _) => Err(syn::Error::new(instance.span(), format!("Expect instantiable trait bound for instance: {}. {}", instance, right_syntax))),
-		(None, Some(instantiable), _) => Err(syn::Error::new(instantiable.span(), format!("Expect instance generic for bound instantiable: {}. {}", instantiable, right_syntax))),
-		(None, _, Some(default_instance)) => Err(syn::Error::new(default_instance.span(), format!("Expect instance generic for default instance: {}. {}", default_instance, right_syntax))),
+		(Some(instance), None, _) => Err(
+			Error::new(
+				instance.span(),
+				format!(
+					"Expect instantiable trait bound for instance: {}. {}",
+					instance,
+					right_syntax,
+				)
+			)
+		),
+		(None, Some(instantiable), _) => Err(
+			Error::new(
+				instantiable.span(),
+				format!(
+					"Expect instance generic for bound instantiable: {}. {}",
+					instantiable,
+					right_syntax,
+				)
+			)
+		),
+		(None, _, Some(default_instance)) => Err(
+			Error::new(
+				default_instance.span(),
+				format!(
+					"Expect instance generic for default instance: {}. {}",
+					default_instance,
+					right_syntax,
+				)
+			)
+		),
 	}
 }
