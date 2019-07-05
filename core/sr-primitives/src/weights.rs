@@ -23,9 +23,8 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-use crate::codec::{Decode, Encode};
-use crate::Perbill;
-use crate::traits::Zero;
+use crate::{Fixed64, DIV, Perbill, traits::Saturating};
+use crate::codec::{Encode, Decode};
 
 /// The final type that each `#[weight = $x:expr]`'s
 /// expression must evaluate to.
@@ -83,138 +82,58 @@ impl Default for TransactionWeight {
 	}
 }
 
-/// A wrapper for fee multiplier.
-/// This is to simulate a `Perbill` in the range [-1, infinity]
+/// Representation of a fee multiplier.
 ///
-/// The fee multiplier is always multiplied by the weight (as denoted by `TransactionWeight` on a
-/// per-transaction basis with `#[weight]` annotation) of the transaction to obtain the final fee.
-///
-/// One can define how this conversion evolves based on the previous block weight by implementing
-/// the `FeeMultiplierUpdate` type of the `system` trait.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
-#[derive(Encode, Decode, Clone, Copy)]
-pub enum FeeMultiplier {
-	/// Should be interpreted as a positive ratio added to the weight, i.e. `weight + weight * p`
-	/// where `p` is a small `Perbill`.
-	///
-	Positive(Perbill, Weight),
-	/// Should be interpreted as a negative ratio subtracted from the weight, i.e.
-	/// `weight - weight * p` where `p` is a small `Perbill`.
-	Negative(Perbill),
-}
+/// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
+/// in the form of the `apply_to` method.
+#[cfg_attr(feature = "std", derive(Debug, Copy, Clone))]
+#[derive(Encode, Decode, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FeeMultiplier(Fixed64);
 
 impl FeeMultiplier {
-	/// Applies the self, as a multiplier, to the given weight.
+	/// Apply the inner Fixed64 as a fee multiplier to a weight value.
+	///
+	/// This will perform a saturated  `weight + weight * self`.
 	pub fn apply_to(&self, weight: Weight) -> Weight {
-		match *self {
-			FeeMultiplier::Positive(p, r) => weight + weight.saturating_mul(r).saturating_add(p * weight),
-			FeeMultiplier::Negative(p) => weight.checked_sub(p * weight).unwrap_or(Zero::zero()),
+		let fixed = self.0;
+		let parts = fixed.0;
+
+		let positive = parts > 0;
+		// Both will fit into u32.
+		let natural_parts = (parts.abs() / DIV) as Weight;
+		let perbill_parts = (parts.abs() % DIV) as u32;
+
+		let n = weight.saturating_mul(natural_parts);
+		let p = Perbill::from_parts(perbill_parts) * weight;
+		let excess = n.saturating_add(p);
+
+		if positive {
+			weight.saturating_add(excess)
+		} else {
+			weight.saturating_sub(excess)
 		}
 	}
 
-	/// consumes self and returns the combination of `self` and `rhs`, taking the sign into account.
-	pub fn sum(self, rhs: Self) -> Self {
-		match (self, rhs) {
-			(FeeMultiplier::Positive(p1, r1), FeeMultiplier::Positive(p2, r2)) => {
-				// because the add implementation silently saturates. A perbill should saturate but
-				// once we have a proper `Float` type this can be improved.
-				let billion = 1_000_000_000;
-				if p1.0 + p2.0 > billion {
-					FeeMultiplier::Positive(
-						Perbill::from_parts((p1.0 + p2.0) % billion),
-						r1.saturating_add(r2).saturating_add(1)
-					)
-				} else {
-					FeeMultiplier::Positive(p1 + p2, r1.saturating_add(r2))
-				}
-			},
-			(FeeMultiplier::Negative(p1), FeeMultiplier::Negative(p2)) => {
-				// the sum impl of perbill simply caps this. This cannot grow more than -1.
-				FeeMultiplier::Negative(p1 + p2)
-			},
-			(FeeMultiplier::Positive(p1, r1), FeeMultiplier::Negative(p2)) => {
-				if let Some(new_p) = p1.0.checked_sub(p2.0) {
-					FeeMultiplier::Positive(Perbill::from_parts(new_p), r1)
-				} else {
-					let new_p = Perbill::from_parts(p2.0 - p1.0);
-					if r1 > 0 {
-						FeeMultiplier::Positive(new_p, r1-1)
-					} else {
-						FeeMultiplier::Negative(new_p)
-					}
-				}
-			},
-			(FeeMultiplier::Negative(_), FeeMultiplier::Positive(_, _)) => {
-				rhs.sum(self)
-			},
-		}
+	/// build self from raw parts per billion.
+	pub fn from_parts(parts: i64) -> Self {
+		Self(Fixed64(parts))
+	}
+
+	/// build self from a fixed64 value.
+	pub fn from_fixed(f: Fixed64) -> Self {
+		Self(f)
 	}
 }
 
-impl Default for FeeMultiplier {
-	fn default() -> Self {
-		FeeMultiplier::Positive(Perbill::zero(), Zero::zero())
+impl Saturating for FeeMultiplier {
+	fn saturating_add(self, rhs: Self) -> Self {
+		Self(self.0.saturating_add(rhs.0))
 	}
-}
+	fn saturating_mul(self, rhs: Self) -> Self {
+		Self(self.0.saturating_mul(rhs.0))
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	fn p(percent: u32) -> Perbill {
-		Perbill::from_parts(percent * 1_000_000_0)
 	}
-
-	#[test]
-	fn fee_multiplier_can_sum() {
-		assert_eq!(
-			FeeMultiplier::Positive(p(10), 1).sum(FeeMultiplier::Positive(p(10), 1)),
-			FeeMultiplier::Positive(p(20), 2)
-		);
-
-		assert_eq!(
-			FeeMultiplier::Positive(p(60), 0).sum(FeeMultiplier::Positive(p(60), 1)),
-			FeeMultiplier::Positive(p(20), 2)
-		);
-
-		assert_eq!(
-			FeeMultiplier::Positive(p(60), 0).sum(FeeMultiplier::Positive(p(60), 0)),
-			FeeMultiplier::Positive(p(20), 1)
-		);
-
-		assert_eq!(
-			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Positive(p(10), 1)),
-			FeeMultiplier::Positive(p(20), 1)
-		);
-
-		assert_eq!(
-			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Positive(p(10), 1)),
-			FeeMultiplier::Positive(p(20), 1)
-		);
-
-		assert_eq!(
-			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Negative(p(10))),
-			FeeMultiplier::Positive(p(0), 0)
-		);
-
-		// zero
-		assert_eq!(
-			FeeMultiplier::Positive(p(0), 0).sum(FeeMultiplier::Negative(p(10))),
-			FeeMultiplier::Negative(p(10))
-		);
-		assert_eq!(
-			FeeMultiplier::Negative(p(0)).sum(FeeMultiplier::Positive(p(10), 2)),
-			FeeMultiplier::Positive(p(10), 2)
-		);
-
-		// asymmetric operation.
-		assert_eq!(
-			FeeMultiplier::Positive(p(10), 0).sum(FeeMultiplier::Negative(p(30))),
-			FeeMultiplier::Negative(p(20))
-		);
-		assert_eq!(
-			FeeMultiplier::Negative(p(30)).sum(FeeMultiplier::Positive(p(10), 0)),
-			FeeMultiplier::Negative(p(20))
-		);
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self(self.0.saturating_sub(rhs.0))
 	}
 }

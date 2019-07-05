@@ -18,8 +18,9 @@
 
 use node_primitives::Balance;
 use runtime_primitives::weights::{Weight, FeeMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
-use runtime_primitives::traits::{Convert, Zero};
-use crate::{Perbill, Balances};
+use runtime_primitives::traits::{Convert, Saturating};
+use runtime_primitives::{DIV, Fixed64};
+use crate::Balances;
 
 /// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
 /// calculation.
@@ -45,68 +46,46 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// Formula:
 ///   diff = (ideal_weight - current_block_weight)
 ///   v = 0.00004
-///   next_weught = weight * (1 + (v . diff) + (v . diff)^2 / 2)
+///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
 pub struct FeeMultiplierUpdateHandler;
 impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHandler {
 	fn convert(previous_state: (Weight, FeeMultiplier)) -> FeeMultiplier {
 		let (block_weight, multiplier) = previous_state;
-		let max_fraction = 1_000_000_000_u128;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
-		let max = MAX_TRANSACTIONS_WEIGHT as u128;
 		let block_weight = block_weight as u128;
-
-		let from_max_to_per_fraction = |x: u128| {
-			if let Some(x_fraction) = x.checked_mul(max_fraction) {
-				x_fraction / max
-			} else {
-				max_fraction
-			}
-		};
-
-		let collapse_mul = |a: u128, b| {
-			if let Some(v) = a.checked_mul(b) {
-				v
-			} else {
-				// collapse to zero if it overflow. For now we don't have the accuracy needed to
-				// compute this trivially with u128.
-				Zero::zero()
-			}
-		};
 
 		// determines if the first_term is positive
 		let positive = block_weight >= ideal;
-		let diff = block_weight.max(ideal) - block_weight.min(ideal);
+		let diff_abs = block_weight.max(ideal) - block_weight.min(ideal);
+		// diff is within u32, safe.
+		let diff = Fixed64::from_rational(diff_abs as i64, MAX_TRANSACTIONS_WEIGHT as u64);
+		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
-		let v = 40_000;
-		// 0.00004^2 = 16/10^10 ~= 2/10^9
-		let v_squared = 2;
+		let v = Fixed64::from_parts(40_000);
+		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1.
+		let v_squared_2 = Fixed64::from_parts(1);
 
-		let mut first_term = v;
-		first_term = collapse_mul(first_term, from_max_to_per_fraction(diff));
-		first_term = first_term / max_fraction;
-
+		let first_term = v.saturating_mul(diff);
 		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving
 		// it a shot.
-		let mut second_term = v_squared;
-		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff));
-		second_term = collapse_mul(second_term, from_max_to_per_fraction(diff) / 2);
-		second_term = second_term / max_fraction;
-		second_term = second_term / max_fraction;
+		let second_term = v_squared_2.saturating_mul(diff_squared);
 
 		if positive {
 			let excess = first_term.saturating_add(second_term);
-			// max_fraction is always safe to convert to u32.
-			let p = Perbill::from_parts(excess.min(max_fraction) as u32);
-			multiplier.sum(FeeMultiplier::Positive(p, 0))
+			multiplier.saturating_add(FeeMultiplier::from_fixed(excess))
 		} else {
 			// first_term > second_term
 			let negative = first_term - second_term;
-			// max_fraction is always safe to convert to u32.
-			let p = Perbill::from_parts(negative.min(max_fraction) as u32);
-			multiplier.sum(FeeMultiplier::Negative(p))
+			multiplier.saturating_sub(FeeMultiplier::from_fixed(negative))
+				// despite the fact that apply_to saturates weight (final fee cannot go below 0)
+				// it is crucially important to stop here and don't further reduce the weight fee
+				// multiplier. While at -1, it means that the network is so un-congested that all
+				// transactions are practically free. We stop here and only increase if the network
+				// became more busy.
+				.max(FeeMultiplier::from_parts(-DIV))
 		}
 	}
 }
@@ -115,6 +94,7 @@ impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHand
 mod tests {
 	use super::*;
 	use runtime_primitives::weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight};
+	use runtime_primitives::Perbill;
 
 	// poc reference implementation.
 	#[allow(dead_code)]
@@ -135,60 +115,73 @@ mod tests {
 		Perbill::from_parts((fm * 1_000_000_000_f32) as u32)
 	}
 
+	fn fm(parts: i64) -> FeeMultiplier {
+		FeeMultiplier::from_parts(parts)
+	}
+
 	#[test]
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
 			FeeMultiplierUpdateHandler::convert((1024, FeeMultiplier::default())),
-			FeeMultiplier::Negative(Perbill::from_parts(9990))
+			fm(-9990)
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
 			FeeMultiplierUpdateHandler::convert((1024 * 4, FeeMultiplier::default())),
-			FeeMultiplier::Negative(Perbill::from_parts(9960))
+			fm(-9960)
 		);
 		// ideal. Original fee.
 		assert_eq!(
 			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT as u32, FeeMultiplier::default())),
-			FeeMultiplier::Positive(Perbill::zero(), 0)
+			fm(0)
 		);
-		// More than ideal. Fee is increased.
+		// // More than ideal. Fee is increased.
 		assert_eq!(
 			FeeMultiplierUpdateHandler::convert(((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32, FeeMultiplier::default())),
-			FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
+			fm(10000)
 		);
 	}
 
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((
-				IDEAL_TRANSACTIONS_WEIGHT * 2,
-				FeeMultiplier::default()
-			)),
-			FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, FeeMultiplier::default())),
+			fm(10000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((
-				IDEAL_TRANSACTIONS_WEIGHT * 2,
-				FeeMultiplier::Positive(Perbill::from_parts(10000), 0)
-			)),
-			FeeMultiplier::Positive(Perbill::from_parts(20000), 0)
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(10000))),
+			fm(20000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((
-				IDEAL_TRANSACTIONS_WEIGHT * 2,
-				FeeMultiplier::Positive(Perbill::from_parts(20000), 0)
-			)),
-			FeeMultiplier::Positive(Perbill::from_parts(30000), 0)
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(20000))),
+			fm(30000)
 		);
 		// ...
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((
-				IDEAL_TRANSACTIONS_WEIGHT * 2,
-				FeeMultiplier::Positive(Perbill::one(), 0)
-			)),
-			FeeMultiplier::Positive(Perbill::from_parts(10000), 1)
+			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(1_000_000_000))),
+			fm(1_000_000_000 + 10000)
+		);
+	}
+
+	#[test]
+	fn stateful_weight_mil_collapse_to_minus_one() {
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((0, FeeMultiplier::default())),
+			fm(-10000)
+		);
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((0, fm(-10000))),
+			fm(-20000)
+		);
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((0, fm(-20000))),
+			fm(-30000)
+		);
+		// ...
+		assert_eq!(
+			FeeMultiplierUpdateHandler::convert((0, fm(1_000_000_000 * -1))),
+			fm(-1_000_000_000)
 		);
 	}
 
@@ -198,8 +191,23 @@ mod tests {
 		// 4 * 1024 * 1024 in a block.
 		let kb = 1024_u32;
 		let mb = kb * kb;
+		let max_fm = FeeMultiplier::from_fixed(Fixed64::from_natural(i64::max_value()));
+
 		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
 			.into_iter()
-			.for_each(|i| { FeeMultiplierUpdateHandler::convert((i, FeeMultiplier::default())); });
+			.for_each(|i| {
+				FeeMultiplierUpdateHandler::convert((i, FeeMultiplier::default()));
+			});
+
+		vec![10 * mb, Weight::max_value() / 2, Weight::max_value()]
+			.into_iter()
+			.for_each(|i| {
+				let fm = FeeMultiplierUpdateHandler::convert((
+					i,
+					max_fm
+				));
+				// won't grow. The convert saturates everything.
+				assert_eq!(fm, max_fm);
+			});
 	}
 }

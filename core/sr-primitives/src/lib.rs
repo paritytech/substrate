@@ -43,7 +43,7 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -390,6 +390,72 @@ impl codec::CompactAs for Perbill {
 impl From<codec::Compact<Perbill>> for Perbill {
 	fn from(x: codec::Compact<Perbill>) -> Perbill {
 		x.0
+	}
+}
+
+
+/// A fixed point number by the scale of 1 billion.
+///
+/// cannot hold a value larger than +-`9223372036854775807 / 1_000_000_000` (~9 billion).
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fixed64(i64);
+
+/// The maximum value of the `Fixed64` type
+pub const DIV: i64 = 1_000_000_000;
+
+impl Fixed64 {
+	/// Equal to the natural number `1`.
+	pub fn one() -> Self {
+		Self(DIV)
+	}
+
+	/// creates self from a natural number.
+	///
+	/// Note that this might be lossy.
+	pub fn from_natural(int: i64) -> Self {
+		Self(int.saturating_mul(DIV))
+	}
+
+	/// creates self from a rational number. Equal to `n/d`.
+	///
+	/// Note that this might be lossy.
+	pub fn from_rational(n: i64, d: u64) -> Self {
+		Self(n.saturating_mul(DIV) / d.max(1) as i64)
+	}
+
+	/// Raw constructor. Equal to `parts / 1_000_000_000`.
+	pub fn from_parts(parts: i64) -> Self {
+		Self(parts)
+	}
+}
+
+impl Saturating for Fixed64 {
+	fn saturating_add(self, rhs: Self) -> Self {
+		Self(self.0.saturating_add(rhs.0))
+	}
+	fn saturating_mul(self, rhs: Self) -> Self {
+		Self(self.0.saturating_mul(rhs.0) / DIV)
+
+	}
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self(self.0.saturating_sub(rhs.0))
+	}
+}
+
+impl ops::Add for Fixed64 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		Self(self.0 + rhs.0)
+	}
+}
+
+impl ops::Sub for Fixed64 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		Self(self.0 - rhs.0)
 	}
 }
 
@@ -771,6 +837,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 #[cfg(test)]
 mod tests {
 	use crate::codec::{Encode, Decode};
+	use super::{Perbill, Permill};
 
 	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
@@ -814,19 +881,19 @@ mod tests {
 	fn compact_permill_perbill_encoding() {
 		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
 		for &(n, l) in &tests {
-			let compact: crate::codec::Compact<super::Permill> = super::Permill(n).into();
+			let compact: crate::codec::Compact<Permill> = Permill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <crate::codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
-			let permill: super::Permill = decoded.into();
-			assert_eq!(permill, super::Permill(n));
+			let decoded = <crate::codec::Compact<Permill>>::decode(&mut & encoded[..]).unwrap();
+			let permill: Permill = decoded.into();
+			assert_eq!(permill, Permill(n));
 
-			let compact: crate::codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let compact: crate::codec::Compact<Perbill> = Perbill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <crate::codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
-			let perbill: super::Perbill = decoded.into();
-			assert_eq!(perbill, super::Perbill(n));
+			let decoded = <crate::codec::Compact<Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let perbill: Perbill = decoded.into();
+			assert_eq!(perbill, Perbill(n));
 		}
 	}
 
@@ -837,16 +904,16 @@ mod tests {
 
 	#[test]
 	fn test_has_compact_permill() {
-		let data = WithCompact { data: super::Permill(1) };
+		let data = WithCompact { data: Permill(1) };
 		let encoded = data.encode();
-		assert_eq!(data, WithCompact::<super::Permill>::decode(&mut &encoded[..]).unwrap());
+		assert_eq!(data, WithCompact::<Permill>::decode(&mut &encoded[..]).unwrap());
 	}
 
 	#[test]
 	fn test_has_compact_perbill() {
-		let data = WithCompact { data: super::Perbill(1) };
+		let data = WithCompact { data: Perbill(1) };
 		let encoded = data.encode();
-		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
+		assert_eq!(data, WithCompact::<Perbill>::decode(&mut &encoded[..]).unwrap());
 	}
 
 	#[test]
@@ -866,7 +933,7 @@ mod tests {
 
 	#[test]
 	fn per_things_operate_in_output_type() {
-		assert_eq!(super::Perbill::one() * 255_u64, 255);
+		assert_eq!(Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]
@@ -874,12 +941,12 @@ mod tests {
 		use primitive_types::U256;
 
 		assert_eq!(
-			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			Perbill::from_parts(999_999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
 		);
 
 		assert_eq!(
-			super::Permill::from_parts(999_999) * std::u128::MAX,
+			Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
 	}

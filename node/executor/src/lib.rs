@@ -981,15 +981,9 @@ mod tests {
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_fee_multiplier();
-			if let FeeMultiplier::Positive(prev, _) = prev_multiplier {
-				match fm {
-					FeeMultiplier::Positive(v, _) => assert!(v > prev),
-					_ => assert!(false, "Fee multiplier should increase"),
-				}
-				prev_multiplier = fm;
-			} else {
-				unreachable!();
-			}
+			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm > prev_multiplier);
+			prev_multiplier = fm;
 		});
 
 		// execute a big block.
@@ -1004,15 +998,84 @@ mod tests {
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_fee_multiplier();
-			if let FeeMultiplier::Positive(prev, _) = prev_multiplier {
-				match fm {
-					FeeMultiplier::Positive(v, _) => assert!(v > prev, "should be {:?} > {:?}", v, prev),
-					_ => assert!(false, "Fee multiplier should increase"),
+			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm > prev_multiplier);
+		});
+	}
+
+	#[test]
+	fn fee_multiplier_decreases_on_small_block() {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
+		let mut prev_multiplier = FeeMultiplier::default();
+
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(System::next_fee_multiplier(), prev_multiplier);
+		});
+
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut tt,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 0)),
+					function: Call::System(system::Call::remark(vec![0; 120])),
 				}
-				prev_multiplier = fm;
-			} else {
-				unreachable!();
-			}
+			]
+		);
+		let block2 = construct_block(
+			&mut tt,
+			2,
+			block1.1.clone(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(52)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::System(system::Call::remark(vec![0; 120])),
+				}
+			]
+		);
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block1.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// fee multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_fee_multiplier();
+			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm < prev_multiplier);
+			prev_multiplier = fm;
+		});
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block2.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// fee multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_fee_multiplier();
+			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm < prev_multiplier);
 		});
 	}
 
