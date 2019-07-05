@@ -27,7 +27,7 @@ use libp2p::{Multiaddr, multihash::Multihash};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use crate::protocol::Protocol;
-use crate::{behaviour::{Behaviour, BehaviourOut}, parse_str_addr};
+use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use peerset::PeersetHandle;

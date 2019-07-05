@@ -41,7 +41,7 @@ use consensus::block_import::BlockImport;
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
-use crate::{NetworkWorker, NetworkService, ProtocolId};
+use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
 use primitives::{H256, Blake2Hasher};

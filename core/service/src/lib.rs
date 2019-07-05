@@ -236,7 +236,7 @@ impl<Components: components::Components> Service<Components> {
 					DEFAULT_PROTOCOL_ID
 				}
 			}.as_bytes();
-			network::ProtocolId::from(protocol_id_full)
+			network::config::ProtocolId::from(protocol_id_full)
 		};
 
 		let network_params = network::config::Params {
