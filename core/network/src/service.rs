@@ -102,7 +102,7 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Protocol sender
-	protocol_sender: mpsc::UnboundedSender<ProtocolMsg<B, S>>,
+	protocol_sender: mpsc::UnboundedSender<ServerToWorkerMsg<B, S>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker<B, S, H> {
@@ -302,19 +302,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn on_block_imported(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::BlockImported(hash, header));
+			.unbounded_send(ServerToWorkerMsg::BlockImported(hash, header));
 	}
 
 	/// Called when a new block is finalized by the client.
 	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::BlockFinalized(hash, header));
+			.unbounded_send(ServerToWorkerMsg::BlockFinalized(hash, header));
 	}
 
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
-		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::PropagateExtrinsics);
+		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::PropagateExtrinsics);
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -322,7 +322,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&self, hash: B::Hash) {
-		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::AnnounceBlock(hash));
+		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
 	}
 
 	/// Send a consensus message through the gossip
@@ -335,7 +335,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	) {
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::GossipConsensusMessage(
+			.unbounded_send(ServerToWorkerMsg::GossipConsensusMessage(
 				topic, engine_id, message, recipient,
 			));
 	}
@@ -350,7 +350,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::RequestJustification(hash.clone(), number));
+			.unbounded_send(ServerToWorkerMsg::RequestJustification(hash.clone(), number));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
@@ -359,7 +359,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	{
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::ExecuteWithSpec(Box::new(f)));
+			.unbounded_send(ServerToWorkerMsg::ExecuteWithSpec(Box::new(f)));
 	}
 
 	/// Execute a closure with the consensus gossip.
@@ -368,7 +368,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	{
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
+			.unbounded_send(ServerToWorkerMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -500,23 +500,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 	}
 }
 
-/// Messages sent to Protocol from elsewhere inside the system.
-pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
-	/// Tell protocol to propagate extrinsics.
+/// Messages sent from the `NetworkService` to the `NetworkWorker`.
+///
+/// Each entry corresponds to a method of `NetworkService`.
+enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PropagateExtrinsics,
-	/// Tell protocol to request justification for a block.
 	RequestJustification(B::Hash, NumberFor<B>),
-	/// Propagate a block to peers.
 	AnnounceBlock(B::Hash),
-	/// A block has been imported (sent by the client).
 	BlockImported(B::Hash, B::Header),
-	/// A block has been finalized (sent by the client).
 	BlockFinalized(B::Hash, B::Header),
-	/// Execute a closure with the chain-specific network specialization.
 	ExecuteWithSpec(Box<dyn SpecTask<B, S> + Send + 'static>),
-	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
-	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 }
 
@@ -553,7 +547,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	network_service: Arc<Mutex<Swarm<B, S, H>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<dyn ImportQueue<B>>,
-	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
+	protocol_rx: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	peerset: PeersetHandle,
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 
@@ -653,27 +647,27 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			let mut network_service = self.network_service.lock();
 
 			match msg {
-				ProtocolMsg::BlockImported(hash, header) =>
+				ServerToWorkerMsg::BlockImported(hash, header) =>
 					network_service.user_protocol_mut().on_block_imported(hash, &header),
-				ProtocolMsg::BlockFinalized(hash, header) =>
+				ServerToWorkerMsg::BlockFinalized(hash, header) =>
 					network_service.user_protocol_mut().on_block_finalized(hash, &header),
-				ProtocolMsg::ExecuteWithSpec(task) => {
+				ServerToWorkerMsg::ExecuteWithSpec(task) => {
 					let protocol = network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
 					task.call_box(spec, &mut context);
 				},
-				ProtocolMsg::ExecuteWithGossip(task) => {
+				ServerToWorkerMsg::ExecuteWithGossip(task) => {
 					let protocol = network_service.user_protocol_mut();
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task.call_box(gossip, &mut context);
 				}
-				ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
+				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
 					network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
-				ProtocolMsg::AnnounceBlock(hash) =>
+				ServerToWorkerMsg::AnnounceBlock(hash) =>
 					network_service.user_protocol_mut().announce_block(hash),
-				ProtocolMsg::RequestJustification(hash, number) =>
+				ServerToWorkerMsg::RequestJustification(hash, number) =>
 					network_service.user_protocol_mut().request_justification(&hash, number),
-				ProtocolMsg::PropagateExtrinsics =>
+				ServerToWorkerMsg::PropagateExtrinsics =>
 					network_service.user_protocol_mut().propagate_extrinsics(),
 			}
 		}
