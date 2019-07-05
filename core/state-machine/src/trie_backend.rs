@@ -198,7 +198,7 @@ pub mod tests {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 
-		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"sub1"[..], &0u64);
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"sub1"[..], 1u128);
 		let mut sub_root = H256::default();
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, Some(child_trie1.keyspace()));

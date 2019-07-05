@@ -20,6 +20,7 @@ use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use substrate_primitives::child_trie::ChildTrie;
 use substrate_primitives::child_trie::ChildTrieReadRef;
+use substrate_primitives::storage::well_known_keys;
 use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
@@ -446,22 +447,23 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use sr_std::ops::Sub;
-	use sr_std::convert::{TryInto, TryFrom};
 	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, ChildTrie,
-		ChildTrieReadRef};
+		ChildTrieReadRef, well_known_keys};
 
 	/// Method for fetching or initiating a new child trie.
-	pub fn fetch_or_new<N>(
+	pub fn next_keyspace() -> u128 {
+		let key = well_known_keys::CHILD_STORAGE_KEYSPACE_COUNTER;
+		// do start at 1 (0 is reserved for top trie)
+		let previous = super::unhashed::get(key).unwrap_or(0u128);
+		let new = previous + 1;
+		super::unhashed::put(key, &new);
+		new
+	}
+
+	/// Method for fetching or initiating a new child trie.
+	pub fn fetch_or_new(
 		parent: &[u8],
-		block_nb: &N,
-	) -> ChildTrie
-		where
-			N: TryInto<u128>,
-			N: Sub<N, Output = N>,
-			N: TryFrom<u128>,
-			N: Clone,
-	{
+	) -> ChildTrie {
 		ChildTrie::fetch_or_new(
 			|pk| { child_trie(pk) },
 			|ct| {
@@ -472,7 +474,7 @@ pub mod child {
 				debug_assert!(updated);
 			},
 			parent,
-			block_nb,
+			next_keyspace(),
 		)
 	}
 

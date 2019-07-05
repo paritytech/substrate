@@ -19,8 +19,6 @@
 use parity_codec::{Encode, Decode, Compact};
 use rstd::prelude::*;
 use rstd::ptr;
-use rstd::ops::Sub;
-use rstd::convert::{TryInto, TryFrom};
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -51,34 +49,10 @@ const NO_CHILD_KEYSPACE: [u8;0] = [];
 
 
 /// Generate a new keyspace for a child trie.
-pub fn generate_keyspace<N>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8>
-	where
-		N: TryInto<u128>,
-		N: Sub<N, Output = N>,
-		N: TryFrom<u128>,
-		N: Clone,
-{
+pub fn generate_keyspace(child_counter: u128) -> Vec<u8> {
 	// using 12 for block number and additional encoding targeting ~u64
-	let mut result = Vec::with_capacity(parent_trie.len() + 12);
-	parity_codec::Encode::encode_to(ChildTrie::parent_key_slice(parent_trie), &mut result);
-
-	let mut block_nb = block_nb.clone();
-	// Note that this algo only work if conversion failure are related to out of bound and
-	// implemented when possible.
-	loop {
-		if let Ok(v) = block_nb.clone().try_into() {
-			if v < u128::max_value() {
-				parity_codec::Encode::encode_to(&Compact(v), &mut result);
-				break;
-			}
-		}
-		parity_codec::Encode::encode_to(&Compact(u128::max_value()), &mut result);
-		if let Ok(max) = N::try_from(u128::max_value()) {
-			block_nb = block_nb - max;
-		} else {
-			unreachable!("Previously fail with bigger value; qed");
-		}
-	}
+	let mut result = Vec::with_capacity(8);
+	parity_codec::Encode::encode_to(&Compact(child_counter), &mut result);
 	result
 }
 
@@ -224,23 +198,17 @@ impl ChildTrie {
 	/// or for performance purpose (later write).
 	///
 	/// We also provide an encodable value specific to the creation state (block number).
-	pub fn fetch_or_new<N>(
+	pub fn fetch_or_new(
 		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
 		child_trie_update: impl FnOnce(ChildTrie),
 		parent: &[u8],
-		block_nb: &N,
-	) -> Self
-		where
-			N: TryInto<u128>,
-			N: Sub<N, Output = N>,
-			N: TryFrom<u128>,
-			N: Clone,
-	{
+		child_trie_counter: u128,
+	) -> Self {
 		parent_fetcher(parent)
 			.unwrap_or_else(|| {
 			let parent = Self::prefix_parent_key(parent);
 			let ct = ChildTrie {
-				keyspace: generate_keyspace(block_nb, &parent),
+				keyspace: generate_keyspace(child_trie_counter),
 				root: Default::default(),
 				parent,
 				extension: Default::default(),
@@ -406,9 +374,7 @@ impl AsRef<ChildTrie> for ChildTrie {
 
 #[test]
 fn encode_empty_prefix() {
-	let block_number = 0u128;
-	let prefix = ChildTrie::prefix_parent_key(hash_db::EMPTY_PREFIX);
-	let empt = generate_keyspace(&block_number, &prefix);
+	let empt = generate_keyspace(0);
 
 	// this ensure root trie can be move to be a child trie
 	assert_eq!(&NO_CHILD_KEYSPACE[..], &empt[..]);

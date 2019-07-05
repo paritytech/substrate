@@ -151,10 +151,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 				let p_key = prefixed_trie_id(&new_info.trie_id);
 				// see issue FIXME #2744 to avoid this fetch
-				let child_trie = child::fetch_or_new(
-					p_key.as_ref(),
-					&block_number,
-				);
+				let child_trie = child::fetch_or_new(p_key.as_ref());
 
 				if !changed.storage.is_empty() {
 					new_info.last_write = Some(block_number);
