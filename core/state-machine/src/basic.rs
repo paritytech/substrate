@@ -45,9 +45,6 @@ impl BasicExternalities {
 		mut top: HashMap<Vec<u8>, Vec<u8>>,
 		mut children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
-		top.retain(|key, _| !is_child_storage_key(key));
-		children.retain(|key, _| is_child_storage_key(key));
-
 		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {
 			top,
@@ -60,8 +57,8 @@ impl BasicExternalities {
 		self.top.insert(k, v)
 	}
 
-	/// Get storages
-	pub fn storages(self) -> (
+	/// Consume self and returns inner storages
+	pub fn into_storages(self) -> (
 		HashMap<Vec<u8>, Vec<u8>>,
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) {
@@ -72,6 +69,7 @@ impl BasicExternalities {
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
 		self.top.eq(&other.top)
+		self.children.eq(&other.children)
 	}
 }
 
@@ -111,7 +109,8 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		if is_child_storage_key(&key) {
-			panic!("Refuse to directly set child storage key");
+			warn!(target: "trie", "Refuse to set child storage key via main storage");
+			return;
 		}
 
 		match maybe_value {
@@ -139,8 +138,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		if is_child_storage_key(&prefix) {
-			panic!("Refuse to directly set child storage key");
+		if is_child_storage_key(prefix) {
+			warn!(
+				target: "trie",
+				"Refuse to clear prefix that is part of child storage key via main storage"
+			);
+			return;
 		}
 
 		self.top.retain(|key, _| !key.starts_with(prefix));
