@@ -225,12 +225,16 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 						base: (new.canon_hash, new.canon_number),
 						historical_votes: HistoricalVotes::new(),
 					};
-					let rounds = VecDeque::new();
+					let mut rounds = VecDeque::new();
 					rounds.push_back(completed_round);
+					let voters_set = &*authority_set.inner().read();
+					let voters = voters_set
+						.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 					let completed_rounds = CompletedRounds::new(
 						rounds,
 						new.set_id,
-						&*authority_set.inner().read(),
+						voters,
 					);
 					let set_state = VoterSetState::Live::<Block> {
 						// always start at round 0 when changing sets.

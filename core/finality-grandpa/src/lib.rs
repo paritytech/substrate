@@ -687,13 +687,16 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 							historical_votes: HistoricalVotes::<Block>::new(),
 					};
 
-					let rounds = VecDeque::new();
+					let mut rounds = VecDeque::new();
 					rounds.push_back(completed_round);
 
+					let voters = authority_set.inner().read()
+						.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 					let completed_rounds = CompletedRounds::new(
 						rounds,
 						new.set_id,
-						&*authority_set.inner().read(),
+						voters,
 					);
 
 					let set_state = VoterSetState::Live {

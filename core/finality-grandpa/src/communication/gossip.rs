@@ -1231,6 +1231,7 @@ impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
+	use crate::HistoricalVotes;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
 
@@ -1246,24 +1247,27 @@ mod tests {
 
 	// dummy voter set state
 	fn voter_set_state() -> SharedVoterSetState<Block> {
-		use crate::authorities::AuthoritySet;
 		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 		use grandpa::round::State as RoundState;
 		use substrate_primitives::H256;
 
 		let state = RoundState::genesis((H256::zero(), 0));
 		let base = state.prevote_ghost.unwrap();
-		let voters = AuthoritySet::genesis(Vec::new());
+		let voters = Vec::new();
+		let completed_round = CompletedRound {
+			state,
+			number: 0,
+			base,
+			historical_votes: HistoricalVotes::<Block>::new(),
+		};
+		let mut rounds = VecDeque::new();
+		rounds.push_back(completed_round);
+
 		let set_state = VoterSetState::Live {
 			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					state,
-					number: 0,
-					votes: Vec::new(),
-					base,
-				},
+				rounds,
 				0,
-				&voters,
+				voters,
 			),
 			current_round: HasVoted::No,
 		};
@@ -1545,7 +1549,7 @@ mod tests {
 				number: 1,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
-				votes: Default::default(),
+				historical_votes: HistoricalVotes::<Block>::new(),
 			}));
 
 			let set_state = environment::VoterSetState::<Block>::Live {

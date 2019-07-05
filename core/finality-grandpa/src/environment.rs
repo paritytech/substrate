@@ -46,7 +46,7 @@ use crate::{
 
 use consensus_common::SelectChain;
 
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
