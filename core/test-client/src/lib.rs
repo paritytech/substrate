@@ -178,7 +178,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 					|_| (),
 					&b"test"[..],
 					// block 0
-					&0u64,
+					1u128,
 				);
 				storage.1.insert(
 					child_trie.keyspace().clone(),

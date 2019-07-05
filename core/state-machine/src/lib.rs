@@ -1153,7 +1153,7 @@ mod tests {
 			|_| None,
 			|_| (),
 			b"testchild",
-			&0u64, // block number
+			1u128, // child trie counter
 		);
 		ext.set_child_storage(&child_trie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_trie.node_ref(), b"abc"), Some(b"def".to_vec()));
@@ -1266,9 +1266,8 @@ mod tests {
 		use crate::trie_backend::tests::test_trie;
 		use std::collections::HashSet;
 
-		let block_number = 0u64;
-		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x01], &block_number);
-		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x23], &block_number);
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x01], 1u128);
+		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x23], 2u128);
 		let mut tr1 = {
 			let mut ttrie = test_trie();
 			let backend = ttrie.as_trie_backend().unwrap();

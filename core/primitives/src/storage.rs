@@ -67,6 +67,9 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
+	/// Counter for child trie keyspace.
+	pub const CHILD_STORAGE_KEYSPACE_COUNTER: &'static [u8] = b":child_keyspace_counter:";
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
