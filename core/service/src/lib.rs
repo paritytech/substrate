@@ -256,7 +256,11 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(network_mut, client.clone(), network_status_sinks.clone())
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+			network_mut,
+			client.clone(),
+			network_status_sinks.clone()
+		)
 			.map_err(|_| ())
 			.select(exit.clone())
 			.then(|_| Ok(()))));
@@ -279,7 +283,6 @@ impl<Components: components::Components> Service<Components> {
 
 		{
 			// block notifications
-			let network = Arc::downgrade(&network);
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
@@ -288,10 +291,6 @@ impl<Components: components::Components> Service<Components> {
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
-
-					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, notification.header);
-					}
 
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
 						Components::RuntimeServices::maintain_transaction_pool(
@@ -623,9 +622,15 @@ fn build_network_future<Components: components::Components, S: network::speciali
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
+	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
 	futures::future::poll_fn(move || {
+		// We poll `imported_blocks_stream`.
+		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
+			network.on_block_imported(notification.hash, notification.header);
+		}
+
 		// We poll `finality_notification_stream`, but we only take the last event.
 		let mut last = None;
 		while let Ok(Async::Ready(Some(item))) = finality_notification_stream.poll() {
@@ -635,6 +640,7 @@ fn build_network_future<Components: components::Components, S: network::speciali
 			network.on_block_finalized(notification.hash, notification.header);
 		}
 
+		// Interval report for the external API.
 		while let Ok(Async::Ready(_)) = status_interval.poll() {
 			let status = NetworkStatus {
 				sync_state: network.sync_state(),
@@ -649,6 +655,7 @@ fn build_network_future<Components: components::Components, S: network::speciali
 			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 		}
 
+		// Main network polling.
 		network.poll()
 			.map_err(|err| {
 				warn!(target: "service", "Error in network: {:?}", err);
