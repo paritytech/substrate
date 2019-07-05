@@ -420,7 +420,7 @@ pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> 
 	rstd::mem::swap(&mut alt_storage, storage);
 	let mut ext = BasicExternalities::new(alt_storage);
 	let r = ext::using(&mut ext, f);
-	*storage = ext.storages().0;
+	*storage = ext.into_storages().0;
 	r
 }
 
@@ -440,7 +440,7 @@ pub fn with_storage_and_children<R, F: FnOnce() -> R>(
 	let mut ext = BasicExternalities::new_with_children(alt_storage, alt_children_storage);
 	let r = ext::using(&mut ext, f);
 
-	let storage_tuple = ext.storages();
+	let storage_tuple = ext.into_storages();
 	*storage = storage_tuple.0;
 	*children_storage = storage_tuple.1;
 

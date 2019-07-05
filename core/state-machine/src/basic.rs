@@ -43,7 +43,7 @@ impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities` with children
 	pub fn new_with_children(
 		mut top: HashMap<Vec<u8>, Vec<u8>>,
-		mut children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
 		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {
@@ -68,8 +68,7 @@ impl BasicExternalities {
 
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
-		self.top.eq(&other.top)
-		self.children.eq(&other.children)
+		self.top.eq(&other.top) && self.children.eq(&other.children)
 	}
 }
 
