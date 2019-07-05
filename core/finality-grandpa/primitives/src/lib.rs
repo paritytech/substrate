@@ -23,7 +23,7 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
@@ -44,14 +44,54 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
+/// The index of an authority.
+pub type AuthorityIndex = u64;
+
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(AuthorityId, u64)>,
+	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
 	/// The number of blocks to delay.
 	pub delay: N,
+}
+
+/// An consensus log item for GRANDPA.
+#[derive(Decode, Encode)]
+pub enum ConsensusLog<N: Codec> {
+	/// Schedule an authority set change.
+	///
+	/// Precedence towards earlier or later digest items can be given
+	/// based on the rules of the chain.
+	///
+	/// No change should be scheduled if one is already and the delay has not
+	/// passed completely.
+	///
+	/// This should be a pure function: i.e. as long as the runtime can interpret
+	/// the digest type it should return the same result regardless of the current
+	/// state.
+	#[codec(index = "1")]
+	ScheduledChange(ScheduledChange<N>),
+	/// Force an authority set change.
+	///
+	/// Forced changes are applied after a delay of _imported_ blocks,
+	/// while pending changes are applied after a delay of _finalized_ blocks.
+	///
+	/// Precedence towards earlier or later digest items can be given
+	/// based on the rules of the chain.
+	///
+	/// No change should be scheduled if one is already and the delay has not
+	/// passed completely.
+	///
+	/// This should be a pure function: i.e. as long as the runtime can interpret
+	/// the digest type it should return the same result regardless of the current
+	/// state.
+	#[codec(index = "2")]
+	ForcedChange(N, ScheduledChange<N>),
+	/// Note that the authority with given index is disabled until the next change.
+	#[codec(index = "3")]
+	OnDisable(AuthorityIndex),
 }
 
 /// WASM function call to check for pending changes.
