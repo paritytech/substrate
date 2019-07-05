@@ -867,7 +867,7 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	fn try_from_account(a: &AccountId) -> Option<Self>;
 }
 
-/// Provide a simply 4 byte identifier for a type.
+/// Provide a simple 4 byte identifier for a type.
 pub trait TypeId {
 	/// Simple 4 byte identifier.
 	const TYPE_ID: [u8; 4];
@@ -882,6 +882,25 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 
 	fn try_from_account(x: &T) -> Option<Self> {
+		x.using_encoded(|d| {
+			if &d[0..4] != Id::TYPE_ID { return None }
+			let mut cursor = &d[4..];
+			let result = Decode::decode(&mut cursor)?;
+			if cursor.iter().all(|x| *x == 0) {
+				Some(result)
+			} else {
+				None
+			}
+		})
+	}
+
+	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
+		(Id::TYPE_ID, self, sub).using_encoded(|b|
+			T::decode(&mut TrailingZeroInput(b))
+		).unwrap_or_default()
+	}
+
+	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
 			if &d[0..4] != Id::TYPE_ID { return None }
 			let mut cursor = &d[4..];
