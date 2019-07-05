@@ -43,10 +43,10 @@ impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities` with children
 	pub fn new_with_children(
 		mut top: HashMap<Vec<u8>, Vec<u8>>,
-		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		mut children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
-		assert!(top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(children.keys().all(|key| is_child_storage_key(key)));
+		top.retain(|key, _| !is_child_storage_key(key));
+		children.retain(|key, _| is_child_storage_key(key));
 
 		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {

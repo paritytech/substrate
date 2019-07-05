@@ -62,8 +62,8 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn new_with_code_with_children(code: &[u8], mut storage: StorageTuple) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
-		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
+		storage.0.retain(|key, _| !is_child_storage_key(key));
+		storage.1.retain(|key, _| is_child_storage_key(key));
 
 		super::set_changes_trie_config(
 			&mut overlay,
