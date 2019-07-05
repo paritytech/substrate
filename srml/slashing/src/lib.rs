@@ -32,15 +32,21 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// A misbehaved validator along with its nominator and each nominator's exposure
+/// A snapshot of the stake backing a single validator in the system.
+/// In which includes the portions of each nominator stash
+///
+/// It assumes that the implemenentation of `OnSlashing` trait
+/// has access to an underlaying module in order to
+/// fetch:
+///		i)  Balance of the `validator`
+///		ii) Account Ids for the `nominators`
+///		iii) Balances for the `nominators`
 pub trait SlashRecipient<AccountId, Exposure> {
 	/// Get the account id of the misbehaved validator
 	fn account_id(&self) -> &AccountId;
 }
 
 /// Report rolling data misconduct and apply slash accordingly
-// Pre-condition: the actual implementor of `OnSlashing` has access to
-// `session_index` and `number of validators`
 pub fn rolling_data<M, OS, SR, Exposure>(
 	misbehaved: &[SR],
 	misconduct: &mut M
@@ -55,7 +61,7 @@ where
 	misconduct.as_misconduct_level(seve)
 }
 
-/// Report era misconduct but do not perform any slashing
+/// Report misconduct during an era but do not perform any slashing
 pub fn era_data<M, OS, SR, Exposure>(who: &[SR], misconduct: &mut M)
 where
 	M: Misconduct<Exposure>,
@@ -67,8 +73,6 @@ where
 }
 
 /// Slash in the end of era
-///
-/// Safety: Make sure call this exactly once and in the end of era
 pub fn end_of_era<E, OS, SR, Exposure>(end_of_era: &E) -> u8
 where
 	E: OnEndEra<Exposure>,
@@ -105,7 +109,6 @@ pub trait OnEndEra<Exposure>: Misconduct<Exposure> {
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to currency
-// In practice this is likely to be the `Staking module`
 pub trait OnSlashing<M, SR, Exposure>
 where
 	M: Misconduct<Exposure>,
