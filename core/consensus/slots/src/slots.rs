@@ -173,7 +173,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 					timestamp,
 					ends_at,
 					inherent_data,
-					epoch: slot_num % u64::from(self.slots_per_epoch),
+					epoch: slot_num / self.slots_per_epoch.get(),
 				})))
 			}
 		}

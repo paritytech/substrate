@@ -31,6 +31,7 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 /// * The slot number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
+	pub(super) epoch: u64,
 	pub(super) vrf_output: VRFOutput,
 	pub(super) proof: VRFProof,
 	pub(super) index: babe_primitives::AuthorityIndex,
@@ -41,6 +42,7 @@ pub struct BabePreDigest {
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 type RawBabePreDigest = (
+	u64,
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
 	u64,
@@ -50,6 +52,7 @@ type RawBabePreDigest = (
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp: RawBabePreDigest = (
+			self.epoch,
 			*self.vrf_output.as_bytes(),
 			self.proof.to_bytes(),
 			self.index,
@@ -61,12 +64,13 @@ impl Encode for BabePreDigest {
 
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
+		let (epoch, output, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
 		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;
 		let _: [u8; babe_primitives::VRF_PROOF_LENGTH] = proof;
 		Some(BabePreDigest {
+			epoch,
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
 			index,

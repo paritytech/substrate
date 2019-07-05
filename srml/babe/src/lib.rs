@@ -116,7 +116,7 @@ decl_storage! {
 		LastTimestamp get(last): T::Moment;
 
 		/// The current authorities set.
-		Authorities get(authorities): Vec<AuthorityId>;
+		Authorities get(authorities): Vec<(AuthorityId, u64)>;
 
 		/// The epoch randomness.
 		///
@@ -138,6 +138,10 @@ decl_storage! {
 
 		/// The current epoch
 		EpochIndex get(epoch_index): u64;
+
+		/// Set to `true` when this code discovers that an epoch change is
+		/// needed. Set to `false` by the actual change.
+		LastSlotInEpoch: bool;
 	}
 }
 
@@ -151,11 +155,15 @@ decl_module! {
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
 				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					<[u8; VRF_OUTPUT_LENGTH]>::decode(&mut data)
+					<(u64, [u8; VRF_OUTPUT_LENGTH])>::decode(&mut data)
 				} else {
 					None
 				}) {
-				Self::deposit_vrf_output(&i);
+				if i.0 != EpochIndex::get() {
+					// New epoch reported by validator
+					LastSlotInEpoch::put(true)
+				}
+				return Self::deposit_vrf_output(&i.1)
 			}
 		}
 	}
@@ -176,7 +184,8 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let (_, _, i): (
+				let (_, _, _, i): (
+					u64,
 					[u8; VRF_OUTPUT_LENGTH],
 					[u8; VRF_PROOF_LENGTH],
 					u64,
@@ -188,6 +197,11 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	}
 }
 
+#[derive(Encode, Decode, Debug, Hash, Eq, PartialEq, Clone)]
+struct Epoch {
+	authorities: Vec<(AuthorityId, u64)>,
+}
+
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
@@ -196,11 +210,14 @@ impl<T: Trait> Module<T> {
 		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
 
-	fn change_authorities(new: Vec<AuthorityId>) {
-		Authorities::put(&new);
-
+	fn deposit_consensus<U: Encode>(new: U) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<system::Module<T>>::deposit_log(log.into());
+		<system::Module<T>>::deposit_log(log.into())
+	}
+
+	fn change_authorities(new: Epoch) {
+		Authorities::put(&new.authorities);
+		Self::deposit_consensus(new)
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
@@ -216,18 +233,24 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
+impl<T: Trait> session::ShouldEndSession<u64> for Module<T> {
+	fn should_end_session(_now: u64) -> bool {
+		LastSlotInEpoch::take()
+	}
+}
+
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, (AuthorityId, u64))>
 	{
 		// instant changes
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::authorities();
 			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
+				Self::change_authorities(Epoch { authorities: next_authorities })
 			}
 		}
 
