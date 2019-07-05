@@ -20,7 +20,7 @@ use runtime_io::with_externalities;
 use srml_support::traits::Currency;
 
 #[test]
-fn slash_nominator_based_exposure() {
+fn slash_nominator_based_on_exposure() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
