@@ -14,16 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
 use futures::{prelude::*, future::Executor, sync::mpsc};
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::error::Error as ConsensusError;
-use crate::block_import::{BlockImport, BlockOrigin, ImportResult};
+use crate::block_import::{BlockImport, BlockOrigin};
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, SharedBlockImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder, SharedJustificationImport, ImportQueue, Link, Origin,
-	IncomingBlock, buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
+	IncomingBlock, import_single_block,
+	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
 
 /// Reputation change for peers which send us a block with an incomplete header.
@@ -404,76 +405,4 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	}
 
 	(imported, count, results)
-}
-
-/// Single block import function.
-fn import_single_block<B: BlockT, V: Verifier<B>>(
-	import_handle: &dyn BlockImport<B, Error = ConsensusError>,
-	block_origin: BlockOrigin,
-	block: IncomingBlock<B>,
-	verifier: Arc<V>,
-) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
-	let peer = block.origin;
-
-	let (header, justification) = match (block.header, block.justification) {
-		(Some(header), justification) => (header, justification),
-		(None, _) => {
-			if let Some(ref peer) = peer {
-				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
-			} else {
-				debug!(target: "sync", "Header {} was not provided ", block.hash);
-			}
-			return Err(BlockImportError::IncompleteHeader(peer))
-		},
-	};
-
-	trace!(target: "sync", "Header {} has {:?} logs", block.hash, header.digest().logs().len());
-
-	let number = header.number().clone();
-	let hash = header.hash();
-	let parent = header.parent_hash().clone();
-
-	let import_error = |e| {
-		match e {
-			Ok(ImportResult::AlreadyInChain) => {
-				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-				Ok(BlockImportResult::ImportedKnown(number))
-			},
-			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
-			Ok(ImportResult::UnknownParent) => {
-				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
-				Err(BlockImportError::UnknownParent)
-			},
-			Ok(ImportResult::KnownBad) => {
-				debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-				Err(BlockImportError::BadBlock(peer.clone()))
-			},
-			Err(e) => {
-				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-				Err(BlockImportError::Error)
-			}
-		}
-	};
-
-	match import_error(import_handle.check_block(hash, parent))? {
-		BlockImportResult::ImportedUnknown { .. } => (),
-		r => return Ok(r), // Any other successful result means that the block is already imported.
-	}
-
-	let (import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
-		.map_err(|msg| {
-			if let Some(ref peer) = peer {
-				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
-			} else {
-				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
-			}
-			BlockImportError::VerificationFailed(peer.clone(), msg)
-		})?;
-
-	let mut cache = HashMap::new();
-	if let Some(keys) = maybe_keys {
-		cache.extend(keys.into_iter());
-	}
-
-	import_error(import_handle.import_block(import_block, cache))
 }
