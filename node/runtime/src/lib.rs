@@ -63,6 +63,10 @@ pub use staking::StakerStatus;
 pub mod impls;
 use impls::{CurrencyToVoteHandler, FeeMultiplierUpdateHandler};
 
+// Make the WASM binary available.
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
@@ -73,7 +77,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 104,
-	impl_version: 104,
+	impl_version: 106,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -195,6 +199,7 @@ impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
 	type Keys = SessionKeys;
+	type SelectInitialValidators = Staking;
 }
 
 parameter_types! {

@@ -20,7 +20,6 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	rustup target add wasm32-unknown-unknown --toolchain nightly && \
 	cargo install --git https://github.com/alexcrichton/wasm-gc && \
 	rustup default nightly && \
-	./scripts/build.sh && \
 	rustup default stable && \
 	cargo build --$PROFILE
 
