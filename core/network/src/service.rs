@@ -95,6 +95,8 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<Swarm<B, S, H>>>,
+	/// Local copy of the `PeerId` of the local node.
+	local_peer_id: PeerId,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -227,6 +229,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			peers: peers.clone(),
 			peerset: peerset_handle,
 			network: network.clone(),
+			local_peer_id,
 			protocol_sender: protocol_sender.clone(),
 		});
 
@@ -303,7 +306,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
 	/// Returns the network identity of the node.
 	pub fn local_peer_id(&self) -> PeerId {
-		Swarm::<B, S, H>::local_peer_id(&*self.network.lock()).clone()
+		self.local_peer_id.clone()
 	}
 
 	/// You must call this when new transactons are imported by the transaction pool.
