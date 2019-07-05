@@ -448,16 +448,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.behaviour.is_enabled(peer_id)
 	}
 
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Message<B>) {
-		self.behaviour.send_packet(target, message)
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.behaviour.peerset_debug_info()

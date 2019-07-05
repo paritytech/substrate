@@ -226,7 +226,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peers: peers.clone(),
-			peerset: peerset_handle.clone(),
+			peerset: peerset_handle,
 			network: network.clone(),
 			protocol_sender: protocol_sender.clone(),
 		});
@@ -235,7 +235,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			is_offline,
 			is_major_syncing,
 			network_service: network,
-			peerset: peerset_handle,
 			service,
 			peers,
 			import_queue: params.import_queue,
@@ -548,7 +547,6 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<dyn ImportQueue<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
-	peerset: PeersetHandle,
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 
 	/// Interval at which we update the `connected_peers` Arc.
