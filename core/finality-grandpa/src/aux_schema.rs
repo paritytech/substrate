@@ -66,21 +66,6 @@ pub struct V2CompletedRounds<Block: BlockT> {
 	voters: Vec<AuthorityId>,
 }
 
-// impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
-// 	fn encode(&self) -> Vec<u8> {
-// 		Vec::from_iter(&self.inner).encode()
-// 	}
-// }
-
-// impl<Block: BlockT> Decode for V2CompletedRounds<Block> {
-// 	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
-// 		Vec::<V2CompletedRound<Block>>::decode(value)
-// 			.map(|completed_rounds| V2CompletedRounds {
-// 				inner: completed_rounds.into(),
-// 			})
-// 	}
-// }
-
 impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
 	fn encode(&self) -> Vec<u8> {
 		let v = Vec::from_iter(&self.rounds);
