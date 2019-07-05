@@ -101,7 +101,7 @@
 //! - `on_finalize` - Called when a block is finalized.
 //! - `set_proxy` - Specify a proxy account. Called by the stash account.
 //! - `resign_proxy` - Clear the proxy account. Called by the proxy account.
-//! - `remove_proxy` - Clear the proxy. Called by the stash.
+//! - `remove_proxy` - Clear the proxy account. Called by the stash account.
 //! - `delegate` - Delegate vote.
 //! - `undelegate` - Undelegate vote.
 //!
