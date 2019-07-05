@@ -244,9 +244,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, (AuthorityId, u64))>
 	{
-		// Clear the “need new session” flat, so we do not get called over and over
-		LastSlotInEpoch::put(false);
-
 		// instant changes
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
