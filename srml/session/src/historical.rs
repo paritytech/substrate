@@ -147,6 +147,9 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 
 type HasherOf<T> = <<T as system::Trait>::Hashing as HashT>::Hasher;
 
+/// A tuple of the validator's ID and their full identification.
+pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
+
 /// a trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
 	db: MemoryDB<HasherOf<T>>,
@@ -163,28 +166,34 @@ impl<T: Trait> ProvingTrie<T> {
 			where I: IntoIterator<Item=(T::ValidatorId, Option<T::FullIdentification>)>
 		{
 			let mut trie = TrieDBMut::new(db, root);
-			for (validator, full_id) in validators {
+			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
+				let i = i as u32;
 				let keys = match <SessionModule<T>>::load_keys(&validator) {
 					None => continue,
 					Some(k) => k,
 				};
 
-				let full_id = full_id.or_else(move || T::FullIdentificationOf::convert(validator));
+				let full_id = full_id.or_else(|| T::FullIdentificationOf::convert(validator.clone()));
 				let full_id = match full_id {
 					None => return Err("no full identification for a current validator"),
-					Some(full) => full,
+					Some(full) => (validator, full),
 				};
 
+				// map each key to the owner index.
 				for key_id in T::Keys::key_ids() {
 					let key = keys.get_raw(key_id);
 					let res = (key_id, key).using_encoded(|k|
-						full_id.using_encoded(|v|
+						i.using_encoded(|v|
 							trie.insert(k, v)
 						)
 					);
 
 					let _ = res.map_err(|_| "failed to insert into trie")?;
 				}
+
+				// map each owner index to the full identification.
+				let _ = i.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
+					.map_err(|_| "failed to insert into trie")?;
 			}
 
 			Ok(())
@@ -223,12 +232,19 @@ impl<T: Trait> ProvingTrie<T> {
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let mut recorder = Recorder::new();
-		(key_id, key_data).using_encoded(|s| {
+		let val_idx = (key_id, key_data).using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| T::FullIdentification::decode(&mut &*raw))
-				.map(move|_| recorder.drain().into_iter().map(|r| r.data).collect())
-		})
+				.and_then(|raw| u32::decode(&mut &*raw))
+		})?;
+
+		val_idx.using_encoded(|s| {
+			trie.get_with(s, &mut recorder)
+				.ok()?
+				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
+		})?;
+
+		Some(recorder.drain().into_iter().map(|r| r.data).collect())
 	}
 
 	/// Access the underlying trie root.
@@ -238,11 +254,15 @@ impl<T: Trait> ProvingTrie<T> {
 
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
-	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<T::FullIdentification> {
+	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
-		(key_id, key_data).using_encoded(|s| trie.get(s))
+		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| T::FullIdentification::decode(&mut &*raw))
+			.and_then(|raw| u32::decode(&mut &*raw))?;
+
+		val_idx.using_encoded(|s| trie.get(s))
+			.ok()?
+			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
 	}
 
 }
@@ -258,7 +278,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 	for Module<T>
 {
 	type Proof = Proof;
-	type FullIdentification = T::FullIdentification;
+	type FullIdentification = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
@@ -272,11 +292,13 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 		})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Proof) -> Option<T::FullIdentification> {
+	fn check_proof(key: (KeyTypeId, D), proof: Proof) -> Option<IdentificationTuple<T>> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {
-			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(T::FullIdentificationOf::convert)
+			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner|
+				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
+			)
 		} else {
 			let root = <HistoricalSessions<T>>::get(&proof.session)?;
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);

@@ -449,12 +449,12 @@ impl<T: Trait> Module<T> {
 		for id in T::Keys::key_ids() {
 			let key = keys.get_raw(id);
 
+			// ensure keys are without duplication.
 			ensure!(
 				Self::key_owner(id, key).map_or(true, |owner| &owner == who),
 				"registered duplicate key"
 			);
 
-			// ensure keys are without duplication.
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
 				if key == old {
 					continue;
