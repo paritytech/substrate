@@ -1193,6 +1193,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Mark all blocks up to given as finalized in operation. If a
 	/// justification is provided it is stored with the given finalized
 	/// block (any other finalized blocks are left unjustified).
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
 	pub fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
@@ -1207,6 +1212,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
 	///
 	/// Pass a flag to indicate whether finality notifications should be propagated.
 	/// This is usually tied to some synchronization state, where we don't send notifications
