@@ -296,21 +296,24 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		Swarm::<B, S, H>::local_peer_id(&*self.network.lock()).clone()
 	}
 
-	/// Called when a new block is imported by the client.
+	/// You must call this when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
 			.unbounded_send(ServerToWorkerMsg::BlockImported(hash, header));
 	}
 
-	/// Called when a new block is finalized by the client.
+	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
 			.unbounded_send(ServerToWorkerMsg::BlockFinalized(hash, header));
 	}
 
-	/// Called when new transactons are imported by the client.
+	/// You must call this when new transactons are imported by the transaction pool.
+	///
+	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
+	/// initialization as part of the configuration.
 	pub fn trigger_repropagate(&self) {
 		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::PropagateExtrinsics);
 	}
@@ -318,7 +321,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// Make sure an important block is propagated to peers.
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
-	/// at least temporarily synced.
+	/// at least temporarily synced. This function forces such an announcement.
 	pub fn announce_block(&self, hash: B::Hash) {
 		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
 	}
@@ -344,7 +347,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
-	/// Request a justification for the given block.
+	/// Request a justification for the given block from the network.
+	///
+	/// On success, the justification will be passed to the import queue that was part at
+	/// initialization as part of the configuration.
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.protocol_sender
@@ -374,12 +380,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
-	/// Get a value.
+	/// Start getting a value from the DHT.
+	///
+	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
+	/// `on_event` on the network specialization.
 	pub fn get_value(&mut self, key: &Multihash) {
 		self.network.lock().get_value(key);
 	}
 
-	/// Put a value.
+	/// Start putting a value in the DHT.
+	///
+	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
+	/// `on_event` on the network specialization.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
 		self.network.lock().put_value(key, value);
 	}
@@ -387,6 +399,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
 	/// Get network state.
+	///
+	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
+	/// everywhere about this. Please don't use this function to retreive actual information.
 	pub fn network_state(&self) -> NetworkState {
 		let mut swarm = self.network.lock();
 		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
@@ -534,20 +549,27 @@ impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>)> GossipT
 	}
 }
 
-/// Future tied to the `Network` service and that must be polled in order for the network to
-/// advance.
+/// Main network worker. Must be polled in order for the network to advance.
+///
+/// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
 pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_offline: Arc<AtomicBool>,
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, S, H>>,
+	/// The *actual* network.
 	network_service: Arc<Mutex<Swarm<B, S, H>>>,
-	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
+	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
+	/// Messages from the `NetworkService` and that must be processed.
 	protocol_rx: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
+	/// Receiver for queries from the on-demand that must be processed.
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
-
 	/// Interval at which we update the `connected_peers` Arc.
 	connected_peers_interval: tokio_timer::Interval,
 }

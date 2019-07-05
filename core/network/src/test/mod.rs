@@ -24,7 +24,7 @@ mod sync;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::build_multiaddr;
+use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};

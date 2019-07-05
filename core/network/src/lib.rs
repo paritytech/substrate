@@ -160,6 +160,13 @@
 //!
 //! See the [`config`] module for more information about how to configure the networking.
 //!
+//! After the `NetworkWorker` has been created, the important things to do are:
+//!
+//! - Calling `NetworkWorker::poll` in order to advance the network.
+//! - Calling `on_block_import` whenever a block is added to the client.
+//! - Calling `on_block_finalized` whenever a block is finalized.
+//! - Calling `trigger_repropagate` when a transaction is added to the pool.
+//!
 //! More precise usage details are still being worked on and will likely change in the future.
 //!
 

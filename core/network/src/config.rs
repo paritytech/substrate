@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Configuration for the networking layer of Substrate.
+//! Configuration of the networking layer.
 
 pub use crate::protocol::ProtocolConfig;
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
@@ -36,23 +36,42 @@ use zeroize::Zeroize;
 
 /// Service initialization parameters.
 pub struct Params<B: BlockT, S, H: ExHashT> {
-	/// Assigned roles for our node.
+	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
-	/// Substrate relay chain access point.
+
+	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
+
 	/// Finality proof provider.
+	///
+	/// This object, if `Some`, is used when a node on the network requests a proof of finality
+	/// from us.
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
-	/// On-demand service reference.
+
+	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
+	/// If `Some`, the network worker will process these requests and answer them.
+	/// Normally used only for light clients.
 	pub on_demand: Option<Arc<OnDemand<B>>>,
-	/// Transaction pool.
+
+	/// Pool of transactions.
+	///
+	/// The network worker will fetch transactions from this object in order to propagate them on
+	/// the network.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
+
 	/// Name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
 	/// Import queue to use.
+	///
+	/// The import queue is the component that verifies that blocks received from other nodes are
+	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
-	/// Protocol specialization.
+
+	/// Customization of the network. Use this to plug additional networking capabilities.
 	pub specialization: S,
 }
 
