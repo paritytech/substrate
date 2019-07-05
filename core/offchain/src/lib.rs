@@ -56,31 +56,35 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<C, Block: traits::Block> {
+pub struct OffchainWorkers<C, S, Block: traits::Block> {
 	client: Arc<C>,
+	db: S,
 	_block: PhantomData<Block>,
 }
 
-impl<C, Block: traits::Block> fmt::Debug for OffchainWorkers<C, Block> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_tuple("OffchainWorkers").finish()
-	}
-}
-
-impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
+impl<C, S, Block: traits::Block> OffchainWorkers<C, S, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
+		db: S,
 	) -> Self {
 		Self {
 			client,
+			db,
 			_block: PhantomData,
 		}
 	}
 }
 
-impl<C, Block> OffchainWorkers<C, Block> where
+impl<C, S, Block: traits::Block> fmt::Debug for OffchainWorkers<C, S, Block> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_tuple("OffchainWorkers").finish()
+	}
+}
+
+impl<C, S, Block> OffchainWorkers<C, S, Block> where
 	Block: traits::Block,
+	S: client::backend::OffchainStorage + 'static,
 	C: ProvideRuntimeApi,
 	C::Api: OffchainWorkerApi<Block>,
 {
@@ -99,7 +103,11 @@ impl<C, Block> OffchainWorkers<C, Block> where
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {
-			let (api, runner) = api::Api::new(pool.clone(), at.clone());
+			let (api, runner) = api::AsyncApi::new(
+				pool.clone(),
+				self.db.clone(),
+				at.clone(),
+			);
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
 			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
@@ -122,9 +130,10 @@ mod tests {
 		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
+		let db = client_db::offchain::LocalStorage::new_test();
 
 		// when
-		let offchain = OffchainWorkers::new(client);
+		let offchain = OffchainWorkers::new(client, db);
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
 
 		// then
