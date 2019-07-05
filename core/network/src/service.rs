@@ -521,33 +521,14 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 	DisconnectPeer(PeerId),
 	/// Performs a reputation adjustement on a peer.
 	ReportPeer(PeerId, i32),
-	/// Synchronization response.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronized,
 }
 
 /// Messages sent to Protocol from elsewhere inside the system.
 pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
-	/// A batch of blocks has been processed, with or without errors.
-	BlocksProcessed(Vec<B::Hash>, bool),
-	/// Tell protocol to restart sync.
-	RestartSync,
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
-	/// Tell protocol that a block was imported (sent by the import-queue).
-	BlockImportedSync(B::Hash, NumberFor<B>),
-	/// Tell protocol to clear all pending justification requests.
-	ClearJustificationRequests,
 	/// Tell protocol to request justification for a block.
 	RequestJustification(B::Hash, NumberFor<B>),
-	/// Inform protocol whether a justification was successfully imported.
-	JustificationImportResult(B::Hash, NumberFor<B>, bool),
-	/// Set finality proof request builder.
-	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
-	/// Tell protocol to request finality proof for a block.
-	RequestFinalityProof(B::Hash, NumberFor<B>),
-	/// Inform protocol whether a finality proof was successfully imported.
-	FinalityProofImportResult((B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	/// Propagate a block to peers.
 	AnnounceBlock(B::Hash),
 	/// A block has been imported (sent by the client).
@@ -560,12 +541,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	/// Tell protocol to perform regular maintenance.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Tick,
-	/// Synchronization request.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronize,
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
@@ -701,10 +676,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					self.peerset.report_peer(who, reputation),
 				Ok(Async::Ready(Some(NetworkMsg::DisconnectPeer(who)))) =>
 					self.network_service.lock().user_protocol_mut().disconnect_peer(&who),
-
-				#[cfg(any(test, feature = "test-helpers"))]
-				Ok(Async::Ready(Some(NetworkMsg::Synchronized))) => {}
-
 				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 			}
 		}
@@ -735,33 +706,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				}
 				ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
 					network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
-				ProtocolMsg::BlocksProcessed(hashes, has_error) =>
-					network_service.user_protocol_mut().blocks_processed(hashes, has_error),
-				ProtocolMsg::RestartSync =>
-					network_service.user_protocol_mut().restart(),
 				ProtocolMsg::AnnounceBlock(hash) =>
 					network_service.user_protocol_mut().announce_block(hash),
-				ProtocolMsg::BlockImportedSync(hash, number) =>
-					network_service.user_protocol_mut().block_imported(&hash, number),
-				ProtocolMsg::ClearJustificationRequests =>
-					network_service.user_protocol_mut().clear_justification_requests(),
 				ProtocolMsg::RequestJustification(hash, number) =>
 					network_service.user_protocol_mut().request_justification(&hash, number),
-				ProtocolMsg::JustificationImportResult(hash, number, success) =>
-					network_service.user_protocol_mut().justification_import_result(hash, number, success),
-				ProtocolMsg::SetFinalityProofRequestBuilder(builder) =>
-					network_service.user_protocol_mut().set_finality_proof_request_builder(builder),
-				ProtocolMsg::RequestFinalityProof(hash, number) =>
-					network_service.user_protocol_mut().request_finality_proof(&hash, number),
-				ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
-					network_service.user_protocol_mut()
-						.finality_proof_import_result(requested_block, finalziation_result),
 				ProtocolMsg::PropagateExtrinsics =>
 					network_service.user_protocol_mut().propagate_extrinsics(),
-				#[cfg(any(test, feature = "test-helpers"))]
-				ProtocolMsg::Tick => network_service.user_protocol_mut().tick(),
-				#[cfg(any(test, feature = "test-helpers"))]
-				ProtocolMsg::Synchronize => {},
 			}
 		}
 
