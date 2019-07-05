@@ -60,7 +60,7 @@ pub enum Error {
 	InvalidMemoryReference,
 	/// The runtime must provide a global named `__heap_base` of type i32 for specifying where the
 	/// allocator is allowed to place its data.
-	#[display(fmt="The runtime doesn't provide a global named __heap_base")]
+	#[display(fmt="The runtime doesn't provide a global named `__heap_base`")]
 	HeapBaseNotFoundOrInvalid,
 	/// The runtime WebAssembly module is not allowed to have the `start` function.
 	#[display(fmt="The runtime has the `start` function")]
