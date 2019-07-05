@@ -58,7 +58,7 @@ struct CachedRuntime {
 struct StateSnapshot {
 	/// The offset and the content of the memory segments that should be used to restore the snapshot
 	data_segments: Vec<(u32, Vec<u8>)>,
-	/// The list of all global variables of the module in their sequential order.
+	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
 	heap_pages: u32,
 }
