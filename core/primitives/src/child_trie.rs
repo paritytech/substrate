@@ -42,7 +42,7 @@ pub type KeySpace = Vec<u8>;
 
 #[cfg(not(feature = "legacy-trie"))]
 /// Keyspace to use for the parent trie key.
-pub const NO_CHILD_KEYSPACE: [u8;2] = [0, 0];
+pub const NO_CHILD_KEYSPACE: [u8;1] = [0];
 #[cfg(feature = "legacy-trie")]
 // Keyspace to use for the parent trie key.
 const NO_CHILD_KEYSPACE: [u8;0] = [];
