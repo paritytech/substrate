@@ -457,10 +457,11 @@ pub(crate) fn insert_into_memory_db<H, I>(
 		H: Hasher,
 		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
 {
+	let keyspace = child_trie.as_ref().map(|child| child.keyspace());
+	let mut mdb = KeySpacedDBMut::new(&mut *mdb, keyspace);
 	let mut root = <H as Hasher>::Out::default();
 	{
 		if let Some(child_trie) = child_trie.as_ref() {
-			let mut mdb = KeySpacedDBMut::new(&mut *mdb, Some(child_trie.keyspace()));
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {
@@ -469,7 +470,6 @@ pub(crate) fn insert_into_memory_db<H, I>(
 				}
 			}
 		} else {
-			let mut mdb = KeySpacedDBMut::new(&mut *mdb, None);
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {
