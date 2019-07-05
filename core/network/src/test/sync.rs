@@ -16,13 +16,14 @@
 
 use client::{backend::Backend, blockchain::HeaderBackend};
 use crate::config::Roles;
-use crate::message;
 use consensus::BlockOrigin;
-use std::collections::HashSet;
+use std::{time::Duration, time::Instant};
+use tokio::runtime::current_thread;
 use super::*;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(n, false);
@@ -33,7 +34,7 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -41,28 +42,24 @@ fn test_ancestor_search_when_common_is(n: usize) {
 #[test]
 fn sync_peers_works() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
-	net.sync();
-	for peer in 0..3 {
-		// Assert peers is up to date.
-		assert_eq!(net.peer(peer).num_peers(), 2);
-		// And then disconnect.
-		for other in 0..3 {
-			if other != peer {
-				net.peer(peer).on_disconnect(net.peer(other));
+
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		for peer in 0..3 {
+			if net.peer(peer).num_peers() != 2 {
+				return Ok(Async::NotReady)
 			}
 		}
-	}
-	net.sync();
-	// Now peers are disconnected.
-	for peer in 0..3 {
-		assert_eq!(net.peer(peer).num_peers(), 0);
-	}
+		Ok(Async::Ready(()))
+	})).unwrap();
 }
 
 #[test]
 fn sync_cycle_from_offline_to_syncing_to_offline() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 	for peer in 0..3 {
 		// Offline, and not major syncing.
@@ -72,63 +69,92 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
-	net.start();
-	for peer in 0..3 {
-		// Online
-		assert!(!net.peer(peer).is_offline());
-		if peer < 2 {
-			// Major syncing.
-			assert!(net.peer(peer).is_major_syncing());
-		}
-	}
-	net.sync();
-	for peer in 0..3 {
-		// All done syncing.
-		assert!(!net.peer(peer).is_major_syncing());
-	}
 
-	// Now disconnect them all.
-	for peer in 0..3 {
-		for other in 0..3 {
-			if other != peer {
-				net.peer(peer).on_disconnect(net.peer(other));
+	// Block until all nodes are online and nodes 0 and 1 and major syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		for peer in 0..3 {
+			// Online
+			if net.peer(peer).is_offline() {
+				return Ok(Async::NotReady)
+			}
+			if peer < 2 {
+				// Major syncing.
+				if !net.peer(peer).is_major_syncing() {
+					return Ok(Async::NotReady)
+				}
 			}
 		}
-		net.sync();
-		assert!(net.peer(peer).is_offline());
-		assert!(!net.peer(peer).is_major_syncing());
-	}
+		Ok(Async::Ready(()))
+	})).unwrap();
+
+	// Block until all nodes are done syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		for peer in 0..3 {
+			if net.peer(peer).is_major_syncing() {
+				return Ok(Async::NotReady)
+			}
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
+
+	// Now drop nodes 1 and 2, and check that node 0 is offline.
+	net.peers.remove(2);
+	net.peers.remove(1);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if !net.peer(0).is_offline() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 }
 
 #[test]
 fn syncing_node_not_major_syncing_when_disconnected() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
-	net.start();
-	net.sync_step();
 
-	// Peer 1 is major-syncing.
-	assert!(net.peer(1).is_major_syncing());
-
-	// Disconnect peer 1 form everyone else.
-	net.peer(1).on_disconnect(net.peer(0));
-	net.peer(1).on_disconnect(net.peer(2));
-
-	// Peer 1 is not major-syncing.
-	net.sync();
+	// Check that we're not major syncing when disconnected.
 	assert!(!net.peer(1).is_major_syncing());
+
+	// Check that we switch to major syncing.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if !net.peer(1).is_major_syncing() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
+
+	// Destroy two nodes, and check that we switch to non-major syncing.
+	net.peers.remove(2);
+	net.peers.remove(0);
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(0).is_major_syncing() {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 }
 
 #[test]
 fn sync_from_two_peers_works() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 	assert!(!net.peer(0).is_major_syncing());
@@ -137,11 +163,12 @@ fn sync_from_two_peers_works() {
 #[test]
 fn sync_from_two_peers_with_ancestry_search_works() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -149,13 +176,14 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 #[test]
 fn ancestry_search_works_when_backoff_is_one() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -163,13 +191,14 @@ fn ancestry_search_works_when_backoff_is_one() {
 #[test]
 fn ancestry_search_works_when_ancestor_is_genesis() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(13, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -191,9 +220,11 @@ fn ancestry_search_works_when_common_is_hundred() {
 
 #[test]
 fn sync_long_chain_works() {
+	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -201,10 +232,11 @@ fn sync_long_chain_works() {
 #[test]
 fn sync_no_common_longer_chain_fails() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(!net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -212,9 +244,10 @@ fn sync_no_common_longer_chain_fails() {
 #[test]
 fn sync_justifications() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 
 	// there's currently no justification for block #10
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
@@ -234,17 +267,26 @@ fn sync_justifications() {
 	net.peer(1).request_justification(&h2.hash().into(), 15);
 	net.peer(1).request_justification(&h3.hash().into(), 20);
 
-	net.sync();
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+		net.poll();
 
-	for height in (10..21).step_by(5) {
-		assert_eq!(net.peer(0).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
-		assert_eq!(net.peer(1).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
-	}
+		for height in (10..21).step_by(5) {
+			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+				return Ok(Async::NotReady);
+			}
+			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+				return Ok(Async::NotReady);
+			}
+		}
+
+		Ok(Async::Ready(()))
+	})).unwrap();
 }
 
 #[test]
 fn sync_justifications_across_forks() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = JustificationTestNet::new(3);
 	// we push 5 blocks
 	net.peer(0).push_blocks(5, false);
@@ -254,24 +296,31 @@ fn sync_justifications_across_forks() {
 
 	// peer 1 will only see the longer fork. but we'll request justifications
 	// for both and finalize the small fork instead.
-	net.sync();
+	net.block_until_sync(&mut runtime);
 
 	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
 
-	net.sync();
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+		net.poll();
 
-	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), Some(Vec::new()));
-	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), Some(Vec::new()));
+		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new()) &&
+			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new())
+		{
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	})).unwrap();
 }
 
 #[test]
 fn sync_after_fork_works() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
-	net.sync_step();
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 	net.peer(2).push_blocks(30, false);
@@ -285,7 +334,7 @@ fn sync_after_fork_works() {
 
 	// peer 1 has the best chain
 	let peer1_chain = net.peer(1).client.as_in_memory_backend().blockchain().clone();
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(1).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(2).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
@@ -294,15 +343,15 @@ fn sync_after_fork_works() {
 #[test]
 fn syncs_all_forks() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(4);
-	net.sync_step();
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
 	net.peer(0).push_blocks(2, true);
 	net.peer(1).push_blocks(4, false);
 
-	net.sync();
+	net.block_until_sync(&mut runtime);
 	// Check that all peers have all of the blocks.
 	assert_eq!(9, net.peer(0).client.as_in_memory_backend().blockchain().blocks_count());
 	assert_eq!(9, net.peer(1).client.as_in_memory_backend().blockchain().blocks_count());
@@ -311,13 +360,12 @@ fn syncs_all_forks() {
 #[test]
 fn own_blocks_are_announced() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
-	net.sync(); // connect'em
+	net.block_until_sync(&mut runtime); // connect'em
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
 
-	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
-	net.peer(0).on_block_imported(header.hash(), &header);
-	net.sync();
+	net.block_until_sync(&mut runtime);
 
 	assert_eq!(net.peer(0).client.as_in_memory_backend().blockchain().info().best_number, 1);
 	assert_eq!(net.peer(1).client.as_in_memory_backend().blockchain().info().best_number, 1);
@@ -329,6 +377,7 @@ fn own_blocks_are_announced() {
 #[test]
 fn blocks_are_not_announced_by_light_nodes() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(0);
 
 	// full peer0 is connected to light peer
@@ -336,35 +385,32 @@ fn blocks_are_not_announced_by_light_nodes() {
 	let mut light_config = ProtocolConfig::default();
 	light_config.roles = Roles::LIGHT;
 	net.add_full_peer(&ProtocolConfig::default());
-	net.add_full_peer(&light_config);
-	net.add_full_peer(&ProtocolConfig::default());
+	net.add_light_peer(&light_config);
 
+	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
-	net.peer(0).start();
-	net.peer(1).start();
-	net.peer(2).start();
-	net.peer(0).on_connect(net.peer(1));
-	net.peer(1).on_connect(net.peer(2));
-
-	// Only sync between 0 -> 1, and 1 -> 2
-	let mut disconnected = HashSet::new();
-	disconnected.insert(0);
-	disconnected.insert(2);
-	net.sync_with(true, Some(disconnected));
-
-	// peer 0 has the best chain
-	// peer 1 has the best chain
-	// peer 2 has genesis-chain only
 	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
+	net.block_until_sync(&mut runtime);
 	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
-	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
+
+	// Add another node and remove node 0.
+	net.add_full_peer(&ProtocolConfig::default());
+	net.peers.remove(0);
+
+	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
+	let mut delay = tokio_timer::Delay::new(Instant::now() + Duration::from_secs(5));
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+		net.poll();
+		delay.poll().map_err(|_| ())
+	})).unwrap();
+	assert_eq!(net.peer(1).client.info().chain.best_number, 0);
 }
 
 #[test]
 fn can_sync_small_non_best_forks() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(2);
-	net.sync_step();
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
@@ -381,7 +427,15 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
 
-	net.sync();
+	// poll until the two nodes connect, otherwise announcing the block will not work
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(0).num_peers() == 0 {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
@@ -391,17 +445,24 @@ fn can_sync_small_non_best_forks() {
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
 	net.peer(0).announce_block(small_hash);
-	net.sync();
 
 	// after announcing, peer 1 downloads the block.
 
-	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
-	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+
+		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
+			return Ok(Async::NotReady)
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
 }
 
 #[test]
 fn can_not_sync_from_light_peer() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
 	let mut net = TestNet::new(1);
@@ -411,8 +472,7 @@ fn can_not_sync_from_light_peer() {
 	net.peer(0).push_blocks(1, false);
 
 	// and let the light client sync from this node
-	// (mind the #1 is disconnected && not syncing)
-	net.sync();
+	net.block_until_sync(&mut runtime);
 
 	// ensure #0 && #1 have the same best block
 	let full0_info = net.peer(0).client.info().chain;
@@ -421,52 +481,34 @@ fn can_not_sync_from_light_peer() {
 	assert_eq!(light_info.best_number, 1);
 	assert_eq!(light_info.best_hash, full0_info.best_hash);
 
-	// add new full client (#2) && sync without #0
+	// add new full client (#2) && remove #0
 	net.add_full_peer(&Default::default());
-	net.peer(1).on_connect(net.peer(2));
-	net.peer(2).on_connect(net.peer(1));
-	net.peer(1).announce_block(light_info.best_hash);
-	net.sync_with(true, Some(vec![0].into_iter().collect()));
+	net.peers.remove(0);
 
-	// ensure that the #2 has failed to sync block #1
-	assert_eq!(net.peer(2).client.info().chain.best_number, 0);
-	// and that the #1 is still connected to #2
-	// (because #2 has not tried to fetch block data from the #1 light node)
-	assert_eq!(net.peer(1).num_peers(), 2);
-
-	// and now try to fetch block data from light peer #1
-	// (this should result in disconnect)
-	net.peer(1).receive_message(
-		&net.peer(2).peer_id,
-		message::generic::Message::BlockRequest(message::generic::BlockRequest {
-			id: 0,
-			fields: message::BlockAttributes::HEADER,
-			from: message::FromBlock::Hash(light_info.best_hash),
-			to: None,
-			direction: message::Direction::Ascending,
-			max: Some(1),
-		}),
-	);
-	net.sync();
-	// check that light #1 has disconnected from #2
-	assert_eq!(net.peer(1).num_peers(), 1);
+	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
+	let mut test_finished = tokio_timer::Delay::new(Instant::now() + Duration::from_secs(5));
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		test_finished.poll().map_err(|_| ())
+	})).unwrap();
 }
 
 #[test]
 fn light_peer_imports_header_from_announce() {
 	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		let header = net.peer(0).client().header(&BlockId::Hash(hash)).unwrap().unwrap();
-		net.peer(1).receive_message(
-			&net.peer(0).peer_id,
-			message::generic::Message::BlockAnnounce(message::generic::BlockAnnounce {
-				header,
-			}),
-		);
+	fn import_with_announce(net: &mut TestNet, runtime: &mut current_thread::Runtime, hash: H256) {
+		net.peer(0).announce_block(hash);
 
-		net.peer(1).import_queue_sync();
-		assert!(net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some());
+		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
+			net.poll();
+			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
+				Ok(Async::Ready(()))
+			} else {
+				Ok(Async::NotReady)
+			}
+		})).unwrap();
 	}
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
@@ -474,13 +516,13 @@ fn light_peer_imports_header_from_announce() {
 	net.add_light_peer(&Default::default());
 
 	// let them connect to each other
-	net.sync();
+	net.block_until_sync(&mut runtime);
 
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
-	import_with_announce(&mut net, new_hash);
+	import_with_announce(&mut net, &mut runtime, new_hash);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
-	import_with_announce(&mut net, known_stale_hash);
+	import_with_announce(&mut net, &mut runtime, known_stale_hash);
 }

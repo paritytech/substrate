@@ -32,7 +32,7 @@ use service::{
 };
 use network::{
 	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, NonReservedPeerMode, NodeKeyConfig},
+	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig},
 	build_multiaddr,
 };
 use primitives::H256;
@@ -354,7 +354,10 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
-	config.enable_mdns = !is_dev && !cli.no_mdns;
+	config.transport = TransportConfig::Normal {
+		enable_mdns: !is_dev && !cli.no_mdns,
+		wasm_external_transport: None,
+	};
 
 	Ok(())
 }

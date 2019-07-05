@@ -23,7 +23,7 @@ use std::time::Duration;
 use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::multihash::Multihash;
+use libp2p::{Multiaddr, multihash::Multihash};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use crate::protocol_behaviour::ProtocolBehaviour;
@@ -40,7 +40,7 @@ use crate::protocol::{event::Event, message::Message};
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
-use crate::config::Params;
+use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
@@ -197,12 +197,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				user_agent,
 				local_public,
 				known_addresses,
-				params.network_config.enable_mdns
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => false,
+					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
+				}
 			);
-			let (transport, bandwidth) = transport::build_transport(
-				local_identity,
-				params.network_config.wasm_external_transport
-			);
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
+				};
+				transport::build_transport(local_identity, config_mem, config_wasm)
+			};
 			(Swarm::<B, S, H>::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 		};
 
@@ -281,6 +288,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		self.network_service.lock().user_protocol_mut().num_sync_peers()
 	}
 
+	/// Adds an address for a node.
+	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		self.network_service.lock().add_known_address(peer_id, addr);
+	}
+
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
 	/// manipulate the worker.
 	pub fn service(&self) -> &Arc<NetworkService<B, S, H>> {
@@ -347,6 +359,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// This method is extremely poor in terms of API and should be eventually removed.
 	pub fn disconnect_peer(&self, who: PeerId) {
 		let _ = self.network_chan.unbounded_send(NetworkMsg::DisconnectPeer(who));
+	}
+
+	/// Request a justification for the given block.
+	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
