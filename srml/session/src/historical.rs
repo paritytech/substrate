@@ -82,7 +82,7 @@ impl<T: Trait> Module<T> {
 				return // out of bounds. harmless.
 			}
 
-			(start..up_to).for_each(<Self as Store>::HistoricalSessions::take);
+			(start..up_to).for_each(<Self as Store>::HistoricalSessions::remove);
 
 			let new_start = up_to;
 			*range = if new_start == end {
@@ -129,20 +129,16 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 		// trie has been generated for this session, so it's no longer queued.
 		<CachedObsolete<T>>::remove(&ending);
 
-		if let Some((new_validators, old_exposures))
-			= <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)
-		{
-			// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
-			// now that a new validator election has occurred.
-			// we cache these in the trie until those sessions themselves end.
-			for obsolete in (ending + 1) .. applied_at {
-				<CachedObsolete<T>>::insert(obsolete, &old_exposures);
-			}
+		let (new_validators, old_exposures) = <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)?;
 
-			Some(new_validators)
-		} else {
-			None
+		// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
+		// now that a new validator election has occurred.
+		// we cache these in the trie until those sessions themselves end.
+		for obsolete in (ending + 1) .. applied_at {
+			<CachedObsolete<T>>::insert(obsolete, &old_exposures);
 		}
+
+		Some(new_validators)
 	}
 }
 
