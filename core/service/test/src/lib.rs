@@ -35,7 +35,7 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{multiaddr, Multiaddr, ManageNetwork};
-use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
+use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
@@ -160,8 +160,10 @@ fn node_config<F: ServiceFactory> (
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
-		enable_mdns: false,
-		wasm_external_transport: None,
+		transport: TransportConfig::Normal {
+			enable_mdns: false,
+			wasm_external_transport: None,
+		},
 	};
 
 	Configuration {
