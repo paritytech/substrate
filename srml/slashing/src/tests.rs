@@ -18,54 +18,43 @@ use crate::*;
 use crate::mock::*;
 use runtime_io::with_externalities;
 use srml_support::traits::Currency;
+use srml_staking::{Exposure, IndividualExposure};
 
 #[test]
 fn slash_nominator_based_on_exposure() {
 	with_externalities(&mut ExtBuilder::default()
-		.nominate(false)
 		.build(),
 	|| {
 		let mut misconduct = Test;
 
 		let _ = Balances::make_free_balance_be(&11, 3000);
 		let _ = Balances::make_free_balance_be(&21, 1000);
-		let _ = Balances::make_free_balance_be(&5, 300);
-		let _ = Balances::make_free_balance_be(&6, 500);
+		let _ = Balances::make_free_balance_be(&101, 300);
+
+		assert_eq!(
+				Staking::stakers(11),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+		);
+
+		assert_eq!(
+				Staking::stakers(21),
+				Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] }
+		);
 
 		assert_eq!(3000, Balances::free_balance(&11));
 		assert_eq!(1000, Balances::free_balance(&21));
-		assert_eq!(300, Balances::free_balance(&5));
-		assert_eq!(500, Balances::free_balance(&6));
+		assert_eq!(300, Balances::free_balance(&101));
 
-
-		let x = SlashRecipient {
-			account_id: 11,
-			value: Balances::free_balance(&11),
-			nominators: vec![
-				NominatorExposure { account_id: 5, value: 50 },
-				NominatorExposure { account_id: 6, value: 60 }
-			]
-		};
-
-		let y = SlashRecipient {
-			account_id: 21,
-			value: Balances::free_balance(&21),
-			nominators: vec![
-				NominatorExposure { account_id: 5, value: 100 },
-				NominatorExposure { account_id: 6, value: 10 }
-			]
-		};
-
-		let misbehaved = vec![x, y];
+		let misbehaved = vec![MockSlashRecipient(11), MockSlashRecipient(21)];
 
 		// dummy impl slash 10%
-		let _ = rolling_data::<_, StakingSlasher<Test, u64>, _>(&misbehaved, &mut misconduct);
+		let _ = rolling_data::<_, StakingSlasher<Test, MockSlashRecipient, Exposure<u64, u64>>, _, _>
+			(&misbehaved, &mut misconduct);
 
 		assert_eq!(2700, Balances::free_balance(&11));
 		assert_eq!(900, Balances::free_balance(&21));
-		// slash 0.1 * 50 + 0.1*100 = 15
-		assert_eq!(285, Balances::free_balance(&5));
-		// slash 0.1 * 60 + 0.1*10 = 7
-		assert_eq!(493, Balances::free_balance(&6));
+		// 250 * 0.1 + 250 * 0.1 = 50
+		assert_eq!(250, Balances::free_balance(&101));
+
 	});
 }

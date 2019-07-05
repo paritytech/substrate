@@ -32,35 +32,23 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Nominator exposure
-#[derive(Default)]
-pub struct NominatorExposure<AccountId, Balance> {
-	/// The stash account of the nominator in question.
-	account_id: AccountId,
-	/// Amount of funds exposed.
-	value: Balance,
-}
-
-/// Exposure for a reported validator
-pub struct SlashRecipient<AccountId, Balance> {
-	/// Validator account id
-	pub account_id: AccountId,
-	/// Own balance
-	pub value: Balance,
-	/// The portions of nominators stashes that are exposed.
-	pub nominators: Vec<NominatorExposure<AccountId, Balance>>,
+/// A misbehaved validator along with its nominator and each nominator's exposure
+pub trait SlashRecipient<AccountId, Exposure> {
+	/// Get the account id of the misbehaved validator
+	fn account_id(&self) -> &AccountId;
 }
 
 /// Report rolling data misconduct and apply slash accordingly
 // Pre-condition: the actual implementor of `OnSlashing` has access to
 // `session_index` and `number of validators`
-pub fn rolling_data<M, OS, Balance>(
-	misbehaved: &[SlashRecipient<M::AccountId, Balance>],
+pub fn rolling_data<M, OS, SR, Exposure>(
+	misbehaved: &[SR],
 	misconduct: &mut M
 ) -> u8
 where
-	M: Misconduct,
-	OS: OnSlashing<M, Balance>,
+	M: Misconduct<Exposure>,
+	SR: SlashRecipient<M::AccountId, Exposure>,
+	OS: OnSlashing<M, SR, Exposure>,
 {
 	let seve = misconduct.on_misconduct(misbehaved);
 	OS::slash(misbehaved, seve);
@@ -68,10 +56,11 @@ where
 }
 
 /// Report era misconduct but do not perform any slashing
-pub fn era_data<M, OS, Balance>(who: &[SlashRecipient<M::AccountId, Balance>], misconduct: &mut M)
+pub fn era_data<M, OS, SR, Exposure>(who: &[SR], misconduct: &mut M)
 where
-	M: Misconduct,
-	OS: OnSlashing<M, Balance>,
+	M: Misconduct<Exposure>,
+	OS: OnSlashing<M, SR, Exposure>,
+	SR: SlashRecipient<M::AccountId, Exposure>,
 {
 	let seve = misconduct.on_misconduct(who);
 	OS::slash(who, seve);
@@ -80,44 +69,48 @@ where
 /// Slash in the end of era
 ///
 /// Safety: Make sure call this exactly once and in the end of era
-pub fn end_of_era<E, Balance, OS>(end_of_era: &E) -> u8
+pub fn end_of_era<E, OS, SR, Exposure>(end_of_era: &E) -> u8
 where
-	E: OnEndEra,
-	OS: OnSlashing<E, Balance>,
+	E: OnEndEra<Exposure>,
+	OS: OnSlashing<E, SR, Exposure>,
+	SR: SlashRecipient<E::AccountId, Exposure>,
 {
 	let seve = end_of_era.severity();
-	let misbehaved = end_of_era.misbehaved();
-	OS::slash(&misbehaved[..], seve);
+	let misbehaved = end_of_era.misbehaved::<SR>();
+	OS::slash(&misbehaved, seve);
 	end_of_era.as_misconduct_level(seve)
 }
 
 /// Base trait for representing misconducts
-pub trait Misconduct: system::Trait {
+pub trait Misconduct<Exposure>: system::Trait {
 	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
 	/// Report misconduct and estimates the current severity level
-	fn on_misconduct<Balance>(
-		&mut self,
-		misbehaved: &[SlashRecipient<Self::AccountId, Balance>]
-	) -> Fraction<Self::Severity>;
+	fn on_misconduct<SR>(&mut self, misbehaved: &[SR]) -> Fraction<Self::Severity>
+	where
+		SR: SlashRecipient<Self::AccountId, Exposure>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 }
 
 /// Apply slash that occurred only during the era
-pub trait OnEndEra: Misconduct {
+pub trait OnEndEra<Exposure>: Misconduct<Exposure> {
 	/// Get severity level accumulated during the current the era
 	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Get all misbehaved validators of the current era
-	fn misbehaved<Balance>(&self) -> Vec<SlashRecipient<Self::AccountId, Balance>>;
+	fn misbehaved<SR>(&self) -> Vec<SR> where SR: SlashRecipient<Self::AccountId, Exposure>;
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to currency
 // In practice this is likely to be the `Staking module`
-pub trait OnSlashing<M: Misconduct, Balance> {
+pub trait OnSlashing<M, SR, Exposure>
+where
+	M: Misconduct<Exposure>,
+	SR: SlashRecipient<M::AccountId, Exposure>,
+{
 	/// Slash
-	fn slash(who: &[SlashRecipient<M::AccountId, Balance>], severity: Fraction<M::Severity>);
+	fn slash(who: &[SR], severity: Fraction<M::Severity>);
 }

@@ -19,7 +19,7 @@
 use super::*;
 use primitives::{Perbill, traits::{IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
 use substrate_primitives::{Blake2Hasher, H256};
-use srml_staking::{GenesisConfig, StakerStatus};
+use srml_staking::{GenesisConfig, StakerStatus, Exposure, IndividualExposure};
 use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
 use rstd::{marker::PhantomData, cell::RefCell};
 use std::collections::HashSet;
@@ -270,34 +270,39 @@ impl ExtBuilder {
 	}
 }
 
-impl Misconduct for Test {
+impl Misconduct<Exposure<u64, u64>> for Test {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
 		1
 	}
 
-	fn on_misconduct<Balance>(
-		&mut self,
-		_misbehaved: &[SlashRecipient<Self::AccountId, Balance>]
-	) -> Fraction<Self::Severity> {
+	fn on_misconduct<SR>(&mut self, _misbehaved: &[SR]) -> Fraction<Self::Severity>
+	where
+		SR: SlashRecipient<Self::AccountId, Exposure<u64, u64>>,
+	{
 		Fraction::new(1, 10)
 	}
 }
 
-pub struct StakingSlasher<T, Balance> {
+pub struct StakingSlasher<T, SR, Exposure> {
 	t: PhantomData<T>,
-	b: PhantomData<Balance>,
+	sr: PhantomData<SR>,
+	e: PhantomData<Exposure>,
 }
 
-impl<T, Balance> OnSlashing<T, Balance> for StakingSlasher<T, Balance>
+impl<T, SR, Exposure> OnSlashing<T, SR, Exposure> for StakingSlasher<T, SR, Exposure>
 where
-	T: srml_staking::Trait + Misconduct,
-	Balance: Into<u128> + Clone,
+	T: srml_staking::Trait + Misconduct<Exposure>,
+	SR: SlashRecipient<T::AccountId, Exposure>,
+	// Balance: Into<u128> + Clone,
 {
-	fn slash(to_punish: &[SlashRecipient<T::AccountId, Balance>], severity: Fraction<T::Severity>) {
+	fn slash(to_punish: &[SR], severity: Fraction<T::Severity>) {
 		// hack to convert both to `u128` and calculate the amount to slash
 		// then convert it back `BalanceOf<T>`
+
+		let to_u128 = |b: BalanceOf<T>|
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 		let to_balance = |b: ExtendedBalance|
 			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 		let slash = |balance: u128, severity: Fraction<T::Severity>| {
@@ -313,18 +318,30 @@ where
 		}
 
 		for who in to_punish {
-			let balance: u128 = who.value.clone().into();
+			let account_id = who.account_id();
+			println!("slash from account: {}", account_id);
+			let balance = to_u128(T::Currency::free_balance(account_id));
 			let slash_amount = slash(balance, severity);
 
 			// slash the validator
-			T::Currency::slash(&who.account_id, slash_amount);
+			T::Currency::slash(account_id, slash_amount);
 
+			let exposure = <srml_staking::Module<T>>::stakers(account_id);
 			// slash nominators for the same severity
-			for nominator in &who.nominators {
-				let balance: u128 = nominator.value.clone().into();
+			for nominator in &exposure.others {
+				println!("slash from nominator: {}", nominator.who);
+				let balance: u128 = to_u128(nominator.value);
 				let slash_amount = slash(balance, severity);
-				T::Currency::slash(&nominator.account_id, slash_amount);
+				T::Currency::slash(&nominator.who, slash_amount);
 			}
 		}
+	}
+}
+
+pub struct MockSlashRecipient(pub u64);
+
+impl SlashRecipient<u64, Exposure<u64, u64>> for MockSlashRecipient {
+	fn account_id(&self) -> &u64 {
+		&self.0
 	}
 }
