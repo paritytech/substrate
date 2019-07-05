@@ -186,8 +186,9 @@ pub use service::{
 };
 pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
 pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
-pub use libp2p::{identity, PeerId, core::PublicKey, wasm_ext::ExtTransport};
+pub use libp2p::{Multiaddr, PeerId};
+#[doc(inline)]
+pub use libp2p::multiaddr;
 
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use on_demand_layer::{OnDemand, RemoteResponse};

@@ -17,6 +17,7 @@
 //! Configuration for the networking layer of Substrate.
 
 pub use crate::protocol::ProtocolConfig;
+pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 use crate::chain::{Client, FinalityProofProvider};
 use crate::on_demand_layer::OnDemand;

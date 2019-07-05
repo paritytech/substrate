@@ -32,8 +32,7 @@ use service::{
 };
 use network::{
 	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig},
-	build_multiaddr,
+	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr},
 };
 use primitives::H256;
 
@@ -279,7 +278,7 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 /// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
 fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp256k1Secret> {
 	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
-		network::identity::secp256k1::SecretKey::from_bytes(bytes)
+		network::config::identity::secp256k1::SecretKey::from_bytes(bytes)
 			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
@@ -287,7 +286,7 @@ fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp25
 /// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
 fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519Secret> {
 	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		network::identity::ed25519::SecretKey::from_bytes(bytes)
+		network::config::identity::ed25519::SecretKey::from_bytes(bytes)
 			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
