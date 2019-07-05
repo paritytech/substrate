@@ -26,29 +26,63 @@ use primitives::traits::{SimpleArithmetic, MaybeSerializeDebug};
 mod fraction;
 pub use fraction::Fraction;
 
+/// Nominator exposure
+#[derive(Default)]
+pub struct NominatorExposure<AccountId, Balance> {
+	/// The stash account of the nominator in question.
+	account_id: AccountId,
+	/// Amount of funds exposed.
+	value: Balance,
+}
+
+/// Exposure for a reported validator
+#[derive(Default)]
+pub struct SlashRecipient<AccountId, Balance> {
+	/// Validator account id
+	pub account_id: AccountId,
+	/// Own balance
+	pub value: Balance,
+	/// The portions of nominators stashes that are exposed.
+	pub nominators: Vec<NominatorExposure<AccountId, Balance>>,
+}
+
 /// Report rolling data misconduct and apply slash accordingly
 // Pre-condition: the actual implementor of `OnSlashing` has access to
 // `session_index` and `number of validators`
-pub fn rolling_data<OS: OnSlashing<M>, M: Misconduct>(
-	who: &[M::AccountId],
+pub fn rolling_data<M, OS, Balance>(
+	misbehaved: &[SlashRecipient<M::AccountId, Balance>],
 	misconduct: &mut M
-) -> u8 {
-	let seve = misconduct.on_misconduct(who);
-	OS::slash(who, seve);
+) -> u8
+where
+	M: Misconduct,
+	OS: OnSlashing<M, Balance>,
+{
+	let seve = misconduct.on_misconduct(misbehaved);
+	OS::slash(misbehaved, seve);
 	misconduct.as_misconduct_level(seve)
 }
 
 /// Report era misconduct but do not perform any slashing
-pub fn era_data<OS: OnSlashing<M>, M: Misconduct>(who: &[M::AccountId], misconduct: &mut M) {
+pub fn era_data<M, OS, Balance>(who: &[SlashRecipient<M::AccountId, Balance>], misconduct: &mut M)
+where
+	M: Misconduct,
+	OS: OnSlashing<M, Balance>,
+{
 	let seve = misconduct.on_misconduct(who);
 	OS::slash(who, seve);
 }
 
 /// Slash in the end of era
-pub fn end_of_era<OS: OnSlashing<E>, E: OnEndEra>(end_of_era: &E) -> u8 {
+///
+/// Safety: Make sure call this exactly once and in the end of era
+pub fn end_of_era<E, Balance, OS>(end_of_era: &E) -> u8
+where
+	E: OnEndEra,
+	OS: OnSlashing<E, Balance>,
+{
 	let seve = end_of_era.severity();
 	let misbehaved = end_of_era.misbehaved();
-	OS::slash(&misbehaved, seve);
+	OS::slash(&misbehaved[..], seve);
 	end_of_era.as_misconduct_level(seve)
 }
 
@@ -58,26 +92,26 @@ pub trait Misconduct: system::Trait {
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
 	/// Report misconduct and estimates the current severity level
-	fn on_misconduct(&mut self, who: &[Self::AccountId]) -> Fraction<Self::Severity>;
+	fn on_misconduct<B>(&mut self, misbehaved: &[SlashRecipient<Self::AccountId, B>]) -> Fraction<Self::Severity>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 }
 
-/// Trait to call end in end of era to apply slash that occured only during the era
+/// Apply slash that occurred only during the era
 pub trait OnEndEra: Misconduct {
 	/// Get severity level accumulated during the current the era
 	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Get all misbehaved validators of the current era
-	fn misbehaved(&self) -> Vec<Self::AccountId>;
+	fn misbehaved<B>(&self) -> Vec<SlashRecipient<Self::AccountId, B>>;
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to currency
 // In practice this is likely to be the `Staking module`
-pub trait OnSlashing<M: Misconduct> {
+pub trait OnSlashing<M: Misconduct, Balance> {
 	/// Slash
-	fn slash(who: &[M::AccountId], severity: Fraction<M::Severity>);
+	fn slash(who: &[SlashRecipient<M::AccountId, Balance>], severity: Fraction<M::Severity>);
 }
 
 #[cfg(test)]
@@ -90,11 +124,12 @@ mod test {
 	use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
 	use rstd::marker::PhantomData;
 
-	/// The AccountId alias in this test module.
 	type AccountId = u64;
 	type BlockNumber = u64;
 	type Balance = u64;
 	type Staking = srml_staking::Module<Test>;
+	type BalanceOf<T> = <<T as srml_staking::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+	type ExtendedBalance = u128;
 
 	pub struct CurrencyToVoteHandler;
 
@@ -192,36 +227,46 @@ mod test {
 			1
 		}
 
-		fn on_misconduct(&mut self, _misbehaved: &[Self::AccountId]) -> Fraction<Self::Severity> {
+		fn on_misconduct<B>(&mut self, _misbehaved: &[SlashRecipient<Self::AccountId, B>]) -> Fraction<Self::Severity> {
 			Fraction::zero()
 		}
 	}
 
-	pub struct StakingSlasher<T>(PhantomData<T>);
+	pub struct StakingSlasher<T, U> {
+		t: PhantomData<T>,
+		u: PhantomData<U>,
+	}
 
-	impl<T: srml_staking::Trait + Misconduct> OnSlashing<T> for StakingSlasher<T> {
-		fn slash(to_punish: &[T::AccountId], severity: Fraction<T::Severity>) {
-
-			type BalanceOf<T> = <<T as srml_staking::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-			type ExtendedBalance = u128;
-
+	impl<T, B> OnSlashing<T, B> for StakingSlasher<T, B>
+	where
+		T: srml_staking::Trait + Misconduct,
+		B: Into<u128> + Clone,
+	{
+		fn slash(to_punish: &[SlashRecipient<T::AccountId, B>], severity: Fraction<T::Severity>) {
 			// hack to convert both to `u128` and calculate the amount to slash
 			// then convert it back `BalanceOf<T>`
 			let to_balance = |b: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
-			let to_u128 = |b: BalanceOf<T>|
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-
-			for who in to_punish {
-				// WARN: exposure need to be taken in to account here which isn't
-				let balance = to_u128(T::Currency::free_balance(who));
-				// (balance * denominator) / numerator
+			let slash = |balance: u128, severity: Fraction<T::Severity>| {
 				let d = balance.saturating_mul(severity.denominator().into());
 				let n = severity.numerator().into();
-				let slash_amount = to_balance(d.checked_div(n).unwrap_or(0));
-				<srml_staking::Module<T>>::slash_validator(who, slash_amount);
-			}
+				to_balance(d.checked_div(n).unwrap_or(0))
+			};
 
+			for who in to_punish {
+				let balance: u128 = who.value.clone().into();
+				let slash_amount = slash(balance, severity);
+
+				// slash the validator
+				T::Currency::slash(&who.account_id, slash_amount);
+
+				// slash nominators for the same severity
+				for nominator in &who.nominators {
+					let balance: u128 = nominator.value.clone().into();
+					let slash_amount = slash(balance, severity);
+					T::Currency::slash(&nominator.account_id, slash_amount);
+				}
+			}
 		}
 	}
 
@@ -230,9 +275,9 @@ mod test {
 	#[should_panic]
 	fn it_works() {
 		let mut misconduct = Test;
-		let misbehaved = [0_u64, 1, 2];
+		let misbehaved: Vec<SlashRecipient<u64, u64>> = vec![SlashRecipient::default(), SlashRecipient::default()];
 
-		era_data::<StakingSlasher<Test>, Test>(&misbehaved, &mut misconduct);
-		let _misconduct_level = rolling_data::<StakingSlasher<Test>, Test>(&misbehaved, &mut misconduct);
+		era_data::<_, StakingSlasher<Test, u64>, _>(&misbehaved, &mut misconduct);
+		let _ = rolling_data::<_, StakingSlasher<Test, u64>, _>(&misbehaved, &mut misconduct);
 	}
 }
