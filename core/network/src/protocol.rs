@@ -838,7 +838,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle));
+		self.consensus_gossip.tick(
+			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
+		);
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle));
 		self.on_demand_core.maintain_peers(OnDemandIn {
@@ -868,7 +870,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
-		self.specialization.maintain_peers(&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle));
+		self.specialization.maintain_peers(
+			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
+		);
 		for p in aborting {
 			self.behaviour.disconnect_peer(&p);
 			self.peerset_handle.report_peer(p, TIMEOUT_REPUTATION_CHANGE);
