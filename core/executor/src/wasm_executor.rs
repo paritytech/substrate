@@ -1375,7 +1375,6 @@ impl WasmExecutor {
 		)?;
 
 		// extract a reference to a linear memory and extract the `__heap_base` start
-		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
 		let _heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
