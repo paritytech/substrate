@@ -144,15 +144,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		let mut out = Vec::new();
 		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
 			if *pending_number > chain_info.finalized_number && *pending_number <= chain_info.best_number {
-				link.request_finality_proof(pending_hash, *pending_number);
+				out.push((pending_hash.clone(), *pending_number));
 			}
 		}
+
+		out
 	}
 
 	fn import_finality_proof(
@@ -572,8 +575,8 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
-			self.0.on_start(link)
+		fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+			self.0.on_start()
 		}
 
 		fn import_finality_proof(
