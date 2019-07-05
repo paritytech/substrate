@@ -220,9 +220,7 @@ pub trait SelectInitialValidators<T: Trait> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>>;
 }
 
-/// Implementation of `SelectInitialValidators` that does nothing.
-pub struct AllValidators;
-impl<T: Trait> SelectInitialValidators<T> for AllValidators {
+impl<T: Trait> SelectInitialValidators<T> for () {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
 		None
 	}
@@ -565,7 +563,7 @@ mod tests {
 		type SessionHandler = TestSessionHandler;
 		type Keys = UintAuthorityId;
 		type Event = ();
-		type SelectInitialValidators = AllValidators;
+		type SelectInitialValidators = ();
 	}
 
 	type System = system::Module<Test>;
