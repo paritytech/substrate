@@ -28,9 +28,9 @@
 //! must pass through this wrapper, otherwise consensus is likely to break in
 //! unexpected ways.
 //!
-//! Next, use the `LinkHalf` and a local configuration to `run_grandpa`. This requires a
-//! `Network` implementation. The returned future should be driven to completion and
-//! will finalize blocks in the background.
+//! Next, use the `LinkHalf` and a local configuration to `run_grandpa_voter`.
+//! This requires a `Network` implementation. The returned future should be
+//! driven to completion and will finalize blocks in the background.
 //!
 //! # Changing authority sets
 //!
