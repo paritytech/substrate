@@ -30,7 +30,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::{
-	AuthoritySignature, global_communication, CommandOrError, Config, environment,
+	global_communication, CommandOrError, CommunicationIn, Config, environment,
 	LinkHalf, Network, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
@@ -70,7 +70,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationIn<Block>,
 		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
 {
@@ -85,8 +85,8 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 				let commit = grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
-			voter::CommunicationIn::Auxiliary(_) => {
-				// ignore aux messages
+			voter::CommunicationIn::CatchUp(..) => {
+				// ignore catch up messages
 				return future::ok(last_finalized_number);
 			},
 		};
@@ -167,15 +167,9 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	} = link;
 
 	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
+	let initial_state = (authority_set, consensus_changes, set_state.clone(), voter_commands_rx.into_future());
 
-	let (network, network_startup) = NetworkBridge::new(
-		network,
-		config.clone(),
-		None,
-		on_exit.clone(),
-	);
-
-	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone(), set_state, on_exit.clone());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
 		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
