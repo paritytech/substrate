@@ -65,6 +65,7 @@ struct StorageDefinition {
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
+	pub where_clause: Option<syn::WhereClause>,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: ext::Opt<AddExtraGenesis>,
 }

@@ -1,7 +1,11 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-use rstd::{slice, vec::Vec, vec};
+// Make the WASM binary available.
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+use rstd::{vec::Vec, slice, vec};
 
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
@@ -31,7 +35,7 @@ macro_rules! impl_stubs {
 			// Leak the output vector to avoid it being freed.
 			// This is fine in a WASM context since the heap
 			// will be discarded after the call.
-			::core::mem::forget(output);
+			rstd::mem::forget(output);
 			res
 		}
 	};

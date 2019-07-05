@@ -173,7 +173,7 @@ pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
 pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
 
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
