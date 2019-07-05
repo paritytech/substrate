@@ -31,6 +31,15 @@ pub type AuthorityId = Public;
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
 
+/// The length of the VRF output
+pub const VRF_OUTPUT_LENGTH: usize = 32;
+
+/// The length of the VRF proof
+pub const VRF_PROOF_LENGTH: usize = 64;
+
+/// The length of the public key
+pub const PUBLIC_KEY_LENGTH: usize = 32;
+
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
 pub struct BabeConfiguration {

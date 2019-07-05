@@ -18,7 +18,8 @@ use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
-use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
+use srml_support::StorageValue;
+use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -93,7 +94,6 @@ pub struct GasMeter<T: Trait> {
 	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
-	#[cfg(test)]
 	pub fn with_limit(gas_limit: Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
 		GasMeter {
 			limit: gas_limit,
@@ -162,13 +162,7 @@ impl<T: Trait> GasMeter<T> {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter {
-				limit: amount,
-				gas_left: amount,
-				gas_price: self.gas_price,
-				#[cfg(test)]
-				tokens: Vec::new(),
-			};
+			let mut nested = GasMeter::with_limit(amount, self.gas_price);
 
 			let r = f(Some(&mut nested));
 
@@ -207,8 +201,8 @@ pub fn buy_gas<T: Trait>(
 	gas_limit: Gas,
 ) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
-	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
-	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
+	// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
+	let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
 	if gas_limit > gas_available {
 		// gas limit reached, revert the transaction and retry again in the future
 		return Err(BLOCK_FULL);
@@ -231,14 +225,7 @@ pub fn buy_gas<T: Trait>(
 		ExistenceRequirement::KeepAlive
 	)?;
 
-	Ok((GasMeter {
-		limit: gas_limit,
-		gas_left: gas_limit,
-		gas_price,
-
-		#[cfg(test)]
-		tokens: Vec::new(),
-	}, imbalance))
+	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
 }
 
 /// Refund the unused gas.
@@ -253,7 +240,7 @@ pub fn refund_unused_gas<T: Trait>(
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
 	// also has Gas type.
-	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+	GasSpent::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought at.
 	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();

@@ -22,7 +22,7 @@ use std::{str::FromStr, io::{stdin, Read}};
 use hex_literal::hex;
 use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256};
+use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, crypto::Ss58Codec, blake2_256};
 use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
@@ -32,7 +32,7 @@ mod vanity;
 
 trait Crypto {
 	type Pair: Pair<Public=Self::Public>;
-	type Public: Ss58Codec + AsRef<[u8]>;
+	type Public: Public + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
 	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
 		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}

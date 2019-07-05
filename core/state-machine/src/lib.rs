@@ -62,7 +62,7 @@ pub use trie_backend::TrieBackend;
 
 /// A wrapper around a child storage key.
 ///
-/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// This wrapper ensures that the child storage key is correct and properly used. It is
 /// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
@@ -288,15 +288,21 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+	fn local_storage_set(&mut self, _kind: offchain::StorageKind, _key: &[u8], _value: &[u8]) {
 		unreachable!()
 	}
 
-	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+	fn local_storage_compare_and_set(
+		&mut self,
+		_kind: offchain::StorageKind,
+		_key: &[u8],
+		_old_value: &[u8],
+		_new_value: &[u8],
+	) -> bool {
 		unreachable!()
 	}
 
-	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(&mut self, _kind: offchain::StorageKind, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!()
 	}
 
