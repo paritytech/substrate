@@ -449,7 +449,7 @@ fn finalize_3_voters_no_observers() {
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	for i in 0..3 {
 		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
@@ -473,7 +473,7 @@ fn finalize_3_voters_1_full_observer() {
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
@@ -701,7 +701,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	// import block#1 WITH consensus data change
 	let new_authorities = vec![substrate_primitives::sr25519::Public::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 1, net.clone(), peers);
 
@@ -718,7 +718,7 @@ fn justification_is_generated_periodically() {
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
 	net.peer(0).push_blocks(32, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 32, net.clone(), peers);
@@ -776,7 +776,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().chain.best_number, 25,
@@ -852,7 +852,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 	// add more blocks on top of it (until we have 30)
 	net.peer(0).push_blocks(4, false);
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	// all peers imported both change blocks
 	for i in 0..6 {
@@ -874,7 +874,7 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 
 	// add 100 blocks
 	net.peer(0).push_blocks(100, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	for i in 0..3 {
 		assert_eq!(net.peer(i).client().info().chain.best_number, 100,
@@ -1059,7 +1059,7 @@ fn voter_persists_its_votes() {
 	// alice has a chain with 20 blocks
 	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
 			   "Peer #{} failed to sync", 0);
@@ -1254,7 +1254,7 @@ fn finalize_3_voters_1_light_observer() {
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().chain.best_number, 20,

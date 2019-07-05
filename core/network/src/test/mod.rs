@@ -609,6 +609,13 @@ pub trait TestNetFactory: Sized {
 		Async::Ready(())
 	}
 
+	/// Blocks the current thread until we are sync'ed.
+	///
+	/// Calls `poll_until_sync` repeatidely with the runtime passed as parameter.
+	fn block_until_sync(&mut self, runtime: &mut tokio::runtime::current_thread::Runtime) {
+		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(self.poll_until_sync()))).unwrap();
+	}
+
 	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.
 	fn poll(&mut self) {
 		self.mut_peers(|peers| {

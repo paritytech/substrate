@@ -34,7 +34,7 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -154,7 +154,7 @@ fn sync_from_two_peers_works() {
 	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 	assert!(!net.peer(0).is_major_syncing());
@@ -168,7 +168,7 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -183,7 +183,7 @@ fn ancestry_search_works_when_backoff_is_one() {
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -198,7 +198,7 @@ fn ancestry_search_works_when_ancestor_is_genesis() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -224,7 +224,7 @@ fn sync_long_chain_works() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -236,7 +236,7 @@ fn sync_no_common_longer_chain_fails() {
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(!net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
 }
@@ -247,7 +247,7 @@ fn sync_justifications() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	// there's currently no justification for block #10
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
@@ -296,7 +296,7 @@ fn sync_justifications_across_forks() {
 
 	// peer 1 will only see the longer fork. but we'll request justifications
 	// for both and finalize the small fork instead.
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
 
@@ -334,7 +334,7 @@ fn sync_after_fork_works() {
 
 	// peer 1 has the best chain
 	let peer1_chain = net.peer(1).client.as_in_memory_backend().blockchain().clone();
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(1).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(2).client.as_in_memory_backend().blockchain().canon_equals_to(&peer1_chain));
@@ -351,7 +351,7 @@ fn syncs_all_forks() {
 	net.peer(0).push_blocks(2, true);
 	net.peer(1).push_blocks(4, false);
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	// Check that all peers have all of the blocks.
 	assert_eq!(9, net.peer(0).client.as_in_memory_backend().blockchain().blocks_count());
 	assert_eq!(9, net.peer(1).client.as_in_memory_backend().blockchain().blocks_count());
@@ -362,10 +362,10 @@ fn own_blocks_are_announced() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut net = TestNet::new(3);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap(); // connect'em
+	net.block_until_sync(&mut runtime); // connect'em
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
 
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	assert_eq!(net.peer(0).client.as_in_memory_backend().blockchain().info().best_number, 1);
 	assert_eq!(net.peer(1).client.as_in_memory_backend().blockchain().info().best_number, 1);
@@ -390,7 +390,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
 	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
 
 	// Add another node and remove node 0.
@@ -472,7 +472,7 @@ fn can_not_sync_from_light_peer() {
 	net.peer(0).push_blocks(1, false);
 
 	// and let the light client sync from this node
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	// ensure #0 && #1 have the same best block
 	let full0_info = net.peer(0).client.info().chain;
@@ -516,7 +516,7 @@ fn light_peer_imports_header_from_announce() {
 	net.add_light_peer(&Default::default());
 
 	// let them connect to each other
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.poll_until_sync()))).unwrap();
+	net.block_until_sync(&mut runtime);
 
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
