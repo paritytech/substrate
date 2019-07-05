@@ -256,7 +256,7 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(network_mut, network_status_sinks.clone())
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(network_mut, client.clone(), network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
 			.then(|_| Ok(()))));
@@ -314,52 +314,6 @@ impl<Components: components::Components> Service<Components> {
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
-		}
-
-		{
-			// finality notifications
-			let network = Arc::downgrade(&network);
-
-			// A utility stream that drops all ready items and only returns the last one.
-			// This is used to only keep the last finality notification and avoid
-			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
-
-			impl<B: BlockT> Stream for MostRecentNotification<B> {
-				type Item = <FinalityNotifications<B> as Stream>::Item;
-				type Error = <FinalityNotifications<B> as Stream>::Error;
-
-				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-					let mut last = None;
-					let last = loop {
-						match self.0.poll()? {
-							Async::Ready(Some(item)) => { last = Some(item) }
-							Async::Ready(None) => match last {
-								None => return Ok(Async::Ready(None)),
-								Some(last) => break last,
-							},
-							Async::NotReady => match last {
-								None => return Ok(Async::NotReady),
-								Some(last) => break last,
-							},
-						}
-					};
-
-					Ok(Async::Ready(Some(last)))
-				}
-			}
-
-			let events = MostRecentNotification(client.finality_notification_stream().fuse())
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_finalized(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
-
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
@@ -660,15 +614,27 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
-fn build_network_future<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: network::ExHashT>(
-	mut network: network::NetworkWorker<B, S, H>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<B>>>>>,
+fn build_network_future<Components: components::Components, S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>, H: network::ExHashT>(
+	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
+	client: Arc<ComponentClient<Components>>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
+	let mut finality_notification_stream = client.finality_notification_stream().fuse();
+
 	futures::future::poll_fn(move || {
+		// We poll `finality_notification_stream`, but we only take the last event.
+		let mut last = None;
+		while let Ok(Async::Ready(Some(item))) = finality_notification_stream.poll() {
+			last = Some(item);
+		}
+		if let Some(notification) = last {
+			network.on_block_finalized(notification.hash, notification.header);
+		}
+
 		while let Ok(Async::Ready(_)) = status_interval.poll() {
 			let status = NetworkStatus {
 				sync_state: network.sync_state(),

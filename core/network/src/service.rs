@@ -288,6 +288,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	pub fn service(&self) -> &Arc<NetworkService<B, S, H>> {
 		&self.service
 	}
+
+	/// You must call this when a new block is finalized by the client.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
+		self.network_service.lock().user_protocol_mut().on_block_finalized(hash, &header);
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
@@ -301,13 +306,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.protocol_sender
 			.unbounded_send(ServerToWorkerMsg::BlockImported(hash, header));
-	}
-
-	/// You must call this when a new block is finalized by the client.
-	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
-		let _ = self
-			.protocol_sender
-			.unbounded_send(ServerToWorkerMsg::BlockFinalized(hash, header));
 	}
 
 	/// You must call this when new transactons are imported by the transaction pool.
@@ -521,7 +519,6 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash),
 	BlockImported(B::Hash, B::Header),
-	BlockFinalized(B::Hash, B::Header),
 	ExecuteWithSpec(Box<dyn SpecTask<B, S> + Send + 'static>),
 	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
@@ -668,8 +665,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			match msg {
 				ServerToWorkerMsg::BlockImported(hash, header) =>
 					network_service.user_protocol_mut().on_block_imported(hash, &header),
-				ServerToWorkerMsg::BlockFinalized(hash, header) =>
-					network_service.user_protocol_mut().on_block_finalized(hash, &header),
 				ServerToWorkerMsg::ExecuteWithSpec(task) => {
 					let protocol = network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
