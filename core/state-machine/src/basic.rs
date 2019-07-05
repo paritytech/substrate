@@ -45,6 +45,9 @@ impl BasicExternalities {
 		mut top: HashMap<Vec<u8>, Vec<u8>>,
 		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
+		assert!(top.keys().all(|key| !is_child_storage_key(key)));
+		assert!(children.keys().all(|key| is_child_storage_key(key)));
+
 		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {
 			top,
@@ -172,7 +175,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, H256};
+	use primitives::{Blake2Hasher, H256, map};
 	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
@@ -196,5 +199,34 @@ mod tests {
 		ext.set_storage(CODE.to_vec(), code.clone());
 
 		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+	}
+
+	#[test]
+	fn children_works() {
+		let child_storage = b":child_storage:default:test".to_vec();
+
+		let mut ext = BasicExternalities::new_with_children(
+			Default::default(),
+			map![
+				child_storage.clone() => map![
+					b"doe".to_vec() => b"reindeer".to_vec()
+				]
+			]
+		);
+
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
+
+		let child = || ChildStorageKey::from_vec(child_storage.clone()).unwrap();
+
+		assert_eq!(ext.child_storage(child(), b"doe"), Some(b"reindeer".to_vec()));
+
+		ext.set_child_storage(child(), b"dog".to_vec(), b"puppy".to_vec());
+		assert_eq!(ext.child_storage(child(), b"dog"), Some(b"puppy".to_vec()));
+
+		ext.clear_child_storage(child(), b"dog");
+		assert_eq!(ext.child_storage(child(), b"dog"), None);
+
+		ext.kill_child_storage(child());
+		assert_eq!(ext.child_storage(child(), b"doe"), None);
 	}
 }
