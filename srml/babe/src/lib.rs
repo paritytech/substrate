@@ -235,7 +235,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<u64> for Module<T> {
 	fn should_end_session(_now: u64) -> bool {
-		LastSlotInEpoch::get()
+		LastSlotInEpoch::take()
 	}
 }
 

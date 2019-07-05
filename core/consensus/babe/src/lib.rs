@@ -1055,8 +1055,8 @@ mod tests {
 				sync_oracle: DummyOracle,
 				inherent_data_providers,
 				force_authoring: false,
-			    time_source: Default::default(),
-				slots_per_epoch: NonZeroU64::new(20).expect("20 is not 0"),
+				time_source: Default::default(),
+				slots_per_epoch: NonZeroU64::new(20).expect("20 is not 0; qed"),
 			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");
