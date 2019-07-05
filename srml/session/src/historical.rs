@@ -82,9 +82,7 @@ impl<T: Trait> Module<T> {
 				return // out of bounds. harmless.
 			}
 
-			for i in start..up_to {
-				<Self as Store>::HistoricalSessions::take(i);
-			}
+			(start..up_to).for_each(<Self as Store>::HistoricalSessions::take);
 
 			let new_start = up_to;
 			*range = if new_start == end {
