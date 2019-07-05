@@ -22,11 +22,11 @@ use std::time::Duration;
 
 use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
-use libp2p::core::{nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::multihash::Multihash;
+use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::{Multiaddr, multihash::Multihash};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use crate::protocol_behaviour::ProtocolBehaviour;
+use crate::protocol::Protocol;
 use crate::{behaviour::{Behaviour, BehaviourOut}, parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
@@ -40,7 +40,7 @@ use crate::protocol::{event::Event, message::Message};
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
-use crate::config::Params;
+use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::specialization::NetworkSpecialization;
 
@@ -149,14 +149,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
-		// Build the peerset.
-		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset::PeersetConfig {
+		let peerset_config = peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
 			reserved_nodes,
-		});
+		};
 
 		// Private and public keys configuration.
 		if let NodeKeyConfig::Secp256k1(_) = params.network_config.node_key {
@@ -171,7 +170,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let protocol = ProtocolBehaviour::new(
+		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
@@ -180,9 +179,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.transaction_pool,
 			params.finality_proof_provider,
 			params.protocol_id,
-			&((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect::<Vec<u8>>(),
-			peerset,
-			peerset_handle.clone(),
+			peerset_config,
 		)?;
 
 		// Build the swarm.
@@ -197,12 +194,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				user_agent,
 				local_public,
 				known_addresses,
-				params.network_config.enable_mdns
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => false,
+					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
+				}
 			);
-			let (transport, bandwidth) = transport::build_transport(
-				local_identity,
-				params.network_config.wasm_external_transport
-			);
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
+				};
+				transport::build_transport(local_identity, config_mem, config_wasm)
+			};
 			(Swarm::<B, S, H>::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 		};
 
@@ -281,6 +285,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		self.network_service.lock().user_protocol_mut().num_sync_peers()
 	}
 
+	/// Adds an address for a node.
+	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		self.network_service.lock().add_known_address(peer_id, addr);
+	}
+
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
 	/// manipulate the worker.
 	pub fn service(&self) -> &Arc<NetworkService<B, S, H>> {
@@ -347,6 +356,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// This method is extremely poor in terms of API and should be eventually removed.
 	pub fn disconnect_peer(&self, who: PeerId) {
 		let _ = self.network_chan.unbounded_send(NetworkMsg::DisconnectPeer(who));
+	}
+
+	/// Request a justification for the given block.
+	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
@@ -708,13 +724,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ProtocolMsg::BlockFinalized(hash, header) =>
 					network_service.user_protocol_mut().on_block_finalized(hash, &header),
 				ProtocolMsg::ExecuteWithSpec(task) => {
-					let (protocol, mut net_out) = network_service.user_protocol_mut().protocol_context_lock();
-					let (mut context, spec) = protocol.specialization_lock(&mut net_out);
+					let protocol = network_service.user_protocol_mut();
+					let (mut context, spec) = protocol.specialization_lock();
 					task.call_box(spec, &mut context);
 				},
 				ProtocolMsg::ExecuteWithGossip(task) => {
-					let (protocol, mut net_out) = network_service.user_protocol_mut().protocol_context_lock();
-					let (mut context, gossip) = protocol.consensus_gossip_lock(&mut net_out);
+					let protocol = network_service.user_protocol_mut();
+					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task.call_box(gossip, &mut context);
 				}
 				ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
@@ -755,7 +771,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::Behaviour(outcome)))) => outcome,
+				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
 				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
 					network_service.user_protocol_mut()
 						.on_event(Event::Dht(ev));
@@ -793,5 +809,5 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, S, H> = libp2p::core::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
-	Behaviour<ProtocolBehaviour<B, S, H>, CustomMessageOutcome<B>, Substream<StreamMuxerBox>>
+	Behaviour<B, S, H>
 >;

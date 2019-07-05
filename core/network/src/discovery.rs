@@ -22,7 +22,7 @@ use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
 use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, num::NonZeroU8, time::Duration};
+use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 
@@ -37,6 +37,8 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
+	/// Discovered nodes to return.
+	discoveries: VecDeque<PeerId>,
 	/// `Clock` instance that uses the current execution context's source of time.
 	clock: Clock,
 	/// Identity of our local node.
@@ -59,6 +61,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			kademlia,
 			next_kad_random_query: Delay::new(clock.now()),
 			duration_to_next_kad: Duration::from_secs(1),
+			discoveries: VecDeque::new(),
 			clock,
 			local_peer_id: local_public_key.into_peer_id(),
 		}
@@ -72,8 +75,11 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Adds a hard-coded address for the given peer, that never expires.
 	///
 	/// This adds an entry to the parameter that was passed to `new`.
+	///
+	/// If we didn't know this address before, also generates a `Discovered` event.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		if self.user_defined.iter().all(|(p, a)| *p != peer_id && *a != addr) {
+			self.discoveries.push_back(peer_id.clone());
 			self.user_defined.push((peer_id, addr));
 		}
 	}
@@ -181,6 +187,12 @@ where
 			Self::OutEvent,
 		>,
 	> {
+		// Immediately process the content of `discovered`.
+		if let Some(peer_id) = self.discoveries.pop_front() {
+			let ev = DiscoveryOut::Discovered(peer_id);
+			return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+		}
+
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		loop {
 			match self.next_kad_random_query.poll() {
