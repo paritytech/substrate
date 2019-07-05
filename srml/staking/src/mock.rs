@@ -16,6 +16,8 @@
 
 //! Test utilities
 
+#![cfg(test)]
+
 use std::{collections::HashSet, cell::RefCell};
 use primitives::Perbill;
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
@@ -98,11 +100,11 @@ impl system::Trait for Test {
 	type Event = ();
 }
 parameter_types! {
-	pub const TransferFee: u64 = 0;
-	pub const CreationFee: u64 = 0;
+	pub const TransferFee: Balance = 0;
+	pub const CreationFee: Balance = 0;
 }
 impl balances::Trait for Test {
-	type Balance = u64;
+	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
