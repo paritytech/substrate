@@ -36,7 +36,7 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::AlwaysBadChecker;
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::{event::Event, message::Message};
+use crate::protocol::event::Event;
 use crate::protocol::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
@@ -94,8 +94,6 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	is_major_syncing: Arc<AtomicBool>,
 	/// Peers whom we are connected with.
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
-	/// Channel for networking messages processed by the background thread.
-	network_chan: mpsc::UnboundedSender<NetworkMsg<B>>,
 	/// Network service
 	network: Arc<Mutex<Swarm<B, S, H>>>,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
@@ -116,7 +114,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	pub fn new(
 		params: Params<B, S, H>,
 	) -> Result<NetworkWorker<B, S, H>, Error> {
-		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 
 		if let Some(ref path) = params.network_config.net_config_path {
@@ -228,7 +225,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			bandwidth,
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
-			network_chan,
 			peers: peers.clone(),
 			peerset: peerset_handle.clone(),
 			network: network.clone(),
@@ -243,7 +239,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			service,
 			peers,
 			import_queue: params.import_queue,
-			network_port,
 			protocol_rx,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
 			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
@@ -505,15 +500,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 	}
 }
 
-/// Messages to be handled by Libp2pNetService.
-#[derive(Debug)]
-pub enum NetworkMsg<B: BlockT + 'static> {
-	/// Send an outgoing custom message.
-	Outgoing(PeerId, Message<B>),
-	/// Performs a reputation adjustement on a peer.
-	ReportPeer(PeerId, i32),
-}
-
 /// Messages sent to Protocol from elsewhere inside the system.
 pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Tell protocol to propagate extrinsics.
@@ -567,7 +553,6 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	network_service: Arc<Mutex<Swarm<B, S, H>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<dyn ImportQueue<B>>,
-	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	peerset: PeersetHandle,
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
@@ -655,17 +640,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
 				let mut network_service = self.network_service.lock();
 				network_service.user_protocol_mut().add_on_demand_request(rq);
-			}
-		}
-
-		loop {
-			match self.network_port.poll() {
-				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(NetworkMsg::Outgoing(who, outgoing_message)))) =>
-					self.network_service.lock().user_protocol_mut().send_packet(&who, outgoing_message),
-				Ok(Async::Ready(Some(NetworkMsg::ReportPeer(who, reputation)))) =>
-					self.peerset.report_peer(who, reputation),
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 			}
 		}
 

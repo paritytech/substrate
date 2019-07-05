@@ -180,8 +180,7 @@ pub mod test;
 
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
-	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork,
-	NetworkMsg, ExHashT, ReportHandle,
+	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork, ExHashT, ReportHandle,
 };
 pub use config::{NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret};
 pub use protocol::{PeerInfo, Context, consensus_gossip, event, message, specialization};
