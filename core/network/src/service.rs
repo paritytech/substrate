@@ -381,7 +381,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
 	pub fn get_value(&mut self, key: &Multihash) {
-		self.network.lock().get_value(key);
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
 	}
 
 	/// Start putting a value in the DHT.
@@ -389,7 +391,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
 	/// `on_event` on the network specialization.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
-		self.network.lock().put_value(key, value);
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
 	}
 }
 
@@ -519,6 +523,8 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithSpec(Box<dyn SpecTask<B, S> + Send + 'static>),
 	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
+	GetValue(Multihash),
+	PutValue(Multihash, Vec<u8>),
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
@@ -678,6 +684,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>
 					network_service.user_protocol_mut().propagate_extrinsics(),
+				ServerToWorkerMsg::GetValue(key) =>
+					network_service.get_value(&key),
+				ServerToWorkerMsg::PutValue(key, value) =>
+					network_service.put_value(key, value),
 			}
 		}
 
