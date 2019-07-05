@@ -309,17 +309,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		(bridge, startup_work)
 	}
 
-	/// Get the round messages for a round in the current set ID. These are signature-checked.
-	pub(crate) fn round_communication(
+	/// Note the beginning of a new round to the `GossipValidator`.
+	pub(crate) fn note_round(
 		&self,
 		round: Round,
 		set_id: SetId,
-		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<ed25519::Pair>>,
-		has_voted: HasVoted<B>,
-	) -> (
-		impl Stream<Item=SignedMessage<B>,Error=Error>,
-		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+		voters: &VoterSet<AuthorityId>,
 	) {
 		// is a no-op if currently in that set.
 		self.validator.note_set(
@@ -337,6 +332,25 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				to,
 				GossipMessage::<B>::from(neighbor).encode()
 			),
+		);
+	}
+
+	/// Get the round messages for a round in the current set ID. These are signature-checked.
+	pub(crate) fn round_communication(
+		&self,
+		round: Round,
+		set_id: SetId,
+		voters: Arc<VoterSet<AuthorityId>>,
+		local_key: Option<Arc<ed25519::Pair>>,
+		has_voted: HasVoted<B>,
+	) -> (
+		impl Stream<Item=SignedMessage<B>,Error=Error>,
+		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+	) {
+		self.note_round(
+			round,
+			set_id,
+			&*voters,
 		);
 
 		let locals = local_key.and_then(|pair| {
