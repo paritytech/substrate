@@ -44,6 +44,7 @@ pub type KeySpace = Vec<u8>;
 
 #[cfg(not(feature = "legacy-trie"))]
 /// Keyspace to use for the parent trie key.
+/// Block number 0 and no path.
 pub const NO_CHILD_KEYSPACE: [u8;2] = [0, 0];
 #[cfg(feature = "legacy-trie")]
 // Keyspace to use for the parent trie key.
@@ -63,6 +64,8 @@ pub fn generate_keyspace<N>(block_nb: &N, parent_trie: &ParentTrie) -> Vec<u8>
 	parity_codec::Encode::encode_to(ChildTrie::parent_key_slice(parent_trie), &mut result);
 
 	let mut block_nb = block_nb.clone();
+	// compact number of child.
+	result.push(1);
 	// Note that this algo only work if conversion failure are related to out of bound and
 	// implemented when possible.
 	loop {
@@ -401,15 +404,4 @@ impl AsRef<ChildTrie> for ChildTrie {
 	fn as_ref(&self) -> &ChildTrie {
 		self
 	}
-}
-
-
-#[test]
-fn encode_empty_prefix() {
-	let block_number = 0u128;
-	let prefix = ChildTrie::prefix_parent_key(hash_db::EMPTY_PREFIX);
-	let empt = generate_keyspace(&block_number, &prefix);
-
-	// this ensure root trie can be move to be a child trie
-	assert_eq!(&NO_CHILD_KEYSPACE[..], &empt[..]);
 }
