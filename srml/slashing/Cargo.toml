@@ -13,10 +13,12 @@ srml-support = { path = "../support", default-features = false }
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives" }
 balances = { package = "srml-balances", path = "../balances" }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 srml-staking = { package = "srml-staking", path = "../staking" }
+substrate-primitives = { path = "../../core/primitives" }
+timestamp = { package = "srml-timestamp", path = "../timestamp" }
 
 [features]
 default = ["std"]
