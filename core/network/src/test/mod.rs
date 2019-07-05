@@ -119,7 +119,7 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 	fn on_event(
 		&mut self,
-		_event: crate::event::Event
+		_event: crate::specialization::Event
 	) {}
 }
 

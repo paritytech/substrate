@@ -184,16 +184,15 @@ pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork, ExHashT, ReportHandle,
 };
-pub use protocol::{PeerInfo, Context, consensus_gossip, event, message, specialization};
+pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
 pub use libp2p::{identity, PeerId, core::PublicKey, wasm_ext::ExtTransport};
 
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
-pub use event::Event;
-pub use error::Error;
-pub use protocol::on_demand::AlwaysBadChecker;
 pub use on_demand_layer::{OnDemand, RemoteResponse};
+
+// Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
 

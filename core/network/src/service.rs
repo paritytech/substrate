@@ -34,10 +34,9 @@ use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
-use crate::AlwaysBadChecker;
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::event::Event;
-use crate::protocol::on_demand::RequestData;
+use crate::protocol::on_demand::{AlwaysBadChecker, RequestData};
 use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
 use crate::protocol::sync::SyncState;
 use crate::config::{Params, TransportConfig};
