@@ -264,7 +264,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				// messages will be ignored.
 				validator.note_round(Round(round.number), |_, _| {});
 
-				for signed in round.votes.iter() {
+				for signed in round.historical_votes.seen().iter() {
 					let message = gossip::GossipMessage::VoteOrPrecommit(
 						gossip::VoteOrPrecommitMessage::<B> {
 							message: signed.clone(),
@@ -281,7 +281,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 				trace!(target: "afg",
 					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
-					round.votes.len(),
+					round.historical_votes.seen().len(),
 					topic,
 					round.number,
 					set_id,

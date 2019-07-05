@@ -38,11 +38,10 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use consensus_common::SelectChain;
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, NewAuthoritySet, VoterCommand, HistoricalVotes,
+	PrimaryPropose, NewAuthoritySet, VoterCommand,
 };
 
 use consensus_common::SelectChain;
@@ -70,8 +69,8 @@ pub struct CompletedRound<Block: BlockT> {
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
-	/// All the votes observed in the round (sorted by order of reception).
-	pub votes: HistoricalVotes<Block>,
+	/// All the votes observed in the round.
+	pub historical_votes: HistoricalVotes<Block>,
 }
 
 // Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -110,16 +109,13 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
 	pub(crate) fn new(
-		genesis: CompletedRound<Block>,
+		rounds: VecDeque<CompletedRound<Block>>,
 		set_id: u64,
-		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		voters: Vec<AuthorityId>,
 	)
 		-> CompletedRounds<Block>
 	{
-		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
-		rounds.push_back(genesis);
-
-		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
+		// let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
 	}
 
@@ -131,11 +127,6 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	/// Iterate over all completed rounds.
 	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
 		self.rounds.iter()
-	}
-
-	/// Create a new completed rounds tracker initialized with the rounds in `completed_rounds`.
-	pub fn new_with_rounds(completed_rounds: VecDeque<CompletedRound<Block>>) -> Self {
-		CompletedRounds { inner: completed_rounds }
 	}
 
 	/// Returns the last (latest) completed round.
@@ -675,15 +666,12 @@ where
 		self.update_voter_set_state(|voter_set_state| {
 			let mut completed_rounds = voter_set_state.completed_rounds();
 
-			// TODO: Future integration will store the prevote and precommit index. See #2611.
-			let votes = historical_votes.seen().clone();
-
 			// NOTE: the Environment assumes that rounds are *always* completed in-order.
 			if !completed_rounds.push(CompletedRound {
 				number: round,
 				state: state.clone(),
 				base,
-				votes: votes.clone(),
+				historical_votes: historical_votes.clone(),
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));

@@ -77,6 +77,7 @@ use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::Vote
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use std::collections::VecDeque;
 
 mod authorities;
 mod aux_schema;
@@ -677,19 +678,26 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+					
+					// always start at round 0 when changing sets.
+					let completed_round = CompletedRound {
+							number: 0,
+							state: genesis_state,
+							base: (new.canon_hash, new.canon_number),
+							historical_votes: HistoricalVotes::<Block>::new(),
+					};
+
+					let rounds = VecDeque::new();
+					rounds.push_back(completed_round);
+
+					let completed_rounds = CompletedRounds::new(
+						rounds,
+						new.set_id,
+						&*authority_set.inner().read(),
+					);
 
 					let set_state = VoterSetState::Live {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: HistoricalVotes::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
+						completed_rounds,
 						current_round: HasVoted::No,
 					};
 

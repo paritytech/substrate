@@ -763,7 +763,7 @@ impl<Block: BlockT> Inner<Block> {
 		// code below assumes this invariant is maintained when creating the
 		// catch up reply since peers won't accept catch-up messages that have
 		// too many equivocations (we exceed the fault-tolerance bound).
-		for vote in last_completed_round.votes {
+		for vote in last_completed_round.historical_votes.seen().clone() {
 			match vote.message {
 				grandpa::Message::Prevote(prevote) => {
 					prevotes.push(grandpa::SignedPrevote {
