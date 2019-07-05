@@ -261,7 +261,7 @@ decl_module! {
 			Self::do_vote(who, ref_index, vote)
 		}
 
-		/// Vote in a referendum on behalf of a stash. If `vote.is_aye`, the vote is to enact the proposal;
+		/// Vote on a referendum using a proxy account on behalf of a stash account. If `vote.is_aye`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		fn proxy_vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
