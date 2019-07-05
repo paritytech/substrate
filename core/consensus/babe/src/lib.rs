@@ -25,7 +25,6 @@
 //! of malicious validators, that are essential for a production network.
 #![forbid(unsafe_code, missing_docs, unused_must_use)]
 #![cfg_attr(not(test), forbid(dead_code))]
-extern crate core;
 mod digest;
 use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
@@ -325,6 +324,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				vrf_output: inout.to_output(),
 				index: index as u64,
 				slot_num,
+				epoch: slot_info.epoch,
 			};
 
 			// deadline our production to approx. the end of the slot
@@ -470,7 +470,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	})?;
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
-	let BabePreDigest { slot_num, index, ref proof, ref vrf_output } = pre_digest;
+	let BabePreDigest { slot_num, index, ref proof, ref vrf_output, epoch: _ } = pre_digest;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -1056,7 +1056,7 @@ mod tests {
 				inherent_data_providers,
 				force_authoring: false,
 			    time_source: Default::default(),
-				slots_per_epoch: 20,
+				slots_per_epoch: NonZeroU64::new(20).expect("20 is not 0"),
 			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");
