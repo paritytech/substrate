@@ -31,12 +31,7 @@ use hash_db::Hasher;
 /// this child trie.
 /// The `KeySpace` of a child trie must be unique for the canonical chain
 /// in order to avoid key collision at a key value database level.
-/// Child trie variant (start with 1u8), is currently build by using the `ParentTrie`
-/// path of the child trie at its creation and the block number at its creation
-/// (only child trie in their creation block need to update this value when moved).
-/// No keyspace variant is only 0u8.
-/// This id is unique as for a block number state we cannot have
-/// two created child trie with the same `ParentTrie`.
+/// This id is unique is currently build from a simple counter in state.
 pub type KeySpace = Vec<u8>;
 
 
@@ -50,7 +45,7 @@ const NO_CHILD_KEYSPACE: [u8;0] = [];
 
 /// Generate a new keyspace for a child trie.
 pub fn generate_keyspace(child_counter: u128) -> Vec<u8> {
-	// using 12 for block number and additional encoding targeting ~u64
+	// using 8 for block number and additional encoding targeting ~u64
 	let mut result = Vec::with_capacity(8);
 	parity_codec::Encode::encode_to(&Compact(child_counter), &mut result);
 	result
