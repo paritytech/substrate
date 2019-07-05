@@ -94,7 +94,7 @@
 //! - `propose` - Propose a sensitive action to be taken.
 //! - `second` - Second (sponsor) a proposal.
 //! - `vote` - Vote on a referendum.
-//! - `proxy_vote` - Vote in a referendum on behalf of a stash.
+//! - `proxy_vote` - Vote on a referendum using a proxy account on behalf of a stash account.
 //! - `start_referendum` - Start a referendum.
 //! - `cancel_referendum` - Remove a referendum.
 //! - `cancel_queued` - Cancel a proposal queued for enactment.
