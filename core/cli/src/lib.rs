@@ -250,16 +250,16 @@ where
 			params.node_key.as_ref().map(parse_secp256k1_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
-					.map(network::Secret::File)
-					.unwrap_or(network::Secret::New)))
+					.map(network::config::Secret::File)
+					.unwrap_or(network::config::Secret::New)))
 				.map(NodeKeyConfig::Secp256k1),
 
 		NodeKeyType::Ed25519 =>
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(network::Secret::File)
-					.unwrap_or(network::Secret::New)))
+					.map(network::config::Secret::File)
+					.unwrap_or(network::config::Secret::New)))
 				.map(NodeKeyConfig::Ed25519)
 	}
 }
@@ -277,18 +277,18 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 }
 
 /// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
-fn parse_secp256k1_secret(hex: &String) -> error::Result<network::Secp256k1Secret> {
+fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp256k1Secret> {
 	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
 		network::identity::secp256k1::SecretKey::from_bytes(bytes)
-			.map(network::Secret::Input)
+			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
 /// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<network::Ed25519Secret> {
+fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519Secret> {
 	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
 		network::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(network::Secret::Input)
+			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
