@@ -107,7 +107,7 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 	let cargo_manifest = PathBuf::from(cargo_manifest);
 
 	if !cargo_manifest.exists() {
-		panic!("'{}' does not exists!", cargo_manifest.display());
+		panic!("'{}' does not exist!", cargo_manifest.display());
 	}
 
 	if !cargo_manifest.ends_with("Cargo.toml") {
