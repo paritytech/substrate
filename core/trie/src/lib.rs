@@ -37,7 +37,7 @@ pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::{KeyFunction, prefixed_key};
 /// Various re-exports from the `hash-db` crate.
-pub use hash_db::{HashDB as HashDBT};
+pub use hash_db::HashDB as HashDBT;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;

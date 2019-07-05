@@ -21,6 +21,9 @@
 //!
 //! Rather than store the full session data for any given session, we instead commit
 //! to the roots of merkle tries containing the session data.
+//!
+//! These roots and proofs of inclusion can be generated at any time during the current session.
+//! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
 use rstd::prelude::*;
 use parity_codec::{Encode, Decode};

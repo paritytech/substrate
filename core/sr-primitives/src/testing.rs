@@ -50,9 +50,14 @@ impl OpaqueKeys for UintAuthorityId {
 	fn key_ids() -> Self::KeyTypeIds { [UINT_DUMMY_KEY].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
-	fn get_raw(&self, _: KeyTypeId) -> &[u8] { unsafe {
-		std::slice::from_raw_parts(&self.0 as *const _ as *const u8, std::mem::size_of::<u64>())
-	} }
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
+		unsafe {
+			std::slice::from_raw_parts(
+				&self.0 as *const _ as *const u8,
+				std::mem::size_of::<u64>(),
+			)
+		}
+	}
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 }
 
