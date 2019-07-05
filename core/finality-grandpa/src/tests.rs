@@ -558,7 +558,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	net.lock().peer(0).push_blocks(1, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().block_until_sync(&mut runtime);
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
@@ -921,7 +921,7 @@ fn force_change_to_new_set() {
 	}
 
 	net.lock().peer(0).push_blocks(25, false);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().block_until_sync(&mut runtime);
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().chain.best_number, 26,
@@ -1310,7 +1310,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	net.peer(0).push_authorities_change_block(vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 1, net.clone(), peers);
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().block_until_sync(&mut runtime);
 
 	// check that the block#1 is finalized on light client
 	runtime.block_on(futures::future::poll_fn(move || -> std::result::Result<_, ()> {
@@ -1373,14 +1373,14 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 		vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
 	); // #10
 	net.lock().peer(0).push_blocks(1, false); // best is #11
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().block_until_sync(&mut runtime);
 
 	// finalize block #11 on full clients
 	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
 
 	// request finalization by light client
 	net.lock().add_light_peer(&GrandpaTestNet::default_config());
-	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| Ok(net.lock().poll_until_sync()))).unwrap();
+	net.lock().block_until_sync(&mut runtime);
 
 	// check block, finalized on light client
 	assert_eq!(
