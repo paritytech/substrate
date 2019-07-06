@@ -489,7 +489,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		self.peerset.add_reserved_peer(peer_id.clone());
-		self.network.lock().add_known_address(peer_id, addr);
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
 	}
 }
@@ -506,6 +508,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	GetValue(Multihash),
 	PutValue(Multihash, Vec<u8>),
+	AddKnownAddress(PeerId, Multiaddr),
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
@@ -657,6 +660,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					network_service.get_value(&key),
 				ServerToWorkerMsg::PutValue(key, value) =>
 					network_service.put_value(key, value),
+				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
+					network_service.add_known_address(peer_id, addr),
 			}
 		}
 
