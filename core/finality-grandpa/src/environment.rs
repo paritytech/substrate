@@ -41,12 +41,12 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, NewAuthoritySet, VoterCommand, SignedMessage,
+	PrimaryPropose, NewAuthoritySet, VoterCommand,
 };
 
 use consensus_common::SelectChain;
 
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
@@ -621,7 +621,7 @@ where
 		&self,
 		round: u64,
 		prevote: Prevote<Block>,
-		votes: &HistoricalVotes<Block>,
+		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
@@ -661,7 +661,7 @@ where
 				self.set_id,
 				round,
 				&set_state,
-				votes,
+				historical_votes,
 			)?;
 
 			Ok(Some(set_state))
@@ -674,7 +674,7 @@ where
 		&self,
 		round: u64,
 		precommit: Precommit<Block>,
-		votes: &HistoricalVotes<Block>,
+		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
@@ -712,7 +712,7 @@ where
 				self.set_id,
 				round,
 				&set_state,
-				votes,
+				historical_votes,
 			)?;
 
 			Ok(Some(set_state))

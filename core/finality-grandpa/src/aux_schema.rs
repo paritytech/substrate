@@ -697,14 +697,10 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::{H256, ed25519::Signature};
+	use substrate_primitives::H256;
 	use std::collections::VecDeque;
-	use crate::{Prevote, SignedMessage, environment::Vote};
-	use grandpa::Message;
-	use test_client;
-	use test_client::runtime::Block;
-	use crate::Prevote;
-	use crate::environment::Vote;
+	use crate::{Prevote, environment::Vote};
+	use test_client::{self, runtime::Block};
 	use super::*;
 
 	#[test]
