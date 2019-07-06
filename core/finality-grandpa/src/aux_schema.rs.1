@@ -42,7 +42,6 @@ const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
-const HISTORICAL_VOTES_PREFIX: &[u8] = b"grandpa_historical_votes_";
 
 const CURRENT_VERSION: u32 = 3;
 
@@ -615,65 +614,15 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	}
 }
 
-/// Write voter set state and historical votes to database.
-pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
-	backend: &B,
-	set_id: u64,
-	round: u64,
-	state: &VoterSetState<Block>,
-	historical_votes: &HistoricalVotes<Block>,
-) -> ClientResult<()> {
-	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
-	set_id.using_encoded(|set_id| votes_key.extend(set_id));
-	round.using_encoded(|round| votes_key.extend(round));
-	backend.insert_aux(
-		&[
-			(&votes_key[..], historical_votes.encode().as_slice()),
-			(SET_STATE_KEY, state.encode().as_slice()),
-		],
-		&[],
-	)
-}
-
-/// Write voter set state to database.
+/// Write voter set state.
 pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	state: &VoterSetState<Block>,
 ) -> ClientResult<()> {
 	backend.insert_aux(
 		&[(SET_STATE_KEY, state.encode().as_slice())],
-		&[],
+		&[]
 	)
-}
-
-/// Write historical votes to database.
-#[cfg(test)]
-pub(crate) fn write_historical_votes<Block: BlockT, B: AuxStore>(
-	backend: &B,
-	set_id: u64,
-	round: u64,
-	historical_votes: &HistoricalVotes<Block>,
-) -> ClientResult<()> {
-	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
-	set_id.using_encoded(|set_id| votes_key.extend(set_id));
-	round.using_encoded(|round| votes_key.extend(round));
-	backend.insert_aux(
-		&[(&votes_key[..], historical_votes.encode().as_slice())],
-		&[],
-	)
-}
-
-/// Read historical votes seen in a round.
-pub(crate) fn read_historical_votes<Block: BlockT, B: AuxStore>(
-	backend: &B,
-	set_id: u64,
-	round: u64,
-) -> Option<HistoricalVotes<Block>> {
-	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
-	set_id.using_encoded(|set_id| key.extend(set_id));
-	round.using_encoded(|round| key.extend(round));
-	load_decode::<_, HistoricalVotes<Block>>(backend, &key[..])
-		.expect("backend error")
 }
 
 /// Update the consensus changes.
@@ -697,10 +646,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::{H256, ed25519::Signature};
-	use std::collections::VecDeque;
-	use crate::{Prevote, SignedMessage, environment::Vote};
-	use grandpa::Message;
+	use substrate_primitives::H256;
 	use test_client;
 	use test_client::runtime::Block;
 	use crate::Prevote;
@@ -988,14 +934,5 @@ mod test {
 				current_round: HasVoted::Yes(AuthorityId::default(), vote),
 			},
 		);
-	}
-
-	#[test]
-	fn write_read_historical_votes_works() {
-		let client = test_client::new();
-		let historical_votes = HistoricalVotes::<test_client::runtime::Block>::new();
-		let _ = write_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321, &historical_votes);
-		let historical_votes_cpy = read_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321);
-		assert_eq!(historical_votes, historical_votes_cpy.unwrap());
 	}
 }
