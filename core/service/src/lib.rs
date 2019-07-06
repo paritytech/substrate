@@ -259,15 +259,6 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
-			network_mut,
-			client.clone(),
-			network_status_sinks.clone()
-		)
-			.map_err(|_| ())
-			.select(exit.clone())
-			.then(|_| Ok(()))));
-
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -346,7 +337,7 @@ impl<Components: components::Components> Service<Components> {
 		let client_ = client.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
-		let (netstat_tx, netstat_rx) = mpsc::unbounded();
+		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>();
 		network_status_sinks.lock().push(netstat_tx);
 		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
@@ -414,11 +405,17 @@ impl<Components: components::Components> Service<Components> {
 		};
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
-			network.clone(),
+
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+			network_mut,
+			client.clone(),
+			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		)));
+		)
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -617,6 +614,8 @@ fn build_network_future<Components: components::Components, S: network::speciali
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
+	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
@@ -638,6 +637,31 @@ fn build_network_future<Components: components::Components, S: network::speciali
 		}
 		if let Some(notification) = last {
 			network.on_block_finalized(notification.hash, notification.header);
+		}
+
+		// Poll the RPC requests and answer them.
+		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
+			match request {
+				rpc::apis::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::apis::system::Health {
+						peers: network.service().peers_debug_info().len(),
+						is_syncing: network.service().is_major_syncing(),
+						should_have_peers,
+					});
+				},
+				rpc::apis::system::Request::Peers(sender) => {
+					let _ = sender.send(network.service().peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
+						peer_id: peer_id.to_base58(),
+						roles: format!("{:?}", p.roles),
+						protocol_version: p.protocol_version,
+						best_hash: p.best_hash,
+						best_number: p.best_number,
+					}).collect());
+				}
+				rpc::apis::system::Request::NetworkState(sender) => {
+					let _ = sender.send(network.service().network_state());
+				}
+			};
 		}
 
 		// Interval report for the external API.
@@ -838,39 +862,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
-}
-
-/// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
-fn build_system_rpc_handler<Components: components::Components>(
-	network: Arc<NetworkService<Components>>,
-	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
-	should_have_peers: bool,
-) -> impl Future<Item = (), Error = ()> {
-	rx.for_each(move |request| {
-		match request {
-			rpc::apis::system::Request::Health(sender) => {
-				let _ = sender.send(rpc::apis::system::Health {
-					peers: network.peers_debug_info().len(),
-					is_syncing: network.is_major_syncing(),
-					should_have_peers,
-				});
-			},
-			rpc::apis::system::Request::Peers(sender) => {
-				let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
-					peer_id: peer_id.to_base58(),
-					roles: format!("{:?}", p.roles),
-					protocol_version: p.protocol_version,
-					best_hash: p.best_hash,
-					best_number: p.best_number,
-				}).collect());
-			}
-			rpc::apis::system::Request::NetworkState(sender) => {
-				let _ = sender.send(network.network_state());
-			}
-		};
-
-		Ok(())
-	})
 }
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
