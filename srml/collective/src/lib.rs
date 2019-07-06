@@ -57,27 +57,29 @@ pub type MemberCount = u32;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The outer origin type.
-	type Origin: From<RawOrigin<Self::AccountId>>;
+	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin>;
 
 	/// The outer event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
 
 /// Origin for the collective module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum RawOrigin<AccountId> {
+pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
 	/// It has been condoned by a single member of the collective.
 	Member(AccountId),
+	/// Dummy to manage the fact we have instancing.
+	_Phantom(rstd::marker::PhantomData<I>),
 }
 
 /// Origin for the collective module.
-pub type Origin<T> = RawOrigin<<T as system::Trait>::AccountId>;
+pub type Origin<T, I> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -112,7 +114,13 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
+	pub enum Event<T, I> where
+		<T as system::Trait>::Hash,
+		<T as system::Trait>::AccountId,
+		Phantom = rstd::marker::PhantomData<T>
+	{
+		/// Dummy to manage the fact we have instancing.
+		_Phantom(Phantom),
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
@@ -132,7 +140,7 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event<T, I>() = default;
 
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
@@ -273,10 +281,10 @@ impl<T: Trait<I>, I: Instance> OnMembersChanged<T::AccountId> for Module<T, I> {
 
 /// Ensure that the origin `o` represents at least `n` members. Returns `Ok` or an `Err`
 /// otherwise.
-pub fn ensure_members<OuterOrigin, AccountId>(o: OuterOrigin, n: MemberCount)
+pub fn ensure_members<OuterOrigin, AccountId, I>(o: OuterOrigin, n: MemberCount)
 	-> result::Result<MemberCount, &'static str>
 where
-	OuterOrigin: Into<result::Result<RawOrigin<AccountId>, OuterOrigin>>
+	OuterOrigin: Into<result::Result<RawOrigin<AccountId, I>, OuterOrigin>>
 {
 	match o.into() {
 		Ok(RawOrigin::Members(x, _)) if x >= n => Ok(n),
@@ -284,11 +292,12 @@ where
 	}
 }
 
-pub struct EnsureMember<AccountId>(::rstd::marker::PhantomData<AccountId>);
+pub struct EnsureMember<AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(AccountId, I)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId
-> EnsureOrigin<O> for EnsureMember<AccountId> {
+	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
+	AccountId,
+	I,
+> EnsureOrigin<O> for EnsureMember<AccountId, I> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
@@ -298,12 +307,13 @@ impl<
 	}
 }
 
-pub struct EnsureMembers<N: U32, AccountId>(::rstd::marker::PhantomData<(N, AccountId)>);
+pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(N, AccountId, I)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	N: U32,
 	AccountId,
-> EnsureOrigin<O> for EnsureMembers<N, AccountId> {
+	I,
+> EnsureOrigin<O> for EnsureMembers<N, AccountId, I> {
 	type Success = (MemberCount, MemberCount);
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
@@ -313,15 +323,16 @@ impl<
 	}
 }
 
-pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId>(
-	::rstd::marker::PhantomData<(N, D, AccountId)>
+pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId, I=DefaultInstance>(
+	rstd::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	N: U32,
 	D: U32,
 	AccountId,
-> EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId> {
+	I,
+> EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId, I> {
 	type Success = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
@@ -331,15 +342,16 @@ impl<
 	}
 }
 
-pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId>(
-	::rstd::marker::PhantomData<(N, D, AccountId)>
+pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
+	rstd::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	N: U32,
 	D: U32,
 	AccountId,
-> EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId> {
+	I,
+> EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId, I> {
 	type Success = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {

@@ -40,7 +40,7 @@ use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };
 use version::RuntimeVersion;
-use collective::VoteIndex;
+use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
@@ -237,6 +237,7 @@ parameter_types! {
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
 
+type CouncilInstance = collective::Instance1;
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
@@ -246,15 +247,15 @@ impl democracy::Trait for Runtime {
 	type VotingPeriod = VotingPeriod;
 	type EmergencyVotingPeriod = EmergencyVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
-	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId>;
-	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type EmergencyOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId>;
-	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type VetoOrigin = collective::EnsureMember<AccountId>;
+	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilInstance>;
+	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type EmergencyOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilInstance>;
+	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type VetoOrigin = collective::EnsureMember<AccountId, CouncilInstance>;
 	type CooloffPeriod = CooloffPeriod;
 }
 
-impl collective::Trait for Runtime {
+impl collective::Trait<CouncilInstance> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
@@ -268,24 +269,25 @@ parameter_types! {
 	pub const CarryCount: u32 = 6;
 	// one additional vote should go by before an inactive voter can be reaped.
 	pub const InactiveGracePeriod: VoteIndex = 1;
-	pub const VotingPeriod: BlockNumber = 2 * DAYS;
+	pub const ElectionsVotingPeriod: BlockNumber = 2 * DAYS;
 	pub const DecayRatio: u32 = 0;
 }
 
 impl elections::Trait for Runtime {
 	type Event = Event;
+	type Currency = Balances;
 	type BadPresentation = ();
 	type BadReaper = ();
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
-	type OnMembersChanged = Collective;
+	type OnMembersChanged = Council;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
-	type VotingPeriod = VotingPeriod;
+	type VotingPeriod = ElectionsVotingPeriod;
 	type DecayRatio = DecayRatio;
 }
 
@@ -298,8 +300,8 @@ parameter_types! {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = collective::EnsureMembers<_4, AccountId>;
-	type RejectOrigin = collective::EnsureMembers<_2, AccountId>;
+	type ApproveOrigin = collective::EnsureMembers<_4, AccountId, CouncilInstance>;
+	type RejectOrigin = collective::EnsureMembers<_2, AccountId, CouncilInstance>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
@@ -387,7 +389,7 @@ construct_runtime!(
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
-		Collective: collective::{Module, Call, Storage, Event<T>, Origin<T>},
+		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>},
 		Elections: elections::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
@@ -396,6 +398,8 @@ construct_runtime!(
 		Sudo: sudo,
 	}
 );
+
+//, Event<T>, Config<T>
 
 /// The address format for describing accounts.
 pub type Address = <Indices as StaticLookup>::Source;
