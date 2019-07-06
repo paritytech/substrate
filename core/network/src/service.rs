@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, fs, io, path::Path};
+use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
@@ -22,7 +22,6 @@ use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
 use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
-use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
@@ -77,8 +76,6 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	is_offline: Arc<AtomicBool>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
-	/// Network service
-	network: Arc<Mutex<Swarm<B, S, H>>>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
@@ -88,6 +85,9 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	peerset: PeersetHandle,
 	/// Protocol sender
 	protocol_sender: mpsc::UnboundedSender<ServerToWorkerMsg<B, S>>,
+	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
+	/// compatibility.
+	_marker: PhantomData<H>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker<B, S, H> {
@@ -203,22 +203,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			Swarm::<B, S, H>::add_external_address(&mut swarm, addr.clone());
 		}
 
-		let network = Arc::new(Mutex::new(swarm));
-
 		let service = Arc::new(NetworkService {
 			bandwidth,
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
-			network: network.clone(),
 			local_peer_id,
 			protocol_sender: protocol_sender.clone(),
+			_marker: PhantomData,
 		});
 
 		Ok(NetworkWorker {
 			is_offline,
 			is_major_syncing,
-			network_service: network,
+			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
 			protocol_rx,
@@ -238,32 +236,32 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.network_service.lock().user_protocol_mut().num_connected_peers()
+		self.network_service.user_protocol().num_connected_peers()
 	}
 
 	/// Returns the number of peers we're connected to and that are being queried.
 	pub fn num_active_peers(&self) -> usize {
-		self.network_service.lock().user_protocol_mut().num_active_peers()
+		self.network_service.user_protocol().num_active_peers()
 	}
 
 	/// Current global sync state.
 	pub fn sync_state(&self) -> SyncState {
-		self.network_service.lock().user_protocol_mut().sync_state()
+		self.network_service.user_protocol().sync_state()
 	}
 
 	/// Target sync block number.
 	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.network_service.lock().user_protocol_mut().best_seen_block()
+		self.network_service.user_protocol().best_seen_block()
 	}
 
 	/// Number of peers participating in syncing.
 	pub fn num_sync_peers(&self) -> u32 {
-		self.network_service.lock().user_protocol_mut().num_sync_peers()
+		self.network_service.user_protocol().num_sync_peers()
 	}
 
 	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
-		self.network_service.lock().add_known_address(peer_id, addr);
+		self.network_service.add_known_address(peer_id, addr);
 	}
 
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
@@ -273,21 +271,21 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&self, hash: B::Hash, header: B::Header) {
-		self.network_service.lock().user_protocol_mut().on_block_imported(hash, &header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header) {
+		self.network_service.user_protocol_mut().on_block_imported(hash, &header);
 	}
 
 	/// You must call this when a new block is finalized by the client.
-	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
-		self.network_service.lock().user_protocol_mut().on_block_finalized(hash, &header);
+	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
+		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
 	}
 
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
 	/// everywhere about this. Please don't use this function to retreive actual information.
-	pub fn network_state(&self) -> NetworkState {
-		let mut swarm = self.network_service.lock();
+	pub fn network_state(&mut self) -> NetworkState {
+		let swarm = &mut self.network_service;
 		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
 
 		let connected_peers = {
@@ -344,9 +342,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// Get currently connected peers.
-	pub fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
-		let mut network_service = self.network_service.lock();
-		network_service.user_protocol_mut()
+	pub fn peers_debug_info(&mut self) -> Vec<(PeerId, PeerInfo<B>)> {
+		self.network_service.user_protocol_mut()
 			.peers_info()
 			.map(|(id, info)| (id.clone(), info.clone()))
 			.collect()
@@ -545,7 +542,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, S, H>>,
 	/// The *actual* network.
-	network_service: Arc<Mutex<Swarm<B, S, H>>>,
+	network_service: Swarm<B, S, H>,
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
@@ -613,9 +610,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		}
 
 		{
-			let mut network_service = self.network_service.lock();
 			let mut link = NetworkLink {
-				protocol: &mut network_service,
+				protocol: &mut self.network_service,
 			};
 			self.import_queue.poll_actions(&mut link);
 		}
@@ -623,8 +619,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		// Check for new incoming on-demand requests.
 		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
 			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
-				let mut network_service = self.network_service.lock();
-				network_service.user_protocol_mut().add_on_demand_request(rq);
+				self.network_service.user_protocol_mut().add_on_demand_request(rq);
 			}
 		}
 
@@ -635,45 +630,42 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				Ok(Async::NotReady) => break,
 			};
 
-			let mut network_service = self.network_service.lock();
-
 			match msg {
 				ServerToWorkerMsg::ExecuteWithSpec(task) => {
-					let protocol = network_service.user_protocol_mut();
+					let protocol = self.network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
 					task.call_box(spec, &mut context);
 				},
 				ServerToWorkerMsg::ExecuteWithGossip(task) => {
-					let protocol = network_service.user_protocol_mut();
+					let protocol = self.network_service.user_protocol_mut();
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task.call_box(gossip, &mut context);
 				}
 				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-					network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
+					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
 				ServerToWorkerMsg::AnnounceBlock(hash) =>
-					network_service.user_protocol_mut().announce_block(hash),
+					self.network_service.user_protocol_mut().announce_block(hash),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
-					network_service.user_protocol_mut().request_justification(&hash, number),
+					self.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>
-					network_service.user_protocol_mut().propagate_extrinsics(),
+					self.network_service.user_protocol_mut().propagate_extrinsics(),
 				ServerToWorkerMsg::GetValue(key) =>
-					network_service.get_value(&key),
+					self.network_service.get_value(&key),
 				ServerToWorkerMsg::PutValue(key, value) =>
-					network_service.put_value(key, value),
+					self.network_service.put_value(key, value),
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
-					network_service.add_known_address(peer_id, addr),
+					self.network_service.add_known_address(peer_id, addr),
 			}
 		}
 
 		loop {
-			let mut network_service = self.network_service.lock();
-			let poll_value = network_service.poll();
+			let poll_value = self.network_service.poll();
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
 				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
-					network_service.user_protocol_mut()
+					self.network_service.user_protocol_mut()
 						.on_event(Event::Dht(ev));
 					CustomMessageOutcome::None
 				},
@@ -695,9 +687,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			}
 		}
 
-		let mut network_service = self.network_service.lock();
-		self.is_offline.store(network_service.user_protocol_mut().num_connected_peers() == 0, Ordering::Relaxed);
-		self.is_major_syncing.store(match network_service.user_protocol_mut().sync_state() {
+		self.is_offline.store(self.network_service.user_protocol_mut().num_connected_peers() == 0, Ordering::Relaxed);
+		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		}, Ordering::Relaxed);
