@@ -237,16 +237,6 @@ where
 	}
 }
 
-impl ops::Add for Permill {
-	type Output = Self;
-
-	fn add(self, b: Self) -> Self::Output {
-		// both u32 values are below a billion. sum won't overflow for u32.
-		Self::from_parts((self.0 + b.0).min(1_000_000))
-	}
-}
-
-
 #[cfg(feature = "std")]
 impl From<f64> for Permill {
 	fn from(x: f64) -> Permill {
@@ -354,15 +344,6 @@ where
 	}
 }
 
-impl ops::Add for Perbill {
-	type Output = Self;
-
-	fn add(self, b: Self) -> Self::Output {
-		// both u32 values are below a billion. sum won't overflow for u32.
-		Self::from_parts((self.0 + b.0).min(1_000_000_000))
-	}
-}
-
 #[cfg(feature = "std")]
 impl From<f64> for Perbill {
 	fn from(x: f64) -> Perbill {
@@ -405,11 +386,6 @@ pub struct Fixed64(i64);
 pub const DIV: i64 = 1_000_000_000;
 
 impl Fixed64 {
-	/// Equal to the natural number `1`.
-	pub fn one() -> Self {
-		Self(DIV)
-	}
-
 	/// creates self from a natural number.
 	///
 	/// Note that this might be lossy.
