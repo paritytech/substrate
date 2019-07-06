@@ -36,6 +36,7 @@ use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
+use network::NetworkState;
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
 use primitives::{Pair, Public, crypto::TypedKey, ed25519};
@@ -76,7 +77,9 @@ pub struct Service<Components: components::Components> {
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
-	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
+	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
+		NetworkStatus<ComponentBlock<Components>>, NetworkState
+	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Option<Keystore>,
 	exit: ::exit_future::Exit,
@@ -341,12 +344,11 @@ impl<Components: components::Components> Service<Components> {
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
-		let network_ = network.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
 		let (netstat_tx, netstat_rx) = mpsc::unbounded();
 		network_status_sinks.lock().push(netstat_tx);
-		let tel_task = netstat_rx.for_each(move |net_status| {
+		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -371,8 +373,6 @@ impl<Components: components::Components> Service<Components> {
 					(proc.cpu_usage(), proc.memory())
 				} else { (0.0, 0) }
 			} else { (0.0, 0) };
-
-			let network_state = network_.network_state();
 
 			telemetry!(
 				SUBSTRATE_INFO;
@@ -550,7 +550,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Returns a receiver that periodically receives a status of the network.
-	pub fn network_status(&self) -> mpsc::UnboundedReceiver<NetworkStatus<ComponentBlock<Components>>> {
+	pub fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<ComponentBlock<Components>>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
 		self.network_status_sinks.lock().push(sink);
 		stream
@@ -616,7 +616,7 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 fn build_network_future<Components: components::Components, S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>, H: network::ExHashT>(
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
@@ -651,8 +651,9 @@ fn build_network_future<Components: components::Components, S: network::speciali
 				average_download_per_sec: network.average_download_per_sec(),
 				average_upload_per_sec: network.average_upload_per_sec(),
 			};
+			let state = network.service().network_state();
 
-			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
+			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
 		}
 
 		// Main network polling.
