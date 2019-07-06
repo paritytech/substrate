@@ -290,6 +290,76 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		self.network_service.lock().user_protocol_mut().on_block_finalized(hash, &header);
 	}
+
+	/// Get network state.
+	///
+	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
+	/// everywhere about this. Please don't use this function to retreive actual information.
+	pub fn network_state(&self) -> NetworkState {
+		let mut swarm = self.network_service.lock();
+		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
+
+		let connected_peers = {
+			let swarm = &mut *swarm;
+			open.iter().filter_map(move |peer_id| {
+				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
+					.into_iter().collect();
+
+				let endpoint = if let Some(e) = swarm.node(peer_id).map(|i| i.endpoint()) {
+					e.clone().into()
+				} else {
+					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
+						and debug information about {:?}", peer_id);
+					return None
+				};
+
+				Some((peer_id.to_base58(), NetworkStatePeer {
+					endpoint,
+					version_string: swarm.node(peer_id)
+						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
+					enabled: swarm.user_protocol().is_enabled(&peer_id),
+					open: swarm.user_protocol().is_open(&peer_id),
+					known_addresses,
+				}))
+			}).collect()
+		};
+
+		let not_connected_peers = {
+			let swarm = &mut *swarm;
+			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
+				.cloned().collect::<Vec<_>>();
+			list.into_iter().map(move |peer_id| {
+				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+					version_string: swarm.node(&peer_id)
+						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
+					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
+						.into_iter().collect(),
+				})
+			}).collect()
+		};
+
+		NetworkState {
+			peer_id: Swarm::<B, S, H>::local_peer_id(&swarm).to_base58(),
+			listened_addresses: Swarm::<B, S, H>::listeners(&swarm).cloned().collect(),
+			external_addresses: Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect(),
+			average_download_per_sec: self.service.bandwidth.average_download_per_sec(),
+			average_upload_per_sec: self.service.bandwidth.average_upload_per_sec(),
+			connected_peers,
+			not_connected_peers,
+			peerset: swarm.user_protocol_mut().peerset_debug_info(),
+		}
+	}
+
+	/// Get currently connected peers.
+	///
+	/// > **Warning**: This method can return outdated information and should only ever be used
+	/// > when obtaining outdated information is acceptable.
+	pub fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
+		let peers = (*self.peers.read()).clone();
+		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
@@ -386,78 +456,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.protocol_sender
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
-	}
-}
-
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkService<B, S, H> {
-	/// Get network state.
-	///
-	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
-	/// everywhere about this. Please don't use this function to retreive actual information.
-	pub fn network_state(&self) -> NetworkState {
-		let mut swarm = self.network.lock();
-		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
-
-		let connected_peers = {
-			let swarm = &mut *swarm;
-			open.iter().filter_map(move |peer_id| {
-				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
-					.into_iter().collect();
-
-				let endpoint = if let Some(e) = swarm.node(peer_id).map(|i| i.endpoint()) {
-					e.clone().into()
-				} else {
-					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
-						and debug information about {:?}", peer_id);
-					return None
-				};
-
-				Some((peer_id.to_base58(), NetworkStatePeer {
-					endpoint,
-					version_string: swarm.node(peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
-					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
-					enabled: swarm.user_protocol().is_enabled(&peer_id),
-					open: swarm.user_protocol().is_open(&peer_id),
-					known_addresses,
-				}))
-			}).collect()
-		};
-
-		let not_connected_peers = {
-			let swarm = &mut *swarm;
-			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
-				.cloned().collect::<Vec<_>>();
-			list.into_iter().map(move |peer_id| {
-				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
-					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
-					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
-					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
-						.into_iter().collect(),
-				})
-			}).collect()
-		};
-
-		NetworkState {
-			peer_id: Swarm::<B, S, H>::local_peer_id(&swarm).to_base58(),
-			listened_addresses: Swarm::<B, S, H>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect(),
-			average_download_per_sec: self.bandwidth.average_download_per_sec(),
-			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
-			connected_peers,
-			not_connected_peers,
-			peerset: swarm.user_protocol_mut().peerset_debug_info(),
-		}
-	}
-
-	/// Get currently connected peers.
-	///
-	/// > **Warning**: This method can return outdated information and should only ever be used
-	/// > when obtaining outdated information is acceptable.
-	pub fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
-		let peers = (*self.peers.read()).clone();
-		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
 }
 

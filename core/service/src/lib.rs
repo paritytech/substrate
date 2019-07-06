@@ -644,13 +644,13 @@ fn build_network_future<Components: components::Components, S: network::speciali
 			match request {
 				rpc::apis::system::Request::Health(sender) => {
 					let _ = sender.send(rpc::apis::system::Health {
-						peers: network.service().peers_debug_info().len(),
+						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
 				rpc::apis::system::Request::Peers(sender) => {
-					let _ = sender.send(network.service().peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
+					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
 						peer_id: peer_id.to_base58(),
 						roles: format!("{:?}", p.roles),
 						protocol_version: p.protocol_version,
@@ -659,7 +659,7 @@ fn build_network_future<Components: components::Components, S: network::speciali
 					}).collect());
 				}
 				rpc::apis::system::Request::NetworkState(sender) => {
-					let _ = sender.send(network.service().network_state());
+					let _ = sender.send(network.network_state());
 				}
 			};
 		}
@@ -675,7 +675,7 @@ fn build_network_future<Components: components::Components, S: network::speciali
 				average_download_per_sec: network.average_download_per_sec(),
 				average_upload_per_sec: network.average_upload_per_sec(),
 			};
-			let state = network.service().network_state();
+			let state = network.network_state();
 
 			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
 		}
