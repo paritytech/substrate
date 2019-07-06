@@ -24,7 +24,7 @@ use log::{warn, error, info};
 use libp2p::core::swarm::NetworkBehaviour;
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{Multiaddr, multihash::Multihash};
-use futures::{prelude::*, sync::oneshot, sync::mpsc};
+use futures::{prelude::*, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use crate::protocol::Protocol;
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
@@ -47,9 +47,6 @@ use crate::protocol::specialization::NetworkSpecialization;
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
 pub use libp2p::PeerId;
-
-/// Type that represents fetch completion future.
-pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT:
