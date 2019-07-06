@@ -731,7 +731,7 @@ impl<T: Trait> Module<T> {
 		<Proxy<T>>::insert(proxy, stash)
 	}
 
-	/// Start a referendum. Can be called directly by the council.
+	/// Start a referendum.
 	pub fn internal_start_referendum(
 		proposal: T::Proposal,
 		threshold: VoteThreshold,
@@ -745,7 +745,7 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Remove a referendum. Can be called directly by the council.
+	/// Remove a referendum.
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
 		Self::deposit_event(RawEvent::Cancelled(ref_index));
 		<Module<T>>::clear_referendum(ref_index);

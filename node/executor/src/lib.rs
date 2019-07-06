@@ -340,7 +340,8 @@ mod tests {
 				invulnerables: vec![alice(), bob(), charlie()],
 			}),
 			democracy: Some(Default::default()),
-			council_seats: Some(Default::default()),
+			collective: Some(Default::default()),
+			elections: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),

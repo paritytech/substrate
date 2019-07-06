@@ -14,7 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Council system: Handles the voting in and maintenance of council members.
+//! Election module for stake-weighted membership selection of a collective.
+//!
+//! The composition of a set of account IDs works according to one or more approval votes
+//! weighted by stake. There is a partial carry-over facility to give greater weight to those
+//! whose voting is serially unsuccessful.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit="128"]
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
@@ -24,13 +31,11 @@ use srml_support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons,
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, OnMembersChanged
 	}
 };
-use democracy;
 use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed};
-use super::OnMembersChanged;
 
 // no polynomial attacks:
 //
@@ -58,7 +63,7 @@ use super::OnMembersChanged;
 // to keep the system as stateless as possible (making it a bit easier to reason about), we just
 // restrict when votes can begin to blocks that lie on boundaries (`voting_period`).
 
-// for an approval vote of C councillors:
+// for an approval vote of C members:
 
 // top K runners-up are maintained between votes. all others are discarded.
 // - candidate removed & bond returned when elected.
@@ -69,8 +74,8 @@ use super::OnMembersChanged;
 // for B blocks following, there's a counting period whereby each of the candidates that believe
 // they fall in the top K+C voted can present themselves. they get the total stake
 // recorded (based on the snapshot); an ordered list is maintained (the leaderboard). Noone may
-// present themselves that, if elected, would result in being included twice on the council
-// (important since existing councillors will have their approval votes as it may be that they
+// present themselves that, if elected, would result in being included twice in the collective
+// (important since existing members will have their approval votes as it may be that they
 // don't get removed), nor if existing presenters would mean they're not in the top K+C.
 
 // following B blocks, the top C candidates are elected and have their bond returned. the top C
@@ -85,7 +90,6 @@ use super::OnMembersChanged;
 // the candidate list increases as needed, but the contents (though not really the capacity) reduce
 // after each vote as all but K entries are cleared. newly registering candidates must use cleared
 // entries before they increase the capacity.
-
 
 /// The activity status of a voter.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
@@ -115,13 +119,14 @@ pub enum CellStatus {
 	Hole,
 }
 
-const COUNCIL_SEATS_ID: LockIdentifier = *b"councils";
+const MODULE_ID: LockIdentifier = *b"py/elect";
 
 pub const VOTER_SET_SIZE: usize = 64;
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 type SetIndex = u32;
 pub type VoteIndex = u32;
@@ -137,14 +142,16 @@ pub const DEFAULT_VOTING_FEE: u32 = 0;
 pub const DEFAULT_PRESENT_SLASH_PER_VOTER: u32 = 1;
 pub const DEFAULT_CARRY_COUNT: u32 = 2;
 pub const DEFAULT_INACTIVE_GRACE_PERIOD: u32 = 1;
-pub const DEFAULT_COUNCIL_VOTING_PERIOD: u32 = 1000;
+pub const DEFAULT_VOTING_PERIOD: u32 = 1000;
 pub const DEFAULT_DECAY_RATIO: u32 = 24;
 
-pub trait Trait: democracy::Trait {
+pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// The council type that this election module is managing the membership of.
-	type Council: Council;
+	/// The currency that people are electing with.
+	type Currency:
+		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>
+		+ ReservableCurrency<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when slashing a validator.
 	type BadPresentation: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -187,14 +194,69 @@ pub trait Trait: democracy::Trait {
 
 	/// How often (in blocks) to check for new votes. A reasonable default value
 	/// is 1000.
-	type CouncilVotingPeriod: Get<Self::BlockNumber>;
+	type VotingPeriod: Get<Self::BlockNumber>;
 
 	/// Decay factor of weight when being accumulated. It should typically be set to
-	/// __at least__ `council_size -1` to keep the council secure.
+	/// __at least__ `membership_size -1` to keep the collective secure.
 	/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
 	/// increment step `t`. 0 will result in no weight being added at all (normal
 	/// approval voting). A reasonable default value is 24.
 	type DecayRatio: Get<u32>;
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Council {
+		// ---- parameters
+		/// How long to give each top candidate to present themselves after the vote ends.
+		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber;
+		/// How long each position is active for.
+		pub TermDuration get(term_duration) config(): T::BlockNumber;
+		/// Number of accounts that should constitute the collective.
+		pub DesiredSeats get(desired_seats) config(): u32;
+
+		// ---- permanent state (always relevant, changes only at the finalization of voting)
+		/// The current membership. When there's a vote going on, this should still be used for executive
+		/// matters. The block number (second element in the tuple) is the block that their position is
+		/// active until (calculated by the sum of the block number when the member was elected
+		/// and their term duration).
+		pub Members get(members) config(): Vec<(T::AccountId, T::BlockNumber)>;
+		/// The total number of vote rounds that have happened or are in progress.
+		pub VoteCount get(vote_index): VoteIndex;
+
+		// ---- persistent state (always relevant, changes constantly)
+		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise manner.
+		///
+		/// In order to get a human-readable representation (`Vec<bool>`), use [`all_approvals_of`].
+		///
+		/// Furthermore, each vector of scalars is chunked with the cap of `APPROVAL_SET_SIZE`.
+		pub ApprovalsOf get(approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
+		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
+		/// currently registered.
+		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
+		/// Basic information about a voter.
+		pub VoterInfoOf get(voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
+		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
+		pub Voters get(voters): map SetIndex => Vec<Option<T::AccountId>>;
+		/// the next free set to store a voter in. This will keep growing.
+		pub NextVoterSet get(next_nonfull_voter_set): SetIndex = 0;
+		/// Current number of Voters.
+		pub VoterCount get(voter_count): SetIndex = 0;
+		/// The present candidate list.
+		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
+		/// Current number of active candidates
+		pub CandidateCount get(candidate_count): u32;
+
+		// ---- temporary state (only relevant during finalization/presentation)
+		/// The accounts holding the seats that will become free on the next tally.
+		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
+		/// Get the leaderboard if we're in the presentation phase. The first element is the weight of each entry;
+		/// It may be the direct summed approval stakes, or a weighted version of it.
+		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
+
+		/// Who is able to vote for whom. Value is the fund-holding account, key is the
+		/// vote-transaction-sending account.
+		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
+	}
 }
 
 decl_module! {
@@ -225,10 +287,10 @@ decl_module! {
 
 		/// How often (in blocks) to check for new votes. A reasonable default value
 		/// is 1000.
-		const CouncilVotingPeriod: T::BlockNumber = T::CouncilVotingPeriod::get();
+		const VotingPeriod: T::BlockNumber = T::VotingPeriod::get();
 
 		/// Decay factor of weight when being accumulated. It should typically be set to
-		/// __at least__ `council_size -1` to keep the council secure.
+		/// __at least__ `membership_size -1` to keep the collective secure.
 		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
 		/// increment step `t`. 0 will result in no weight being added at all (normal
 		/// approval voting). A reasonable default value is 24.
@@ -271,8 +333,12 @@ decl_module! {
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
 		/// # </weight>
-		fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, hint: SetIndex) -> Result {
-			let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+		fn proxy_set_approvals(origin,
+			votes: Vec<bool>,
+			#[compact] index: VoteIndex,
+			hint: SetIndex
+		) -> Result {
+			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index, hint)
 		}
 
@@ -335,7 +401,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				COUNCIL_SEATS_ID,
+				MODULE_ID,
 				if valid { &who } else { &reporter }
 			);
 
@@ -372,7 +438,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(COUNCIL_SEATS_ID, &who);
+			T::Currency::remove_lock(MODULE_ID, &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -449,7 +515,7 @@ decl_module! {
 			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
-			if let Some(p) = Self::active_council().iter().position(|&(ref c, _)| c == &candidate) {
+			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
 				ensure!(p < expiring.len(), "candidate must not form a duplicated member if elected");
 			}
 
@@ -495,17 +561,17 @@ decl_module! {
 			DesiredSeats::put(count);
 		}
 
-		/// Remove a particular member from the council. This is effective immediately.
+		/// Remove a particular member from the set. This is effective immediately.
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
 		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
 			let who = T::Lookup::lookup(who)?;
-			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
+			let new_set: Vec<(T::AccountId, T::BlockNumber)> = Self::members()
 				.into_iter()
 				.filter(|i| i.0 != who)
 				.collect();
-			<ActiveCouncil<T>>::put(new_council);
+			<Members<T>>::put(new_set);
 			T::OnMembersChanged::on_members_changed(&[], &[who]);
 		}
 
@@ -530,66 +596,15 @@ decl_module! {
 	}
 }
 
-decl_storage! {
-	trait Store for Module<T: Trait> as Council {
-		// ---- parameters
-		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber;
-		/// How long each position is active for.
-		pub TermDuration get(term_duration) config(): T::BlockNumber;
-		/// Number of accounts that should be sitting on the council.
-		pub DesiredSeats get(desired_seats) config(): u32;
-
-		// ---- permanent state (always relevant, changes only at the finalization of voting)
-		/// The current council. When there's a vote going on, this should still be used for executive
-		/// matters. The block number (second element in the tuple) is the block that their position is
-		/// active until (calculated by the sum of the block number when the council member was elected
-		/// and their term duration).
-		pub ActiveCouncil get(active_council) config(): Vec<(T::AccountId, T::BlockNumber)>;
-		/// The total number of vote rounds that have happened or are in progress.
-		pub VoteCount get(vote_index): VoteIndex;
-
-		// ---- persistent state (always relevant, changes constantly)
-		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise manner.
-		///
-		/// In order to get a human-readable representation (`Vec<bool>`), use [`all_approvals_of`].
-		///
-		/// Furthermore, each vector of scalars is chunked with the cap of `APPROVAL_SET_SIZE`.
-		pub ApprovalsOf get(approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
-		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
-		/// currently registered.
-		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
-		/// Basic information about a voter.
-		pub VoterInfoOf get(voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
-		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		pub Voters get(voters): map SetIndex => Vec<Option<T::AccountId>>;
-		/// the next free set to store a voter in. This will keep growing.
-		pub NextVoterSet get(next_nonfull_voter_set): SetIndex = 0;
-		/// Current number of Voters.
-		pub VoterCount get(voter_count): SetIndex = 0;
-		/// The present candidate list.
-		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
-		/// Current number of active candidates
-		pub CandidateCount get(candidate_count): u32;
-
-		// ---- temporary state (only relevant during finalization/presentation)
-		/// The accounts holding the seats that will become free on the next tally.
-		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
-		/// Get the leaderboard if we're in the presentation phase. The first element is the weight of each entry;
-		/// It may be the direct summed approval stakes, or a weighted version of it.
-		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
-	}
-}
-
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::AccountId {
 		/// reaped voter, reaper
 		VoterReaped(AccountId, AccountId),
 		/// slashed reaper
 		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of council seat(s)) has started.
+		/// A tally (for approval votes of seat(s)) has started.
 		TallyStarted(u32),
-		/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
+		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
 		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
 );
@@ -607,9 +622,9 @@ impl<T: Trait> Module<T> {
 		<RegisterInfoOf<T>>::exists(who)
 	}
 
-	/// Iff the councillor `who` still has a seat at blocknumber `n` returns `true`.
-	pub fn will_still_be_councillor_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
-		Self::active_council().iter()
+	/// Iff the member `who` still has a seat at blocknumber `n` returns `true`.
+	pub fn will_still_be_member_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
+		Self::members().iter()
 			.find(|&&(ref a, _)| a == who)
 			.map(|&(_, expires)| expires > n)
 			.unwrap_or(false)
@@ -617,18 +632,18 @@ impl<T: Trait> Module<T> {
 
 	/// Determine the block that a vote can happen on which is no less than `n`.
 	pub fn next_vote_from(n: T::BlockNumber) -> T::BlockNumber {
-		let voting_period = T::CouncilVotingPeriod::get();
+		let voting_period = T::VotingPeriod::get();
 		(n + voting_period - One::one()) / voting_period * voting_period
 	}
 
 	/// The block number on which the tally for the next election will happen. `None` only if the
-	/// desired seats of the council is zero.
+	/// desired seats of the set is zero.
 	pub fn next_tally() -> Option<T::BlockNumber> {
 		let desired_seats = Self::desired_seats();
 		if desired_seats == 0 {
 			None
 		} else {
-			let c = Self::active_council();
+			let c = Self::members();
 			let (next_possible, count, coming) =
 				if let Some((tally_end, comers, leavers)) = Self::next_finalize() {
 					// if there's a tally in progress, then next tally can begin immediately afterwards
@@ -639,7 +654,7 @@ impl<T: Trait> Module<T> {
 			if count < desired_seats as usize {
 				Some(next_possible)
 			} else {
-				// next tally begins once enough council members expire to bring members below desired.
+				// next tally begins once enough members expire to bring members below desired.
 				if desired_seats <= coming {
 					// the entire amount of desired seats is less than those new members - we'll have
 					// to wait until they expire.
@@ -654,7 +669,7 @@ impl<T: Trait> Module<T> {
 	// Private
 	/// Check there's nothing to do this block
 	fn end_block(block_number: T::BlockNumber) -> Result {
-		if (block_number % T::CouncilVotingPeriod::get()).is_zero() {
+		if (block_number % T::VotingPeriod::get()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
 					Self::start_tally();
@@ -749,7 +764,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			COUNCIL_SEATS_ID,
+			MODULE_ID,
 			&who,
 			locked_balance,
 			T::BlockNumber::max_value(),
@@ -772,11 +787,11 @@ impl<T: Trait> Module<T> {
 
 	/// Close the voting, record the number of seats that are actually up for grabs.
 	fn start_tally() {
-		let active_council = Self::active_council();
+		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <system::Module<T>>::block_number();
-		let expiring = active_council.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
-		let retaining_seats = active_council.len() - expiring.len();
+		let expiring = members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
+		let retaining_seats = members.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
 			<NextFinalize<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
@@ -790,7 +805,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most approved
-	/// candidates in their place. If the total council members is less than the desired membership
+	/// candidates in their place. If the total number of members is less than the desired membership
 	/// a new vote is started.
 	/// Clears all presented candidates, returning the bond of the elected ones.
 	fn finalize_tally() -> Result {
@@ -821,19 +836,19 @@ impl<T: Trait> Module<T> {
 					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
 				}));
 		});
-		let active_council = Self::active_council();
-		let outgoing: Vec<_> = active_council.iter()
+		let members = Self::members();
+		let outgoing: Vec<_> = members.iter()
 			.take(expiring.len())
 			.map(|a| a.0.clone()).collect();
 
-		// set the new council.
-		let mut new_council: Vec<_> = active_council
+		// set the new membership set.
+		let mut new_set: Vec<_> = members
 			.into_iter()
 			.skip(expiring.len())
 			.chain(incoming.iter().cloned().map(|a| (a, new_expiry)))
 			.collect();
-		new_council.sort_by_key(|&(_, expiry)| expiry);
-		<ActiveCouncil<T>>::put(new_council);
+		new_set.sort_by_key(|&(_, expiry)| expiry);
+		<Members<T>>::put(new_set);
 
 		T::OnMembersChanged::on_members_changed(&incoming, &outgoing);
 
@@ -1072,8 +1087,199 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use super::*;
+	use super::RawEvent;
 	use crate::tests::*;
-	use srml_support::{assert_ok, assert_noop, assert_err};
+	use crate::tests::{Call, Origin, Event as OuterEvent};
+	use primitives::traits::BlakeTwo256;
+	use srml_support::{Hashable, assert_ok, assert_noop, assert_err};
+	use system::{EventRecord, Phase};
+	use hex_literal::hex;
+	use runtime_io::with_externalities;
+	use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
+	use primitives::testing::{Digest, DigestItem, Header};
+
+	impl_outer_origin! {
+		pub enum Origin for Test {
+			motions<T>
+		}
+	}
+
+	impl_outer_event! {
+		pub enum Event for Test {
+			balances<T>, democracy<T>, seats<T>, motions<T>,
+		}
+	}
+
+	impl_outer_dispatch! {
+		pub enum Call for Test where origin: Origin {
+			balances::Balances,
+			democracy::Democracy,
+		}
+	}
+
+	thread_local! {
+		static VOTER_BOND: RefCell<u64> = RefCell::new(0);
+		static VOTING_FEE: RefCell<u64> = RefCell::new(0);
+		static PRESENT_SLASH_PER_VOTER: RefCell<u64> = RefCell::new(0);
+		static DECAY_RATIO: RefCell<u32> = RefCell::new(0);
+	}
+
+	pub struct VotingBond;
+	impl Get<u64> for VotingBond {
+		fn get() -> u64 { VOTER_BOND.with(|v| *v.borrow()) }
+	}
+
+	pub struct VotingFee;
+	impl Get<u64> for VotingFee {
+		fn get() -> u64 { VOTING_FEE.with(|v| *v.borrow()) }
+	}
+
+	pub struct PresentSlashPerVoter;
+	impl Get<u64> for PresentSlashPerVoter {
+		fn get() -> u64 { PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow()) }
+	}
+
+	pub struct DecayRatio;
+	impl Get<u32> for DecayRatio {
+		fn get() -> u32 { DECAY_RATIO.with(|v| *v.borrow()) }
+	}
+
+	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+	#[derive(Clone, Eq, PartialEq, Debug)]
+	pub struct Test;
+	impl system::Trait for Test {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = Event;
+	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
+	impl balances::Trait for Test {
+		type Balance = u64;
+		type OnNewAccount = ();
+		type OnFreeBalanceZero = ();
+		type Event = Event;
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
+	}
+	parameter_types! {
+		pub const CandidacyBond: u64 = 3;
+		pub const CarryCount: u32 = 2;
+		pub const InactiveGracePeriod: u32 = 1;
+		pub const VotingPeriod: u64 = 4;
+	}
+	impl Trait for Test {
+		type Event = Event;
+		type BadPresentation = ();
+		type BadReaper = ();
+		type BadVoterIndex = ();
+		type LoserCandidate = ();
+		type OnMembersChanged = CouncilMotions;
+		type CandidacyBond = CandidacyBond;
+		type VotingBond = VotingBond;
+		type VotingFee = VotingFee;
+		type PresentSlashPerVoter = PresentSlashPerVoter;
+		type CarryCount = CarryCount;
+		type InactiveGracePeriod = InactiveGracePeriod;
+		type VotingPeriod = VotingPeriod;
+		type DecayRatio = DecayRatio;
+	}
+
+	pub struct ExtBuilder {
+		balance_factor: u64,
+		decay_ratio: u32,
+		voting_fee: u64,
+		voter_bond: u64,
+		bad_presentation_punishment: u64,
+	}
+
+	impl Default for ExtBuilder {
+		fn default() -> Self {
+			Self {
+				balance_factor: 1,
+				decay_ratio: 24,
+				voting_fee: 0,
+				voter_bond: 0,
+				bad_presentation_punishment: 1,
+			}
+		}
+	}
+
+	impl ExtBuilder {
+		pub fn balance_factor(mut self, factor: u64) -> Self {
+			self.balance_factor = factor;
+			self
+		}
+		pub fn decay_ratio(mut self, ratio: u32) -> Self {
+			self.decay_ratio = ratio;
+			self
+		}
+		pub fn voting_fee(mut self, fee: u64) -> Self {
+			self.voting_fee = fee;
+			self
+		}
+		pub fn bad_presentation_punishment(mut self, fee: u64) -> Self {
+			self.bad_presentation_punishment = fee;
+			self
+		}
+		pub fn voter_bond(mut self, fee: u64) -> Self {
+			self.voter_bond = fee;
+			self
+		}
+		pub fn set_associated_consts(&self) {
+			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
+			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
+			PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
+			DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
+		}
+		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+			self.set_associated_consts();
+			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+			t.extend(balances::GenesisConfig::<Test>{
+				balances: vec![
+					(1, 10 * self.balance_factor),
+					(2, 20 * self.balance_factor),
+					(3, 30 * self.balance_factor),
+					(4, 40 * self.balance_factor),
+					(5, 50 * self.balance_factor),
+					(6, 60 * self.balance_factor)
+				],
+				vesting: vec![],
+			}.build_storage().unwrap().0);
+			t.extend(seats::GenesisConfig::<Test> {
+				members: vec![],
+				desired_seats: 2,
+				presentation_duration: 2,
+				term_duration: 5,
+			}.build_storage().unwrap().0);
+			runtime_io::TestExternalities::new(t)
+		}
+	}
+
+	pub type System = system::Module<Test>;
+	pub type Balances = balances::Module<Test>;
+	pub type Democracy = democracy::Module<Test>;
+	pub type Council = seats::Module<Test>;
+	pub type CouncilMotions = motions::Module<Test>;
 
 	fn voter_ids() -> Vec<u64> {
 		Council::all_voters().iter().map(|v| v.unwrap_or(0) ).collect::<Vec<u64>>()
@@ -1158,12 +1364,12 @@ mod tests {
 			assert_eq!(<Test as Trait>::PresentSlashPerVoter::get(), 1);
 			assert_eq!(Council::presentation_duration(), 2);
 			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-			assert_eq!(<Test as Trait>::CouncilVotingPeriod::get(), 4);
+			assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
 			assert_eq!(Council::term_duration(), 5);
 			assert_eq!(Council::desired_seats(), 2);
 			assert_eq!(<Test as Trait>::CarryCount::get(), 2);
 
-			assert_eq!(Council::active_council(), vec![]);
+			assert_eq!(Council::members(), vec![]);
 			assert_eq!(Council::next_tally(), Some(4));
 			assert_eq!(Council::presentation_active(), false);
 			assert_eq!(Council::next_finalize(), None);
@@ -1581,7 +1787,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
+			assert_eq!(Council::members(), vec![(6, 11), (5, 11)]);
 			assert_eq!(Council::voter_info(6).unwrap(), VoterInfo { last_win: 1, last_active: 0, stake: 600, pot: 0});
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 1, last_active: 0, stake: 500, pot: 0});
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
@@ -1604,7 +1810,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 19), (5, 19)]);
+			assert_eq!(Council::members(), vec![(6, 19), (5, 19)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
 				VoterInfo { last_win: 2, last_active: 1, stake: 600, pot:0 }
@@ -1629,7 +1835,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 27), (5, 27)]);
+			assert_eq!(Council::members(), vec![(6, 27), (5, 27)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
 				VoterInfo { last_win: 3, last_active: 2, stake: 600, pot: 0}
@@ -1655,7 +1861,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93 + 90, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 35), (5, 35)]);
+			assert_eq!(Council::members(), vec![(6, 35), (5, 35)]);
 			assert_eq!(
 				Council::voter_info(6).unwrap(),
 				VoterInfo { last_win: 4, last_active: 3, stake: 600, pot: 0}
@@ -1690,7 +1896,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(300, 2), (300, 3), (400, 4), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 11), (4, 11)]);
+			assert_eq!(Council::members(), vec![(6, 11), (4, 11)]);
 
 			System::set_block_number(12);
 			assert_ok!(Council::retract_voter(Origin::signed(6), 0));
@@ -1710,7 +1916,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(400, 4), (588, 2), (588, 3), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 19), (3, 19)]);
+			assert_eq!(Council::members(), vec![(6, 19), (3, 19)]);
 
 			System::set_block_number(20);
 			assert_ok!(Council::end_block(System::block_number()));
@@ -1723,7 +1929,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(4), 4, 400 + Council::get_offset(400, 1), 2), Ok(()));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(4, 27), (2, 27)]);
+			assert_eq!(Council::members(), vec![(4, 27), (2, 27)]);
 		})
 	}
 
@@ -1756,7 +1962,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
+			assert_eq!(Council::members(), vec![(6, 11), (5, 11)]);
 
 			System::set_block_number(12);
 			assert_ok!(Council::retract_voter(Origin::signed(6), 0));
@@ -1778,7 +1984,7 @@ mod tests {
 			);
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
+			assert_eq!(Council::members(), vec![(6, 11), (5, 11)]);
 
 			System::set_block_number(14);
 			assert!(Council::presentation_active());
@@ -1788,7 +1994,7 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (500, 5), (600, 6), (1096, 1)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(1, 19), (6, 19)]);
+			assert_eq!(Council::members(), vec![(1, 19), (6, 19)]);
 		})
 	}
 
@@ -2061,7 +2267,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
-			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
+			assert_eq!(Council::members(), vec![(5, 11), (2, 11)]);
 
 			assert!(!Council::is_a_candidate(&2));
 			assert!(!Council::is_a_candidate(&5));
@@ -2088,14 +2294,14 @@ mod tests {
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (0, 0), (20, 2), (50, 5)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
+			assert_eq!(Council::members(), vec![(5, 11), (2, 11)]);
 			let mut current = System::block_number();
 			let free_block;
 			loop {
 				current += 1;
 				System::set_block_number(current);
 				assert_ok!(Council::end_block(System::block_number()));
-				if Council::active_council().len() == 0 {
+				if Council::members().len() == 0 {
 					free_block = current;
 					break;
 				}
@@ -2139,7 +2345,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(4), 5, 50, 0), Err("duplicate presentation"));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
+			assert_eq!(Council::members(), vec![(5, 11), (2, 11)]);
 			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
@@ -2332,7 +2538,7 @@ mod tests {
 
 			assert_eq!(Council::vote_index(), 2);
 			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-			assert_eq!(<Test as Trait>::CouncilVotingPeriod::get(), 4);
+			assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
 			assert_eq!(Council::voter_info(4), Some(VoterInfo { last_win: 1, last_active: 0, stake: 40, pot: 0 }));
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(4),
@@ -2567,7 +2773,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
-			assert_eq!(Council::active_council(), vec![(1, 11), (5, 11)]);
+			assert_eq!(Council::members(), vec![(1, 11), (5, 11)]);
 
 			assert!(!Council::is_a_candidate(&1));
 			assert!(!Council::is_a_candidate(&5));
@@ -2619,7 +2825,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());
-			assert_eq!(Council::active_council(), vec![(1, 11), (5, 11), (3, 15)]);
+			assert_eq!(Council::members(), vec![(1, 11), (5, 11), (3, 15)]);
 
 			assert!(!Council::is_a_candidate(&1));
 			assert!(!Council::is_a_candidate(&2));

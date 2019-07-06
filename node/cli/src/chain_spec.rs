@@ -126,8 +126,11 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: vec![],
+		collective: Some(CollectiveConfig {
+			members: vec![],
+		}),
+		elections: Some(ElectionsConfig {
+			members: vec![],
 			presentation_duration: 1 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
@@ -224,7 +227,7 @@ pub fn testnet_genesis(
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = 100 * DOLLARS;
 
-	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
+	let desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -253,13 +256,16 @@ pub fn testnet_genesis(
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: endowed_accounts.iter()
+		collective: Some(CollectiveConfig {
+			members: vec![],
+		}),
+		elections: Some(ElectionsConfig {
+			members: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
 			presentation_duration: 10,
 			term_duration: 1000000,
-			desired_seats: council_desired_seats,
+			desired_seats: desired_seats,
 		}),
 		timestamp: Some(TimestampConfig {
 			minimum_period: 2,                    // 2*2=4 second block time.
