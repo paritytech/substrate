@@ -472,10 +472,10 @@ where
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Message = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, ed25519::Signature, AuthorityId>;
+	type Messages = Vec<::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, ed25519::Signature, AuthorityId>>;
 
 	#[allow(deprecated)]
-	fn prevotes_seen(&self, round: u64) -> Vec<Self::Message> {
+	fn prevotes_seen(&self, round: u64) -> Self::Messages {
 		crate::aux_schema::read_historical_votes::<Block, _>(&**self.inner.backend(), self.set_id, round)
 			.map(|historical_votes| historical_votes.seen().clone())
 			.unwrap_or(Vec::new())
@@ -485,27 +485,27 @@ where
 	}
 
 	#[allow(deprecated)]
-	fn votes_seen_when_prevoted(&self, round: u64) -> Vec<Self::Message> {
+	fn votes_seen_when_prevoted(&self, round: u64) -> Self::Messages {
 		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
 			&**self.inner.backend(),
 			self.set_id,
 			round
 		).unwrap_or(HistoricalVotes::<Block>::new());
 
-		let len = historical_votes.prevote_idx().unwrap_or(0);
-		historical_votes.seen().split_at(len).0.to_vec()
+		let len = historical_votes.prevote_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
 	}
 
 	#[allow(deprecated)]
-	fn votes_seen_when_precommited(&self, round: u64) -> Vec<Self::Message> {
+	fn votes_seen_when_precommited(&self, round: u64) -> Self::Messages {
 		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
 			&**self.inner.backend(),
 			self.set_id,
 			round
 		).unwrap_or(HistoricalVotes::<Block>::new());
 
-		let len = historical_votes.precommit_idx().unwrap_or(0);
-		historical_votes.seen().split_at(len).0.to_vec()
+		let len = historical_votes.precommit_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
 	}
 }
 
