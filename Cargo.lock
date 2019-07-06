@@ -4832,7 +4832,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cargo_metadata 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
