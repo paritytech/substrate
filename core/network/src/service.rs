@@ -14,39 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
-use std::{fs, io, path::Path};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::{collections::HashMap, fs, io, path::Path, time::Duration};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
-use log::{warn, error, info};
-use libp2p::core::swarm::NetworkBehaviour;
-use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::{Multiaddr, multihash::Multihash};
+use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use futures::{prelude::*, sync::mpsc};
+use log::{warn, error, info};
+use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::{PeerId, Multiaddr, multihash::Multihash};
 use parking_lot::{Mutex, RwLock};
-use crate::protocol::Protocol;
+use peerset::PeersetHandle;
+use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
-use peerset::PeersetHandle;
-use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
-use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
-
-use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::event::Event;
-use crate::protocol::on_demand::{AlwaysBadChecker, RequestData};
-use crate::protocol::{self, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
-use crate::protocol::sync::SyncState;
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
+use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
+use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
+use crate::protocol::sync::SyncState;
 
 /// Interval at which we update the `peers` field on the main thread.
 const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
-
-pub use libp2p::PeerId;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT:
