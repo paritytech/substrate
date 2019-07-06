@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, fs, io, path::Path, time::Duration};
+use std::{collections::HashMap, fs, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
@@ -22,7 +22,7 @@ use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
 use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
@@ -31,14 +31,11 @@ use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
-use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, ConnectedPeer, PeerInfo};
+use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
-
-/// Interval at which we update the `peers` field on the main thread.
-const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT:
@@ -80,8 +77,6 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	is_offline: Arc<AtomicBool>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
-	/// Peers whom we are connected with.
-	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<Swarm<B, S, H>>>,
 	/// Local copy of the `PeerId` of the local node.
@@ -156,7 +151,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
@@ -215,7 +209,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			bandwidth,
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
-			peers: peers.clone(),
 			peerset: peerset_handle,
 			network: network.clone(),
 			local_peer_id,
@@ -227,11 +220,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			is_major_syncing,
 			network_service: network,
 			service,
-			peers,
 			import_queue: params.import_queue,
 			protocol_rx,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
-			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
 		})
 	}
 
@@ -353,12 +344,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// Get currently connected peers.
-	///
-	/// > **Warning**: This method can return outdated information and should only ever be used
-	/// > when obtaining outdated information is acceptable.
 	pub fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
-		let peers = (*self.peers.read()).clone();
-		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
+		let mut network_service = self.network_service.lock();
+		network_service.user_protocol_mut()
+			.peers_info()
+			.map(|(id, info)| (id.clone(), info.clone()))
+			.collect()
 	}
 }
 
@@ -548,8 +539,6 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	is_offline: Arc<AtomicBool>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
-	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, S, H>>,
 	/// The *actual* network.
@@ -560,8 +549,6 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	protocol_rx: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the on-demand that must be processed.
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
-	/// Interval at which we update the `connected_peers` Arc.
-	connected_peers_interval: tokio_timer::Interval,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -628,14 +615,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				protocol: &mut network_service,
 			};
 			self.import_queue.poll_actions(&mut link);
-		}
-
-		while let Ok(Async::Ready(_)) = self.connected_peers_interval.poll() {
-			let mut network_service = self.network_service.lock();
-			let infos = network_service.user_protocol_mut().peers_info().map(|(id, info)| {
-				(id.clone(), ConnectedPeer { peer_info: info.clone() })
-			}).collect();
-			*self.peers.write() = infos;
 		}
 
 		// Check for new incoming on-demand requests.

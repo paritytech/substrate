@@ -117,12 +117,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
 }
 
-/// A peer from whom we have received a Status message.
-#[derive(Clone)]
-pub struct ConnectedPeer<B: BlockT> {
-	pub peer_info: PeerInfo<B>
-}
-
 /// A peer that we are connected to
 /// and from whom we have not yet received a Status message.
 struct HandshakingPeer {
