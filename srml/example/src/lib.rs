@@ -440,7 +440,7 @@ decl_module! {
 		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
-		// Implementation of a privileged call. The `origin` parameter is must be ROOT because
+		// Implementation of a privileged call. The `origin` parameter is ROOT because
 		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 		// to execute it. Different runtimes have different reasons for allow privileged
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
