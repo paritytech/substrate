@@ -83,14 +83,13 @@ impl<Balance> Approved<Balance> for VoteThreshold
 		+ Rem<Balance, Output = Balance>
 		+ Copy
 {
-	/// Given:
+
+	/// Return true if the overall outcome is in favor of approval.
 	///
-	/// - `approve` votes for a proposal,
-	/// - `against` votes against a proposal,
-	/// - a total electorate size of `electorate`, and
-	/// - the number of `voters` who voted,
-	///
-	/// this function will return true if the overall outcome is in favor of approval.
+	/// - `approve` is the number of votes approving of a proposal.
+	/// - `against` is the number of votes against a proposal.
+	/// - `voters` is the total number of voters who voted.
+	/// - `electorate` is the total electorate size.
 	///
 	/// We assume each *voter* may cast more than one *vote*, hence `voters` is not necessarily equal to
 	/// `approve + against`. Likewise, `electorate - voters` are abstainers.

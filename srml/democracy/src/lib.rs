@@ -293,7 +293,7 @@ decl_module! {
 			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
 		}
 
-		/// Called when a block is finalized. Will launch a new referendum if it is time, finish
+		/// Called when a block is finalized. Launch a new referendum if it is time, finish
 		/// any referenda that are ready to be tallied, and enact proposals that are ready.
 		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
@@ -398,8 +398,7 @@ decl_storage! {
 		pub MinimumDeposit get(minimum_deposit) config(): BalanceOf<T>;
 		/// The delay before enactment for all public referenda.
 		pub PublicDelay get(public_delay) config(): T::BlockNumber;
-		/// The maximum number of additional lock periods a voter may offer to strengthen
-		/// their vote. Multiples of `PublicDelay`.
+		/// The maximum number of additional lock periods a voter may offer to strengthen their vote.
 		pub MaxLockPeriods get(max_lock_periods) config(): LockPeriods;
 
 		/// How often (in blocks) to check for new votes.
@@ -447,8 +446,7 @@ decl_event!(
 impl<T: Trait> Module<T> {
 	// Exposed immutables.
 
-	/// Get the balance locked in support of `proposal`; `None` if proposal isn't a valid proposal
-	/// index.
+	/// Get the balance locked in support of `proposal`; `None` if proposal isn't a valid proposal index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		Self::deposit_of(proposal).map(|(d, l)| d * BalanceOf::<T>::sa(l.len() as u64))
 	}
@@ -615,7 +613,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Executed(index, ok));
 	}
 
-	/// Finds the proposal that will be the next referendum, unreserves the currency of
+	/// Find the proposal that will be the next referendum, unreserves the currency of
 	/// the depositors, and opens the voting period.
 	fn launch_next(now: T::BlockNumber) -> Result {
 		let mut public_props = Self::public_props();
