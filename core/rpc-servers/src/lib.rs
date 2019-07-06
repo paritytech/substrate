@@ -28,7 +28,7 @@ use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
 type Metadata = apis::metadata::Metadata;
-type RpcHandler = pubsub::PubSubHandler<Metadata>;
+pub type RpcHandler = pubsub::PubSubHandler<Metadata>;
 pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 

@@ -56,7 +56,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, DefaultRpcHandlerConstructor
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -547,6 +547,8 @@ macro_rules! construct_service_factory {
 				{ $( $full_import_queue_init:tt )* },
 			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
+			FullRpcHandlerConstructor = $full_rpc_handler_constructor:ty,
+			LightRpcHandlerConstructor = $light_rpc_handler_constructor:ty,
 		}
 	) => {
 		$( #[$attr] )*
@@ -566,6 +568,8 @@ macro_rules! construct_service_factory {
 			type LightService = $light_service;
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
+			type FullRpcHandlerConstructor = $full_rpc_handler_constructor;
+			type LightRpcHandlerConstructor = $light_rpc_handler_constructor;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,

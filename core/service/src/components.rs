@@ -132,6 +132,49 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+pub trait RpcHandlerConstructor<C: Components>{
+	fn new_rpc_handler(
+        client: Arc<ComponentClient<C>>,
+        network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+        should_have_peers: bool,
+        rpc_system_info: SystemInfo,
+        task_executor: TaskExecutor,
+        transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+    ) -> rpc::RpcHandler;
+}
+
+pub struct DefaultRpcHandlerConstructor;
+
+impl<C: Components> RpcHandlerConstructor<C> for DefaultRpcHandlerConstructor where
+    ComponentClient<C>: ProvideRuntimeApi,
+    <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>{
+	fn new_rpc_handler(
+        client: Arc<ComponentClient<C>>,
+        network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+        should_have_peers: bool,
+        rpc_system_info: SystemInfo,
+        task_executor: TaskExecutor,
+        transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+    ) -> rpc::RpcHandler{
+		let client = client.clone();
+		let subscriptions = rpc::apis::Subscriptions::new(task_executor);
+		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
+		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
+		let author = rpc::apis::author::Author::new(
+			client.clone(), transaction_pool.clone(), subscriptions
+		);
+		let system = rpc::apis::system::System::new(
+			rpc_system_info.clone(), network.clone(), should_have_peers
+		);
+		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
+			state,
+			chain,
+			author,
+			system,
+		)
+	}
+}
+
 /// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
 	type ServersHandle: Send + Sync;
@@ -165,22 +208,7 @@ impl<C: Components> StartRPC<Self> for C where
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Self::ServersHandle> {
 		let handler = || {
-			let client = client.clone();
-			let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-			let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-			let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-			let author = rpc::apis::author::Author::new(
-				client.clone(), transaction_pool.clone(), subscriptions
-			);
-			let system = rpc::apis::system::System::new(
-				rpc_system_info.clone(), network.clone(), should_have_peers
-			);
-			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
-				state,
-				chain,
-				author,
-				system,
-			)
+            C::RpcHandlerConstructor::new_rpc_handler(client.clone(), network.clone(), should_have_peers, rpc_system_info.clone(), task_executor.clone(), transaction_pool.clone())
 		};
 
 		Ok((
@@ -305,6 +333,10 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
 	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
+	/// Full Rpc Handler Constructor
+	type FullRpcHandlerConstructor: RpcHandlerConstructor<FullComponents<Self>>;
+    /// Light Rpc Handler Constructor
+    type LightRpcHandlerConstructor: RpcHandlerConstructor<LightComponents<Self>>;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -376,6 +408,8 @@ pub trait Components: Sized + 'static {
 	>;
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
+    /// Rpc Handler Constructor
+    type RpcHandlerConstructor: RpcHandlerConstructor<Self>;
 
 	/// Create client.
 	fn build_client(
@@ -443,6 +477,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ImportQueue = Factory::FullImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::FullService;
+    type RpcHandlerConstructor = Factory::FullRpcHandlerConstructor;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -517,6 +552,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::LightService;
+    type RpcHandlerConstructor = Factory::LightRpcHandlerConstructor;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,

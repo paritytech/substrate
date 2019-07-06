@@ -30,7 +30,7 @@ use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor, DefaultRpcHandlerConstructor
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -162,6 +162,8 @@ construct_service_factory! {
 				).map_err(Into::into)
 			}
 		},
+		FullRpcHandlerConstructor = DefaultRpcHandlerConstructor,
+		LightRpcHandlerConstructor = DefaultRpcHandlerConstructor,
 	}
 }
 
