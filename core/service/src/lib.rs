@@ -56,7 +56,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, DefaultRpcHandlerConstructor
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, RpcHandlerConstructor, DefaultRpcHandlerConstructor
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
