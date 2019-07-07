@@ -82,15 +82,6 @@ where
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
-
-	// Block: 'static,
-	// B: Backend<Block, Blake2Hasher> + 'static,
-	// E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	// N: Network<Block> + 'static + Send,
-	// N::In: 'static + Send,
-	// RA: 'static + Send + Sync,
-	// SC: SelectChain<Block> + 'static,
-	// NumberFor<Block>: BlockNumberOps,
 {
 	type Messages = Vec<::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>>;
 
@@ -239,6 +230,7 @@ where
 	PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 	PRA::Api: GrandpaApi<Block>,
 	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	SC: SelectChain<Block>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -471,6 +463,8 @@ where
 					// }
 				}
 
+				let votes_seen = self.votes_seen_when_prevoted(challenge.challenged_vote_set.round);
+
 				if challenged {
 					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 					
@@ -506,6 +500,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> BlockImport<Block>
 		PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 		PRA::Api: GrandpaApi<Block>,
 		T: SubmitReport<Client<B, E, Block, RA>, Block>,
+		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
 
