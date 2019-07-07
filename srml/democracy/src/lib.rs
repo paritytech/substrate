@@ -91,7 +91,7 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! - `propose` - Propose a sensitive action to be taken.
+//! - `propose` - Propose an action to be taken.
 //! - `second` - Second (sponsor) a proposal.
 //! - `vote` - Vote on a referendum.
 //! - `proxy_vote` - Vote on a referendum using a proxy account on behalf of a stash account.
