@@ -14,6 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Main entry point of the substrate-network crate.
+//!
+//! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
+//! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
+//! order fo the network to advance.
+//! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
+//! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
+//!
+//! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
+//! which is then processed by [`NetworkWorker::poll`].
+
 use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
