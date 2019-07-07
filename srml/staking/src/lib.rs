@@ -278,7 +278,7 @@ use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get
+		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get
 	}
 };
 use session::{OnSessionEnding, SelectInitialValidators, SessionIndex};
@@ -911,7 +911,8 @@ impl<T: Trait> Module<T> {
 
 	// MUTABLES (DANGEROUS)
 
-	/// Update the ledger for a controller. This will also update the stash lock.
+	/// Update the ledger for a controller. This will also update the stash lock. The lock will
+	/// will lock the entire funds except paying for further transactions.
 	fn update_ledger(
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
@@ -921,7 +922,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			ledger.total,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::all()
+			WithdrawReasons::except(WithdrawReason::TransactionPayment),
 		);
 		<Ledger<T>>::insert(controller, ledger);
 	}

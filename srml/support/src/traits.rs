@@ -607,3 +607,10 @@ bitmask! {
 	}
 }
 
+impl WithdrawReasons {
+	pub fn except(one: WithdrawReason) -> WithdrawReasons {
+		let mut mask = Self::all();
+		mask.toggle(one);
+		mask
+	}
+}

@@ -749,7 +749,7 @@ impl<T: Trait> Module<T> {
 			&who,
 			locked_balance,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::all()
+			WithdrawReasons::except(WithdrawReason::TransactionPayment),
 		);
 
 		<VoterInfoOf<T>>::insert(
