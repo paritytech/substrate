@@ -528,65 +528,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		// Implementation of `import_queue::Link` trait using the available local variables.
-		struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-			protocol: &'a mut Swarm<B, S, H>,
-		}
-		impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
-			fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-				self.protocol.user_protocol_mut().block_imported(&hash, number)
-			}
-			fn blocks_processed(&mut self, hashes: Vec<B::Hash>, has_error: bool) {
-				self.protocol.user_protocol_mut().blocks_processed(hashes, has_error)
-			}
-			fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
-				self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
-				if !success {
-					info!("Invalid justification provided by {} for #{}", who, hash);
-					self.protocol.user_protocol_mut().disconnect_peer(&who);
-					self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
-				}
-			}
-			fn clear_justification_requests(&mut self) {
-				self.protocol.user_protocol_mut().clear_justification_requests()
-			}
-			fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-				self.protocol.user_protocol_mut().request_justification(hash, number)
-			}
-			fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-				self.protocol.user_protocol_mut().request_finality_proof(hash, number)
-			}
-			fn finality_proof_imported(
-				&mut self,
-				who: PeerId,
-				request_block: (B::Hash, NumberFor<B>),
-				finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-			) {
-				let success = finalization_result.is_ok();
-				self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
-				if !success {
-					info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
-					self.protocol.user_protocol_mut().disconnect_peer(&who);
-					self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
-				}
-			}
-			fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
-				self.protocol.user_protocol_mut().report_peer(who, reputation_change)
-			}
-			fn restart(&mut self) {
-				self.protocol.user_protocol_mut().restart()
-			}
-			fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
-				self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)
-			}
-		}
-
-		{
-			let mut link = NetworkLink {
-				protocol: &mut self.network_service,
-			};
-			self.import_queue.poll_actions(&mut link);
-		}
+		// Poll the import queue for actions to perform.
+		self.import_queue.poll_actions(&mut NetworkLink {
+			protocol: &mut self.network_service,
+		});
 
 		// Check for new incoming on-demand requests.
 		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
@@ -596,6 +541,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		}
 
 		loop {
+			// Process the next message coming from the `NetworkService`.
 			let msg = match self.protocol_rx.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
 				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
@@ -631,6 +577,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		}
 
 		loop {
+			// Process the next action coming from the network.
 			let poll_value = self.network_service.poll();
 
 			let outcome = match poll_value {
@@ -659,6 +606,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			}
 		}
 
+		// Update the variables shared with the `NetworkService`.
 		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
 		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
@@ -674,3 +622,57 @@ type Swarm<B, S, H> = libp2p::core::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
 	Behaviour<B, S, H>
 >;
+
+// Implementation of `import_queue::Link` trait using the available local variables.
+struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+	protocol: &'a mut Swarm<B, S, H>,
+}
+
+impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
+	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		self.protocol.user_protocol_mut().block_imported(&hash, number)
+	}
+	fn blocks_processed(&mut self, hashes: Vec<B::Hash>, has_error: bool) {
+		self.protocol.user_protocol_mut().blocks_processed(hashes, has_error)
+	}
+	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
+		if !success {
+			info!("Invalid justification provided by {} for #{}", who, hash);
+			self.protocol.user_protocol_mut().disconnect_peer(&who);
+			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
+		}
+	}
+	fn clear_justification_requests(&mut self) {
+		self.protocol.user_protocol_mut().clear_justification_requests()
+	}
+	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		self.protocol.user_protocol_mut().request_justification(hash, number)
+	}
+	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		self.protocol.user_protocol_mut().request_finality_proof(hash, number)
+	}
+	fn finality_proof_imported(
+		&mut self,
+		who: PeerId,
+		request_block: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {
+		let success = finalization_result.is_ok();
+		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
+		if !success {
+			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
+			self.protocol.user_protocol_mut().disconnect_peer(&who);
+			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
+		}
+	}
+	fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
+		self.protocol.user_protocol_mut().report_peer(who, reputation_change)
+	}
+	fn restart(&mut self) {
+		self.protocol.user_protocol_mut().restart()
+	}
+	fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
+		self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)
+	}
+}
