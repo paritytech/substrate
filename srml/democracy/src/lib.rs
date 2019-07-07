@@ -108,7 +108,7 @@
 //! ### Public Functions
 //!
 //! - `locked_for` - Get the balance locked in support of a proposal.
-//! - `is_active_referendum` - Return true if the given referendum index corresponds to an on-going referendum.
+//! - `is_active_referendum` - Return true if the given referendum index corresponds to an ongoing referendum.
 //! - `active_referendums` - Get all referenda that are currently active and their corresponding info.
 //!  Equivalent to the Table of Referenda.
 //! - `maturing_referendums_at` - Get all referenda ready for tally at block `n`.
