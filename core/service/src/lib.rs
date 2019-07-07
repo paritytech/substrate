@@ -610,7 +610,11 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
-fn build_network_future<Components: components::Components, S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>, H: network::ExHashT>(
+fn build_network_future<
+	Components: components::Components,
+	S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>,
+	H: network::ExHashT
+> (
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
