@@ -151,6 +151,11 @@
 //! ## Genesis Config
 //!
 //! The Democracy module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//!
+//! ## Related Modules
+//!
+//! - [Staking](../srml_staking/index.html)
+//! - [Council](../srml_council/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
