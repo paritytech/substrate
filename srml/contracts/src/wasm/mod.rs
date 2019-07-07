@@ -208,7 +208,6 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
-		current_block: u64,
 	}
 	impl Ext for MockExt {
 		type T = Test;
@@ -293,7 +292,7 @@ mod tests {
 			self.rent_allowance
 		}
 
-		fn current_block(&self) -> &u64 { &self.current_block }
+		fn current_block(&self) -> &u64 { &121 }
 	}
 
 	fn execute<E: Ext>(
@@ -1345,4 +1344,70 @@ mod tests {
 			Err("during execution"),
 		);
 	}
+
+	/// calls `ext_current_block`, loads the current block number from the scratch buffer and
+	/// compares it with the constant &121.
+	const CODE_CURRENT_BLOCK: &str = r#"
+(module
+	(import "env" "ext_current_block" (func $ext_current_block))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the scratch buffer with the self address.
+		(call $ext_current_block)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 121.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 121)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn current_block() {
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_CURRENT_BLOCK,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+			.unwrap();
+	}
+
 }
