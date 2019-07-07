@@ -167,20 +167,30 @@
 //!
 //! ### Reward Calculation
 //!
-//! Rewards are recorded **per-session** and paid **per-era**. The value of the reward for each
-//! session is calculated at the end of the session based on the timeliness of the session, then
-//! accumulated to be paid later. The value of the new _per-session-reward_ is calculated at the end
-//! of each era by multiplying `SlotStake` and `SessionReward`  (`SessionReward` is the
-//! multiplication factor, represented by a number between 0 and 1). Once a new era is triggered,
-//! rewards are paid to the validators and their associated nominators.
+//! Validators and nominators are rewarded at the end of each era. The total reward of an era is
+//! calculated using the era duration and the staking rate (the total amount of tokens staked by
+//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! defined staking rate. The full specification can be found
+//! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model).
+//!
+//! Total reward is split among validators and their nominators depending on the number of point
+//! they received during the era. Points are added to a validor using
+//! [`add_reward_points_to_validator`](./enum.Call.html#variant.add_reward_points_to_validator).
+//!
+//! [`Module`](./struct.Module.html) implements
+//! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
+//! to block producer and block producer of referenced uncles.
+//!
+//! The validator and its nominator split their reward as following:
 //!
 //! The validator can declare an amount, named
 //! [`validator_payment`](./struct.ValidatorPrefs.html#structfield.validator_payment), that does not
 //! get shared with the nominators at each reward payout through its
 //! [`ValidatorPrefs`](./struct.ValidatorPrefs.html). This value gets deducted from the total reward
-//! that can be paid. The remaining portion is split among the validator and all of the nominators
-//! that nominated the validator, proportional to the value staked behind this validator (_i.e._
-//! dividing the [`own`](./struct.Exposure.html#structfield.own) or
+//! that is paid to the validator and its nominators. The remaining portion is split among the
+//! validator and all of the nominators that nominated the validator, proportional to the value
+//! staked behind this validator (_i.e._ dividing the
+//! [`own`](./struct.Exposure.html#structfield.own) or
 //! [`others`](./struct.Exposure.html#structfield.others) by
 //! [`total`](./struct.Exposure.html#structfield.total) in [`Exposure`](./struct.Exposure.html)).
 //!
