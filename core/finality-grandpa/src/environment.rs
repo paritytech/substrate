@@ -464,58 +464,6 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
-	AccountableSafety
-for Environment<B, E, Block, N, RA, SC, T>
-where
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network<Block> + 'static + Send,
-	N::In: 'static + Send,
-	RA: 'static + Send + Sync,
-	SC: SelectChain<Block> + 'static,
-	NumberFor<Block>: BlockNumberOps,
-{
-	type Messages = Vec<::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>>;
-
-	#[allow(deprecated)]
-	fn prevotes_seen(&self, round: u64) -> Self::Messages {
-		crate::aux_schema::read_historical_votes::<Block, _>(&**self.inner.backend(), self.set_id, round)
-			.map(|historical_votes| historical_votes.seen().clone())
-			.unwrap_or(Vec::new())
-			.into_iter()
-			.filter(|sig_msg| sig_msg.message.is_prevote())
-			.collect()
-	}
-
-	#[allow(deprecated)]
-	fn votes_seen_when_prevoted(&self, round: u64) -> Self::Messages {
-		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
-			&**self.inner.backend(),
-			self.set_id,
-			round
-		).unwrap_or(HistoricalVotes::<Block>::new());
-
-		let len = historical_votes.prevote_index().unwrap_or(0);
-		historical_votes.seen().split_at(len as usize).0.to_vec()
-	}
-
-	#[allow(deprecated)]
-	fn votes_seen_when_precommited(&self, round: u64) -> Self::Messages {
-		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
-			&**self.inner.backend(),
-			self.set_id,
-			round
-		).unwrap_or(HistoricalVotes::<Block>::new());
-
-		let len = historical_votes.precommit_index().unwrap_or(0);
-		historical_votes.seen().split_at(len as usize).0.to_vec()
-	}
-}
-
-
 impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, T>

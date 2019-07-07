@@ -33,7 +33,7 @@ use consensus_common::{
 use consensus_accountable_safety::SubmitReport;
 use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId,
-	Challenge
+	Challenge,
 };
 use srml_grandpa::{Signal, ChallengedVote};
 use runtime_primitives::Justification;
@@ -44,8 +44,9 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{H256, Blake2Hasher};
 use transaction_pool::txpool::{self, Pool as TransactionPool};
+use grandpa::AccountableSafety;
 
-use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
+use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand, HistoricalVotes};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{finalize_block, is_descendent_of};
@@ -68,6 +69,68 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> {
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	api: Arc<PRA>,
 	transaction_pool: Option<Arc<T>>
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> AccountableSafety
+for GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>
+where
+	NumberFor<Block>: grandpa::BlockNumberOps,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	DigestFor<Block>: Encode,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block>,
+	SC: SelectChain<Block>,
+
+	// Block: 'static,
+	// B: Backend<Block, Blake2Hasher> + 'static,
+	// E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	// N: Network<Block> + 'static + Send,
+	// N::In: 'static + Send,
+	// RA: 'static + Send + Sync,
+	// SC: SelectChain<Block> + 'static,
+	// NumberFor<Block>: BlockNumberOps,
+{
+	type Messages = Vec<::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>>;
+
+	#[allow(deprecated)]
+	fn prevotes_seen(&self, round: u64) -> Self::Messages {
+		crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.authority_set.set_id(),
+			round
+		)
+		.map(|historical_votes| historical_votes.seen().clone())
+		.unwrap_or(Vec::new())
+		.into_iter()
+		.filter(|sig_msg| sig_msg.message.is_prevote())
+		.collect()
+	}
+
+	#[allow(deprecated)]
+	fn votes_seen_when_prevoted(&self, round: u64) -> Self::Messages {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.authority_set.set_id(),
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+
+		let len = historical_votes.prevote_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
+	}
+
+	#[allow(deprecated)]
+	fn votes_seen_when_precommited(&self, round: u64) -> Self::Messages {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.authority_set.set_id(),
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+
+		let len = historical_votes.precommit_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
+	}
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> JustificationImport<Block>
