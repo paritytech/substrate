@@ -1198,9 +1198,11 @@ impl<T: Trait> Module<T> {
 		ForceNewEra::put(true);
 	}
 
-	/// Remove all associated data of a stash account for the staking system.
+	/// Remove all associated data of a stash account from the staking system.
 	///
-	/// This is called immediately when an account's balance falls below existential deposit.
+	/// This is called :
+	/// - Immediately when an account's balance falls below existential deposit.
+	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
 	fn kill_stash(stash: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(stash) {
 			<Ledger<T>>::remove(&controller);
