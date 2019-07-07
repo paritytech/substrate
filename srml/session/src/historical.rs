@@ -118,7 +118,7 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
 		});
 
-		// do all of thie _before_ calling the other `on_session_ending` impl
+		// do all of this _before_ calling the other `on_session_ending` impl
 		// so that we have e.g. correct exposures from the _current_.
 
 		match ProvingTrie::<T>::generate_for(ending) {
