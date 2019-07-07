@@ -94,8 +94,8 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
-	/// Protocol sender
-	protocol_sender: mpsc::UnboundedSender<ServerToWorkerMsg<B, S>>,
+	/// Channel that sends messages to the actual worker.
+	to_worker: mpsc::UnboundedSender<ServerToWorkerMsg<B, S>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -110,7 +110,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	pub fn new(
 		params: Params<B, S, H>,
 	) -> Result<NetworkWorker<B, S, H>, Error> {
-		let (protocol_sender, protocol_rx) = mpsc::unbounded();
+		let (to_worker, from_worker) = mpsc::unbounded();
 
 		if let Some(ref path) = params.network_config.net_config_path {
 			fs::create_dir_all(Path::new(path))?;
@@ -219,7 +219,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
-			protocol_sender: protocol_sender.clone(),
+			to_worker: to_worker.clone(),
 			_marker: PhantomData,
 		});
 
@@ -229,7 +229,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
-			protocol_rx,
+			from_worker,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
 		})
 	}
@@ -371,7 +371,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration.
 	pub fn trigger_repropagate(&self) {
-		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::PropagateExtrinsics);
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::PropagateExtrinsics);
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -379,7 +379,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
 	pub fn announce_block(&self, hash: B::Hash) {
-		let _ = self.protocol_sender.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
 	}
 
 	/// Send a consensus message through the gossip
@@ -391,7 +391,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		recipient: GossipMessageRecipient,
 	) {
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GossipConsensusMessage(
 				topic, engine_id, message, recipient,
 			));
@@ -409,7 +409,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// initialization as part of the configuration.
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::RequestJustification(hash.clone(), number));
 	}
 
@@ -418,7 +418,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		where F: FnOnce(&mut S, &mut dyn Context<B>) + Send + 'static
 	{
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::ExecuteWithSpec(Box::new(f)));
 	}
 
@@ -427,7 +427,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
 	{
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
@@ -442,7 +442,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// `on_event` on the network specialization.
 	pub fn get_value(&mut self, key: &Multihash) {
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
 	}
 
@@ -452,7 +452,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// `on_event` on the network specialization.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
 	}
 
@@ -476,7 +476,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		self.peerset.add_reserved_peer(peer_id.clone());
 		let _ = self
-			.protocol_sender
+			.to_worker
 			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
 	}
@@ -529,7 +529,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
-	protocol_rx: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
+	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the on-demand that must be processed.
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
@@ -553,7 +553,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 		loop {
 			// Process the next message coming from the `NetworkService`.
-			let msg = match self.protocol_rx.poll() {
+			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
 				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 				Ok(Async::NotReady) => break,

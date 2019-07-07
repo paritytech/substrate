@@ -15,6 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Configuration of the networking layer.
+//!
+//! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
+//! See the documentation of [`Params`].
 
 pub use crate::protocol::ProtocolConfig;
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
@@ -34,7 +37,7 @@ use std::error::Error;
 use std::{io::{self, Write}, iter, fmt, fs, net::Ipv4Addr, path::{Path, PathBuf}};
 use zeroize::Zeroize;
 
-/// Service initialization parameters.
+/// Network initialization parameters.
 pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Assigned roles for our node (full, light, ...).
 	pub roles: Roles,
