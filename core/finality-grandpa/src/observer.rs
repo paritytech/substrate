@@ -15,12 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use std::collections::VecDeque;
 
 use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
 use grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet,
+	HistoricalVotes,
 };
 use log::{debug, info, warn};
 
@@ -30,14 +32,14 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::{
-	AuthoritySignature, global_communication, CommandOrError, Config, environment,
+	global_communication, CommandOrError, CommunicationIn, Config, environment,
 	LinkHalf, Network, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthoritySignature};
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
@@ -57,22 +59,24 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberF
 	}
 }
 
-fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
+fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
+	note_round: F,
 ) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
 	NumberFor<Block>: BlockNumberOps,
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationIn<Block>,
 		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
+	F: Fn(u64),
 {
 	let authority_set = authority_set.clone();
 	let consensus_changes = consensus_changes.clone();
@@ -85,8 +89,8 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 				let commit = grandpa::Commit::from(commit);
 				(round, commit, callback)
 			},
-			voter::CommunicationIn::Auxiliary(_) => {
-				// ignore aux messages
+			voter::CommunicationIn::CatchUp(..) => {
+				// ignore catch up messages
 				return future::ok(last_finalized_number);
 			},
 		};
@@ -123,6 +127,10 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 				Ok(_) => {},
 				Err(e) => return future::err(e),
 			};
+
+			// note that we've observed completion of this round through the commit,
+			// and that implies that the next round has started.
+			note_round(round + 1);
 
 			grandpa::process_commit_validation_result(validation_result, callback);
 
@@ -167,15 +175,9 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	} = link;
 
 	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
+	let initial_state = (authority_set, consensus_changes, set_state.clone(), voter_commands_rx.into_future());
 
-	let (network, network_startup) = NetworkBridge::new(
-		network,
-		config.clone(),
-		None,
-		on_exit.clone(),
-	);
-
-	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone(), set_state, on_exit.clone());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
 		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
@@ -194,6 +196,21 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 		let last_finalized_number = client.info().chain.finalized_number;
 
+		// NOTE: since we are not using `round_communication` we have to
+		// manually note the round with the gossip validator, otherwise we won't
+		// relay round messages. we want all full nodes to contribute to vote
+		// availability.
+		let note_round = {
+			let network = network.clone();
+			let voters = voters.clone();
+
+			move |round| network.note_round(
+				crate::communication::Round(round),
+				crate::communication::SetId(set_id),
+				&*voters,
+			)
+		};
+
 		// create observer for the current set
 		let observer = grandpa_observer(
 			&client,
@@ -202,6 +219,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 			&voters,
 			last_finalized_number,
 			global_in,
+			note_round,
 		);
 
 		let handle_voter_command = move |command, voter_commands_rx| {
@@ -223,24 +241,37 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
-
+					let completed_round = CompletedRound {
+						number: 0,
+						state: genesis_state,
+						base: (new.canon_hash, new.canon_number),
+						historical_votes: HistoricalVotes::new(),
+					};
+					let mut rounds = VecDeque::new();
+					rounds.push_back(completed_round);
+					let voters_set = &*authority_set.inner().read();
+					let voters = voters_set
+						.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
+					let completed_rounds = CompletedRounds::new(
+						rounds,
+						new.set_id,
+						voters,
+					);
 					let set_state = VoterSetState::Live::<Block> {
 						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: Vec::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
+						completed_rounds,
 						current_round: HasVoted::No,
 					};
 
 					#[allow(deprecated)]
-					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+					crate::aux_schema::write_voter_state(
+						&**client.backend(),
+						new.set_id,
+						0,
+						&set_state,
+						&HistoricalVotes::<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>::new(),
+					)?;
 
 					set_state
 				},

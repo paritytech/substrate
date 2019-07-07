@@ -16,15 +16,13 @@
 
 //! Testing block import logic.
 
-use consensus::import_queue::{import_single_block, BasicQueue, BlockImportError, BlockImportResult};
+use consensus::import_queue::{
+	import_single_block, IncomingBlock, BasicQueue, BlockImportError, BlockImportResult
+};
 use test_client::{self, prelude::*};
 use test_client::runtime::{Block, Hash};
 use runtime_primitives::generic::BlockId;
 use super::*;
-
-struct TestLink {}
-
-impl Link<Block> for TestLink {}
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let client = test_client::new();

@@ -35,7 +35,7 @@ use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId,
 	Challenge
 };
-use srml_grandpa::Signal;
+use srml_grandpa::{Signal, ChallengedVote};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
@@ -83,7 +83,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> JustificationImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		let mut out = Vec::new();
 		let chain_info = self.inner.info().chain;
 
 		// request justifications for all pending changes for which change blocks have already been imported
@@ -101,12 +102,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> JustificationImport<Block>
 				if let Ok(Some(hash)) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
-							link.request_justification(&header.hash(), *header.number());
+							out.push((header.hash(), *header.number()));
 						}
 					}
 				}
 			}
 		}
+
+		out
 	}
 
 	fn import_justification(
@@ -172,7 +175,7 @@ where
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 	PRA::Api: GrandpaApi<Block>,
-	T: SubmitReport<PRA, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -395,14 +398,14 @@ where
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
 			Ok(Some(challenge)) => {
 
-				let challenged_votes = challenge.challenge_vote_set.challenged_votes;
+				let challenged_votes = challenge.challenged_vote_set.challenged_votes.clone();
 				
 				let challenged = false;
-				for ChallengedVote { vote, authority, signature } in  {
-					if me == authority {
-						challenged = true;
-						break;
-					}
+				for ChallengedVote { vote, authority, signature } in challenged_votes {
+					// if me == authority {
+					// 	challenged = true;
+					// 	break;
+					// }
 				}
 
 				if challenged {
@@ -415,7 +418,7 @@ where
 						)
 						.map(|call| {
 							self.transaction_pool.as_ref().map(|txpool|
-								txpool.submit_report_call(self.api.as_ref(), call.as_slice())
+								txpool.submit_report_call(self.inner.as_ref(), call.as_slice())
 							);
 							info!(target: "afg", "Unjustified prevotes report has been submitted")
 						}).unwrap_or_else(|err|
@@ -439,7 +442,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> BlockImport<Block>
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 		PRA::Api: GrandpaApi<Block>,
-		T: SubmitReport<PRA, Block>,
+		T: SubmitReport<Client<B, E, Block, RA>, Block>,
 {
 	type Error = ConsensusError;
 
@@ -598,7 +601,7 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	T: SubmitReport<PRA, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 {
 
 	/// Import a block justification and finalize the block.

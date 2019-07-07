@@ -86,6 +86,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 mod authorities;
 mod aux_schema;
@@ -111,7 +112,7 @@ pub use observer::run_grandpa_observer;
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
-use until_imported::UntilCommitBlocksImported;
+use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
 use fg_primitives::AuthoritySignature;
@@ -124,6 +125,7 @@ mod tests;
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A signed message.
 pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
@@ -132,25 +134,84 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	AuthorityId,
 >;
 
+/// An ordered set of historical votes.
+pub type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
 /// A primary propose message for this chain's block type.
 pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A precommit message for this chain's block type.
 pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+
+/// A catch up message for this chain's block type.
+pub type CatchUp<Block> = grandpa::CatchUp<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
 /// A commit message for this chain's block type.
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
+
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
+>;
+
+/// A global communication input stream for commits and catch up messages. Not
+/// exposed publicly, used internally to simplify types in the communication
+/// layer.
+type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// Global communication input stream for commits and catch up messages, with
+/// the hash type not being derived from the block, useful for forcing the hash
+/// to some type (e.g. `H256`) when the compiler can't do the inference.
+type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A global communication sink for commits. Not exposed publicly, used
+/// internally to simplify types in the communication layer.
+type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// Global communication sink for commits with the hash type not being derived
+/// from the block, useful for forcing the hash to some type (e.g. `H256`) when
+/// the compiler can't do the inference.
+type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
 >;
 
 /// Configuration for the GRANDPA service.
@@ -240,7 +301,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(::tokio::timer::Error),
+	Timer(tokio_timer::Error),
 }
 
 impl From<GrandpaError> for Error {
@@ -372,7 +433,7 @@ where
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
 	// A: txpool::ChainApi,
-	T: SubmitReport<PRA, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 {
 	use runtime_primitives::traits::Zero;
 
@@ -423,11 +484,11 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	network: &NetworkBridge<Block, N>,
 ) -> (
 	impl Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationInH<Block, H256>,
 		Error = CommandOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = voter::CommunicationOut<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		SinkItem = CommunicationOutH<Block, H256>,
 		SinkError = CommandOrError<H256, NumberFor<Block>>,
 	>,
 ) where
@@ -443,37 +504,21 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		.unwrap_or(false);
 
 	// verification stream
-	let (commit_in, commit_out) = network.global_communication(
+	let (global_in, global_out) = network.global_communication(
 		communication::SetId(set_id),
 		voters.clone(),
 		is_voter,
 	);
 
-	// block commit messages until relevant blocks are imported.
-	let commit_in = UntilCommitBlocksImported::new(
+	// block commit and catch up messages until relevant blocks are imported.
+	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
 		client.clone(),
-		commit_in,
+		global_in,
 	);
 
-	let commits_in = commit_in.map_err(CommandOrError::from);
-	let commits_out = commit_out.sink_map_err(CommandOrError::from);
-
-	let global_in = commits_in.map(|(round, commit, mut callback)| {
-		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
-			voter::CommitProcessingOutcome::Good(_) =>
-				callback(communication::CommitProcessingOutcome::Good),
-			voter::CommitProcessingOutcome::Bad(_) =>
-				callback(communication::CommitProcessingOutcome::Bad),
-		}));
-		voter::CommunicationIn::Commit(round, commit, callback)
-	});
-
-	// NOTE: eventually this will also handle catch-up requests
-	let global_out = commits_out.with(|global| match global {
-		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
-		_ => unimplemented!(),
-	});
+	let global_in = global_in.map_err(CommandOrError::from);
+	let global_out = global_out.sink_map_err(CommandOrError::from);
 
 	(global_in, global_out)
 }
@@ -508,7 +553,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
+pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -520,7 +565,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
+	pub telemetry_on_connect: Option<TelemetryOnConnect>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<T>,
 }
@@ -568,13 +613,13 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	let (network, network_startup) = NetworkBridge::new(
 		network,
 		config.clone(),
-		Some(&set_state.read()),
+		set_state.clone(),
 		on_exit.clone(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
-	if let Some(telemetry_on_connect) = telemetry_on_connect {
+	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = authority_set.clone();
 		let events = telemetry_on_connect.telemetry_connection_sinks
 			.for_each(move |_| {
@@ -591,10 +636,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 				);
 				Ok(())
 			})
-			.then(|_| Ok(()));
-		let events = events.select(telemetry_on_connect.on_exit).then(|_| Ok(()));
-		telemetry_on_connect.executor.spawn(events);
-	}
+			.then(|_| -> Result<(), ()> { Ok(()) });
+		futures::future::Either::A(events)
+	} else {
+		futures::future::Either::B(futures::future::empty())
+	};
 
 	let voters = authority_set.current_authorities();
 	let initial_environment = Arc::new(Environment {
@@ -706,24 +752,40 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+					
+					// always start at round 0 when changing sets.
+					let completed_round = CompletedRound {
+							number: 0,
+							state: genesis_state,
+							base: (new.canon_hash, new.canon_number),
+							historical_votes: HistoricalVotes::<Block>::new(),
+					};
+
+					let mut rounds = VecDeque::new();
+					rounds.push_back(completed_round);
+
+					let voters = authority_set.inner().read()
+						.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
+					let completed_rounds = CompletedRounds::new(
+						rounds,
+						new.set_id,
+						voters,
+					);
 
 					let set_state = VoterSetState::Live {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: Vec::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
+						completed_rounds,
 						current_round: HasVoted::No,
 					};
 
 					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+					aux_schema::write_voter_state(
+						&**client.backend(),
+						new.set_id,
+						0,
+						&set_state,
+						&HistoricalVotes::<Block>::new(),
+					)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
 
@@ -797,7 +859,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 
 	let voter_work = network_startup.and_then(move |()| voter_work);
 
-	Ok(voter_work.select(on_exit).then(|_| Ok(())))
+	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
+	let telemetry_task = telemetry_task
+		.then(|_| futures::future::empty::<(), ()>());
+
+	Ok(voter_work.select(on_exit).select2(telemetry_task).then(|_| Ok(())))
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]

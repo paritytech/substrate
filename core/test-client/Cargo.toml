@@ -10,9 +10,9 @@ client-db = { package = "substrate-client-db", path = "../client/db", features =
 consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 executor = { package = "substrate-executor", path = "../executor" }
 futures = { version = "0.1.27" }
-hash-db = "0.12"
+hash-db = "0.14.0"
 keyring = { package = "substrate-keyring", path = "../keyring" }
-parity-codec = "3.5.1"
+parity-codec = "4.1.1"
 primitives = { package = "substrate-primitives", path = "../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }

@@ -36,6 +36,7 @@ impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block> for T
 where 
 	Block: BlockT + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
+	<Block as BlockT>::Extrinsic: Decode,
 	C: HeaderBackend<Block>,
 {
 	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {

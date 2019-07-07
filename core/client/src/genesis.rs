@@ -53,7 +53,12 @@ mod tests {
 	use primitives::Blake2Hasher;
 	use hex::*;
 
-	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(
+		Executor,
+		test_client::runtime::api::dispatch,
+		test_client::runtime::native_version,
+		test_client::runtime::WASM_BINARY
+	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
 		NativeExecutionDispatch::new(None)

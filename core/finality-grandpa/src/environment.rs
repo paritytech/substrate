@@ -23,7 +23,7 @@ use std::ops::Deref;
 use log::{debug, warn, info, error};
 use parity_codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio::timer::Delay;
+use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
@@ -32,7 +32,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet, AccountableSafety,
 };
 use grandpa_primitives::Equivocation;
 use fg_primitives::{GrandpaEquivocationProof, GrandpaApi};
@@ -45,19 +45,27 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	PrimaryPropose, NewAuthoritySet, VoterCommand,
 };
 
 use consensus_common::SelectChain;
 use consensus_accountable_safety::SubmitReport;
 
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use fg_primitives::{AuthorityId, AuthoritySignature};
 
-/// Data about a completed round.
+type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// Data about a completed round. The set of votes that is stored must be
+/// minimal, i.e. at most one equivocation is stored per voter.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
 	/// The round number.
@@ -67,7 +75,7 @@ pub struct CompletedRound<Block: BlockT> {
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
 	/// All the votes observed in the round.
-	pub votes: Vec<SignedMessage<Block>>,
+	pub historical_votes: HistoricalVotes<Block>,
 }
 
 // Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -78,6 +86,7 @@ pub struct CompletedRounds<Block: BlockT> {
 	set_id: u64,
 	voters: Vec<AuthorityId>,
 }
+
 
 // NOTE: the current strategy for persisting completed rounds is very naive
 // (update everything) and we also rely on cloning to do atomic updates,
@@ -105,16 +114,13 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
 	pub(crate) fn new(
-		genesis: CompletedRound<Block>,
+		rounds: VecDeque<CompletedRound<Block>>,
 		set_id: u64,
-		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		voters: Vec<AuthorityId>,
 	)
 		-> CompletedRounds<Block>
 	{
-		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
-		rounds.push_back(genesis);
-
-		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
+		// let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
 	}
 
@@ -180,6 +186,16 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.clone(),
 			VoterSetState::Paused { completed_rounds } =>
 				completed_rounds.clone(),
+		}
+	}
+
+	/// Returns the last completed round.
+	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
+		match self {
+			VoterSetState::Live { completed_rounds, .. } =>
+				completed_rounds.last().clone(),
+			VoterSetState::Paused { completed_rounds } =>
+				completed_rounds.last().clone(),
 		}
 	}
 }
@@ -448,6 +464,58 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
+
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
+	AccountableSafety
+for Environment<B, E, Block, N, RA, SC, T>
+where
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	N: Network<Block> + 'static + Send,
+	N::In: 'static + Send,
+	RA: 'static + Send + Sync,
+	SC: SelectChain<Block> + 'static,
+	NumberFor<Block>: BlockNumberOps,
+{
+	type Messages = Vec<::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>>;
+
+	#[allow(deprecated)]
+	fn prevotes_seen(&self, round: u64) -> Self::Messages {
+		crate::aux_schema::read_historical_votes::<Block, _>(&**self.inner.backend(), self.set_id, round)
+			.map(|historical_votes| historical_votes.seen().clone())
+			.unwrap_or(Vec::new())
+			.into_iter()
+			.filter(|sig_msg| sig_msg.message.is_prevote())
+			.collect()
+	}
+
+	#[allow(deprecated)]
+	fn votes_seen_when_prevoted(&self, round: u64) -> Self::Messages {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.set_id,
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+
+		let len = historical_votes.prevote_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
+	}
+
+	#[allow(deprecated)]
+	fn votes_seen_when_precommited(&self, round: u64) -> Self::Messages {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.set_id,
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+
+		let len = historical_votes.precommit_index().unwrap_or(0);
+		historical_votes.seen().split_at(len as usize).0.to_vec()
+	}
+}
+
+
 impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, T>
@@ -558,7 +626,12 @@ where
 		Ok(())
 	}
 
-	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+	fn prevoted(
+		&self,
+		round: u64,
+		prevote: Prevote<Block>,
+		historical_votes: &HistoricalVotes<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -592,7 +665,13 @@ where
 			};
 
 			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_state(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+				&set_state,
+				historical_votes,
+			)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -600,7 +679,12 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(
+		&self,
+		round: u64,
+		precommit: Precommit<Block>,
+		historical_votes: &HistoricalVotes<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -632,7 +716,13 @@ where
 			};
 
 			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_state(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+				&set_state,
+				historical_votes,
+			)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -645,7 +735,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: Vec<SignedMessage<Block>>,
+		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -664,7 +754,7 @@ where
 				number: round,
 				state: state.clone(),
 				base,
-				votes,
+				historical_votes: historical_votes.clone(),
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));
@@ -676,7 +766,13 @@ where
 			};
 
 			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_state(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+				&set_state,
+				&historical_votes,
+			)?;
 
 			Ok(Some(set_state))
 		})?;

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Conrete externalities implementation.
+//! Concrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;
@@ -115,7 +115,7 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> (B::Transaction, Option<MemoryDB<H>>) {
+	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<MemoryDB<H>>) {
 		let _ = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
@@ -126,7 +126,7 @@ where
 		);
 
 		(
-			storage_transaction.0,
+			storage_transaction,
 			changes_trie_transaction,
 		)
 	}

@@ -18,6 +18,9 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::collections::VecDeque;
+use std::iter::FromIterator;
+
 use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
@@ -30,15 +33,74 @@ use fg_primitives::AuthorityId;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
-use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
-use crate::NewAuthoritySet;
+use crate::environment::{
+	CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState,
+};
+use crate::{NewAuthoritySet, HistoricalVotes, SignedMessage};
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
+const HISTORICAL_VOTES_PREFIX: &[u8] = b"grandpa_historical_votes_";
 
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
+
+/// Data about a completed round.
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub struct V2CompletedRound<Block: BlockT> {
+	/// The round number.
+	pub number: u64,
+	/// The round state (prevote ghost, estimate, finalized, etc.)
+	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	/// The target block base used for voting in the round.
+	pub base: (Block::Hash, NumberFor<Block>),
+	/// All the votes observed in the round.
+	pub votes: Vec<SignedMessage<Block>>,
+}
+
+// Data about last completed rounds.
+#[derive(Debug, Clone, PartialEq)]
+pub struct V2CompletedRounds<Block: BlockT> {
+	rounds: VecDeque<V2CompletedRound<Block>>,
+	set_id: u64,
+	voters: Vec<AuthorityId>,
+}
+
+impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
+	fn encode(&self) -> Vec<u8> {
+		let v = Vec::from_iter(&self.rounds);
+		(&v, &self.set_id, &self.voters).encode()
+	}
+}
+
+impl<Block: BlockT> Decode for V2CompletedRounds<Block> {
+	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+		<(Vec<V2CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
+			.map(|(rounds, set_id, voters)| V2CompletedRounds {
+				rounds: rounds.into(),
+				set_id,
+				voters,
+			})
+	}
+}
+
+// The state of the current voter set.
+#[derive(Debug, Decode, Encode, PartialEq)]
+pub enum V2VoterSetState<Block: BlockT> {
+	/// The voter is live, i.e. participating in rounds.
+	Live {
+		/// The previously completed rounds.
+		completed_rounds: V2CompletedRounds<Block>,
+		/// Vote status for the current round.
+		current_round: HasVoted<Block>,
+	},
+	/// The voter is paused, i.e. not casting or importing any votes.
+	Paused {
+		/// The previously completed rounds.
+		completed_rounds: V2CompletedRounds<Block>,
+	},
+}
 
 /// The voter set state.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -155,16 +217,21 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 		let base = last_round_state.prevote_ghost
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
+		let completed_round = CompletedRound {
+			number: last_round_number,
+			state: last_round_state,
+			base,
+			historical_votes: HistoricalVotes::<Block>::new(),
+		};
+		let mut rounds = VecDeque::new();
+		rounds.push_back(completed_round);
+		let voters = new_set.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 		let set_state = VoterSetState::Live {
 			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					number: last_round_number,
-					state: last_round_state,
-					votes: Vec::new(),
-					base,
-				},
+				rounds,
 				set_id,
-				&new_set,
+				voters,
 			),
 			current_round: HasVoted::No,
 		};
@@ -195,17 +262,23 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 		AUTHORITY_SET_KEY,
 	)? {
 		let set_id = set.current().0;
-
-		let completed_rounds = |number, state, base| CompletedRounds::new(
-			CompletedRound {
+		let completed_rounds = |number, state, base| {
+			let completed_round = CompletedRound {
 				number,
 				state,
-				votes: Vec::new(),
 				base,
-			},
-			set_id,
-			&set,
-		);
+				historical_votes: HistoricalVotes::<Block>::new(),
+			};
+			let mut rounds = VecDeque::new();
+			rounds.push_back(completed_round);
+			let voters = set.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
+			CompletedRounds::new(
+				rounds,
+				set_id,
+				voters,
+			)
+		};
 
 		let set_state = match load_decode::<_, V1VoterSetState<Block::Hash, NumberFor<Block>>>(
 			backend,
@@ -229,6 +302,98 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 				}
 			},
 			None => {
+				let set_state = genesis_round();
+				let base = set_state.prevote_ghost
+					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
+
+				VoterSetState::Live {
+					completed_rounds: completed_rounds(0, set_state, base),
+					current_round: HasVoted::No,
+				}
+			},
+		};
+
+		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
+
+		return Ok(Some((set, set_state)));
+	}
+
+	Ok(None)
+}
+
+fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Block>) -> VoterSetState<Block> {
+	let transform = |completed_rounds: V2CompletedRounds<Block>| {
+		CompletedRounds::new(
+			completed_rounds.rounds.into_iter().map(
+				| V2CompletedRound { number, state, base, votes } | {
+					CompletedRound {
+						number,
+						state,
+						base,
+						historical_votes: HistoricalVotes::<Block>::new_with(votes, None, None),
+					}
+				}
+			).collect::<VecDeque<CompletedRound<Block>>>(),
+			completed_rounds.set_id,
+			completed_rounds.voters,
+		)
+	};
+	match voter_set_state_v2 {
+		V2VoterSetState::Paused { completed_rounds } => {
+			VoterSetState::Paused {
+				completed_rounds: transform(completed_rounds)
+			}
+		},
+		V2VoterSetState::Live { completed_rounds, current_round } => {
+			VoterSetState::Live {
+				completed_rounds: transform(completed_rounds),
+				current_round,
+			}
+		},
+	}
+}
+
+fn migrate_from_version2<Block: BlockT, B, G>(
+	backend: &B,
+	genesis_round: &G,
+) -> ClientResult<Option<(
+	AuthoritySet<Block::Hash, NumberFor<Block>>,
+	VoterSetState<Block>,
+)>> where B: AuxStore,
+		  G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+{
+	CURRENT_VERSION.using_encoded(|s|
+		backend.insert_aux(&[(VERSION_KEY, s)], &[])
+	)?;
+
+	if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
+		let set_state = match load_decode::<_, V2VoterSetState<Block>>(
+			backend,
+			SET_STATE_KEY,
+		)? {
+			Some(voter_set_state_v2) => voter_set_state_from_v2(voter_set_state_v2),
+			None => {
+				let completed_rounds = |number, state, base| {
+					let completed_round = CompletedRound {
+						number,
+						state,
+						base,
+						historical_votes: HistoricalVotes::<Block>::new(),
+					};
+					let mut rounds = VecDeque::new();
+					rounds.push_back(completed_round);
+					let voters = set.current().1.iter().map(|(a, _)| a.clone()).collect();
+
+					CompletedRounds::new(
+						rounds,
+						set.current().0,
+						voters,
+					)
+				};
+
 				let set_state = genesis_round();
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
@@ -286,6 +451,15 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(2) => {
+			if let Some((new_set, set_state)) = migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)? {
+				return Ok(PersistentData {
+					authority_set: new_set.into(),
+					consensus_changes: Arc::new(consensus_changes.into()),
+					set_state: set_state.into(),
+				});
+			}
+		},
+		Some(3) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
@@ -300,16 +474,22 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 						let base = state.prevote_ghost
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
+						let completed_round = CompletedRound {
+							number: 0,
+							historical_votes: HistoricalVotes::<Block>::new(),
+							base,
+							state,
+						};
+						let mut rounds = VecDeque::new();
+						rounds.push_back(completed_round);
+						let voters = set
+							.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 						VoterSetState::Live {
 							completed_rounds: CompletedRounds::new(
-								CompletedRound {
-									number: 0,
-									votes: Vec::new(),
-									base,
-									state,
-								},
+								rounds,
 								set.current().0,
-								&set,
+								voters,
 							),
 							current_round: HasVoted::No,
 						}
@@ -338,16 +518,22 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	let base = state.prevote_ghost
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
+	let completed_round = CompletedRound {
+		number: 0,
+		state,
+		base,
+		historical_votes: HistoricalVotes::<Block>::new(),
+	};
+
+	let mut rounds = VecDeque::new();
+	rounds.push_back(completed_round);
+	let voters = genesis_set.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 	let genesis_state = VoterSetState::Live {
 		completed_rounds: CompletedRounds::new(
-			CompletedRound {
-				number: 0,
-				votes: Vec::new(),
-				state,
-				base,
-			},
+			rounds,
 			0,
-			&genesis_set,
+			voters,
 		),
 		current_round: HasVoted::No,
 	};
@@ -400,16 +586,21 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 			new_set.canon_hash.clone(),
 			new_set.canon_number.clone(),
 		));
+		let completed_round = CompletedRound {
+			number: 0,
+			state: round_state,
+			historical_votes: HistoricalVotes::<Block>::new(),
+			base: (new_set.canon_hash, new_set.canon_number),
+		};
+		let mut rounds = VecDeque::new();
+		rounds.push_back(completed_round);
+		let voters = set.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 		let set_state = VoterSetState::<Block>::Live {
 			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					number: 0,
-					state: round_state,
-					votes: Vec::new(),
-					base: (new_set.canon_hash, new_set.canon_number),
-				},
+				rounds,
 				new_set.set_id,
-				&set,
+				voters,
 			),
 			current_round: HasVoted::No,
 		};
@@ -424,15 +615,65 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	}
 }
 
-/// Write voter set state.
+/// Write voter set state and historical votes to database.
+pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+	state: &VoterSetState<Block>,
+	historical_votes: &HistoricalVotes<Block>,
+) -> ClientResult<()> {
+	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| votes_key.extend(set_id));
+	round.using_encoded(|round| votes_key.extend(round));
+	backend.insert_aux(
+		&[
+			(&votes_key[..], historical_votes.encode().as_slice()),
+			(SET_STATE_KEY, state.encode().as_slice()),
+		],
+		&[],
+	)
+}
+
+/// Write voter set state to database.
 pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	state: &VoterSetState<Block>,
 ) -> ClientResult<()> {
 	backend.insert_aux(
 		&[(SET_STATE_KEY, state.encode().as_slice())],
-		&[]
+		&[],
 	)
+}
+
+/// Write historical votes to database.
+#[cfg(test)]
+pub(crate) fn write_historical_votes<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+	historical_votes: &HistoricalVotes<Block>,
+) -> ClientResult<()> {
+	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| votes_key.extend(set_id));
+	round.using_encoded(|round| votes_key.extend(round));
+	backend.insert_aux(
+		&[(&votes_key[..], historical_votes.encode().as_slice())],
+		&[],
+	)
+}
+
+/// Read historical votes seen in a round.
+pub(crate) fn read_historical_votes<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+) -> Option<HistoricalVotes<Block>> {
+	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| key.extend(set_id));
+	round.using_encoded(|round| key.extend(round));
+	load_decode::<_, HistoricalVotes<Block>>(backend, &key[..])
+		.expect("backend error")
 }
 
 /// Update the consensus changes.
@@ -457,7 +698,9 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 #[cfg(test)]
 mod test {
 	use substrate_primitives::H256;
-	use test_client;
+	use std::collections::VecDeque;
+	use crate::{Prevote, environment::Vote};
+	use test_client::{self, runtime::Block};
 	use super::*;
 
 	#[test]
@@ -507,10 +750,10 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -527,18 +770,24 @@ mod test {
 			},
 		);
 
+		let completed_round = CompletedRound {
+			number: round_number,
+			state: round_state.clone(),
+			base: round_state.prevote_ghost.unwrap(),
+			historical_votes: HistoricalVotes::<Block>::new(),
+		};
+		let mut rounds = VecDeque::new();
+		rounds.push_back(completed_round);
+		let voters = authority_set.inner().read()
+			.current().1.iter().map(|(a, _)| a.clone()).collect();
+		
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
 				completed_rounds: CompletedRounds::new(
-					CompletedRound {
-						number: round_number,
-						state: round_state.clone(),
-						base: round_state.prevote_ghost.unwrap(),
-						votes: vec![],
-					},
+					rounds,
 					set_id,
-					&*authority_set.inner().read(),
+					voters,
 				),
 				current_round: HasVoted::No,
 			},
@@ -594,15 +843,16 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
-			&client,
-			H256::random(),
-			0,
-			|| unreachable!(),
-		).unwrap();
+		let PersistentData { authority_set, set_state, .. } =
+			load_persistent::<test_client::runtime::Block, _, _>(
+				&client,
+				H256::random(),
+				0,
+				|| unreachable!(),
+			).unwrap();
 
 		assert_eq!(
 			*authority_set.inner().read(),
@@ -614,21 +864,134 @@ mod test {
 			},
 		);
 
+		let completed_round = CompletedRound {
+			number: round_number,
+			state: round_state.clone(),
+			base: round_state.prevote_ghost.unwrap(),
+			historical_votes: HistoricalVotes::<Block>::new(),
+		};
+
+		let mut rounds = VecDeque::new();
+		rounds.push_back(completed_round);
+		let voters = authority_set.inner().read()
+			.current().1.iter().map(|(a, _)| a.clone()).collect();
+
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
 				completed_rounds: CompletedRounds::new(
-					CompletedRound {
-						number: round_number,
-						state: round_state.clone(),
-						base: round_state.prevote_ghost.unwrap(),
-						votes: vec![],
-					},
+					rounds,
 					set_id,
-					&*authority_set.inner().read(),
+					voters,
 				),
 				current_round: HasVoted::No,
 			},
 		);
+	}
+
+	#[test]
+	fn load_decode_from_v2_migrates_data_format() {
+		let client = test_client::new();
+		let voters = vec![AuthorityId::default()];
+		let authorities = vec![(AuthorityId::default(), 100)];
+		let set_id = 3;
+		let h = H256::random();
+		let n = 32;
+
+		let prevote = Prevote::<Block>::new(h.clone(), n.clone());
+		let vote = Vote::Prevote(None, prevote);
+
+		{
+			let current_round = HasVoted::Yes(AuthorityId::default(), vote.clone());
+
+			let authority_set = AuthoritySet::<H256, u64> {
+				current_authorities: authorities.clone(),
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			};
+
+			let rounds = VecDeque::new();
+
+			let completed_rounds = V2CompletedRounds {
+				rounds,
+				set_id,
+				voters,
+			};
+
+			let voter_set_state = V2VoterSetState::Live {
+				completed_rounds,
+				current_round,
+			};
+
+			client.insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+					(VERSION_KEY, 2u32.encode().as_slice()),
+				],
+				&[],
+			).unwrap();
+		}
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(2),
+		);
+
+		// should perform the migration
+		load_persistent::<Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(3),
+		);
+
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			*authority_set.inner().read(),
+			AuthoritySet {
+				current_authorities: authorities,
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			},
+		);
+
+		let rounds = VecDeque::new();
+		let voters = authority_set.inner().read()
+			.current().1.iter().map(|(a, _)| a.clone()).collect();
+
+		assert_eq!(
+			&*set_state.read(),
+			&VoterSetState::Live {
+				completed_rounds: CompletedRounds::new(
+					rounds, 
+					set_id,
+					voters,
+				),
+				current_round: HasVoted::Yes(AuthorityId::default(), vote),
+			},
+		);
+	}
+
+	#[test]
+	fn write_read_historical_votes_works() {
+		let client = test_client::new();
+		let historical_votes = HistoricalVotes::<test_client::runtime::Block>::new();
+		let _ = write_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321, &historical_votes);
+		let historical_votes_cpy = read_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321);
+		assert_eq!(historical_votes, historical_votes_cpy.unwrap());
 	}
 }

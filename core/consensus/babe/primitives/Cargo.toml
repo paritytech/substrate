@@ -12,7 +12,7 @@ runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives
 substrate-primitives = { path = "../../../primitives", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../accountable-safety/primitives" }
-parity-codec = { version = "3.5.1", default-features = false }
+parity-codec = { version = "4.1.1", default-features = false }
 
 [features]
 default = ["std"]

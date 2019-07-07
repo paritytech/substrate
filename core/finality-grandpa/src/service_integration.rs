@@ -18,6 +18,7 @@
 
 use client;
 use service::{FullBackend, FullExecutor, LightBackend, LightExecutor, ServiceFactory};
+use transaction_pool::txpool::Pool;
 
 pub type BlockImportForService<F> = crate::GrandpaBlockImport<
 	FullBackend<F>,
@@ -31,7 +32,7 @@ pub type BlockImportForService<F> = crate::GrandpaBlockImport<
 		<F as ServiceFactory>::RuntimeApi
 	>,
 	<F as ServiceFactory>::SelectChain,
-	<F as ServiceFactory>::FullTransactionPoolApi
+	Pool<<F as ServiceFactory>::FullTransactionPoolApi>
 >;
 
 pub type LinkHalfForService<F> = crate::LinkHalf<

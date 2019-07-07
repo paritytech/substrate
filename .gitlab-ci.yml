@@ -95,8 +95,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - ./scripts/build.sh --locked
-    - time cargo check --benches
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches
     - sccache -s
 
 
@@ -107,7 +106,7 @@ cargo-check-subkey:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./subkey
-    - time cargo check --release   # makes sense to save artifacts for building it
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
 
 
@@ -122,9 +121,34 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo test --all --release --verbose --locked
     - sccache -s
+
+
+test-srml-staking:                 &test-srml-staking
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  only:
+    changes:
+      - .gitlab-ci.yml
+      - srml/staking/*
+  script:
+    - cd srml/staking/
+    - time cargo test --release --verbose --no-default-features --features std
+    - sccache -s
+
+
+
+
+
 
 test-linux-stable-int:
   <<:                              *test-linux
@@ -134,7 +158,6 @@ test-linux-stable-int:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
@@ -161,9 +184,12 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
+    - time cargo web build -p substrate-offchain
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
+    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
+    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
@@ -188,7 +214,6 @@ build-linux-release:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
@@ -218,9 +243,8 @@ build-rust-doc-release:
     - ./crate-docs
   <<:                              *build-only
   script:
-    - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s

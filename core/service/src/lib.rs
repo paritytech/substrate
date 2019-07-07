@@ -32,13 +32,13 @@ use std::time::Duration;
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend};
+use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use keystore::Store as Keystore;
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
-use primitives::Pair;
+use primitives::{Pair, Public, crypto::TypedKey, ed25519};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -52,11 +52,10 @@ pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, PoolApi as _, Options as TransactionPoolOptions,
 	ChainApi, IntoPoolError
 };
-use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient,
+	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
@@ -68,7 +67,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
-pub use tokio::runtime::TaskExecutor;
+pub use futures::future::Executor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -76,19 +75,32 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	select_chain: Option<<Components as components::Components>::SelectChain>,
-	network: Arc<components::NetworkService<Components::Factory>>,
+	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Keystore,
+	keystore: Option<Keystore>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	/// Sender for futures that must be spawned as background tasks.
+	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	/// Receiver for futures that must be spawned as background tasks.
+	to_spawn_rx: mpsc::UnboundedReceiver<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	/// List of futures to poll from `poll`.
+	/// If spawning a background task is not possible, we instead push the task into this `Vec`.
+	/// The elements must then be polled manually.
+	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
+	rpc_handlers: rpc::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
+		ComponentClient<Components>,
+		ComponentOffchainStorage<Components>,
+		ComponentBlock<Components>>
+	>>,
 }
 
 /// Creates bare client without any networking.
@@ -103,17 +115,33 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 	Ok(client)
 }
 
+/// An handle for spawning tasks in the service.
+#[derive(Clone)]
+pub struct SpawnTaskHandle {
+	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+}
+
+impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.sender.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
+	}
+}
+
 /// Stream of events for connection established to a telemetry server.
 pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 
 /// Used to hook on telemetry connection established events.
-pub struct TelemetryOnConnect<'a> {
-	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<dyn Future<Item=(), Error=()> + Send + 'static>,
+pub struct TelemetryOnConnect {
 	/// Event stream.
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
-	/// Executor to which the hook is spawned.
-	pub executor: &'a TaskExecutor,
 }
 
 impl<Components: components::Components> Service<Components> {
@@ -127,31 +155,50 @@ impl<Components: components::Components> Service<Components> {
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
-		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
+
+		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
+		let (to_spawn_tx, to_spawn_rx) =
+			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
 
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+			match Keystore::open(keystore_path.clone()) {
+				Ok(ks) => Some(ks),
+				Err(err) => {
+					error!("Failed to initialize keystore: {}", err);
+					None
+				}
+			}
+		} else {
+			None
+		};
+
+		// Keep the public key for telemetry
+		let public_key: String;
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
-			None => {
-				let key = keystore.generate(&config.password)?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
-
-				public_key
+		if let Some(keystore) = keystore.as_mut() {
+			for seed in &config.keys {
+				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
 			}
-		};
+
+			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
+				Some(public_key) => public_key.to_string(),
+				None => {
+					let key: ed25519::Pair = keystore.generate(&config.password)?;
+					let public_key = key.public();
+					info!("Generated a new keypair: {:?}", public_key);
+					public_key.to_string()
+				}
+			}
+		} else {
+			public_key = format!("<disabled-keystore>");
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -213,18 +260,25 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		task_executor.spawn(build_network_future(network_mut, network_status_sinks.clone())
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(network_mut, network_status_sinks.clone())
 			.map_err(|_| ())
 			.select(exit.clone())
-			.then(|_| Ok(())));
+			.then(|_| Ok(()))));
 
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(
-				client.clone(),
-				task_executor.clone(),
-			)))
-		} else {
-			None
+		#[allow(deprecated)]
+		let offchain_storage = client.backend().offchain_storage();
+		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+			(true, Some(db)) => {
+				Some(Arc::new(offchain::OffchainWorkers::new(
+					client.clone(),
+					db,
+				)))
+			},
+			(true, None) => {
+				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
+				None
+			},
+			_ => None,
 		};
 
 		{
@@ -233,6 +287,7 @@ impl<Components: components::Components> Service<Components> {
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+			let to_spawn_tx_ = to_spawn_tx.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
@@ -251,18 +306,19 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						Components::RuntimeServices::offchain_workers(
+						let future = Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,
 							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
+						let _ = to_spawn_tx_.unbounded_send(future);
 					}
 
 					Ok(())
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		{
@@ -308,7 +364,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		{
@@ -330,7 +386,7 @@ impl<Components: components::Components> Service<Components> {
 				.select(exit.clone())
 				.then(|_| Ok(()));
 
-			task_executor.spawn(events);
+			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
 		// Periodically notify the telemetry.
@@ -338,10 +394,10 @@ impl<Components: components::Components> Service<Components> {
 		let client_ = client.clone();
 		let network_ = network.clone();
 		let mut sys = System::new();
-		let self_pid = get_current_pid();
+		let self_pid = get_current_pid().ok();
 		let (netstat_tx, netstat_rx) = mpsc::unbounded();
 		network_status_sinks.lock().push(netstat_tx);
-		task_executor.spawn(netstat_rx.for_each(move |net_status| {
+		let tel_task = netstat_rx.for_each(move |net_status| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -359,9 +415,12 @@ impl<Components: components::Components> Service<Components> {
 			};
 
 			// get cpu usage and memory usage of this process
-			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
-				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
-				(proc.cpu_usage(), proc.memory())
+			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
+				if sys.refresh_process(self_pid) {
+					let proc = sys.get_process(self_pid)
+						.expect("Above refresh_process succeeds, this should be Some(), qed");
+					(proc.cpu_usage(), proc.memory())
+				} else { (0.0, 0) }
 			} else { (0.0, 0) };
 
 			let network_state = network_.network_state();
@@ -384,32 +443,33 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(())));
+		}).select(exit.clone()).then(|_| Ok(()));
+		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
-		let system_info = rpc::apis::system::SystemInfo {
-			chain_name: config.chain_spec.name().into(),
-			impl_name: config.impl_name.into(),
-			impl_version: config.impl_version.into(),
-			properties: config.chain_spec.properties(),
-		};
 		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
-		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(),
-			system_rpc_tx,
-			system_info,
-			config.rpc_http,
-			config.rpc_ws,
-			config.rpc_ws_max_connections,
-			config.rpc_cors.clone(),
-			task_executor.clone(),
-			transaction_pool.clone(),
-		)?;
-		task_executor.spawn(build_system_rpc_handler::<Components>(
+		let gen_handler = || {
+			let system_info = rpc::apis::system::SystemInfo {
+				chain_name: config.chain_spec.name().into(),
+				impl_name: config.impl_name.into(),
+				impl_version: config.impl_version.into(),
+				properties: config.chain_spec.properties(),
+			};
+			Components::RuntimeServices::start_rpc(
+				client.clone(),
+				system_rpc_tx.clone(),
+				system_info.clone(),
+				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
+				transaction_pool.clone(),
+			)
+		};
+		let rpc_handlers = gen_handler();
+		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
 			network.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		));
+		)));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -417,7 +477,6 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
-			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
@@ -425,7 +484,7 @@ impl<Components: components::Components> Service<Components> {
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
-				wasm_external_transport: None,
+				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
 				.for_each(move |event| {
@@ -438,7 +497,7 @@ impl<Components: components::Components> Service<Components> {
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
-						"pubkey" => &pubkey,
+						"pubkey" => &public_key,
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
@@ -448,9 +507,9 @@ impl<Components: components::Components> Service<Components> {
 					});
 					Ok(())
 				});
-			task_executor.spawn(future
+			let _ = to_spawn_tx.unbounded_send(Box::new(future
 				.select(exit.clone())
-				.then(|_| Ok(())));
+				.then(|_| Ok(()))));
 			telemetry
 		});
 
@@ -461,10 +520,14 @@ impl<Components: components::Components> Service<Components> {
 			select_chain,
 			transaction_pool,
 			signal: Some(signal),
+			to_spawn_tx,
+			to_spawn_rx,
+			to_poll: Vec::new(),
 			keystore,
 			config,
 			exit,
-			_rpc: Box::new(rpc),
+			rpc_handlers,
+			_rpc: rpc,
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
@@ -472,13 +535,20 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+	pub fn authority_key<TPair>(&self) -> Option<TPair>
+	where
+		TPair: Pair + TypedKey,
+		<TPair as Pair>::Public: Public + TypedKey,
+	{
 		if self.config.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, &self.config.password)))
-		{
-			Some(key)
+		if let Some(keystore) = &self.keystore {
+			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
+					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
+			{
+				Some(key)
+			} else {
+				None
+			}
 		} else {
 			None
 		}
@@ -488,9 +558,33 @@ impl<Components: components::Components> Service<Components> {
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
-}
 
-impl<Components> Service<Components> where Components: components::Components {
+	/// Spawns a task in the background that runs the future passed as parameter.
+	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Returns a handle for spawning tasks.
+	pub fn spawn_task_handle(&self) -> SpawnTaskHandle {
+		SpawnTaskHandle {
+			sender: self.to_spawn_tx.clone(),
+		}
+	}
+
+	/// Starts an RPC query.
+	///
+	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
+	/// would for example send.
+	///
+	/// Returns a `Future` that contains the optional response.
+	///
+	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
+	/// send back spontaneous events.
+	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
+	-> impl Future<Item = Option<String>, Error = ()> {
+		self.rpc_handlers.handle_request(request, mem.metadata.clone())
+	}
+
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -502,7 +596,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get shared network instance.
-	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
+	pub fn network(&self) -> Arc<components::NetworkService<Components>> {
 		self.network.clone()
 	}
 
@@ -518,14 +612,52 @@ impl<Components> Service<Components> where Components: components::Components {
 		self.transaction_pool.clone()
 	}
 
-	/// Get shared keystore.
-	pub fn keystore(&self) -> &Keystore {
-		&self.keystore
-	}
-
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()
+	}
+}
+
+impl<Components> Future for Service<Components> where Components: components::Components {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
+			let executor = tokio_executor::DefaultExecutor::current();
+			if let Err(err) = executor.execute(task_to_spawn) {
+				debug!(
+					target: "service",
+					"Failed to spawn background task: {:?}; falling back to manual polling",
+					err
+				);
+				self.to_poll.push(err.into_future());
+			}
+		}
+
+		// Polling all the `to_poll` futures.
+		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
+			self.to_poll.remove(pos);
+		}
+
+		// The service future never ends.
+		Ok(Async::NotReady)
+	}
+}
+
+impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	for Service<Components> where Components: components::Components
+{
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -590,22 +722,74 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 	}
 }
 
-fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error>
-	where F: Fn(&SocketAddr) -> Result<T, io::Error>,
-{
-	Ok(match address {
-		Some(mut address) => Some(start(&address)
-			.or_else(|e| match e.kind() {
-				io::ErrorKind::AddrInUse |
-				io::ErrorKind::PermissionDenied => {
-					warn!("Unable to bind server to {}. Trying random port.", address);
-					address.set_port(0);
-					start(&address)
-				},
-				_ => Err(e),
-			})?),
-		None => None,
-	})
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+#[cfg(not(target_os = "unknown"))]
+fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
+	config: &FactoryFullConfiguration<F>,
+	mut gen_handler: H
+) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
+		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
+	{
+		Ok(match address {
+			Some(mut address) => Some(start(&address)
+				.or_else(|e| match e.kind() {
+					io::ErrorKind::AddrInUse |
+					io::ErrorKind::PermissionDenied => {
+						warn!("Unable to bind server to {}. Trying random port.", address);
+						address.set_port(0);
+						start(&address)
+					},
+					_ => Err(e),
+				})?),
+			None => None,
+		})
+	}
+
+	Ok(Box::new((
+		maybe_start_server(
+			config.rpc_http,
+			|address| rpc::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+		)?,
+		maybe_start_server(
+			config.rpc_ws,
+			|address| rpc::start_ws(
+				address,
+				config.rpc_ws_max_connections,
+				config.rpc_cors.as_ref(),
+				gen_handler(),
+			),
+		)?.map(Mutex::new),
+	)))
+}
+
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+#[cfg(target_os = "unknown")]
+fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
+	_: &FactoryFullConfiguration<F>,
+	_: H
+) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+	Ok(Box::new(()))
+}
+
+/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
+/// the HTTP or WebSockets server).
+pub struct RpcSession {
+	metadata: rpc::Metadata,
+}
+
+impl RpcSession {
+	/// Creates an RPC session.
+	///
+	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
+	/// messages.
+	///
+	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
+	pub fn new(sender: mpsc::Sender<String>) -> RpcSession {
+		RpcSession {
+			metadata: rpc::Metadata::new(sender),
+		}
+	}
 }
 
 /// Transaction pool adapter.
@@ -688,7 +872,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 /// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
 fn build_system_rpc_handler<Components: components::Components>(
-	network: Arc<NetworkService<Components::Factory>>,
+	network: Arc<NetworkService<Components>>,
 	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
@@ -730,12 +914,11 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// ```
 /// # use substrate_service::{
 /// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::construct_simple_protocol;
 /// # use client::{self, LongestChain};
-/// # use primitives::{Pair as PairT, ed25519};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
@@ -779,14 +962,14 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 		Genesis = GenesisConfig,
 /// 		Configuration = (),
 /// 		FullService = FullComponents<Self>
-/// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
+/// 			{ |config| <FullComponents<Factory>>::new(config) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 			|service: Self::FullService| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
-/// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+/// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
 /// 			{ |_, client, _, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
@@ -898,21 +1081,18 @@ macro_rules! construct_service_factory {
 			}
 
 			fn new_light(
-				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor
+				config: $crate::FactoryFullConfiguration<Self>
 			) -> $crate::Result<Self::LightService, $crate::Error>
 			{
-				( $( $light_service_init )* ) (config, executor)
+				( $( $light_service_init )* ) (config)
 			}
 
 			fn new_full(
-				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor,
+				config: $crate::FactoryFullConfiguration<Self>
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
-					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, executor, key)
+				( $( $full_service_init )* ) (config).and_then(|service| {
+					($( $authority_setup )*)(service)
 				})
 			}
 		}

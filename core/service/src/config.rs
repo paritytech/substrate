@@ -16,11 +16,12 @@
 
 //! Service configuration.
 
-use std::net::SocketAddr;
+use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
 pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
+pub use network::ExtTransport;
 pub use network::config::{NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
@@ -43,9 +44,9 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
-	pub keystore_path: String,
+	pub keystore_path: Option<PathBuf>,
 	/// Path to the database.
-	pub database_path: String,
+	pub database_path: PathBuf,
 	/// Cache Size for internal database in MiB
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes
@@ -74,6 +75,9 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_cors: Option<Vec<String>>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
+	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
+	/// endpoint, this transport will be tried in priority before all others.
+	pub telemetry_external_transport: Option<ExtTransport>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -112,6 +116,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
 			telemetry_endpoints: None,
+			telemetry_external_transport: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
 			force_authoring: false,

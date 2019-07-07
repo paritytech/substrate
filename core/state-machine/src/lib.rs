@@ -62,7 +62,7 @@ pub use trie_backend::TrieBackend;
 
 /// A wrapper around a child storage key.
 ///
-/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// This wrapper ensures that the child storage key is correct and properly used. It is
 /// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
@@ -288,15 +288,21 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+	fn local_storage_set(&mut self, _kind: offchain::StorageKind, _key: &[u8], _value: &[u8]) {
 		unreachable!()
 	}
 
-	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+	fn local_storage_compare_and_set(
+		&mut self,
+		_kind: offchain::StorageKind,
+		_key: &[u8],
+		_old_value: &[u8],
+		_new_value: &[u8],
+	) -> bool {
 		unreachable!()
 	}
 
-	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(&mut self, _kind: offchain::StorageKind, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!()
 	}
 
@@ -502,7 +508,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	pub fn execute(
 		&mut self,
 		strategy: ExecutionStrategy,
-	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<dyn Error>> {
+	) -> Result<(Vec<u8>, (B::Transaction, H::Out), Option<MemoryDB<H>>), Box<dyn Error>> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
 		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -522,7 +528,12 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		compute_tx: bool,
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (CallResult<R, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>) where
+	) -> (
+		CallResult<R, Exec::Error>,
+		bool,
+		Option<(B::Transaction, H::Out)>,
+		Option<MemoryDB<H>>,
+	) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
@@ -554,7 +565,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
 		on_consensus_failure: Handler,
-	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<MemoryDB<H>>) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(
@@ -585,7 +596,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		compute_tx: bool,
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
-	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<MemoryDB<H>>) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
@@ -613,7 +624,11 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		manager: ExecutionManager<Handler>,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
-	) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<dyn Error>> where
+	) -> Result<(
+		NativeOrEncoded<R>,
+		Option<(B::Transaction, H::Out)>,
+		Option<MemoryDB<H>>
+	), Box<dyn Error>> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(

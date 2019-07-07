@@ -32,7 +32,7 @@ fn should_return_storage() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(core.executor()));
+	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(b":code".to_vec());
 
 	assert_eq!(
@@ -57,7 +57,7 @@ fn should_return_child_storage() {
 		.add_child_storage("test", "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(core.executor()));
+	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
 	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
 	let key = StorageKey(b"key".to_vec());
 
@@ -82,7 +82,7 @@ fn should_call_contract() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(core.executor()));
+	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
@@ -97,7 +97,7 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
+		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
@@ -128,7 +128,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
+		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(Arc::new(remote)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
@@ -163,7 +163,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 fn should_query_storage() {
 	fn run_tests(client: Arc<TestClient>) {
 		let core = tokio::runtime::Runtime::new().unwrap();
-		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+		let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		let add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -254,7 +254,7 @@ fn should_return_runtime_version() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(test_client::new());
-	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+	let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
@@ -274,7 +274,7 @@ fn should_notify_on_runtime_version_initially() {
 
 	{
 		let client = Arc::new(test_client::new());
-		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+		let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 

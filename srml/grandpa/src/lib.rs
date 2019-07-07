@@ -309,7 +309,7 @@ decl_module! {
 				}
 
 				if block_number == pending_change.scheduled_at + pending_change.delay {
-					<Authorities<T>>::put(&pending_change.next_authorities);
+					Authorities::put(&pending_change.next_authorities);
 					Self::deposit_event(
 						Event::NewAuthorities(pending_change.next_authorities)
 					);
@@ -327,7 +327,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
-		<Authorities<T>>::get()
+		Authorities::get()
 	}
 
 	/// Schedule a change in the authorities.
@@ -602,17 +602,17 @@ where
 		}
 	}
 
-	let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
+	// let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
 
-	// Check all votes are for round_s and that are incompatible with B
-	for ChallengedVote { vote, authority, signature } in challenged_votes {
-		let message = Message::Prevote(vote.clone());
-		let payload = localized_payload(round, set_id, &message);
+	// // Check all votes are for round_s and that are incompatible with B
+	// for ChallengedVote { vote, authority, signature } in challenged_votes {
+	// 	let message = Message::Prevote(vote.clone());
+	// 	let payload = localized_payload(round, set_id, &message);
 
-		if !signature.verify(payload.as_slice(),&authority) {
-			return TransactionValidity::Invalid(0)
-		}
-	}
+	// 	if !signature.verify(payload.as_slice(),&authority) {
+	// 		return TransactionValidity::Invalid(0)
+	// 	}
+	// }
 	
 	// if there is a reference to a previous challenge check that is correct.
 

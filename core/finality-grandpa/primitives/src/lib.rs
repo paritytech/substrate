@@ -70,7 +70,7 @@ pub type PrecommitEquivocation<Hash, Number> =
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: Vec<(AuthorityId, u64)>,
@@ -173,7 +173,7 @@ decl_runtime_apis! {
 	}
 }
 
-#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct GrandpaEquivocationProof<E> {
 	pub set_id: u64,
 	pub equivocation: E,
@@ -192,7 +192,7 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 
 
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Challenge<H, N, Header, S, Id, Vote> {
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
@@ -201,14 +201,14 @@ pub struct Challenge<H, N, Header, S, Id, Vote> {
 }
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct FinalizedBlockProof<H, N, Header, S, Id> {
 	pub commit: Commit<H, N, S, Id>,
 	pub headers: Vec<Header>,
 }
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct ChallengedVoteSet<Vote> {
 	pub challenged_votes: Vec<ChallengedVote<Vote>>,
 	pub set_id: u64,
@@ -216,7 +216,7 @@ pub struct ChallengedVoteSet<Vote> {
 }
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct ChallengedVote<Vote> {
 	// Prevote or Precommit
 	pub vote: Vote,
