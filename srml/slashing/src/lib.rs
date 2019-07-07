@@ -32,7 +32,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-
 /// Report rolling data misconduct and apply slash accordingly
 pub fn rolling_data<M, OS, SR, ExposedStake>(
 	misbehaved: &[SR],
@@ -87,7 +86,7 @@ pub trait Misconduct<ExposedStake>: system::Trait
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 }
 
-/// Apply slash that occurred only during the era
+/// Apply slash in the end of the era
 pub trait OnEndEra<ExposedStake>: Misconduct<ExposedStake> {
 	/// Get severity level accumulated during the current the era
 	fn severity(&self) -> Fraction<Self::Severity>;
@@ -96,7 +95,7 @@ pub trait OnEndEra<ExposedStake>: Misconduct<ExposedStake> {
 	fn misbehaved<SR>(&self) -> Vec<SR> where SR: SlashRecipient<Self::AccountId, ExposedStake>;
 }
 
-/// Slash misbehaved, should be implemented by some `module` that has access to currency
+/// Slash misbehaved, should be implemented by some `module` that has access to `Currency`
 pub trait OnSlashing<M, SR, Balance>
 where
 	M: Misconduct<Balance>,
@@ -108,14 +107,11 @@ where
 
 /// A snapshot of the stake backing a single validator in the system.
 /// In which includes the portions of each nominator stash
-///
-/// It assumes that the implemenentation of `OnSlashing` trait
-/// has access to the `Currency` trait in some way
 pub trait SlashRecipient<AccountId, ExposedStake>
 {
 	/// Get the account id of the misbehaved validator
 	fn account_id(&self) -> &AccountId;
 
-	/// Get account id of each of nominators and its exposed stake
+	/// Get account id of each of the nominators and its exposed stake
 	fn nominators(&self) -> &[(AccountId, ExposedStake)];
 }

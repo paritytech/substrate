@@ -409,10 +409,10 @@ impl<
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
-	pub who: AccountId,
+	who: AccountId,
 	/// Amount of funds exposed.
 	#[codec(compact)]
-	pub value: Balance,
+	value: Balance,
 }
 
 /// A snapshot of the stake backing a single validator in the system.
