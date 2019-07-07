@@ -960,9 +960,9 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
+		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
 			trace!(target: "babe", "Retreiving a peer");
-			&self.peers[i]
+			&mut self.peers[i]
 		}
 
 		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {

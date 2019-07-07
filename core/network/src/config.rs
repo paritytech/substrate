@@ -135,7 +135,7 @@ impl ProtocolId {
 /// # Example
 ///
 /// ```
-/// # use substrate_network::{Multiaddr, PeerId, parse_str_addr};
+/// # use substrate_network::{Multiaddr, PeerId, config::parse_str_addr};
 /// let (peer_id, addr) = parse_str_addr(
 /// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
 /// ).unwrap();
