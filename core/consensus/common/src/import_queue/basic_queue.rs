@@ -85,15 +85,6 @@ impl<B: BlockT> BasicQueue<B> {
 			manual_poll: None,
 		}
 	}
-
-	/// Send synchronization request to the block import channel.
-	///
-	/// The caller should wait for Link::synchronized() call to ensure that it
-	/// has synchronized with ImportQueue.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn synchronize(&self) {
-		let _ = self.sender.unbounded_send(ToWorkerMsg::Synchronize);
-	}
 }
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
