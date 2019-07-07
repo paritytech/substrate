@@ -63,8 +63,6 @@ enum BlockImportWorkerMsg<B: BlockT> {
 	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
 	ReportPeer(Origin, i32),
 	Restart,
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronized,
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -120,11 +118,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	fn restart(&mut self) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
 	}
-
-	#[cfg(any(test, feature = "test-helpers"))]
-	fn synchronized(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Synchronized);
-	}
 }
 
 /// See [`buffered_link`].
@@ -168,9 +161,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.report_peer(who, reput),
 				BlockImportWorkerMsg::Restart =>
 					link.restart(),
-				#[cfg(any(test, feature = "test-helpers"))]
-				BlockImportWorkerMsg::Synchronized =>
-					link.synchronized(),
 			}
 		}
 	}

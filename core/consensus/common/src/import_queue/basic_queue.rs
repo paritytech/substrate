@@ -153,8 +153,6 @@ enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronize,
 }
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
@@ -213,11 +211,6 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 					ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
 						worker.import_justification(who, hash, number, justification);
 					}
-					#[cfg(any(test, feature = "test-helpers"))]
-					ToWorkerMsg::Synchronize => {
-						trace!(target: "sync", "Sending sync message");
-						worker.result_sender.synchronized();
-					},
 				}
 			}
 		});
