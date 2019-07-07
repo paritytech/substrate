@@ -10,4 +10,14 @@ error[E0053]: method `test` has an incompatible type for trait
    = note: expected type `fn(u64)`
               found type `fn(std::string::String)`
 
-For more information about this error, try `rustc --explain E0053`.
+error[E0308]: mismatched types
+  --> $DIR/impl_incorrect_method_signature.rs:20:11
+   |
+20 |         fn test(data: String) {}
+   |                 ^^^^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `u64`
+              found type `std::string::String`
+
+Some errors have detailed explanations: E0053, E0308.
+For more information about an error, try `rustc --explain E0053`.
