@@ -84,8 +84,8 @@ pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternaliti
 }
 
 pub fn new_test_ext_sig(authorities: Vec<(AuthorityId, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test> {
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+	t.extend(GenesisConfig {
 		authorities,
 	}.build_storage().unwrap().0);
 	t.into()

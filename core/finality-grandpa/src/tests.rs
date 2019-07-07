@@ -1110,7 +1110,7 @@ fn challenge_digest_produces_answer() {
 			},
 			headers: vec![],
 		},
-		challenged_votes: ChallengedVoteSet {
+		challenged_vote_set: ChallengedVoteSet {
 			challenged_votes: vec![],
 			set_id: 0,
 			round: 0,
@@ -1351,7 +1351,7 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock().make_block_import(client);
+			let (_, _, _, _, link, _) = net.lock().make_block_import(client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
@@ -1628,6 +1628,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TestPool { pool: RwLock::new(vec![]) }),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))

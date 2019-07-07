@@ -931,6 +931,7 @@ mod tests {
 		type Specialization = DummySpecialization;
 		type Verifier = BabeVerifier<PeersFullClient>;
 		type PeerData = ();
+		type TestPool = ();
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
