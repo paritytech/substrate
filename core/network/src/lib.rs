@@ -189,7 +189,7 @@ pub mod test;
 
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
-	NetworkService, NetworkWorker, TransactionPool, ManageNetwork, ExHashT, ReportHandle,
+	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
 };
 pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
 pub use protocol::sync::SyncState;

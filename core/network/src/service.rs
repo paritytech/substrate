@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use futures::{prelude::*, sync::mpsc};
@@ -72,8 +72,8 @@ impl ReportHandle {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
-	/// Are we connected to any peer?
-	is_offline: Arc<AtomicBool>,
+	/// Number of peers we're connected to.
+	num_connected: Arc<AtomicUsize>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
@@ -148,8 +148,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let local_peer_id = local_public.clone().into_peer_id();
 		info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
 
-		// Start in off-line mode, since we're not connected to any nodes yet.
-		let is_offline = Arc::new(AtomicBool::new(true));
+		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig { roles: params.roles },
@@ -205,7 +204,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		let service = Arc::new(NetworkService {
 			bandwidth,
-			is_offline: is_offline.clone(),
+			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
@@ -214,7 +213,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		});
 
 		Ok(NetworkWorker {
-			is_offline,
+			num_connected,
 			is_major_syncing,
 			network_service: swarm,
 			service,
@@ -445,6 +444,36 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 			.protocol_sender
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
 	}
+
+	/// Connect to unreserved peers and allow unreserved peers to connect.
+	pub fn accept_unreserved_peers(&self) {
+		self.peerset.set_reserved_only(false);
+	}
+
+	/// Disconnect from unreserved peers and deny new unreserved peers to connect.
+	pub fn deny_unreserved_peers(&self) {
+		self.peerset.set_reserved_only(true);
+	}
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	pub fn remove_reserved_peer(&self, peer: PeerId) {
+		self.peerset.remove_reserved_peer(peer);
+	}
+
+	/// Adds a `PeerId` and its address as reserved.
+	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+		self.peerset.add_reserved_peer(peer_id.clone());
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		Ok(())
+	}
+
+	/// Returns the number of peers we're connected to.
+	pub fn num_connected(&self) -> usize {
+		self.num_connected.load(Ordering::Relaxed)
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
@@ -454,42 +483,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	}
 
 	fn is_offline(&self) -> bool {
-		self.is_offline.load(Ordering::Relaxed)
-	}
-}
-
-/// Trait for managing network
-pub trait ManageNetwork {
-	/// Set to allow unreserved peers to connect
-	fn accept_unreserved_peers(&self);
-	/// Set to deny unreserved peers to connect
-	fn deny_unreserved_peers(&self);
-	/// Remove reservation for the peer
-	fn remove_reserved_peer(&self, peer: PeerId);
-	/// Add reserved peer
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
-}
-
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork for NetworkService<B, S, H> {
-	fn accept_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(false);
-	}
-
-	fn deny_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(true);
-	}
-
-	fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(peer);
-	}
-
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
-		self.peerset.add_reserved_peer(peer_id.clone());
-		let _ = self
-			.protocol_sender
-			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
-		Ok(())
+		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 }
 
@@ -514,7 +508,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
 pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	is_offline: Arc<AtomicBool>,
+	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
 	/// The network service that can be extracted and shared through the codebase.
@@ -665,7 +659,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			}
 		}
 
-		self.is_offline.store(self.network_service.user_protocol_mut().num_connected_peers() == 0, Ordering::Relaxed);
+		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
 		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
