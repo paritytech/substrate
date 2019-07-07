@@ -208,6 +208,7 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
+		current_block: u64,
 	}
 	impl Ext for MockExt {
 		type T = Test;
@@ -291,6 +292,8 @@ mod tests {
 		fn rent_allowance(&self) -> u64 {
 			self.rent_allowance
 		}
+
+		fn current_block(&self) -> &u64 { &self.current_block }
 	}
 
 	fn execute<E: Ext>(
