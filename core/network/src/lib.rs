@@ -176,7 +176,6 @@ mod custom_proto;
 mod debug_info;
 mod discovery;
 mod on_demand_layer;
-#[macro_use]
 mod protocol;
 mod service;
 mod transport;
