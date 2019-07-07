@@ -270,7 +270,7 @@ impl ExtBuilder {
 	}
 }
 
-impl Misconduct<Exposure<u64, u64>> for Test {
+impl Misconduct<u64> for Test {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
@@ -279,7 +279,7 @@ impl Misconduct<Exposure<u64, u64>> for Test {
 
 	fn on_misconduct<SR>(&mut self, _misbehaved: &[SR]) -> Fraction<Self::Severity>
 	where
-		SR: SlashRecipient<Self::AccountId, Exposure<u64, u64>>,
+		SR: SlashRecipient<Self::AccountId, u64>,
 	{
 		Fraction::new(1, 10)
 	}
@@ -295,7 +295,7 @@ impl<T, SR, Exposure> OnSlashing<T, SR, Exposure> for StakingSlasher<T, SR, Expo
 where
 	T: srml_staking::Trait + Misconduct<Exposure>,
 	SR: SlashRecipient<T::AccountId, Exposure>,
-	// Balance: Into<u128> + Clone,
+	Exposure: Clone + Into<u128>,
 {
 	fn slash(to_punish: &[SR], severity: Fraction<T::Severity>) {
 		// hack to convert both to `u128` and calculate the amount to slash
@@ -326,22 +326,28 @@ where
 			// slash the validator
 			T::Currency::slash(account_id, slash_amount);
 
-			let exposure = <srml_staking::Module<T>>::stakers(account_id);
-			// slash nominators for the same severity
-			for nominator in &exposure.others {
-				println!("slash from nominator: {}", nominator.who);
-				let balance: u128 = to_u128(nominator.value);
+			// slash each nominator in regard to its exposed stake
+			for (n, exposed_stake) in who.nominators().iter() {
+				println!("slash from nominator: {}", n);
+				let balance: u128 = exposed_stake.clone().into();
 				let slash_amount = slash(balance, severity);
-				T::Currency::slash(&nominator.who, slash_amount);
+				T::Currency::slash(n, slash_amount);
 			}
 		}
 	}
 }
 
-pub struct MockSlashRecipient(pub u64);
+pub struct MockSlashRecipient {
+	pub account_id: AccountId,
+	pub others: Vec<(AccountId, Balance)>,
+}
 
-impl SlashRecipient<u64, Exposure<u64, u64>> for MockSlashRecipient {
-	fn account_id(&self) -> &u64 {
-		&self.0
+impl SlashRecipient<AccountId, Balance> for MockSlashRecipient {
+	fn account_id(&self) -> &AccountId {
+		&self.account_id
+	}
+
+	fn nominators(&self) -> &[(AccountId, Balance)] {
+		&self.others
 	}
 }

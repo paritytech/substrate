@@ -32,29 +32,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// A snapshot of the stake backing a single validator in the system.
-/// In which includes the portions of each nominator stash
-///
-/// It assumes that the implemenentation of `OnSlashing` trait
-/// has access to an underlaying module in order to
-/// fetch:
-///		i)  Balance of the `validator`
-///		ii) Account Ids for the `nominators`
-///		iii) Balances for the `nominators`
-pub trait SlashRecipient<AccountId, Exposure> {
-	/// Get the account id of the misbehaved validator
-	fn account_id(&self) -> &AccountId;
-}
 
 /// Report rolling data misconduct and apply slash accordingly
-pub fn rolling_data<M, OS, SR, Exposure>(
+pub fn rolling_data<M, OS, SR, ExposedStake>(
 	misbehaved: &[SR],
 	misconduct: &mut M
 ) -> u8
 where
-	M: Misconduct<Exposure>,
-	SR: SlashRecipient<M::AccountId, Exposure>,
-	OS: OnSlashing<M, SR, Exposure>,
+	M: Misconduct<ExposedStake>,
+	SR: SlashRecipient<M::AccountId, ExposedStake>,
+	OS: OnSlashing<M, SR, ExposedStake>,
 {
 	let seve = misconduct.on_misconduct(misbehaved);
 	OS::slash(misbehaved, seve);
@@ -62,22 +49,22 @@ where
 }
 
 /// Report misconduct during an era but do not perform any slashing
-pub fn era_data<M, OS, SR, Exposure>(who: &[SR], misconduct: &mut M)
+pub fn era_data<M, OS, SR, ExposedStake>(who: &[SR], misconduct: &mut M)
 where
-	M: Misconduct<Exposure>,
-	OS: OnSlashing<M, SR, Exposure>,
-	SR: SlashRecipient<M::AccountId, Exposure>,
+	M: Misconduct<ExposedStake>,
+	SR: SlashRecipient<M::AccountId, ExposedStake>,
+	OS: OnSlashing<M, SR, ExposedStake>,
 {
 	let seve = misconduct.on_misconduct(who);
 	OS::slash(who, seve);
 }
 
 /// Slash in the end of era
-pub fn end_of_era<E, OS, SR, Exposure>(end_of_era: &E) -> u8
+pub fn end_of_era<E, OS, SR, ExposedStake>(end_of_era: &E) -> u8
 where
-	E: OnEndEra<Exposure>,
-	OS: OnSlashing<E, SR, Exposure>,
-	SR: SlashRecipient<E::AccountId, Exposure>,
+	E: OnEndEra<ExposedStake>,
+	OS: OnSlashing<E, SR, ExposedStake>,
+	SR: SlashRecipient<E::AccountId, ExposedStake>,
 {
 	let seve = end_of_era.severity();
 	let misbehaved = end_of_era.misbehaved::<SR>();
@@ -86,34 +73,49 @@ where
 }
 
 /// Base trait for representing misconducts
-pub trait Misconduct<Exposure>: system::Trait {
+pub trait Misconduct<ExposedStake>: system::Trait
+{
 	/// Severity represented as a fraction
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
 
 	/// Report misconduct and estimates the current severity level
 	fn on_misconduct<SR>(&mut self, misbehaved: &[SR]) -> Fraction<Self::Severity>
 	where
-		SR: SlashRecipient<Self::AccountId, Exposure>;
+		SR: SlashRecipient<Self::AccountId, ExposedStake>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 }
 
 /// Apply slash that occurred only during the era
-pub trait OnEndEra<Exposure>: Misconduct<Exposure> {
+pub trait OnEndEra<ExposedStake>: Misconduct<ExposedStake> {
 	/// Get severity level accumulated during the current the era
 	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Get all misbehaved validators of the current era
-	fn misbehaved<SR>(&self) -> Vec<SR> where SR: SlashRecipient<Self::AccountId, Exposure>;
+	fn misbehaved<SR>(&self) -> Vec<SR> where SR: SlashRecipient<Self::AccountId, ExposedStake>;
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to currency
-pub trait OnSlashing<M, SR, Exposure>
+pub trait OnSlashing<M, SR, Balance>
 where
-	M: Misconduct<Exposure>,
-	SR: SlashRecipient<M::AccountId, Exposure>,
+	M: Misconduct<Balance>,
+	SR: SlashRecipient<M::AccountId, Balance>
 {
 	/// Slash
 	fn slash(who: &[SR], severity: Fraction<M::Severity>);
+}
+
+/// A snapshot of the stake backing a single validator in the system.
+/// In which includes the portions of each nominator stash
+///
+/// It assumes that the implemenentation of `OnSlashing` trait
+/// has access to the `Currency` trait in some way
+pub trait SlashRecipient<AccountId, ExposedStake>
+{
+	/// Get the account id of the misbehaved validator
+	fn account_id(&self) -> &AccountId;
+
+	/// Get account id of each of nominators and its exposed stake
+	fn nominators(&self) -> &[(AccountId, ExposedStake)];
 }
