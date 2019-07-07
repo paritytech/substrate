@@ -654,13 +654,15 @@ fn build_network_future<
 					});
 				},
 				rpc::apis::system::Request::Peers(sender) => {
-					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
-						peer_id: peer_id.to_base58(),
-						roles: format!("{:?}", p.roles),
-						protocol_version: p.protocol_version,
-						best_hash: p.best_hash,
-						best_number: p.best_number,
-					}).collect());
+					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+						rpc::apis::system::PeerInfo {
+							peer_id: peer_id.to_base58(),
+							roles: format!("{:?}", p.roles),
+							protocol_version: p.protocol_version,
+							best_hash: p.best_hash,
+							best_number: p.best_number,
+						}
+					).collect());
 				}
 				rpc::apis::system::Request::NetworkState(sender) => {
 					let _ = sender.send(network.network_state());
