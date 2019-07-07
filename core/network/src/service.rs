@@ -500,34 +500,12 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PropagateExtrinsics,
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash),
-	ExecuteWithSpec(Box<dyn SpecTask<B, S> + Send + 'static>),
-	ExecuteWithGossip(Box<dyn GossipTask<B> + Send + 'static>),
+	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
+	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	GetValue(Multihash),
 	PutValue(Multihash, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
-}
-
-/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
-	fn call_box(self: Box<Self>, spec: &mut S, context: &mut dyn Context<B>);
-}
-
-impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut dyn Context<B>)> SpecTask<B, S> for F {
-	fn call_box(self: Box<F>, spec: &mut S, context: &mut dyn Context<B>) {
-		(*self)(spec, context)
-	}
-}
-
-/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait GossipTask<B: BlockT> {
-	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut dyn Context<B>);
-}
-
-impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>)> GossipTask<B> for F {
-	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut dyn Context<B>) {
-		(*self)(gossip, context)
-	}
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -634,12 +612,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				ServerToWorkerMsg::ExecuteWithSpec(task) => {
 					let protocol = self.network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
-					task.call_box(spec, &mut context);
+					task(spec, &mut context);
 				},
 				ServerToWorkerMsg::ExecuteWithGossip(task) => {
 					let protocol = self.network_service.user_protocol_mut();
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
-					task.call_box(gossip, &mut context);
+					task(gossip, &mut context);
 				}
 				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
 					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
