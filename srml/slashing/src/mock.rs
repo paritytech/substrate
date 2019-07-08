@@ -270,7 +270,7 @@ impl ExtBuilder {
 	}
 }
 
-impl Misconduct<u64> for Test {
+impl Misconduct<u64, u64> for Test {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
@@ -279,22 +279,24 @@ impl Misconduct<u64> for Test {
 
 	fn on_misconduct<SR>(&mut self, _misbehaved: &[SR]) -> Fraction<Self::Severity>
 	where
-		SR: SlashRecipient<Self::AccountId, u64>,
+		SR: SlashRecipient<u64, u64>,
 	{
 		Fraction::new(1, 10)
 	}
 }
 
-pub struct StakingSlasher<T, SR, Exposure> {
+pub struct StakingSlasher<T, SR, AccountId, Exposure> {
+	a: PhantomData<AccountId>,
 	t: PhantomData<T>,
 	sr: PhantomData<SR>,
 	e: PhantomData<Exposure>,
 }
 
-impl<T, SR, Exposure> OnSlashing<T, SR, Exposure> for StakingSlasher<T, SR, Exposure>
+impl<T, SR, AccountId, Exposure> OnSlashing<T, SR, AccountId, Exposure> for StakingSlasher<T, SR, AccountId, Exposure>
 where
-	T: srml_staking::Trait + Misconduct<Exposure>,
-	SR: SlashRecipient<T::AccountId, Exposure>,
+	T: srml_staking::Trait + Misconduct<AccountId, Exposure>,
+	SR: SlashRecipient<AccountId, Exposure>,
+	AccountId: Clone + Into<T::AccountId>,
 	Exposure: Clone + Into<u128>,
 {
 	fn slash(to_punish: &[SR], severity: Fraction<T::Severity>) {
@@ -309,7 +311,6 @@ where
 			let d = balance.saturating_mul(severity.denominator().into());
 			let n = severity.numerator().into();
 			let res = d.checked_div(n).unwrap_or(0);
-			println!("slash: {}", res);
 			to_balance(res)
 		};
 
@@ -318,20 +319,18 @@ where
 		}
 
 		for who in to_punish {
-			let account_id = who.account_id();
-			println!("slash from account: {}", account_id);
-			let balance = to_u128(T::Currency::free_balance(account_id));
+			let account_id = who.account_id().clone().into();
+			let balance = to_u128(T::Currency::free_balance(&account_id));
 			let slash_amount = slash(balance, severity);
 
 			// slash the validator
-			T::Currency::slash(account_id, slash_amount);
+			T::Currency::slash(&account_id, slash_amount);
 
 			// slash each nominator in regard to its exposed stake
 			for (n, exposed_stake) in who.nominators().iter() {
-				println!("slash from nominator: {}", n);
 				let balance: u128 = exposed_stake.clone().into();
 				let slash_amount = slash(balance, severity);
-				T::Currency::slash(n, slash_amount);
+				T::Currency::slash(&n.clone().into(), slash_amount);
 			}
 		}
 	}
