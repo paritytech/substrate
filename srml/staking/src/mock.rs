@@ -53,23 +53,24 @@ thread_local! {
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, validators: &[(AccountId, Ks)]) {
-		SESSION.with(|x|
+		SESSION.with(|x| {
+			let v = validators.iter().map(|(ref a, _)| a).cloned().collect::<Vec<_>>();
 			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
-		);
+		});
 	}
 
 	fn on_disabled(validator_index: usize) {
 		SESSION.with(|d| {
 			let mut d = d.borrow_mut();
 			let value = d.0[validator_index];
-			println!("on_disabled {} -> {}", validator_index, value);
 			d.1.insert(value);
 		})
 	}
 }
 
 pub fn is_disabled(validator: AccountId) -> bool {
-	SESSION.with(|d| d.borrow().1.contains(&validator))
+	let stash = Staking::ledger(&validator).unwrap().stash;
+	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
 pub struct ExistentialDeposit;
@@ -133,11 +134,19 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 }
 impl session::Trait for Test {
-	type OnSessionEnding = Staking;
+	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = crate::StashOf<Test>;
+	type SelectInitialValidators = Staking;
+}
+
+impl session::historical::Trait for Test {
+	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl authorship::Trait for Test {
 	type FindAuthor = Author11;
@@ -163,6 +172,7 @@ impl Trait for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
 }
 
 pub struct ExtBuilder {
@@ -172,6 +182,7 @@ pub struct ExtBuilder {
 	validator_count: u32,
 	minimum_validator_count: u32,
 	fair: bool,
+	num_validators: Option<u32>,
 }
 
 impl Default for ExtBuilder {
@@ -182,7 +193,8 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			fair: true
+			fair: true,
+			num_validators: None,
 		}
 	}
 }
@@ -212,6 +224,10 @@ impl ExtBuilder {
 		self.fair = is_fair;
 		self
 	}
+	pub fn num_validators(mut self, num_validators: u32) -> Self {
+		self.num_validators = Some(num_validators);
+		self
+	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
@@ -223,12 +239,12 @@ impl ExtBuilder {
 		} else {
 			1
 		};
-		let validators = if self.validator_pool { vec![10, 20, 30, 40] } else { vec![10, 20] };
-		let _ = session::GenesisConfig::<Test>{
-			// NOTE: if config.nominate == false then 100 is also selected in the initial round.
-			validators,
-			keys: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+
+		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		let validators = (0..num_validators)
+			.map(|x| ((x + 1) * 10 + 1) as u64)
+			.collect::<Vec<_>>();
+
 		let _ = balances::GenesisConfig::<Test>{
 			balances: vec![
 					(1, 10 * balance_factor),
@@ -250,9 +266,7 @@ impl ExtBuilder {
 			],
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		let _ = timestamp::GenesisConfig::<Test>{
-			minimum_period: 5,
-		}.assimilate_storage(&mut t, &mut c);
+
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
 		let status_41 = if self.validator_pool {
@@ -277,6 +291,15 @@ impl ExtBuilder {
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
+
+		let _ = timestamp::GenesisConfig::<Test>{
+			minimum_period: 5,
+		}.assimilate_storage(&mut t, &mut c);
+
+		let _ = session::GenesisConfig::<Test> {
+			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
+		}.assimilate_storage(&mut t, &mut c);
+
 		let mut ext = t.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
@@ -357,11 +380,14 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 }
 
 pub fn start_session(session_index: session::SessionIndex) {
-	for i in Session::current_index()..session_index {
+	// Compensate for session delay
+	let session_index = session_index + 1;
+	for i in  Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number());
 		Session::on_initialize(System::block_number());
 	}
+
 	assert_eq!(Session::current_index(), session_index);
 }
 
@@ -382,6 +408,10 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 
 pub fn add_reward_points_to_all_elected() {
 	for v in <Module<Test>>::current_elected() {
-		<Module<Test>>::add_reward_points_to_validator(v, 1).unwrap();
+		<Module<Test>>::add_reward_points_to_validator(super::RawOrigin::Root.into(), v, 1).unwrap();
 	}
+}
+
+pub fn validator_controllers() -> Vec<AccountId> {
+	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
 }

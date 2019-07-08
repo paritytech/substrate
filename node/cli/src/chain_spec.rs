@@ -21,9 +21,8 @@ use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
 	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
 	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
-	SystemConfig, TimestampConfig,
-	Perbill, SessionKeys, StakerStatus,
-	DAYS, DOLLARS, MILLICENTS, SECS_PER_BLOCK,
+	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
+	MILLICENTS, SECS_PER_BLOCK,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -39,6 +38,10 @@ pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 /// Flaming Fir testnet generator
 pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/flaming-fir.json"))
+}
+
+fn session_keys(key: ed25519::Public) -> SessionKeys {
+	SessionKeys { ed25519: key }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -97,7 +100,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
@@ -113,8 +116,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -228,7 +230,7 @@ pub fn testnet_genesis(
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
@@ -239,8 +241,7 @@ pub fn testnet_genesis(
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,

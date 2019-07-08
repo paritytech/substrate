@@ -16,12 +16,12 @@
 
 //! Substrate service components.
 
-use std::{sync::Arc, net::SocketAddr, ops::Deref, ops::DerefMut};
+use std::{sync::Arc, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service, maybe_start_server};
+use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -32,7 +32,6 @@ use runtime_primitives::{
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
-use parking_lot::Mutex;
 use futures::{prelude::*, future::Executor, sync::mpsc};
 
 // Type aliases.
@@ -121,6 +120,11 @@ pub type ComponentClient<C> = Client<
 	<C as Components>::RuntimeApi,
 >;
 
+/// A offchain workers storage backend type.
+pub type ComponentOffchainStorage<C> = <
+	<C as Components>::Backend as client::backend::Backend<ComponentBlock<C>, Blake2Hasher>
+>::OffchainStorage;
+
 /// Block type for `Components`
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
 
@@ -139,72 +143,37 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
-	type ServersHandle: Send + Sync;
-
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
 		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		system_info: SystemInfo,
-		rpc_http: Option<SocketAddr>,
-		rpc_ws: Option<SocketAddr>,
-		rpc_ws_max_connections: Option<usize>,
-		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> error::Result<Self::ServersHandle>;
+	) -> rpc::RpcHandler;
 }
 
 impl<C: Components> StartRPC<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
 {
-	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
-
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
 		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
-		rpc_http: Option<SocketAddr>,
-		rpc_ws: Option<SocketAddr>,
-		rpc_ws_max_connections: Option<usize>,
-		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> error::Result<Self::ServersHandle> {
-		let handler = || {
-			let client = client.clone();
-			let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-			let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-			let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-			let author = rpc::apis::author::Author::new(
-				client.clone(), transaction_pool.clone(), subscriptions
-			);
-			let system = rpc::apis::system::System::new(
-				rpc_system_info.clone(), system_send_back.clone()
-			);
-			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
-				state,
-				chain,
-				author,
-				system,
-			)
-		};
-
-		Ok((
-			maybe_start_server(
-				rpc_http,
-				|address| rpc::start_http(address, rpc_cors.as_ref(), handler()),
-			)?,
-			maybe_start_server(
-				rpc_ws,
-				|address| rpc::start_ws(
-					address,
-					rpc_ws_max_connections,
-					rpc_cors.as_ref(),
-					handler(),
-				),
-			)?.map(Mutex::new),
-		))
+	) -> rpc::RpcHandler {
+		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
+		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
+		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
+		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions);
+		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
+		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
+			state,
+			chain,
+			author,
+			system,
+		)
 	}
 }
 
@@ -259,7 +228,11 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 pub trait OffchainWorker<C: Components> {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		offchain: &offchain::OffchainWorkers<
+			ComponentClient<C>,
+			ComponentOffchainStorage<C>,
+			ComponentBlock<C>
+		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
@@ -270,7 +243,11 @@ impl<C: Components> OffchainWorker<Self> for C where
 {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		offchain: &offchain::OffchainWorkers<
+			ComponentClient<C>,
+			ComponentOffchainStorage<C>,
+			ComponentBlock<C>
+		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
 		Ok(Box::new(offchain.on_block_imported(number, pool)))
@@ -512,7 +489,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.as_str().into(),
+			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
 		Ok((Arc::new(client_db::new_client(
@@ -614,7 +591,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.as_str().into(),
+			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;

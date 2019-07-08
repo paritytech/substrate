@@ -292,7 +292,7 @@ use srml_support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
-use session::{OnSessionEnding, SessionIndex};
+use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
@@ -300,7 +300,7 @@ use primitives::traits::{
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root, RawOrigin};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
@@ -467,7 +467,43 @@ type ExpoMap<T> = BTreeMap<
 pub const DEFAULT_SESSIONS_PER_ERA: u32 = 3;
 pub const DEFAULT_BONDING_DURATION: u32 = 1;
 
-pub trait Trait: system::Trait + session::Trait + authorship::Trait {
+/// Means for interacting with a specialized version of the `session` trait.
+///
+/// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
+pub trait SessionInterface<AccountId>: system::Trait {
+	/// Disable a given validator by stash ID.
+	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
+	/// Get the validators from session.
+	fn validators() -> Vec<AccountId>;
+	/// Prune historical session tries up to but not including the given index.
+	fn prune_historical_up_to(up_to: session::SessionIndex);
+}
+
+impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
+	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
+	T: session::historical::Trait<
+		FullIdentification = Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>,
+		FullIdentificationOf = ExposureOf<T>,
+	>,
+	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
+	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
+	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
+{
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
+		<session::Module<T>>::disable(validator)
+	}
+
+	fn validators() -> Vec<<T as system::Trait>::AccountId> {
+		<session::Module<T>>::validators()
+	}
+
+	fn prune_historical_up_to(up_to: session::SessionIndex) {
+		<session::historical::Module<T>>::prune_up_to(up_to);
+	}
+}
+
+pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -498,6 +534,9 @@ pub trait Trait: system::Trait + session::Trait + authorship::Trait {
 
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
+
+	/// Interface for interacting with a session module.
+	type SessionInterface: self::SessionInterface<Self::AccountId>;
 }
 
 decl_storage! {
@@ -539,15 +578,6 @@ decl_storage! {
 		/// This is keyed by the stash account.
 		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
-		// The historical validators and their nominations for a given era. Stored as a trie root
-		// of the mapping `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just
-		// the contents of `Stakers`, under a key that is the `era`.
-		//
-		// Every era change, this will be appended with the trie root of the contents of `Stakers`,
-		// and the oldest entry removed down to a specific number of entries (probably around 90 for
-		// a 3 month history).
-		// pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
-
 		/// The currently elected validator set keyed by stash account ID.
 		pub CurrentElected get(current_elected): Vec<T::AccountId>;
 
@@ -577,6 +607,9 @@ decl_storage! {
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceNewEra get(forcing_new_era): bool;
+
+		/// A mapping from still-bonded eras to the first session index of that era.
+		BondedEras: Vec<(EraIndex, SessionIndex)>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -608,10 +641,6 @@ decl_storage! {
 							)
 						}, _ => Ok(())
 					};
-				}
-
-				if let Some(validators) = <Module<T>>::select_validators() {
-					<session::Validators<T>>::put(&validators);
 				}
 			});
 		});
@@ -903,7 +932,8 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(#[compact] new: u32) {
+		fn set_validator_count(origin, #[compact] new: u32) {
+			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
 
@@ -917,17 +947,20 @@ decl_module! {
 		/// - Triggers the Phragmen election. Expensive but not user-controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
-		fn force_new_era() {
+		fn force_new_era(origin) {
+			ensure_root(origin)?;
 			Self::apply_force_new_era()
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(#[compact] new: u32) {
+		fn set_offline_slash_grace(origin, #[compact] new: u32) {
+			ensure_root(origin)?;
 			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		fn set_invulnerables(validators: Vec<T::AccountId>) {
+		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
+			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
@@ -935,7 +968,8 @@ decl_module! {
 		///
 		/// At the end of the era each the total payout will be distributed among validator
 		/// relatively to their points.
-		fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
+		fn add_reward_points_to_validator(origin, validator: T::AccountId, points: u32) {
+			ensure_root(origin)?;
 			<Module<T>>::current_elected().iter()
 				.position(|elected| *elected == validator)
 				.map(|index| {
@@ -1056,10 +1090,18 @@ impl<T: Trait> Module<T> {
 		imbalance
 	}
 
-	/// Session has just ended. Provide the validator set for the next session if it's an era-end.
-	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
+	/// with the exposure of the prior validator set.
+	fn new_session(session_index: SessionIndex)
+		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
+	{
 		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
-			Self::new_era()
+			let validators = T::SessionInterface::validators();
+			let prior = validators.into_iter()
+				.map(|v| { let e = Self::stakers(&v); (v, e) })
+				.collect();
+
+			Self::new_era(session_index).map(move |new| (new, prior))
 		} else {
 			None
 		}
@@ -1069,7 +1111,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
-	fn new_era() -> Option<Vec<T::AccountId>> {
+	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Payout
 		let rewards = CurrentEraRewards::take();
 		let now = T::Time::now();
@@ -1107,10 +1149,31 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Increment current era.
-		CurrentEra::mutate(|s| *s += 1);
+		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+		let bonding_duration = T::BondingDuration::get();
+
+		if current_era > bonding_duration {
+			let first_kept = current_era - bonding_duration;
+			BondedEras::mutate(|bonded| {
+				bonded.push((current_era, start_session_index));
+
+				// prune out everything that's from before the first-kept index.
+				let n_to_prune = bonded.iter()
+					.take_while(|&&(era_idx, _)| era_idx < first_kept)
+					.count();
+
+				bonded.drain(..n_to_prune);
+
+				if let Some(&(_, first_session)) = bonded.first() {
+					T::SessionInterface::prune_historical_up_to(first_session);
+				}
+			})
+		}
 
 		// Reassign all Stakers.
-		Self::select_validators()
+		let (_slot_stake, maybe_new_validators) = Self::select_validators();
+
+		maybe_new_validators
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
@@ -1119,8 +1182,8 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// Returns the potential new validator set.
-	fn select_validators() -> Option<Vec<T::AccountId>> {
+	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
+	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
 		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
@@ -1222,10 +1285,8 @@ impl<T: Trait> Module<T> {
 
 			// Set the new validator set in sessions.
 			<CurrentElected<T>>::put(&elected_stashes);
-			let validators = elected_stashes.into_iter()
-				.map(|s| Self::bonded(s).unwrap_or_default())
-				.collect::<Vec<_>>();
-			Some(validators)
+
+			(slot_stake, Some(elected_stashes))
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.
 			// This is bad.
@@ -1233,7 +1294,7 @@ impl<T: Trait> Module<T> {
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
 			// TODO: #2494
-			None
+			(Self::slot_stake(), None)
 		}
 	}
 
@@ -1287,7 +1348,7 @@ impl<T: Trait> Module<T> {
 					.map(|x| x.min(slash_exposure))
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
-				let _ = <session::Module<T>>::disable(&controller);
+				let _ = T::SessionInterface::disable_validator(&stash);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
@@ -1299,9 +1360,17 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(i: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::new_session(i + 1)
+impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
+	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		Self::new_session(start_session - 1).map(|(new, _old)| new)
+	}
+}
+
+impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
+		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
+	{
+		Self::new_session(start_session - 1)
 	}
 }
 
@@ -1321,13 +1390,14 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
 /// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
 /// * 1 point to the producer of each referenced uncle block.
-impl<T: Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
+// TODO TODO: either we make authorship bound on trait either we make authorship dependency optinal
+impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		let _ = Self::add_reward_points_to_validator(author, 20);
+		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), author, 20);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		let _ = Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
-		let _ = Self::add_reward_points_to_validator(author, 1);
+		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), <authorship::Module<T>>::author(), 2);
+		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), author, 1);
 	}
 }
 
@@ -1354,4 +1424,32 @@ fn multiply_by_rational<N>(value: N, num: u32, den: u32) -> N
 	};
 
 	result_divisor_part + result_remainder_part
+}
+
+/// A `Convert` implementation that finds the stash of the given controller account,
+/// if any.
+pub struct StashOf<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
+	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
+		<Module<T>>::ledger(&controller).map(|l| l.stash)
+	}
+}
+
+/// A typed conversion from stash account ID to the current exposure of nominators
+/// on that account.
+pub struct ExposureOf<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
+	for ExposureOf<T>
+{
+	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+		Some(<Module<T>>::stakers(&validator))
+	}
+}
+
+impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
+	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
+		<Module<T>>::select_validators().1
+	}
 }

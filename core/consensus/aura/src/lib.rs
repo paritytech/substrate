@@ -117,12 +117,14 @@ struct AuraSlotCompatible;
 
 impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
+		&self,
 		data: &InherentData
-	) -> Result<(TimestampInherent, AuraInherent), consensus_common::Error> {
+	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), consensus_common::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
+			.map(|(x, y)| (x, y, Default::default()))
 	}
 }
 
@@ -170,7 +172,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers
+		inherent_data_providers,
+		AuraSlotCompatible,
 	))
 }
 
@@ -514,7 +517,7 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -561,14 +564,19 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
-				// `Consensus` is the Aura-specific authorities change log.
+				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
-					.convert_first(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
+					.logs()
+					.iter()
+					.filter_map(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
 						OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)
 					))
-					.map(|ConsensusLog::AuthoritiesChange(a)|
-						vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
-					);
+					.find_map(|l| match l {
+						ConsensusLog::AuthoritiesChange(a) => Some(
+							vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
+						),
+						_ => None,
+					});
 
 				let import_block = ImportBlock {
 					origin,
@@ -702,7 +710,7 @@ pub fn import_queue<B, C, P>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::stream::Stream as _;
+	use futures::{Async, stream::Stream as _};
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
@@ -753,11 +761,9 @@ mod tests {
 	}
 
 	const SLOT_DURATION: u64 = 1;
-	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
-		started: bool,
+		peers: Vec<Peer<(), DummySpecialization>>,
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -769,7 +775,6 @@ mod tests {
 		fn from_config(_config: &ProtocolConfig) -> Self {
 			AuraTestNet {
 				peers: Vec::new(),
-				started: false,
 			}
 		}
 
@@ -797,28 +802,16 @@ mod tests {
 			}
 		}
 
-		fn uses_tokio(&self) -> bool {
-			true
+		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
+			&mut self.peers[i]
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
-			&self.peers[i]
-		}
-
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
-		}
-
-		fn started(&self) -> bool {
-			self.started
-		}
-
-		fn set_started(&mut self, new: bool) {
-			self.started = new;
 		}
 	}
 
@@ -826,9 +819,7 @@ mod tests {
 	#[allow(deprecated)]
 	fn authoring_blocks() {
 		let _ = ::env_logger::try_init();
-		let mut net = AuraTestNet::new(3);
-
-		net.start();
+		let net = AuraTestNet::new(3);
 
 		let peers = &[
 			(0, Keyring::Alice),
@@ -881,15 +872,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| {
-				net.lock().send_import_notifications();
-				net.lock().sync_without_disconnects();
-				Ok(())
-			})
-			.map(|_| ())
-			.map_err(|_| ());
-
+		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}
 

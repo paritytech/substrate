@@ -21,13 +21,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use primitives::{Pair as PairT, ed25519};
+use primitives::Pair;
 use futures::prelude::*;
-use node_primitives::Block;
+use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -79,12 +79,13 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>|
 				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, local_key: Option<Arc<ed25519::Pair>>| {
+			|mut service: Self::FullService| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(ref key) = local_key {
-					info!("Using authority key {}", key.public());
+				if let Some(aura_key) = service.authority_key::<AuraPair>() {
+					info!("Using aura key {}", aura_key.public());
+
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -93,9 +94,10 @@ construct_service_factory! {
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or(ServiceError::SelectChainRequired)?;
+
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						key.clone(),
+						Arc::new(aura_key),
 						client,
 						select_chain,
 						block_import.clone(),
@@ -104,19 +106,18 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
-
-					info!("Running Grandpa session as Authority {}", key.public());
+					let select = aura.select(service.on_exit()).then(|_| Ok(()));
+					service.spawn_task(Box::new(select));
 				}
 
-				let local_key = if service.config.disable_grandpa {
+				let grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					local_key
+					service.authority_key::<grandpa_primitives::AuthorityPair>()
 				};
 
 				let config = grandpa::Config {
-					local_key,
+					local_key: grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
@@ -165,7 +166,7 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, ed25519::Pair>(
+				import_queue::<_, _, AuraPair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
@@ -189,7 +190,7 @@ construct_service_factory! {
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, ed25519::Pair>(
+				import_queue::<_, _, AuraPair>(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import,
 					None,
@@ -215,7 +216,7 @@ construct_service_factory! {
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use consensus::CompatibleDigestItem;
+	use aura::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, CENTS, UncheckedExtrinsic};

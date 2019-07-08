@@ -173,7 +173,7 @@ pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
 pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
 
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -513,16 +513,19 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
-		fn cancel_referendum(#[compact] ref_index: ReferendumIndex) {
+		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
+			ensure_root(origin)?;
 			Self::clear_referendum(ref_index);
 		}
 
 		/// Cancel a proposal queued for enactment.
 		fn cancel_queued(
+			origin,
 			#[compact] when: T::BlockNumber,
 			#[compact] which: u32,
 			#[compact] what: ReferendumIndex
 		) {
+			ensure_root(origin)?;
 			let which = which as usize;
 			let mut items = <DispatchQueue<T>>::get(when);
 			if items.get(which).and_then(Option::as_ref).map_or(false, |x| x.1 == what) {
@@ -1473,9 +1476,9 @@ mod tests {
 				Some((set_balance_proposal(2), 0))
 			]);
 
-			assert_noop!(Democracy::cancel_queued(3, 0, 0), "proposal not found");
-			assert_noop!(Democracy::cancel_queued(4, 1, 0), "proposal not found");
-			assert_ok!(Democracy::cancel_queued(4, 0, 0));
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 3, 0, 0), "proposal not found");
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 4, 1, 0), "proposal not found");
+			assert_ok!(Democracy::cancel_queued(Origin::ROOT, 4, 0, 0));
 			assert_eq!(Democracy::dispatch_queue(4), vec![None]);
 		});
 	}
@@ -1774,7 +1777,7 @@ mod tests {
 				0
 			).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
-			assert_ok!(Democracy::cancel_referendum(r.into()));
+			assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r.into()));
 
 			next_block();
 			next_block();

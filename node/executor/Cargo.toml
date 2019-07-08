@@ -6,7 +6,7 @@ description = "Substrate node implementation in Rust."
 edition = "2018"
 
 [dependencies]
-trie-root = "0.12"
+trie-root = "0.14.0"
 parity-codec = "4.1.1"
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
