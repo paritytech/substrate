@@ -31,7 +31,7 @@ use crate::{behaviour::{Behaviour, BehaviourOut}, parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use peerset::PeersetHandle;
-use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
+use consensus::import_queue::{ImportQueue, Link, BoxFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::AlwaysBadChecker;
@@ -543,7 +543,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Inform protocol whether a justification was successfully imported.
 	JustificationImportResult(B::Hash, NumberFor<B>, bool),
 	/// Set finality proof request builder.
-	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
+	SetFinalityProofRequestBuilder(BoxFinalityProofRequestBuilder<B>),
 	/// Tell protocol to request finality proof for a block.
 	RequestFinalityProof(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a finality proof was successfully imported.
@@ -663,7 +663,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			fn restart(&mut self) {
 				self.protocol.user_protocol_mut().restart()
 			}
-			fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
+			fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
 				self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)
 			}
 		}

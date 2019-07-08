@@ -27,7 +27,7 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::{Verifier, SharedFinalityProofRequestBuilder}, well_known_cache_keys,
+	import_queue::{Verifier, BoxFinalityProofRequestBuilder}, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
 	Error as ConsensusError, FinalityProofRequestBuilder,
 };
@@ -100,8 +100,8 @@ struct LightAuthoritySet {
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
 	/// Create finality proof request builder.
-	pub fn create_finality_proof_request_builder(&self) -> SharedFinalityProofRequestBuilder<Block> {
-		Arc::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
+	pub fn create_finality_proof_request_builder(&self) -> BoxFinalityProofRequestBuilder<Block> {
+		Box::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
 	}
 }
 

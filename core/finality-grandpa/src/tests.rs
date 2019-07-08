@@ -31,7 +31,7 @@ use client::{
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	BoxFinalityProofRequestBuilder,
 };
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -109,7 +109,7 @@ impl TestNetFactory for GrandpaTestNet {
 			SharedBlockImport<Block>,
 			Option<SharedJustificationImport<Block>>,
 			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)
 	{

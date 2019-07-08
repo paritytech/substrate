@@ -35,7 +35,7 @@ use crate::config::Roles;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
 	SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	BoxFinalityProofRequestBuilder,
 };
 use consensus::block_import::BlockImport;
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
@@ -386,7 +386,7 @@ pub trait TestNetFactory: Sized {
 			SharedBlockImport<Block>,
 			Option<SharedJustificationImport<Block>>,
 			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{
@@ -712,7 +712,7 @@ impl TestNetFactory for JustificationTestNet {
 			SharedBlockImport<Block>,
 			Option<SharedJustificationImport<Block>>,
 			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{

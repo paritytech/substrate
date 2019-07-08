@@ -37,7 +37,7 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	BoxFinalityProofRequestBuilder,
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -671,7 +671,7 @@ pub fn import_queue<B, C, P>(
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where

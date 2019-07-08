@@ -48,7 +48,7 @@ pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=Con
 pub type SharedFinalityProofImport<B> = Arc<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Shared finality proof request builder struct used by the queue.
-pub type SharedFinalityProofRequestBuilder<B> = Arc<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
+pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = libp2p::PeerId;
@@ -140,7 +140,7 @@ pub trait Link<B: BlockT>: Send {
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Remember finality proof request builder on start.
-	fn set_finality_proof_request_builder(&mut self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
+	fn set_finality_proof_request_builder(&mut self, _request_builder: BoxFinalityProofRequestBuilder<B>) {}
 	/// Adjusts the reputation of the given peer.
 	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
