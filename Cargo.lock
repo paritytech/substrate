@@ -3817,6 +3817,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-trie 2.0.0",
 ]
 
 [[package]]
