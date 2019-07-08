@@ -147,6 +147,25 @@ use proc_macro::TokenStream;
 /// ```nocompile
 /// trait Store for Module<T: Trait> as Example where T::AccountId: std::fmt::Display {}
 /// ```
+///
+/// ## Limitations
+///
+/// # Instancing and generic `GenesisConfig`
+///
+/// If your module supports instancing and you see an error like `parameter `I` is never used` for
+/// your `decl_storage!`, you are hitting a limitation of the current implementation. You probably
+/// try to use an associated type of a non-instantiable trait. To solve this, add the following to
+/// your macro call:
+///
+/// ```nocompile
+/// add_extra_genesis {
+/// 	config(phantom): std::marker::PhantomData<I>,
+/// }
+/// ...
+///
+/// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
+/// `Default::default()`.
+///
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

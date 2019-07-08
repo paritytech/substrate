@@ -30,10 +30,14 @@ pub use self::bandwidth::BandwidthSinks;
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
+/// If `memory_only` is true, then only communication within the same process are allowed. Only
+/// addresses with the format `/memory/...` are allowed.
+///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
 pub fn build_transport(
 	keypair: identity::Keypair,
+	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
@@ -63,12 +67,21 @@ pub fn build_transport(
 		OptionalTransport::none()
 	};
 	#[cfg(not(target_os = "unknown"))]
-	let transport = {
+	let transport = transport.or_transport(if !memory_only {
 		let desktop_trans = tcp::TcpConfig::new();
 		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
 			.or_transport(desktop_trans);
-		transport.or_transport(dns::DnsConfig::new(desktop_trans))
-	};
+		OptionalTransport::some(dns::DnsConfig::new(desktop_trans))
+	} else {
+		OptionalTransport::none()
+	});
+
+	let transport = transport.or_transport(if memory_only {
+		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
+	} else {
+		OptionalTransport::none()
+	});
+
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// Encryption

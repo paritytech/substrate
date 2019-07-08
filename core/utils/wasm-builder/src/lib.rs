@@ -78,7 +78,7 @@
 //! - wasm-gc
 //!
 
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
 
 mod prerequisites;
 mod wasm_project;
@@ -107,24 +107,16 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 	let cargo_manifest = PathBuf::from(cargo_manifest);
 
 	if !cargo_manifest.exists() {
-		create_out_file(
-			file_name,
-			format!("compile_error!(\"'{}' does not exists!\")", cargo_manifest.display())
-		);
-		return
+		panic!("'{}' does not exist!", cargo_manifest.display());
 	}
 
 	if !cargo_manifest.ends_with("Cargo.toml") {
-		create_out_file(
-			file_name,
-			format!("compile_error!(\"'{}' no valid path to a `Cargo.toml`!\")", cargo_manifest.display())
-		);
-		return
+		panic!("'{}' no valid path to a `Cargo.toml`!", cargo_manifest.display());
 	}
 
 	if let Some(err_msg) = prerequisites::check() {
-		create_out_file(file_name, format!("compile_error!(\"{}\");", err_msg));
-		return
+		eprintln!("{}", err_msg);
+		process::exit(1);
 	}
 
 	let (wasm_binary, bloaty) = wasm_project::create_and_compile(&cargo_manifest);
@@ -156,8 +148,12 @@ fn create_out_file(file_name: &str, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> Command {
-	if Command::new("rustup").args(&["run", "nightly", "cargo"])
-		.status().map(|s| s.success()).unwrap_or(false)
+	if Command::new("rustup")
+		.args(&["run", "nightly", "cargo"])
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.status()
+		.map(|s| s.success()).unwrap_or(false)
 	{
 		let mut cmd = Command::new("rustup");
 		cmd.args(&["run", "nightly", "cargo"]);

@@ -121,16 +121,8 @@ pub struct NetworkConfiguration {
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
 	pub node_name: String,
-	/// If true, the network will use mDNS to discover other libp2p nodes on the local network
-	/// and connect to them if they support the same chain.
-	pub enable_mdns: bool,
-	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
-	/// some binding between the networking provided by the operating system or environment and
-	/// libp2p.
-	///
-	/// This parameter exists whatever the target platform is, but it is expected to be set to
-	/// `Some` only when compiling for WASM.
-	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	/// Configuration for the transport layer.
+	pub transport: TransportConfig,
 }
 
 impl Default for NetworkConfiguration {
@@ -148,8 +140,10 @@ impl Default for NetworkConfiguration {
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
-			enable_mdns: false,
-			wasm_external_transport: None,
+			transport: TransportConfig::Normal {
+				enable_mdns: false,
+				wasm_external_transport: None,
+			},
 		}
 	}
 }
@@ -170,6 +164,40 @@ impl NetworkConfiguration {
 		];
 		config
 	}
+
+	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	pub fn new_memory() -> NetworkConfiguration {
+		let mut config = NetworkConfiguration::new();
+		config.listen_addresses = vec![
+			iter::once(Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(Protocol::Tcp(0)))
+				.collect()
+		];
+		config
+	}
+}
+
+/// Configuration for the transport layer.
+#[derive(Clone)]
+pub enum TransportConfig {
+	/// Normal transport mode.
+	Normal {
+		/// If true, the network will use mDNS to discover other libp2p nodes on the local network
+		/// and connect to them if they support the same chain.
+		enable_mdns: bool,
+
+		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
+		/// need some binding between the networking provided by the operating system or environment
+		/// and libp2p.
+		///
+		/// This parameter exists whatever the target platform is, but it is expected to be set to
+		/// `Some` only when compiling for WASM.
+		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	},
+
+	/// Only allow connections within the same process.
+	/// Only addresses of the form `/memory/...` will be supported.
+	MemoryOnly,
 }
 
 /// The policy for connections to non-reserved peers.

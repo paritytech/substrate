@@ -53,7 +53,10 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
-use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
+use primitives::{
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, TypedKey},
+	generic::DigestItem,
+};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -153,7 +156,7 @@ pub trait Trait: timestamp::Trait {
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + Default;
+	type AuthorityId: Member + Parameter + TypedKey + Default;
 }
 
 decl_storage! {
@@ -184,6 +187,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
+
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
@@ -274,7 +278,8 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = session::Module::<T>::validators();
+		use staking::SessionInterface;
+		let validators = T::SessionInterface::validators();
 
 		report.punish(
 			validators.len(),
