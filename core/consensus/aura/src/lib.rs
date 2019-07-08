@@ -571,12 +571,12 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 					.filter_map(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
 						OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)
 					))
-					.filter_map(|l| match l {
-						ConsensusLog::AuthoritiesChange(a) => Some(a),
+					.find_map(|l| match l {
+						ConsensusLog::AuthoritiesChange(a) => Some(
+							vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
+						),
 						_ => None,
-					})
-					.map(|a| vec![(well_known_cache_keys::AUTHORITIES, a.encode())])
-					.next();
+					});
 
 				let import_block = ImportBlock {
 					origin,
