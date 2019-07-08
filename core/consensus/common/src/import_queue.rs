@@ -176,7 +176,7 @@ pub enum BlockImportError {
 
 /// Single block import function.
 pub fn import_single_block<B: BlockT, V: Verifier<B>>(
-	import_handle: &dyn BlockImport<B, Error = ConsensusError>,
+	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: Arc<V>,

@@ -176,7 +176,7 @@ pub trait BlockImport<B: BlockT> {
 
 	/// Check block preconditions.
 	fn check_block(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
@@ -185,31 +185,31 @@ pub trait BlockImport<B: BlockT> {
 	///
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
-		&self,
+		&mut self,
 		block: ImportBlock<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
-impl<B: BlockT, T> BlockImport<B> for Arc<T>
-where T: BlockImport<B>
+impl<B: BlockT, T, E: ::std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
+where for<'r> &'r T: BlockImport<B, Error = E>
 {
-	type Error = T::Error;
+	type Error = E;
 
 	fn check_block(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).check_block(hash, parent_hash)
+		(&**self).check_block(hash, parent_hash)
 	}
 
 	fn import_block(
-		&self,
+		&mut self,
 		block: ImportBlock<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).import_block(block, cache)
+		(&**self).import_block(block, cache)
 	}
 }
 
@@ -219,11 +219,11 @@ pub trait JustificationImport<B: BlockT> {
 
 	/// Called by the import queue when it is started. Returns a list of justifications to request
 	/// from the network.
-	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justification: Justification,
@@ -236,11 +236,11 @@ pub trait FinalityProofImport<B: BlockT> {
 
 	/// Called by the import queue when it is started. Returns a list of finality proofs to request
 	/// from the network.
-	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,

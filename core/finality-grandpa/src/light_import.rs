@@ -126,7 +126,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	type Error = ConsensusError;
 
 	fn import_block(
-		&self,
+		&mut self,
 		block: ImportBlock<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -136,7 +136,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	}
 
 	fn check_block(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
@@ -154,7 +154,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
 		let chain_info = self.client.info().chain;
 
@@ -169,7 +169,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 	}
 
 	fn import_finality_proof(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		finality_proof: Vec<u8>,
@@ -227,7 +227,7 @@ impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityPro
 
 /// Try to import new block.
 fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
-	client: &Client<B, E, Block, RA>,
+	mut client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	mut block: ImportBlock<Block>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -246,7 +246,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
 	let enacts_consensus_change = !new_cache.is_empty();
-	let import_result = client.import_block(block, new_cache);
+	let import_result = BlockImport::import_block(&mut client, block, new_cache);
 
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
