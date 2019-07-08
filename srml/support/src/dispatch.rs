@@ -622,7 +622,7 @@ macro_rules! decl_module {
 		compile_error!(
 			"First parameter of dispatch should be marked `origin` only, with no type specified \
 			(a bit like `self`)."
-		)
+		);
 	};
 	// Ignore any ident which is `origin` but has a type, regardless of the type token itself.
 	(@normalize
@@ -646,7 +646,7 @@ macro_rules! decl_module {
 		compile_error!(
 			"First parameter of dispatch should be marked `origin` only, with no type specified \
 			(a bit like `self`)."
-		)
+		);
 	};
 	// Ignore any function missing `origin` as the first parameter.
 	(@normalize
@@ -704,15 +704,6 @@ macro_rules! decl_module {
 	// Implementation of Call enum's .dispatch() method.
 	// TODO: this probably should be a different macro?
 
-	(@call
-		root
-		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?>  $fn_name:ident  $origin:ident $system:ident [ $( $param_name:ident),* ]
-	) => {
-		{
-			$system::ensure_root($origin)?;
-			<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $( $param_name ),* )
-		}
-	};
 	(@call
 		$ingore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
@@ -866,38 +857,6 @@ macro_rules! decl_module {
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
-	};
-
-	// Expansion for root dispatch functions with no specified result type.
-	(@impl_function
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		$origin_ty:ty;
-		root;
-		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
-	) => {
-		$(#[doc = $doc_attr])*
-		#[allow(unreachable_code)]
-		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
-			{ $( $impl )* }
-			Ok(())
-		}
-	};
-
-	// Expansion for root dispatch functions with explicit return types.
-	(@impl_function
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		$origin_ty:ty;
-		root;
-		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn $name:ident (
-			root $(, $param:ident : $param_ty:ty )*
-		) -> $result:ty { $( $impl:tt )* }
-	) => {
-		$(#[doc = $doc_attr])*
-		$vis fn $name($( $param: $param_ty ),* ) -> $result {
-			$( $impl )*
-		}
 	};
 
 	// Expansion for _origin_ dispatch functions with no return type.
@@ -1574,7 +1533,7 @@ macro_rules! __function_to_metadata {
 		compile_error!(concat!(
 			"Invalid attribute for parameter `", stringify!($param_name),
 			"`, the following attributes are supported: `#[compact]`"
-		))
+		));
 	}
 }
 
