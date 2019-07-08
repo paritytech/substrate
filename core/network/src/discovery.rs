@@ -43,6 +43,8 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	clock: Clock,
 	/// Identity of our local node.
 	local_peer_id: PeerId,
+	/// Number of nodes we're currently connected to.
+	num_connections: u64,
 }
 
 impl<TSubstream> DiscoveryBehaviour<TSubstream> {
@@ -64,6 +66,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			discoveries: VecDeque::new(),
 			clock,
 			local_peer_id: local_public_key.into_peer_id(),
+			num_connections: 0,
 		}
 	}
 
@@ -149,10 +152,12 @@ where
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+		self.num_connections += 1;
 		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+		self.num_connections -= 1;
 		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
 	}
 
@@ -229,7 +234,7 @@ where
 						KademliaOut::FindNodeResult { key, closer_peers } => {
 							trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
 								key, closer_peers.len());
-							if closer_peers.is_empty() {
+							if closer_peers.is_empty() && self.num_connections != 0 {
 								warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
 									results");
 							}
