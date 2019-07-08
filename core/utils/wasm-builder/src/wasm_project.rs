@@ -227,12 +227,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 
 	fs::write(
 		project_folder.join("src/lib.rs"),
-		format!(
-			r#"
-				#![no_std]
-				pub use wasm_project::*;
-			"#
-		)
+		"#![no_std] pub use wasm_project::*;",
 	).expect("Project `lib.rs` writing can not fail; qed");
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
@@ -265,9 +260,15 @@ fn is_release_build() -> bool {
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = crate::get_nightly_cargo();
+
+	let rustflags = format!(
+		"-C link-arg=--export-table {}",
+		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
+	);
+
 	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
-		.env("RUSTFLAGS", "-C link-arg=--export-table")
+		.env("RUSTFLAGS", rustflags)
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
@@ -347,4 +348,5 @@ fn generate_rerun_if_changed_instructions(
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
 }

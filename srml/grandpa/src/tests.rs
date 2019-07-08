@@ -39,9 +39,9 @@ fn authorities_change_logged() {
 		let header = System::finalize();
 		assert_eq!(header.digest, Digest {
 			logs: vec![
-				Signal::AuthoritiesChange(
+				grandpa_log(ConsensusLog::ScheduledChange(
 					ScheduledChange { delay: 0, next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)]) }
-				).into(),
+				)),
 			],
 		});
 
@@ -64,9 +64,9 @@ fn authorities_change_logged_after_delay() {
 		let header = System::finalize();
 		assert_eq!(header.digest, Digest {
 			logs: vec![
-				Signal::AuthoritiesChange(
+				grandpa_log(ConsensusLog::ScheduledChange(
 					ScheduledChange { delay: 1, next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)]) }
-				).into(),
+				)),
 			],
 		});
 

@@ -24,10 +24,10 @@ mod sync;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::build_multiaddr;
+use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
+use client::{self, ClientInfo, BlockchainEvents, ImportNotifications, FinalityNotifications};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
@@ -41,7 +41,7 @@ use consensus::block_import::BlockImport;
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
-use crate::{NetworkWorker, NetworkService, ProtocolId};
+use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
 use primitives::{H256, Blake2Hasher};
@@ -114,12 +114,12 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		&mut self,
 		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
-		_message: &mut Option<crate::message::Message<Block>>,
+		_message: Vec<u8>,
 	) {}
 
 	fn on_event(
 		&mut self,
-		_event: crate::event::Event
+		_event: crate::specialization::Event
 	) {}
 }
 
@@ -216,7 +216,8 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
-	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send>; 2]>,
+	imported_blocks_stream: futures::stream::Fuse<ImportNotifications<Block>>,
+	finality_notification_stream: futures::stream::Fuse<FinalityNotifications<Block>>,
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
@@ -289,7 +290,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.service().on_block_imported(hash, header);
+			self.network.on_block_imported(hash, header);
 			at = hash;
 		}
 
@@ -376,7 +377,7 @@ pub trait TestNetFactory: Sized {
 	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Arc<Self::Verifier>;
 
 	/// Get reference to peer.
-	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization>;
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization>;
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Specialization>>;
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Specialization>>)>(&mut self, closure: F);
 
@@ -448,78 +449,22 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
-		let blocks_notif_future = {
-			let network = Arc::downgrade(&network.service().clone());
-			client.import_notification_stream()
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.then(|_| Ok(()))
-		};
-
-		let finality_notif_future = {
-			let network = Arc::downgrade(&network.service().clone());
-
-			// A utility stream that drops all ready items and only returns the last one.
-			// This is used to only keep the last finality notification and avoid
-			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
-
-			impl<B: BlockT> Stream for MostRecentNotification<B> {
-				type Item = <FinalityNotifications<B> as Stream>::Item;
-				type Error = <FinalityNotifications<B> as Stream>::Error;
-
-				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-					let mut last = None;
-					let last = loop {
-						match self.0.poll()? {
-							Async::Ready(Some(item)) => { last = Some(item) }
-							Async::Ready(None) => match last {
-								None => return Ok(Async::Ready(None)),
-								Some(last) => break last,
-							},
-							Async::NotReady => match last {
-								None => return Ok(Async::NotReady),
-								Some(last) => break last,
-							},
-						}
-					};
-
-					Ok(Async::Ready(Some(last)))
-				}
-			}
-
-			MostRecentNotification(client.finality_notification_stream().fuse())
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_finalized(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.then(|_| Ok(()))
-		};
-
 		let (block_import, ..) = self.make_block_import(PeersClient::Full(client.clone()));
-
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
+			let imported_blocks_stream = client.import_notification_stream().fuse();
+			let finality_notification_stream = client.finality_notification_stream().fuse();
+
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
+				imported_blocks_stream,
+				finality_notification_stream,
 				block_import,
 				verifier,
-				to_poll: {
-					let mut sv = smallvec::SmallVec::new();
-					sv.push(Box::new(blocks_notif_future) as Box<_>);
-					sv.push(Box::new(finality_notif_future) as Box<_>);
-					sv
-				},
 				network,
 			});
 		});
@@ -561,34 +506,22 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
-		let blocks_notif_future = {
-			let network = Arc::downgrade(&network.service().clone());
-			client.import_notification_stream()
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.then(|_| Ok(()))
-		};
-
 		let (block_import, ..) = self.make_block_import(PeersClient::Light(client.clone()));
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
+			let imported_blocks_stream = client.import_notification_stream().fuse();
+			let finality_notification_stream = client.finality_notification_stream().fuse();
+
 			peers.push(Peer {
 				data,
 				verifier,
 				block_import,
 				client: PeersClient::Light(client),
-				to_poll: {
-					let mut sv = smallvec::SmallVec::new();
-					sv.push(Box::new(blocks_notif_future) as Box<_>);
-					sv
-				},
+				imported_blocks_stream,
+				finality_notification_stream,
 				network,
 			});
 		});
@@ -624,7 +557,20 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				peer.network.poll().unwrap();
-				peer.to_poll.retain(|f| f.poll() == Ok(Async::NotReady));
+
+				// We poll `imported_blocks_stream`.
+				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
+					peer.network.on_block_imported(notification.hash, notification.header);
+				}
+
+				// We poll `finality_notification_stream`, but we only take the last event.
+				let mut last = None;
+				while let Ok(Async::Ready(Some(item))) = peer.finality_notification_stream.poll() {
+					last = Some(item);
+				}
+				if let Some(notification) = last {
+					peer.network.on_block_finalized(notification.hash, notification.header);
+				}
 			}
 		});
 	}
@@ -652,8 +598,8 @@ impl TestNetFactory for TestNet {
 		Arc::new(PassThroughVerifier(false))
 	}
 
-	fn peer(&self, i: usize) -> &Peer<(), Self::Specialization> {
-		&self.peers[i]
+	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::Specialization> {
+		&mut self.peers[i]
 	}
 
 	fn peers(&self) -> &Vec<Peer<(), Self::Specialization>> {
@@ -698,7 +644,7 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config)
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization> {
 		self.0.peer(i)
 	}
 

@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 use primitives::sr25519::Signature;
-use babe_primitives::{self, BABE_ENGINE_ID};
+use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
@@ -33,8 +33,8 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 pub struct BabePreDigest {
 	pub(super) vrf_output: VRFOutput,
 	pub(super) proof: VRFProof,
-	pub(super) index: u64,
-	pub(super) slot_num: u64,
+	pub(super) index: babe_primitives::AuthorityIndex,
+	pub(super) slot_num: SlotNumber,
 }
 
 /// The prefix used by BABE for its VRF keys.
