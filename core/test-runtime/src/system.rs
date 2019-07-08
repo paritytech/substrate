@@ -313,12 +313,9 @@ mod tests {
 
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Transfer};
+	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, map};
 	use substrate_executor::WasmExecutor;
-
-	const WASM_CODE: &'static [u8] =
-			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
@@ -365,7 +362,7 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
 		})
 	}
 
@@ -453,7 +450,7 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
 		})
 	}
 }

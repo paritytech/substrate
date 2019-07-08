@@ -24,7 +24,10 @@
 //!
 //! Finality implies canonicality but not vice-versa.
 
+#![warn(missing_docs)]
+
 pub mod light;
+pub mod offchain;
 
 mod cache;
 mod storage_cache;
@@ -77,6 +80,10 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
+/// A reference tracking state.
+///
+/// It makes sure that the hash we are using stays pinned in storage
+/// until this structure is dropped.
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState,
 	storage: Arc<StorageDb<Block>>,
@@ -202,7 +209,7 @@ pub fn new_client<E, S, Block, RA>(
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
 }
 
-mod columns {
+pub(crate) mod columns {
 	pub const META: Option<u32> = crate::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
@@ -213,6 +220,8 @@ mod columns {
 	pub const JUSTIFICATION: Option<u32> = Some(6);
 	pub const CHANGES_TRIE: Option<u32> = Some(7);
 	pub const AUX: Option<u32> = Some(8);
+	/// Offchain workers local storage
+	pub const OFFCHAIN: Option<u32> = Some(9);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -531,6 +540,7 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 	}
 }
 
+/// A database wrapper for changes tries.
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
@@ -675,6 +685,7 @@ where
 /// Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
+	offchain_storage: offchain::LocalStorage,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
 	/// None<*> means that the value hasn't been cached yet. Some(*) means that the value (either None or
 	/// Some(*)) has been cached and is valid.
@@ -689,31 +700,29 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> client::error::Result<Self> {
 		Self::new_inner(config, canonicalization_delay)
 	}
 
-	#[cfg(feature = "kvdb-rocksdb")]
 	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+		#[cfg(feature = "kvdb-rocksdb")]
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
+		#[cfg(not(feature = "kvdb-rocksdb"))]
+		let db = {
+			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
+			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
+		};
+		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
-	#[cfg(not(feature = "kvdb-rocksdb"))]
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
-		log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
-	}
-
+	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		use utils::NUM_COLUMNS;
-
-		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
+		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
 	}
 
+	/// Creates a client backend with test settings.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
 
@@ -724,7 +733,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
 		};
-		Backend::from_kvdb(
+		Self::from_kvdb(
 			db,
 			canonicalization_delay,
 			&db_setting,
@@ -745,6 +754,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			db: db.clone(),
 			state_db,
 		};
+		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage {
 			db,
 			meta,
@@ -754,6 +764,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
+			offchain_storage,
 			changes_tries_storage,
 			changes_trie_config: Mutex::new(None),
 			blockchain,
@@ -1232,6 +1243,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
 	type ChangesTrieStorage = DbChangesTrieStorage<Block>;
+	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -1303,6 +1315,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		Some(&self.changes_tries_storage)
+	}
+
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+		Some(self.offchain_storage.clone())
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {

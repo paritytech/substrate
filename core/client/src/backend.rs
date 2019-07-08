@@ -139,6 +139,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	type State: StateBackend<H>;
 	/// Changes trie storage.
 	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block, H>;
+	/// Offchain workers local storage.
+	type OffchainStorage: OffchainStorage;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -156,6 +158,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn used_state_cache_size(&self) -> Option<usize>;
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
+	/// Returns a handle to offchain storage.
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
 		self.state_at(BlockId::Hash(hash.clone())).is_ok()
@@ -192,6 +196,26 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &Mutex<()>;
+}
+
+/// Offchain workers local storage.
+pub trait OffchainStorage: Clone + Send + Sync {
+	/// Persist a value in storage under given key and prefix.
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+
+	/// Retrieve a value from storage under given key and prefix.
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Replace the value in storage if given old_value matches the current one.
+	///
+	/// Returns `true` if the value has been set and false otherwise.
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool;
 }
 
 /// Changes trie storage that supports pruning.

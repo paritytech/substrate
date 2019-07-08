@@ -432,13 +432,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 
 		let engine_id = message.engine_id;
-		//validate the message
+		// validate the message
 		let validation = self.validators.get(&engine_id)
 			.cloned()
 			.map(|v| {
 				let mut context = NetworkContext { gossip: self, protocol, engine_id };
 				v.validate(&mut context, &who, &message.data)
 			});
+
 		let validation_result = match validation {
 			Some(ValidationResult::ProcessAndKeep(topic)) => Some((topic, true)),
 			Some(ValidationResult::ProcessAndDiscard(topic)) => Some((topic, false)),

@@ -24,10 +24,11 @@ substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
-consensus = { package = "substrate-consensus-aura", path = "../../core/consensus/aura" }
-grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
-sr-primitives = { path = "../../core/sr-primitives" }
+aura = { package = "substrate-consensus-aura", path = "../../core/consensus/aura" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
+grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
+grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
