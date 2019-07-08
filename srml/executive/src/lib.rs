@@ -508,7 +508,7 @@ mod tests {
 	#[test]
 	fn block_import_works() {
 		#[cfg(not(feature = "legacy-trie"))]
-		let state_root = hex!("ed9a2c7f4bbac160123b8bd60451392ca31eac9aa4235c4bc15ada002e118fc9").into();
+		let state_root = hex!("c566707325fc89ca9df9d22b0d1b8ad79cc785911f6c5aaf13f356563ea7f0b5").into();
 		#[cfg(feature = "legacy-trie")]
 		let state_root = hex!("d75c79776d69123b65e819977b70e102482e05fd7538c1dcae1249a248ba64e4").into();
 		with_externalities(&mut new_test_ext(), || {
