@@ -95,6 +95,7 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 /// the same order of states defined below, e.g. `Paused` implies a prior
 /// `PendingPause`.
 #[derive(Decode, Encode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum StoredState<N> {
 	/// The current authority set is live and GRANDPA is enabled.
 	Live,
@@ -362,6 +363,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
+
 	fn on_disabled(i: usize) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}
