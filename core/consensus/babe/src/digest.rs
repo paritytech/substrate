@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 use primitives::sr25519::Signature;
-use babe_primitives::{self, BABE_ENGINE_ID};
+use babe_primitives::{self, BABE_ENGINE_ID, Epoch};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
@@ -31,11 +31,11 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 /// * The slot number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
-	pub(super) epoch: u64,
+	pub(super) slot_num: u64,
 	pub(super) vrf_output: VRFOutput,
+	pub(super) epoch: u64,
 	pub(super) proof: VRFProof,
 	pub(super) index: u64,
-	pub(super) slot_num: u64,
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -92,6 +92,9 @@ pub trait CompatibleDigestItem: Sized {
 
 	/// If this item is a BABE signature, return the signature.
 	fn as_babe_seal(&self) -> Option<Signature>;
+
+	/// If this item is a BABE epoch, return it.
+	fn as_babe_epoch(&self) -> Option<Epoch>;
 }
 
 impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
@@ -111,5 +114,9 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 
 	fn as_babe_seal(&self) -> Option<Signature> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
+	}
+
+	fn as_babe_epoch(&self) -> Option<Epoch> {
+		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
 	}
 }

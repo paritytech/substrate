@@ -118,6 +118,11 @@ impl Config {
 	pub fn threshold(&self) -> u64 {
 		self.0.threshold
 	}
+
+	/// Retrieve the number of slots per BABE epoch
+	pub fn slots_per_epoch(&self) -> u64 {
+		self.0.slots_per_epoch
+	}
 }
 
 impl SlotCompatible for BabeLink {
@@ -209,9 +214,10 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
+		slots_per_epoch: config.slots_per_epoch(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
-	Ok(slots::start_slot_worker::<_, _, _, _, _, _>(
+	Ok(slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -230,6 +236,7 @@ struct BabeWorker<C, E, I, SO> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	threshold: u64,
+	slots_per_epoch: u64,
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -278,6 +285,22 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 		};
 
+		let randomness = match randomness(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
+			Ok(randomness) => randomness,
+			Err(e) => {
+				error!(
+					target: "babe",
+					"Unable to fetch randomness at block {:?}: {:?}",
+					chain_head.hash(),
+					e
+				);
+				telemetry!(CONSENSUS_WARN; "babe.unable_fetching_randomness";
+					"slot" => ?chain_head.hash(), "err" => ?e
+				);
+				return Box::new(future::ok(()));
+			}
+		};
+
 		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "babe", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "babe.skipping_proposal_slot";
@@ -292,8 +315,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
-			&[0u8; 0],
-			0,
+			slot_info.number / self.slots_per_epoch,
 			&authorities,
 			&pair,
 			self.threshold,
@@ -362,13 +384,13 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<BabePreDigest, String> = find_pre_digest::<B>(&header);
-			if let Err(e) = pre_digest {
-				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
-				return
-			} else {
-				trace!(target: "babe", "Got correct number of seals.  Good!")
-			};
+			// let pre_digest = find_pre_digest::<B>(&header);
+			// if let Err(e) = pre_digest {
+			// 	warn!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
+			// 	return
+			// } else {
+			// 	trace!(target: "babe", "Got correct number of seals.  Good!")
+			// };
 
 			let header_num = header.number().clone();
 			let parent_hash = header.parent_hash().clone();
@@ -424,10 +446,10 @@ macro_rules! babe_err {
 	};
 }
 
-fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String>
+fn find_pre_digest<B: Block>(header: &B::Header) -> Result<(Option<Epoch>, BabePreDigest), String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
-	let mut pre_digest: Option<_> = None;
+	let (mut pre_digest, mut epoch): (Option<_>, Option<_>) = (None, None);
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}", log);
 		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
@@ -435,8 +457,13 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
+		match (log.as_babe_epoch(), epoch.is_some()) {
+			(Some(_), true) => Err(babe_err!("Multiple BABE epoch headers, rejecting!"))?,
+			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(s, false) => epoch = s,
+		}
 	}
-	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
+	(epoch, pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found")?))
 }
 
 /// check a header has been signed by the right key. If the slot is too far in
@@ -455,8 +482,10 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId],
+	randomness: [u8; 32],
 	threshold: u64,
-) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
+	slots_per_epoch: u64,
+) -> Result<CheckedHeader<([u8; 32], B::Header), (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
@@ -469,7 +498,14 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let pre_digest = find_pre_digest::<B>(&header)?;
+	let (Epoch { randomness_, .. }, pre_digest) = find_pre_digest::<B>(&header)?;
+	let randomness = match randomness_ {
+		Some(randomness) => client.cache().and_then(|s| {
+			s.insert(&well_known_cache_keys::RANDOMNESS, &BlockId::Hash(hash), randomness);
+			randomness
+		}),
+		None => randomness().expect,
+	}
 	let BabePreDigest { slot_num, index, ref proof, ref vrf_output, epoch: _ } = pre_digest;
 
 	if slot_num > slot_now {
@@ -483,10 +519,9 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
-					Default::default(),
+					randomness,
 					slot_num,
-					Default::default(),
-					0,
+					slot_num / slots_per_epoch,
 				);
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, vrf_output, proof)
@@ -636,6 +671,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			hash,
 			&authorities[..],
 			self.config.threshold(),
+			self.config.slots_per_epoch(),
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
@@ -719,8 +755,28 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
-				panic!("We don’t support deprecated code with new consensus algorithms, \
-						therefore this is unreachable; qed")
+				Err(babe_err!("runtime does not implement BabeApi"))
+			}
+		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
+}
+
+fn randomness<B, C>(client: &C, at: &BlockId<B>) -> Result<
+	[u8; 32],
+	ConsensusError,
+> where
+	B: Block,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: BabeApi<B>,
+{
+	client
+		.cache()
+		.and_then(|cache| cache.get_at(&well_known_cache_keys::RANDOMNESS, at)
+			.and_then(|v| Decode::decode(&mut &v[..])))
+		.or_else(|| {
+			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
+				BabeApi::randomness(&*client.runtime_api(), at).ok()
+			} else {
+				Err(babe_err!("runtime does not implement BabeApi"))
 			}
 		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 }
@@ -752,12 +808,10 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
-	genesis_hash: &[u8],
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
 	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"genesis block hash", genesis_hash);
 	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
 	transcript.commit_bytes(b"chain randomness", randomness);
 	transcript
@@ -775,7 +829,6 @@ fn check(inout: &VRFInOut, threshold: u64) -> bool {
 fn claim_slot(
 	randomness: &[u8],
 	slot_number: u64,
-	genesis_hash: &[u8],
 	epoch: u64,
 	authorities: &[AuthorityId],
 	key: &sr25519::Pair,
@@ -783,12 +836,7 @@ fn claim_slot(
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
 	let index = authorities.iter().position(|s| s == public)?;
-	let transcript = make_transcript(
-		randomness,
-		slot_number,
-		genesis_hash,
-		epoch,
-	);
+	let transcript = make_transcript(randomness, slot_number, epoch);
 
 	// Compute the threshold we will use.
 	//
@@ -965,9 +1013,9 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
+		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
 			trace!(target: "babe", "Retreiving a peer");
-			&self.peers[i]
+			&mut self.peers[i]
 		}
 
 		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
@@ -1086,7 +1134,7 @@ mod tests {
 		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
 		loop {
-			match claim_slot(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
+			match claim_slot(randomness, i, 0, &[pair.public()], &pair, u64::MAX / 10) {
 				None => i += 1,
 				Some(s) => {
 					debug!(target: "babe", "Authored block {:?}", s);

@@ -49,6 +49,12 @@ pub struct BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
+	/// The number of slots per BABE epoch. Currently, only
+	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
+	pub slots_per_epoch: u64,
+
 	/// The expected block time in milliseconds for BABE. Currently,
 	/// only the value provided by this type at genesis will be used.
 	///
@@ -95,5 +101,17 @@ decl_runtime_apis! {
 
 		/// Get the current authorites for Babe.
 		fn authorities() -> Vec<AuthorityId>;
+
+		/// Get the current randomness for Babe.
+		fn randomness() -> [u8; 32];
 	}
+}
+
+/// A BABE epoch
+#[derive(Encode, Decode, Eq, PartialEq, Clone)]
+pub struct Epoch {
+	/// The epoch randomness
+	pub randomness: [u8; 32],
+	/// The epoch authorities
+	pub authorities: Vec<AuthorityId>,
 }

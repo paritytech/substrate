@@ -123,4 +123,7 @@ pub mod well_known_cache_keys {
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";
+
+	/// On-chain randomness.
+	pub const RANDOMNESS: Id = *b"rand";
 }

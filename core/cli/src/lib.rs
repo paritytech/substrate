@@ -32,8 +32,7 @@ use service::{
 };
 use network::{
 	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig},
-	build_multiaddr,
+	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr},
 };
 use primitives::H256;
 
@@ -250,16 +249,16 @@ where
 			params.node_key.as_ref().map(parse_secp256k1_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
-					.map(network::Secret::File)
-					.unwrap_or(network::Secret::New)))
+					.map(network::config::Secret::File)
+					.unwrap_or(network::config::Secret::New)))
 				.map(NodeKeyConfig::Secp256k1),
 
 		NodeKeyType::Ed25519 =>
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
-					.map(network::Secret::File)
-					.unwrap_or(network::Secret::New)))
+					.map(network::config::Secret::File)
+					.unwrap_or(network::config::Secret::New)))
 				.map(NodeKeyConfig::Ed25519)
 	}
 }
@@ -277,18 +276,18 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 }
 
 /// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
-fn parse_secp256k1_secret(hex: &String) -> error::Result<network::Secp256k1Secret> {
+fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp256k1Secret> {
 	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
-		network::identity::secp256k1::SecretKey::from_bytes(bytes)
-			.map(network::Secret::Input)
+		network::config::identity::secp256k1::SecretKey::from_bytes(bytes)
+			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
 /// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
-fn parse_ed25519_secret(hex: &String) -> error::Result<network::Ed25519Secret> {
+fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519Secret> {
 	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		network::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(network::Secret::Input)
+		network::config::identity::ed25519::SecretKey::from_bytes(bytes)
+			.map(network::config::Secret::Input)
 			.map_err(invalid_node_key))
 }
 
@@ -810,7 +809,7 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use network::identity::{secp256k1, ed25519};
+	use network::config::identity::{secp256k1, ed25519};
 
 	#[test]
 	fn tests_node_name_good() {
@@ -842,10 +841,10 @@ mod tests {
 					node_key_file: None
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
+					NodeKeyConfig::Secp256k1(network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Secp256k1 &&
 							&sk[..] == ski.to_bytes() => Ok(()),
-					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
+					NodeKeyConfig::Ed25519(network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -870,9 +869,9 @@ mod tests {
 					node_key_file: Some(file.clone())
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+					NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
-					NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+					NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
@@ -904,9 +903,9 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Secp256k1(network::Secret::New)
+						NodeKeyConfig::Secp256k1(network::config::Secret::New)
 							if typ == NodeKeyType::Secp256k1 => Ok(()),
-						NodeKeyConfig::Ed25519(network::Secret::New)
+						NodeKeyConfig::Ed25519(network::config::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
 					})
@@ -919,10 +918,10 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config(params, &Some(net_config_dir.clone()))
 					.and_then(move |c| match c {
-						NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+						NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Secp256k1 &&
 								f == &dir.join(NODE_KEY_SECP256K1_FILE) => Ok(()),
-						NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+						NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))

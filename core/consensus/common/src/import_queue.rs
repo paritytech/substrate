@@ -145,9 +145,6 @@ pub trait Link<B: BlockT>: Send {
 	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
 	fn restart(&mut self) {}
-	/// Synchronization request has been processed.
-	#[cfg(any(test, feature = "test-helpers"))]
-	fn synchronized(&mut self) {}
 }
 
 /// Block import successful result.
