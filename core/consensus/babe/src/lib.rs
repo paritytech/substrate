@@ -152,7 +152,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub select_chain: SC,
 
 	/// A block importer
-	pub block_import: Arc<I>,
+	pub block_import: I,
 
 	/// The environment
 	pub env: Arc<E>,
@@ -200,7 +200,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 {
 	let worker = BabeWorker {
 		client: client.clone(),
-		block_import,
+		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		local_key,
 		sync_oracle: sync_oracle.clone(),
@@ -220,7 +220,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 
 struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
-	block_import: Arc<I>,
+	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
@@ -397,7 +397,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "babe", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
