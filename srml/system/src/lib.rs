@@ -89,7 +89,6 @@ use srml_support::{
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
-use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -317,6 +316,8 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+		BlockHashCount get(block_hash_count) config(): T::BlockNumber = 250.into();
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
@@ -361,7 +362,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -578,6 +579,12 @@ impl<T: Trait> Module<T> {
 		if let Some(storage_changes_root) = storage_changes_root {
 			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
 			digest.push(item);
+		}
+
+		// move block hash pruning window by one block
+		let block_hash_count = <BlockHashCount<T>>::get();
+		if number > block_hash_count {
+			<BlockHash<T>>::remove(number - block_hash_count - One::one());
 		}
 
 		// The following fields
@@ -803,7 +810,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
 	}
 
 	#[test]

@@ -200,7 +200,7 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Storage, Config, Event},
+		System: system::{Module, Call, Storage, Config<T>, Event},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},

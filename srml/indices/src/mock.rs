@@ -89,7 +89,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		for i in 1..5 { h.insert(i); }
 	}
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
+	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
 	}.build_storage().unwrap().0);

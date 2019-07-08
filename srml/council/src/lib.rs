@@ -234,7 +234,7 @@ mod tests {
 		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			self.set_associated_consts();
-			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 			t.extend(balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),

@@ -217,7 +217,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {

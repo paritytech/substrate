@@ -323,7 +323,7 @@ mod tests {
 
 	#[test]
 	fn median_works() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		with_externalities(&mut TestExternalities::new(t), || {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
@@ -333,7 +333,7 @@ mod tests {
 
 	#[test]
 	fn notifies_when_stalled() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
@@ -352,7 +352,7 @@ mod tests {
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
