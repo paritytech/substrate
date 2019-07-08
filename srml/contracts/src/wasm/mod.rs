@@ -1407,7 +1407,7 @@ mod tests {
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		)
-			.unwrap();
+		.unwrap();
 	}
 
 }
