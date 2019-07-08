@@ -29,7 +29,7 @@ use tokio_timer::{Delay, clock::Clock};
 //! Discovery mechanisms of Substrate.
 //!
 //! The `DiscoveryBehaviour` struct implements the `NetworkBehaviour` trait of libp2p and is
-//! responsible for discovering the nodes that are part of the network.
+//! responsible for discovering other nodes that are part of the network.
 //!
 //! Substrate uses the following mechanisms in order to discover nodes that are part of the network:
 //!
@@ -49,7 +49,7 @@ use tokio_timer::{Delay, clock::Clock};
 //! ## Usage
 //!
 //! The `DiscoveryBehaviour` generates events of type `DiscoveryOut`, most notably
-//! `DiscoveryOut::Discovered` that is generated whenever we discover the identity of a node.
+//! `DiscoveryOut::Discovered` that is generated whenever we discover a node.
 //! Only the identity of the node is returned. The node's addresses are stored within the
 //! `DiscoveryBehaviour` and can be queried through the `NetworkBehaviour` trait.
 //!
