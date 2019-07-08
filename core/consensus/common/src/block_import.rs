@@ -251,5 +251,5 @@ pub trait FinalityProofImport<B: BlockT> {
 /// Finality proof request builder.
 pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
 	/// Build data blob, associated with the request.
-	fn build_request_data(&self, hash: &B::Hash) -> Vec<u8>;
+	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
 }

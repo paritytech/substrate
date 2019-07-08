@@ -216,7 +216,7 @@ impl LightAuthoritySet {
 struct GrandpaFinalityProofRequestBuilder<B: BlockT<Hash=H256>>(Arc<RwLock<LightImportData<B>>>);
 
 impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBuilder<B> {
-	fn build_request_data(&self, _hash: &B::Hash) -> Vec<u8> {
+	fn build_request_data(&mut self, _hash: &B::Hash) -> Vec<u8> {
 		let data = self.0.read();
 		make_finality_proof_request(
 			data.last_finalized,

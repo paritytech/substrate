@@ -662,7 +662,7 @@ impl<B: BlockT> ChainSync<B> {
 			protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
 				id: 0,
 				block: request.0,
-				request: self.request_builder.as_ref()
+				request: self.request_builder.as_mut()
 					.map(|builder| builder.build_request_data(&request.0))
 					.unwrap_or_default()
 			})
