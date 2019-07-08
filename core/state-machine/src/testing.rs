@@ -41,7 +41,7 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
-	/// Create a new instance of `TestExternalities`
+	/// Create a new instance of `TestExternalities`.
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
 	}
