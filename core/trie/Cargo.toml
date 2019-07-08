@@ -28,7 +28,7 @@ criterion = "0.2"
 hex-literal = "0.2.0"
 
 [features]
-default = ["std", "legacy-trie"]
+default = ["std"]
 # use legacy trie implementation (substrate 1.0)
 legacy-trie = []
 std = [
