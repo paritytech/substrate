@@ -75,7 +75,10 @@ where
 pub trait Misconduct<ExposedStake>: system::Trait
 {
 	/// Severity represented as a fraction
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u128>;
+	/// Note,
+	///		- `Into<u64>` ensures that conversion via `Convert<BalanceOf<T>, u64>` will not be lossy
+	///		- `Into<u128>` makes it possible to just use an into instead of `into().into()`
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u64> + Into<u128>;
 
 	/// Report misconduct and estimates the current severity level
 	fn on_misconduct<SR>(&mut self, misbehaved: &[SR]) -> Fraction<Self::Severity>
