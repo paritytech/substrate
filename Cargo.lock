@@ -5620,7 +5620,7 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.4.5"
-source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#7894e5e5fc8cd932aa79a38b60fd91bc761cbaa6"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#d04c634d4897866f3714af8386f8f00e9a54782c"
 dependencies = [
  "libc 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory_units 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5633,7 +5633,7 @@ dependencies = [
 [[package]]
 name = "wasmi-validation"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#7894e5e5fc8cd932aa79a38b60fd91bc761cbaa6"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-fast-alloc#d04c634d4897866f3714af8386f8f00e9a54782c"
 dependencies = [
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
