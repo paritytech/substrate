@@ -58,7 +58,8 @@ pub struct ScheduledChange<N> {
 }
 
 /// An consensus log item for GRANDPA.
-#[derive(Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[derive(Decode, Encode, PartialEq, Eq, Clone)]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
 	///
@@ -91,7 +92,25 @@ pub enum ConsensusLog<N: Codec> {
 	ForcedChange(N, ScheduledChange<N>),
 	/// Note that the authority with given index is disabled until the next change.
 	#[codec(index = "3")]
-	OnDisable(AuthorityIndex),
+	OnDisabled(AuthorityIndex),
+}
+
+impl<N: Codec> ConsensusLog<N> {
+	/// Try to cast the log entry as a contained signal.
+	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
+		match self {
+			ConsensusLog::ScheduledChange(change) => Some(change),
+			ConsensusLog::ForcedChange(_, _) | ConsensusLog::OnDisabled(_) => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained forced signal.
+	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
+		match self {
+			ConsensusLog::ForcedChange(median, change) => Some((median, change)),
+			ConsensusLog::ScheduledChange(_) | ConsensusLog::OnDisabled(_) => None,
+		}
+	}
 }
 
 /// WASM function call to check for pending changes.

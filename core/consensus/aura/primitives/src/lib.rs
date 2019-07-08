@@ -37,7 +37,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 	AuthoritiesChange(Vec<AuthorityId>),
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
-	OnDisable(AuthorityIndex),
+	OnDisabled(AuthorityIndex),
 }
 
 decl_runtime_apis! {

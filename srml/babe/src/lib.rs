@@ -31,7 +31,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::BABE_ENGINE_ID;
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -244,8 +244,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		s[40..].copy_from_slice(&rho);
 		NextEpochRandomness::put(runtime_io::blake2_256(&s))
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+
+	fn on_disabled(i: usize) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			BABE_ENGINE_ID,
+			ConsensusLog::OnDisabled(i as u64).encode(),
+		);
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
