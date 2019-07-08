@@ -33,14 +33,13 @@ mod mock;
 mod tests;
 
 /// Report rolling data misconduct and apply slash accordingly
-pub fn rolling_data<M, T, OS, SR, AccountId, Exposure>(
-	misbehaved: &[SR],
+pub fn rolling_data<M, OS, AccountId, Exposure>(
+	misbehaved: &[(AccountId, Exposure)],
 	misconduct: &mut M
 ) -> u8
 where
 	M: Misconduct<AccountId, Exposure>,
-	SR: SlashRecipient<AccountId, Exposure>,
-	OS: OnSlashing<M, T, SR, AccountId, Exposure>,
+	OS: OnSlashing<AccountId, Exposure, M::Severity>,
 {
 	let seve = misconduct.on_misconduct(misbehaved);
 	OS::slash(misbehaved, seve);
@@ -48,39 +47,34 @@ where
 }
 
 /// Report misconduct during an era but do not perform any slashing
-pub fn era_data<M, T, OS, SR, AccountId, Exposure>(who: &[SR], misconduct: &mut M)
+pub fn era_data<M, OS, AccountId, Exposure>(misbehaved: &[(AccountId, Exposure)], misconduct: &mut M)
 where
 	M: Misconduct<AccountId, Exposure>,
-	SR: SlashRecipient<AccountId, Exposure>,
-	OS: OnSlashing<M, T, SR, AccountId, Exposure>,
+	OS: OnSlashing<AccountId, Exposure, M::Severity>,
 {
-	let seve = misconduct.on_misconduct(who);
-	OS::slash(who, seve);
+	misconduct.on_misconduct(misbehaved);
 }
 
 /// Slash in the end of era
-pub fn end_of_era<E, T, OS, SR, AccountId, Exposure>(end_of_era: &E) -> u8
+pub fn end_of_era<E, OS, AccountId, Exposure>(end_of_era: &E) -> u8
 where
 	E: OnEndEra<AccountId, Exposure>,
-	OS: OnSlashing<E, T, SR, AccountId, Exposure>,
-	SR: SlashRecipient<AccountId, Exposure>,
+	OS: OnSlashing<AccountId, Exposure, E::Severity>,
 {
 	let seve = end_of_era.severity();
-	let misbehaved = end_of_era.misbehaved::<SR>();
+	let misbehaved = end_of_era.misbehaved();
 	OS::slash(&misbehaved, seve);
 	end_of_era.as_misconduct_level(seve)
 }
 
 /// Base trait for representing misconducts
-pub trait Misconduct<AccountId, ExposedStake>
+pub trait Misconduct<AccountId, Exposure>
 {
 	/// Severity represented as a fraction
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u64>;
 
 	/// Report misconduct and estimates the current severity level
-	fn on_misconduct<SR>(&mut self, misbehaved: &[SR]) -> Fraction<Self::Severity>
-	where
-		SR: SlashRecipient<AccountId, ExposedStake>;
+	fn on_misconduct(&mut self, misbehaved: &[(AccountId, Exposure)]) -> Fraction<Self::Severity>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
 	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
@@ -92,26 +86,11 @@ pub trait OnEndEra<AccountId, Exposure>: Misconduct<AccountId, Exposure> {
 	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Get all misbehaved validators of the current era
-	fn misbehaved<SR>(&self) -> Vec<SR> where SR: SlashRecipient<AccountId, Exposure>;
+	fn misbehaved(&self) -> Vec<(AccountId, Exposure)>;
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to `Currency`
-pub trait OnSlashing<M, T, SR, AccountId, Exposure>
-where
-	M: Misconduct<AccountId, Exposure>,
-	SR: SlashRecipient<AccountId, Exposure>
-{
+pub trait OnSlashing<AccountId, Exposure, Severity> {
 	/// Slash
-	fn slash(who: &[SR], severity: Fraction<M::Severity>);
-}
-
-/// A snapshot of the stake backing a single validator in the system.
-/// In which includes the portions of each nominator stash
-pub trait SlashRecipient<AccountId, ExposedStake>
-{
-	/// Get the account id of the misbehaved validator
-	fn account_id(&self) -> &AccountId;
-
-	/// Get account id of each of the nominators and its exposed stake
-	fn nominators(&self) -> &[(AccountId, ExposedStake)];
+	fn slash(who: &[(AccountId, Exposure)], severity: Fraction<Severity>);
 }

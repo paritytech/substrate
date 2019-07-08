@@ -19,13 +19,15 @@
 use super::*;
 use primitives::{Perbill, traits::{IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
 use substrate_primitives::{Blake2Hasher, H256};
-use srml_staking::{GenesisConfig, StakerStatus, Exposure, IndividualExposure};
+use srml_staking::{GenesisConfig, StakerStatus};
 use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
 use rstd::{marker::PhantomData, cell::RefCell};
 use std::collections::HashSet;
 
 pub type AccountId = u64;
+pub type Exposure = u64;
 pub type BlockNumber = u64;
+pub type Severity = u64;
 pub type Balance = u64;
 pub type Balances = balances::Module<Test>;
 pub type Session = session::Module<Test>;
@@ -99,6 +101,7 @@ impl srml_staking::Trait for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
 }
 
 impl session::Trait for Test {
@@ -108,11 +111,18 @@ impl session::Trait for Test {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = ();
 	type Event = ();
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = srml_staking::StashOf<Test>;
 }
 
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+}
+
+impl session::historical::Trait for Test {
+	type FullIdentification = srml_staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = srml_staking::ExposureOf<Test>;
 }
 
 parameter_types! {
@@ -272,43 +282,33 @@ impl ExtBuilder {
 
 pub struct SlashTenPercent<T>(pub T);
 
-impl<T: srml_staking::Trait> Misconduct<u64, u64> for SlashTenPercent<T> {
+impl<T: srml_staking::Trait> Misconduct<T::AccountId, u64> for SlashTenPercent<T> {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
 		1
 	}
 
-	fn on_misconduct<SR>(&mut self, _misbehaved: &[SR]) -> Fraction<Self::Severity>
-	where
-		SR: SlashRecipient<u64, u64>,
+	fn on_misconduct(&mut self, _misbehaved: &[(T::AccountId, u64)]) -> Fraction<Self::Severity>
 	{
 		Fraction::new(1, 10)
 	}
 }
 
-pub struct StakingSlasher<M, T, SR, AccountId, Exposure> {
-	a: PhantomData<AccountId>,
-	t: PhantomData<T>,
-	m: PhantomData<M>,
-	sr: PhantomData<SR>,
-	e: PhantomData<Exposure>,
-}
+pub struct StakingSlasher<T>(PhantomData<T>);
 
-impl<M, T, SR, AccountId, Exposure> OnSlashing<M, T, SR, AccountId, Exposure>
-	for StakingSlasher<M, T, SR, AccountId, Exposure>
+// exposure(u64) and severity(u64)
+impl<T: srml_staking::Trait> OnSlashing<T::AccountId, Exposure, Severity> for StakingSlasher<T>
 where
-	M: Misconduct<AccountId, Exposure>,
-	M::Severity: Into<BalanceOf<T>>,
-	T: srml_staking::Trait,
-	SR: SlashRecipient<AccountId, Exposure>,
-	AccountId: Clone + Into<T::AccountId>,
-	Exposure: Clone + Into<BalanceOf<T>>,
+	Exposure: Into<BalanceOf<T>>,
+	Severity: Into<BalanceOf<T>>,
 {
-	fn slash(to_punish: &[SR], severity: Fraction<M::Severity>) {
+	fn slash(to_punish: &[(T::AccountId, Exposure)], severity: Fraction<Severity>) {
+		let to_balance = |b: ExtendedBalance|
+			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 		let slash = |balance: BalanceOf<T>, severity: Fraction<BalanceOf<T>>| {
-			let d = balance * severity.denominator().into();
-			let n = severity.numerator().into();
+			let d = balance * severity.denominator();
+			let n = severity.numerator();
 			d / n
 		};
 
@@ -318,37 +318,13 @@ where
 
 		let severity: Fraction<BalanceOf<T>> = Fraction::new(
 			severity.denominator().into(),
-			severity.numerator().into()
+			severity.numerator().into(),
 		);
 
-		for who in to_punish {
-			let account_id = who.account_id().clone().into();
-			let balance = T::Currency::free_balance(&account_id);
+		for (who, exposure) in to_punish {
+			let balance: BalanceOf<T> = exposure.clone().into();
 			let slash_amount = slash(balance, severity.into());
-
-			// slash the validator
-			T::Currency::slash(&account_id, slash_amount);
-
-			// slash each nominator in regard to its exposed stake
-			for (n, exposed_stake) in who.nominators().iter() {
-				let slash_amount = slash(exposed_stake.clone().into(), severity);
-				T::Currency::slash(&n.clone().into(), slash_amount);
-			}
+			T::Currency::slash(&who, slash_amount);
 		}
-	}
-}
-
-pub struct MockSlashRecipient {
-	pub account_id: AccountId,
-	pub others: Vec<(AccountId, Balance)>,
-}
-
-impl SlashRecipient<AccountId, Balance> for MockSlashRecipient {
-	fn account_id(&self) -> &AccountId {
-		&self.account_id
-	}
-
-	fn nominators(&self) -> &[(AccountId, Balance)] {
-		&self.others
 	}
 }

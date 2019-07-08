@@ -19,8 +19,7 @@ use crate::mock::*;
 use runtime_io::with_externalities;
 use srml_support::traits::Currency;
 
-type Staking = Test;
-type Slash = StakingSlasher<SlashTenPercent<Test>, Staking, MockSlashRecipient, u64, u64>;
+type OnSlash = StakingSlasher<Test>;
 
 #[test]
 fn slash_nominator_based_on_exposure() {
@@ -31,24 +30,16 @@ fn slash_nominator_based_on_exposure() {
 
 		let _ = Balances::make_free_balance_be(&11, 3000);
 		let _ = Balances::make_free_balance_be(&21, 1000);
-		let _ = Balances::make_free_balance_be(&101, 300);
-
 
 		assert_eq!(3000, Balances::free_balance(&11));
 		assert_eq!(1000, Balances::free_balance(&21));
-		assert_eq!(300, Balances::free_balance(&101));
 
-		let misbehaved = vec![
-			MockSlashRecipient { account_id: 11, others: vec![(101, 30)] },
-			MockSlashRecipient { account_id: 21, others: vec![(101, 70)] },
-		];
+		let misbehaved = vec![(11_u64, 1000_u64), (21_u64, 500)];
 
 		// dummy impl slash 10%
-		let _ = rolling_data::<_, _, Slash, _, _, _>(&misbehaved, &mut misconduct);
+		let _ = rolling_data::<_, OnSlash, _, _>(&misbehaved, &mut misconduct);
 
-		assert_eq!(2700, Balances::free_balance(&11));
-		assert_eq!(900, Balances::free_balance(&21));
-		// 30 * 0.1 + 70 * 0.1 = 10
-		assert_eq!(290, Balances::free_balance(&101));
+		assert_eq!(2900, Balances::free_balance(&11));
+		assert_eq!(950, Balances::free_balance(&21));
 	});
 }
