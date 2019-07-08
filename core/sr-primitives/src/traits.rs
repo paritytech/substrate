@@ -25,6 +25,7 @@ use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
 use crate::generic::{Digest, DigestItem};
+pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -160,6 +161,13 @@ impl<A, B: Default> Convert<A, B> for () {
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
+}
+
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct ConvertInto;
+
+impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+	fn convert(a: A) -> B { a.into() }
 }
 
 /// A meta trait for arithmetic.
@@ -835,12 +843,15 @@ pub trait ValidateUnsigned {
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
-	/// Return the number of encoded keys.
-	fn count() -> usize { 0 }
-	/// Get the raw bytes of key with index `i`.
-	fn get_raw(&self, i: usize) -> &[u8];
+	/// An iterator over the type IDs of keys that this holds.
+	type KeyTypeIds: IntoIterator<Item=super::KeyTypeId>;
+
+	/// Return an iterator over the key-type IDs supported by this set.
+	fn key_ids() -> Self::KeyTypeIds;
+	/// Get the raw bytes of key with key-type ID `i`.
+	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
-	fn get<T: Decode>(&self, i: usize) -> Option<T> { T::decode(&mut self.get_raw(i)) }
+	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> { T::decode(&mut self.get_raw(i)) }
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
 }
@@ -969,41 +980,62 @@ macro_rules! count {
 	};
 }
 
-#[macro_export]
-/// Just implement `OpaqueKeys` for a given tuple-struct.
+/// Implement `OpaqueKeys` for a described struct.
 /// Would be much nicer for this to be converted to `derive` code.
+///
+/// Every field type must be equivalent implement `as_ref()`, which is expected
+/// to hold the standard SCALE-encoded form of that key. This is typically
+/// just the bytes of the key.
+///
+/// ```rust
+/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId};
+///
+/// impl_opaque_keys! {
+/// 	pub struct Keys {
+/// 		#[id(key_types::ED25519)]
+/// 		pub ed25519: [u8; 32],
+/// 		#[id(key_types::SR25519)]
+/// 		pub sr25519: [u8; 32],
+/// 	}
+/// }
+/// ```
+#[macro_export]
 macro_rules! impl_opaque_keys {
 	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-	) => {
-		impl_opaque_keys! {
-			pub struct $name ( $( $t ,)* );
-			impl OpaqueKeys for _ {}
-		}
-	};
-	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-		impl OpaqueKeys for _ {
-			$($rest:tt)*
+		pub struct $name:ident {
+			$(
+				#[id($key_id:expr)]
+				pub $field:ident: $type:ty,
+			)*
 		}
 	) => {
 		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
-		pub struct $name($( pub $t ,)*);
+		pub struct $name {
+			$(
+				pub $field: $type,
+			)*
+		}
+
 		impl $crate::traits::OpaqueKeys for $name {
-			fn count() -> usize {
-				let mut c = 0;
-				$( let _: $t; c += 1; )*
-				c
+			type KeyTypeIds = $crate::rstd::iter::Cloned<
+				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
+			>;
+
+			fn key_ids() -> Self::KeyTypeIds {
+				[
+					$($key_id),*
+				].iter().cloned()
 			}
-			fn get_raw(&self, i: usize) -> &[u8] {
-				$crate::count!(impl_opaque_keys (!! self i) $($t),*);
-				&[]
+
+			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
+				match i {
+					$(
+						i if i == $key_id => self.$field.as_ref(),
+					)*
+					_ => &[],
+				}
 			}
-			$($rest)*
 		}
 	};
-	( !! $self:ident $param_i:ident $i:tt) => {
-		if $param_i == $i { return $self.$i.as_ref() }
-	}
 }

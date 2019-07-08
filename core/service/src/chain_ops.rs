@@ -21,7 +21,7 @@ use futures::prelude::*;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
+use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header};
 use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
@@ -111,8 +111,11 @@ impl WaitLink {
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {
-		self.imported_blocks += 1;
+	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		self.imported_blocks += processed_blocks.len() as u64;
+		if has_error {
+			warn!("There was an error importing {} blocks", processed_blocks.len());
+		}
 	}
 }
 
@@ -169,13 +172,17 @@ pub fn import_blocks<F, E, R>(
 		}
 
 		block_count = b;
-		if b % 1000 == 0 {
+		if b % 1000 == 0 && b != 0 {
 			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
 	let mut link = WaitLink::new();
 	Ok(futures::future::poll_fn(move || {
+		if exit_recv.try_recv().is_ok() {
+			return Ok(Async::Ready(()));
+		}
+
 		let blocks_before = link.imported_blocks;
 		queue.poll_actions(&mut link);
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
