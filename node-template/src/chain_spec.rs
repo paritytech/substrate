@@ -91,7 +91,6 @@ impl Alternative {
 fn testnet_genesis(initial_authorities: Vec<AuraId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
-			block_hash_count: 250,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),

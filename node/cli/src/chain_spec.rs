@@ -100,7 +100,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			block_hash_count: 250,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
@@ -233,7 +232,6 @@ pub fn testnet_genesis(
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			block_hash_count: 250,
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),

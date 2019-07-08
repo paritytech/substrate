@@ -85,7 +85,7 @@ use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::Contains,
+	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get},
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
@@ -183,6 +183,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
+
+	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+	type BlockHashCount: Get<Self::BlockNumber>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -316,8 +319,6 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
-		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
-		BlockHashCount get(block_hash_count) config(): T::BlockNumber = 250.into();
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
@@ -362,11 +363,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|
-			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
-			config: &GenesisConfig<T>,
-		| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -586,7 +583,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// move block hash pruning window by one block
-		let block_hash_count = <BlockHashCount<T>>::get();
+		let block_hash_count = <T::BlockHashCount>::get();
 		if number > block_hash_count {
 			<BlockHash<T>>::remove(number - block_hash_count - One::one());
 		}
@@ -782,7 +779,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use srml_support::impl_outer_origin;
+	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -790,6 +787,11 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 10;
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -800,6 +802,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
+		type BlockHashCount = BlockHashCount;
 	}
 
 	impl From<Event> for u16 {
@@ -814,7 +817,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]
@@ -920,15 +923,7 @@ mod tests {
 
 	#[test]
 	fn prunes_block_hash_mappings() {
-		let config = GenesisConfig::<Test> {
-			block_hash_count: 10,
-			..Default::default()
-		};
-
-		let mut test_ext: runtime_io::TestExternalities<_> = config
-			.build_storage().unwrap().0.into();
-
-		with_externalities(&mut test_ext, || {
+		with_externalities(&mut new_test_ext(), || {
 			// simulate import of 15 blocks
 			for n in 1..=15 {
 				System::initialize(
