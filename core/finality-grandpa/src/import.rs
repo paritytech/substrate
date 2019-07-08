@@ -32,8 +32,9 @@ use consensus_common::{
 };
 use consensus_accountable_safety::SubmitReport;
 use fg_primitives::{
-	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature, AuthorityId,
-	Challenge,
+	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature,
+	AuthorityId, Challenge, FinalizedBlockProof, ChallengedVote,
+	ChallengedVoteSet, SignedPrecommit,
 };
 use srml_grandpa::{Signal, ChallengedVote};
 use runtime_primitives::Justification;
@@ -454,16 +455,53 @@ where
 			Ok(Some(challenge)) => {
 
 				let challenged_votes = challenge.challenged_vote_set.challenged_votes.clone();
-				
-				let challenged = false;
+				let prevote_challenged = false;
+				let precommit_challenged = false;
+
 				for ChallengedVote { vote, authority, signature } in challenged_votes {
-					// if me == authority {
-					// 	challenged = true;
-					// 	break;
-					// }
+					if true { //me == authority {
+						match vote {
+							Prevote { target_hash, target_number } => prevote_challenged = true,
+							Precommit { target_hash, target_number } => precommit_challenged = true,
+						}
+					}
 				}
 
 				let votes_seen = self.votes_seen_when_prevoted(challenge.challenged_vote_set.round);
+				let votes_seen = vec![
+					SignedMessage {
+						message:, // Prevote, Precommit, PrimaryPropose.
+						signature:,
+						id:,
+					}
+				];
+				let challenge = Challenge {
+					finalized_block: (H, N),
+					finalized_block_proof: FinalizedBlockProof {
+						commit: Commit {
+							target_hash:,
+							target_number:,
+							precommits: vec![
+								SignedPrecommit {
+									precommit:,
+									signature:,
+									id:,
+								},
+							],
+						},
+						headers: vec![],
+					},
+					challenged_vote_set: ChallengedVoteSet {
+						challenged_votes: vec![
+							ChallengedVote {
+							}
+						],
+						set_id: u64,
+						round: u64,
+					},
+					previous_challenge: Option<H>,
+				};
+
 
 				if challenged {
 					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
