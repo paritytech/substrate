@@ -395,8 +395,6 @@ fn rewards_should_work() {
 }
 
 #[test]
-#[ignore]
-// TODO TODO: merge
 fn multi_era_reward_should_work() {
 	// Should check that:
 	// The value of current_session_reward is set at the end of each era, based on
@@ -410,44 +408,21 @@ fn multi_era_reward_should_work() {
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
-// <<<<<<< HEAD
-// 		// Compute now as other parameter won't change
-// 		let total_payout_0 = current_total_payout_for_duration(3);
-// 		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
-// 		dbg!(<Module<Test>>::slot_stake());
-// 		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 11, 1).unwrap();
+		// Compute now as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
+		dbg!(<Module<Test>>::slot_stake());
+		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 11, 1).unwrap();
 
-// 		start_session(1);
-// 		start_session(2);
-// 		start_session(3);
-// 		assert_eq!(Staking::current_era(), 1);
+		start_session(0);
+		start_session(1);
+		start_session(2);
+		start_session(3);
 
-// 		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0);
-// =======
-		// start_session(0);
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0);
 
-		// // session triggered: the reward value stashed should be 10
-		// assert_eq!(Staking::current_session_reward(), session_reward);
-		// assert_eq!(Staking::current_era_reward(), session_reward);
-
-		// start_session(1);
-
-		// assert_eq!(Staking::current_session_reward(), session_reward);
-		// assert_eq!(Staking::current_era_reward(), 2*session_reward);
-
-		// start_session(2);
-
-		// // 1 + sum of of the session rewards accumulated
-		// let recorded_balance = 1 + 3*session_reward;
-		// assert_eq!(Balances::total_balance(&10), recorded_balance);
-
-		// // the reward for next era will be: session_reward * slot_stake
-		// let new_session_reward = Staking::session_reward() * Staking::slot_stake();
-		// assert_eq!(Staking::current_session_reward(), new_session_reward);
-
-		// // fast forward to next era:
-		// start_session(4);
-// >>>>>>> origin/master
+		start_session(4);
 
 		let total_payout_1 = current_total_payout_for_duration(3);
 		assert!(total_payout_1 > 10); // Test is meaningfull if reward something
@@ -457,7 +432,7 @@ fn multi_era_reward_should_work() {
 		start_session(5);
 
 		// pay time
-		// assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0 + total_payout_1);
+		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0 + total_payout_1);
 	});
 }
 
