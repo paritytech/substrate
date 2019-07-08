@@ -628,10 +628,6 @@ decl_module! {
 		///
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
 		/// the `origin` falls below _existential deposit_ and gets removed as dust.
-		///
-		/// NOTE: At the moment, there are no financial restrictions to bond
-		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts from
-		/// spamming `Staking` storage by bonding 1 UNIT. See test case: `bond_with_no_staked_value`.
 		/// # </weight>
 		fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
