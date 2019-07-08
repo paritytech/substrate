@@ -79,9 +79,8 @@ use rstd::map;
 use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+	Zero,
 }};
-#[cfg(any(feature = "std", test))]
-use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
@@ -576,7 +575,12 @@ impl<T: Trait> Module<T> {
 		// move block hash pruning window by one block
 		let block_hash_count = <T::BlockHashCount>::get();
 		if number > block_hash_count {
-			<BlockHash<T>>::remove(number - block_hash_count - One::one());
+			let to_remove = number - block_hash_count - One::one();
+
+			// keep genesis hash
+			if to_remove != Zero::zero() {
+				<BlockHash<T>>::remove(to_remove);
+			}
 		}
 
 		let storage_root = T::Hashing::storage_root();
