@@ -790,7 +790,10 @@ mod test3 {
 
 #[cfg(test)]
 #[allow(dead_code)]
-mod test_map_vec_append {
+mod test_append_and_len {
+	use crate::storage::{AppendableStorageMap, DecodeLengthStorageMap, StorageMap, StorageValue};
+	use runtime_io::{with_externalities, TestExternalities};
+
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;
@@ -814,9 +817,6 @@ mod test_map_vec_append {
 
 	#[test]
 	fn append_works() {
-		use crate::storage::{AppendableStorageMap, StorageMap, StorageValue};
-		use runtime_io::{with_externalities, TestExternalities};
-
 		with_externalities(&mut TestExternalities::default(), || {
 			let _ = MapVec::append(1, &[1, 2, 3]);
 			let _ = MapVec::append(1, &[4, 5]);
@@ -825,6 +825,17 @@ mod test_map_vec_append {
 			let _ = JustVec::append(&[1, 2, 3]);
 			let _ = JustVec::append(&[4, 5]);
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+		});
+	}
+
+	#[test]
+	fn len_works() {
+		with_externalities(&mut TestExternalities::default(), || {
+			JustVec::put(&vec![1, 2, 3, 4, 5]);
+			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
+
+			assert_eq!(JustVec::len().unwrap(), 5);
+			assert_eq!(MapVec::len(1).unwrap(), 6);
 		});
 	}
 }

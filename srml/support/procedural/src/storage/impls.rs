@@ -280,6 +280,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#impl_trait> #scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 

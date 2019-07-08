@@ -163,6 +163,12 @@ pub trait StorageValue<T: Codec> {
 	/// `T` is required to implement `codec::EncodeAppend`.
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
 		where T: EncodeAppend<Item=I>;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn len() -> Result<usize, &'static str>
+		where T: parity_codec_edge::DecodeLength;
 }
 
 impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
@@ -193,6 +199,11 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 		where T: EncodeAppend<Item=I>
 	{
 		U::append(items, &mut RuntimeStorage)
+	}
+	fn len() -> Result<usize, &'static str>
+		where T: parity_codec_edge::DecodeLength
+	{
+		U::len(&mut RuntimeStorage)
 	}
 }
 
@@ -278,6 +289,25 @@ impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 		where V: EncodeAppend<Item=I>
 	{
 		U::append(key.borrow(), items, &mut RuntimeStorage)
+	}
+}
+
+/// A storage map with a decodable length.
+pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: parity_codec_edge::DecodeLength;
+}
+
+impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
+	where U: hashed::generator::DecodeLengthStorageMap<K, V>
+{
+	fn len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: parity_codec_edge::DecodeLength
+	{
+		U::len(key.borrow(), &mut RuntimeStorage)
 	}
 }
 

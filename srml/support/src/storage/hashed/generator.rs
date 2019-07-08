@@ -205,6 +205,16 @@ pub trait StorageValue<T: codec::Codec> {
 		storage.put_raw(Self::key(), &new_val);
 		Ok(())
 	}
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn len<S: HashedStorage<Twox128>>(storage: &mut S)
+		-> Result<usize, &'static str> where T: parity_codec_edge::DecodeLength
+	{
+		<T as parity_codec_edge::DecodeLength>::len(&storage.get_raw(Self::key()).unwrap_or_default())
+			.ok_or_else(|| "Could not read len")
+	}
 }
 
 /// A strongly-typed map in storage.
@@ -260,7 +270,7 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `V` is required to implement `codec::EncodeAppend`.
 	fn append<S: HashedStorage<Self::Hasher>, I: codec::Encode>(
 		key : &K, items: &[I], storage: &mut S
 	) -> Result<(), &'static str> where V: codec::EncodeAppend<Item=I> {
@@ -271,5 +281,19 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 		).ok_or_else(|| "Could not append given item")?;
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
+	}
+}
+
+/// A storage map with a decodable length.
+pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `V` is required to implement `Codec::DecodeLength`.
+	fn len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S)
+		-> Result<usize, &'static str> where V: parity_codec_edge::DecodeLength
+	{
+		let k = Self::key_for(key);
+		<V as parity_codec_edge::DecodeLength>::len(&storage.get_raw(&k[..]).unwrap_or_default())
+			.ok_or_else(|| "Could not read len")
 	}
 }
