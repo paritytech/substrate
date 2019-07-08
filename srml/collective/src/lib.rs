@@ -506,6 +506,40 @@ mod tests {
 	}
 
 	#[test]
+	fn removal_of_old_voters_votes_works_with_set_members() {
+		with_externalities(&mut make_ext(), || {
+			System::set_block_number(1);
+			let proposal = make_proposal(42);
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
+			);
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4]));
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
+			);
+
+			let proposal = make_proposal(69);
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
+			);
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4]));
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })
+			);
+		});
+	}
+
+	#[test]
 	fn propose_works() {
 		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
