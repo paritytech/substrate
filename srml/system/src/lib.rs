@@ -362,7 +362,11 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|
+			storage: &mut primitives::StorageOverlay,
+			_: &mut primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig<T>,
+		| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
