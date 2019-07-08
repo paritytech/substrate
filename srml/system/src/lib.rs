@@ -913,4 +913,45 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn prunes_block_hash_mappings() {
+		let config = GenesisConfig::<Test> {
+			block_hash_count: 10,
+			..Default::default()
+		};
+
+		let mut test_ext: runtime_io::TestExternalities<_> = config
+			.build_storage().unwrap().0.into();
+
+		with_externalities(&mut test_ext, || {
+			// simulate import of 15 blocks
+			for n in 1..=15 {
+				System::initialize(
+					&n,
+					&[n as u8 - 1; 32].into(),
+					&[0u8; 32].into(),
+					&Default::default(),
+				);
+
+				System::finalize();
+			}
+
+			// first 5 block hashes are pruned
+			for n in 0..5 {
+				assert_eq!(
+					System::block_hash(n),
+					H256::zero(),
+				);
+			}
+
+			// the remaining 10 are kept
+			for n in 5..15 {
+				assert_eq!(
+					System::block_hash(n),
+					[n as u8; 32].into(),
+				);
+			}
+		})
+	}
 }
