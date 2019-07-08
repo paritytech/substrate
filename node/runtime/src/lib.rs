@@ -237,7 +237,6 @@ parameter_types! {
 	pub const CooloffPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 }
 
-type CouncilInstance = collective::Instance1;
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
@@ -255,6 +254,7 @@ impl democracy::Trait for Runtime {
 	type CooloffPeriod = CooloffPeriod;
 }
 
+type CouncilInstance = collective::Instance1;
 impl collective::Trait<CouncilInstance> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
@@ -289,6 +289,13 @@ impl elections::Trait for Runtime {
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = ElectionsVotingPeriod;
 	type DecayRatio = DecayRatio;
+}
+
+type TechnicalInstance = collective::Instance2;
+impl collective::Trait<TechnicalInstance> for Runtime {
+	type Origin = Origin;
+	type Proposal = Call;
+	type Event = Event;
 }
 
 parameter_types! {
@@ -390,6 +397,7 @@ construct_runtime!(
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>},
+		TechnicalCommittee: collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>},
 		Elections: elections::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
@@ -398,8 +406,6 @@ construct_runtime!(
 		Sudo: sudo,
 	}
 );
-
-//, Event<T>, Config<T>
 
 /// The address format for describing accounts.
 pub type Address = <Indices as StaticLookup>::Source;

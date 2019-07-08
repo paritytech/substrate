@@ -572,7 +572,7 @@ decl_module! {
 				.filter(|i| i.0 != who)
 				.collect();
 			<Members<T>>::put(new_set);
-			T::OnMembersChanged::on_members_changed(&[], &[who]);
+			T::OnMembersChanged::on_members_changed(&[]);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -850,7 +850,7 @@ impl<T: Trait> Module<T> {
 		new_set.sort_by_key(|&(_, expiry)| expiry);
 		<Members<T>>::put(new_set);
 
-		T::OnMembersChanged::on_members_changed(&incoming, &outgoing);
+		T::OnMembersChanged::on_members_changed(&incoming);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();

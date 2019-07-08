@@ -258,9 +258,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> OnMembersChanged<T::AccountId> for Module<T, I> {
-	fn on_members_changed(new: &[T::AccountId], old: &[T::AccountId]) {
+	fn on_members_changed(new: &[T::AccountId]) {
 		// remove accounts from all current voting in motions.
-		let mut old = old.to_vec();
+		let mut old = <Members<T, I>>::get();
 		old.sort_unstable();
 		for h in Self::proposals().into_iter() {
 			<Voting<T, I>>::mutate(h, |v|
@@ -275,7 +275,7 @@ impl<T: Trait<I>, I: Instance> OnMembersChanged<T::AccountId> for Module<T, I> {
 				}
 			);
 		}
-		<Members<T, I>>::put(new.to_vec());
+		<Members<T, I>>::put_ref(new);
 	}
 }
 
@@ -450,7 +450,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
 			);
-			Collective::on_members_changed(&[], &[1]);
+			Collective::on_members_changed(&[]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
@@ -464,7 +464,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
 			);
-			Collective::on_members_changed(&[], &[3]);
+			Collective::on_members_changed(&[]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })
