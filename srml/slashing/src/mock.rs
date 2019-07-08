@@ -270,7 +270,9 @@ impl ExtBuilder {
 	}
 }
 
-impl Misconduct<u64, u64> for Test {
+pub struct SlashTenPercent<T>(pub T);
+
+impl<T: srml_staking::Trait> Misconduct<u64, u64> for SlashTenPercent<T> {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
@@ -285,51 +287,51 @@ impl Misconduct<u64, u64> for Test {
 	}
 }
 
-pub struct StakingSlasher<T, SR, AccountId, Exposure> {
+pub struct StakingSlasher<M, T, SR, AccountId, Exposure> {
 	a: PhantomData<AccountId>,
 	t: PhantomData<T>,
+	m: PhantomData<M>,
 	sr: PhantomData<SR>,
 	e: PhantomData<Exposure>,
 }
 
-impl<T, SR, AccountId, Exposure> OnSlashing<T, SR, AccountId, Exposure> for StakingSlasher<T, SR, AccountId, Exposure>
+impl<M, T, SR, AccountId, Exposure> OnSlashing<M, T, SR, AccountId, Exposure>
+	for StakingSlasher<M, T, SR, AccountId, Exposure>
 where
-	T: srml_staking::Trait + Misconduct<AccountId, Exposure>,
+	M: Misconduct<AccountId, Exposure>,
+	M::Severity: Into<BalanceOf<T>>,
+	T: srml_staking::Trait,
 	SR: SlashRecipient<AccountId, Exposure>,
 	AccountId: Clone + Into<T::AccountId>,
-	Exposure: Clone + Into<u128>,
+	Exposure: Clone + Into<BalanceOf<T>>,
 {
-	fn slash(to_punish: &[SR], severity: Fraction<T::Severity>) {
-		// hack to convert both to `u128` and calculate the amount to slash
-		// then convert it back `BalanceOf<T>`
-
-		let to_u128 = |b: BalanceOf<T>|
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-		let to_balance = |b: ExtendedBalance|
-			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
-		let slash = |balance: u128, severity: Fraction<T::Severity>| {
-			let d = balance.saturating_mul(severity.denominator().into());
+	fn slash(to_punish: &[SR], severity: Fraction<M::Severity>) {
+		let slash = |balance: BalanceOf<T>, severity: Fraction<BalanceOf<T>>| {
+			let d = balance * severity.denominator().into();
 			let n = severity.numerator().into();
-			let res = d.checked_div(n).unwrap_or(0);
-			to_balance(res)
+			d / n
 		};
 
 		if severity.is_zero() {
 			return;
 		}
 
+		let severity: Fraction<BalanceOf<T>> = Fraction::new(
+			severity.denominator().into(),
+			severity.numerator().into()
+		);
+
 		for who in to_punish {
 			let account_id = who.account_id().clone().into();
-			let balance = to_u128(T::Currency::free_balance(&account_id));
-			let slash_amount = slash(balance, severity);
+			let balance = T::Currency::free_balance(&account_id);
+			let slash_amount = slash(balance, severity.into());
 
 			// slash the validator
 			T::Currency::slash(&account_id, slash_amount);
 
 			// slash each nominator in regard to its exposed stake
 			for (n, exposed_stake) in who.nominators().iter() {
-				let balance: u128 = exposed_stake.clone().into();
-				let slash_amount = slash(balance, severity);
+				let slash_amount = slash(exposed_stake.clone().into(), severity);
 				T::Currency::slash(&n.clone().into(), slash_amount);
 			}
 		}

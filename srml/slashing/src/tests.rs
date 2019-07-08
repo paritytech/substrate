@@ -19,14 +19,15 @@ use crate::mock::*;
 use runtime_io::with_externalities;
 use srml_support::traits::Currency;
 
-type Slash = StakingSlasher<Test, MockSlashRecipient, u64, u64>;
+type Staking = Test;
+type Slash = StakingSlasher<SlashTenPercent<Test>, Staking, MockSlashRecipient, u64, u64>;
 
 #[test]
 fn slash_nominator_based_on_exposure() {
 	with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
-		let mut misconduct = Test;
+		let mut misconduct = SlashTenPercent(Test);
 
 		let _ = Balances::make_free_balance_be(&11, 3000);
 		let _ = Balances::make_free_balance_be(&21, 1000);
@@ -43,8 +44,7 @@ fn slash_nominator_based_on_exposure() {
 		];
 
 		// dummy impl slash 10%
-		let _ = rolling_data::<_, Slash, _, _, _>
-			(&misbehaved, &mut misconduct);
+		let _ = rolling_data::<_, _, Slash, _, _, _>(&misbehaved, &mut misconduct);
 
 		assert_eq!(2700, Balances::free_balance(&11));
 		assert_eq!(900, Balances::free_balance(&21));

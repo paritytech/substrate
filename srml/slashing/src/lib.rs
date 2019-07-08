@@ -33,14 +33,14 @@ mod mock;
 mod tests;
 
 /// Report rolling data misconduct and apply slash accordingly
-pub fn rolling_data<M, OS, SR, AccountId, Exposure>(
+pub fn rolling_data<M, T, OS, SR, AccountId, Exposure>(
 	misbehaved: &[SR],
 	misconduct: &mut M
 ) -> u8
 where
 	M: Misconduct<AccountId, Exposure>,
 	SR: SlashRecipient<AccountId, Exposure>,
-	OS: OnSlashing<M, SR, AccountId, Exposure>,
+	OS: OnSlashing<M, T, SR, AccountId, Exposure>,
 {
 	let seve = misconduct.on_misconduct(misbehaved);
 	OS::slash(misbehaved, seve);
@@ -48,21 +48,21 @@ where
 }
 
 /// Report misconduct during an era but do not perform any slashing
-pub fn era_data<M, OS, SR, AccountId, Exposure>(who: &[SR], misconduct: &mut M)
+pub fn era_data<M, T, OS, SR, AccountId, Exposure>(who: &[SR], misconduct: &mut M)
 where
 	M: Misconduct<AccountId, Exposure>,
 	SR: SlashRecipient<AccountId, Exposure>,
-	OS: OnSlashing<M, SR, AccountId, Exposure>,
+	OS: OnSlashing<M, T, SR, AccountId, Exposure>,
 {
 	let seve = misconduct.on_misconduct(who);
 	OS::slash(who, seve);
 }
 
 /// Slash in the end of era
-pub fn end_of_era<E, OS, SR, AccountId, Exposure>(end_of_era: &E) -> u8
+pub fn end_of_era<E, T, OS, SR, AccountId, Exposure>(end_of_era: &E) -> u8
 where
 	E: OnEndEra<AccountId, Exposure>,
-	OS: OnSlashing<E, SR, AccountId, Exposure>,
+	OS: OnSlashing<E, T, SR, AccountId, Exposure>,
 	SR: SlashRecipient<AccountId, Exposure>,
 {
 	let seve = end_of_era.severity();
@@ -75,10 +75,7 @@ where
 pub trait Misconduct<AccountId, ExposedStake>
 {
 	/// Severity represented as a fraction
-	/// Note,
-	///		- `Into<u64>` ensures that conversion via `Convert<BalanceOf<T>, u64>` will not be lossy
-	///		- `Into<u128>` makes it possible to just use an into instead of `into().into()`
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u64> + Into<u128>;
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// Report misconduct and estimates the current severity level
 	fn on_misconduct<SR>(&mut self, misbehaved: &[SR]) -> Fraction<Self::Severity>
@@ -99,7 +96,7 @@ pub trait OnEndEra<AccountId, Exposure>: Misconduct<AccountId, Exposure> {
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to `Currency`
-pub trait OnSlashing<M, SR, AccountId, Exposure>
+pub trait OnSlashing<M, T, SR, AccountId, Exposure>
 where
 	M: Misconduct<AccountId, Exposure>,
 	SR: SlashRecipient<AccountId, Exposure>
