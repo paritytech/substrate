@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DiscoveryNetBehaviour, ProtocolId};
+use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
@@ -115,12 +115,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
-}
-
-/// A peer from whom we have received a Status message.
-#[derive(Clone)]
-pub struct ConnectedPeer<B: BlockT> {
-	pub peer_info: PeerInfo<B>
 }
 
 /// A peer that we are connected to
@@ -446,16 +440,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Returns true if we try to open protocols with the given peer.
 	pub fn is_enabled(&self, peer_id: &PeerId) -> bool {
 		self.behaviour.is_enabled(peer_id)
-	}
-
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Message<B>) {
-		self.behaviour.send_packet(target, message)
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
