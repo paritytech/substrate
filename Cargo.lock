@@ -2326,7 +2326,7 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.1",
+ "substrate-wasm-builder-runner 1.0.2",
 ]
 
 [[package]]
@@ -2380,7 +2380,7 @@ dependencies = [
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-wasm-builder-runner 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4609,7 +4609,7 @@ dependencies = [
  "sr-sandbox 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.1",
+ "substrate-wasm-builder-runner 1.0.2",
 ]
 
 [[package]]
@@ -4765,7 +4765,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
- "substrate-wasm-builder-runner 1.0.1",
+ "substrate-wasm-builder-runner 1.0.2",
  "trie-db 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4845,11 +4845,11 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.1"
+version = "1.0.2"
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -6171,7 +6171,7 @@ dependencies = [
 "checksum strum 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1810e25f576e7ffce1ff5243b37066da5ded0310b3274c20baaeccb1145b2806"
 "checksum strum_macros 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "572a2f4e53dd4c3483fd79e5cc10ddd773a3acb1169bbfe8762365e107110579"
 "checksum substrate-bip39 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d69ace596e9ca97837cc41f8edcfc4e0a997f227d5fc153d1010b60a0fe9acda"
-"checksum substrate-wasm-builder-runner 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "131fa5f29b2a2e459f226411e4718ecda62e360123b7cfd76ae6a7da5bcaeb0d"
+"checksum substrate-wasm-builder-runner 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f52ecbff6cc3d6e5c6401828e15937b680f459d6803ce238f01fe615bc40d071"
 "checksum subtle 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
 "checksum subtle 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "01dca13cf6c3b179864ab3292bd794e757618d35a7766b7c46050c614ba00829"
 "checksum syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)" = "b4d960b829a55e56db167e861ddb43602c003c7be0bee1d345021703fac2fb7c"
