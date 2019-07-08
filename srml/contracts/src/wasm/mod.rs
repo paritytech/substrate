@@ -1364,7 +1364,7 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; fill the scratch buffer with the self address.
+		;; This stores the block height in the scratch buffer
 		(call $ext_current_block)
 
 		;; assert $ext_scratch_size == 8
