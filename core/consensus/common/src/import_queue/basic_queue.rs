@@ -85,15 +85,6 @@ impl<B: BlockT> BasicQueue<B> {
 			manual_poll: None,
 		}
 	}
-
-	/// Send synchronization request to the block import channel.
-	///
-	/// The caller should wait for Link::synchronized() call to ensure that it
-	/// has synchronized with ImportQueue.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn synchronize(&self) {
-		let _ = self.sender.unbounded_send(ToWorkerMsg::Synchronize);
-	}
 }
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
@@ -153,8 +144,6 @@ enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronize,
 }
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
@@ -213,11 +202,6 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 					ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
 						worker.import_justification(who, hash, number, justification);
 					}
-					#[cfg(any(test, feature = "test-helpers"))]
-					ToWorkerMsg::Synchronize => {
-						trace!(target: "sync", "Sending sync message");
-						worker.result_sender.synchronized();
-					},
 				}
 			}
 		});

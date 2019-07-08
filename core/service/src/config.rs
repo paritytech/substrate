@@ -21,8 +21,7 @@ use transaction_pool;
 use crate::chain_spec::ChainSpec;
 pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
-pub use network::ExtTransport;
-pub use network::config::{NetworkConfiguration, Roles};
+pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
@@ -51,8 +50,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
-	/// Size in percent of cache size dedicated to child tries 
-	pub state_cache_child_ratio: Option<usize>, 
+	/// Size in percent of cache size dedicated to child tries
+	pub state_cache_child_ratio: Option<usize>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Additional key seeds.
