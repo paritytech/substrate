@@ -70,10 +70,11 @@ where
 /// Base trait for representing misconducts
 pub trait Misconduct<AccountId, Exposure>
 {
-	/// Severity represented as a fraction
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default + Into<u64>;
+	/// Severity
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// Report misconduct and estimates the current severity level
+	// TODO: replace this with Self::Severity
 	fn on_misconduct(&mut self, misbehaved: &[(AccountId, Exposure)]) -> Fraction<Self::Severity>;
 
 	/// Convert severity level into misconduct level (1, 2, 3 or 4)
@@ -83,6 +84,7 @@ pub trait Misconduct<AccountId, Exposure>
 /// Apply slash in the end of the era
 pub trait OnEndEra<AccountId, Exposure>: Misconduct<AccountId, Exposure> {
 	/// Get severity level accumulated during the current the era
+	// TODO: replace this with Self::Severity
 	fn severity(&self) -> Fraction<Self::Severity>;
 
 	/// Get all misbehaved validators of the current era

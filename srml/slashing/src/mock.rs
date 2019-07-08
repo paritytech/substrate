@@ -282,14 +282,14 @@ impl ExtBuilder {
 
 pub struct SlashTenPercent<T>(pub T);
 
-impl<T: srml_staking::Trait> Misconduct<T::AccountId, u64> for SlashTenPercent<T> {
+impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for SlashTenPercent<T> {
 	type Severity = u64;
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
 		1
 	}
 
-	fn on_misconduct(&mut self, _misbehaved: &[(T::AccountId, u64)]) -> Fraction<Self::Severity>
+	fn on_misconduct(&mut self, _misbehaved: &[(T::AccountId, Exposure)]) -> Fraction<Self::Severity>
 	{
 		Fraction::new(1, 10)
 	}
