@@ -576,6 +576,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(who, response),
+			GenericMessage::RemoteReadChildRequest(_) => {}
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -585,10 +586,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					);
 				}
 			}
-			other => self.specialization.on_message(
+			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 				who,
-				&mut Some(other),
+				msg,
 			),
 		}
 
