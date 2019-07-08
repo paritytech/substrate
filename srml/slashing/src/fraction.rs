@@ -28,6 +28,7 @@ use primitives::traits::{SimpleArithmetic, Zero};
 /// -> numerator = 25 * n
 ///
 /// then in the end: (balance / numerator) * denominator
+// TODO(niklasad1): no overflow checking the operations may overflow
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Fraction<N> {
 	denominator: N,
@@ -49,11 +50,13 @@ impl<N: SimpleArithmetic + Copy> Add for Fraction<N> {
 
     fn add(self, rhs: Self) -> Self {
 		match (self.is_zero(), rhs.is_zero()) {
-			(true, true) | (false, true) => self,
+			(true, true) => Self::zero(),
+			(false, true) => self,
 			(true, false) => rhs,
 			(false, false) => {
 				let lcm = lcm(self.numerator, rhs.numerator);
 
+				// numerator and denominator is non-zero
 				let factor1 = lcm / self.numerator;
 				let factor2 = lcm / rhs.numerator;
 
@@ -85,7 +88,7 @@ impl<N: SimpleArithmetic + Copy> Fraction<N> {
 
 	/// Check if the `Fraction` is zero
 	pub fn is_zero(&self) -> bool {
-		self.denominator.is_zero()
+		self.denominator.is_zero() || self.numerator.is_zero()
 	}
 
 	/// Get denominator
@@ -132,7 +135,7 @@ mod tests {
 	fn zero() {
 		assert_eq!(Fraction::new(0_u64, 0_u64).is_zero(), true);
 		assert_eq!(Fraction::new(0_u64, 1200120).is_zero(), true);
-		assert_eq!(Fraction::new(129291_u64, 0).is_zero(), false);
+		assert_eq!(Fraction::new(129291_u64, 0).is_zero(), true);
 	}
 
 	#[test]
@@ -165,6 +168,10 @@ mod tests {
 
 		let f1 = Fraction::zero();
 		let f2 = Fraction::new(1_u32, 4_u32);
+		assert_eq!(f1 * f2, Fraction::zero());
+
+		let f1 = Fraction::new(0_u32, 100_u32);
+		let f2 = Fraction::new(100_u32, 0_u32);
 		assert_eq!(f1 * f2, Fraction::zero());
 	}
 }
