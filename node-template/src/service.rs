@@ -133,5 +133,6 @@ construct_service_factory! {
 		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
 			Ok(None)
 		}},
+		RpcExtensions = () {},
 	}
 }

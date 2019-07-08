@@ -31,7 +31,7 @@ use runtime_primitives::{
 };
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
-use rpc::{self, apis::system::SystemInfo};
+use rpc::system::SystemInfo;
 use futures::{prelude::*, future::Executor, sync::mpsc};
 
 // Type aliases.
@@ -141,39 +141,47 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// A transport-agnostic handler of the RPC queries.
+pub type RpcHandler = rpc_servers::RpcHandler<rpc::metadata::Metadata>;
+
 /// Something that can start the RPC service.
-pub trait StartRPC<C: Components> {
+pub trait StartRpc<C: Components> {
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
+		system_send_back: mpsc::UnboundedSender<rpc::system::Request<ComponentBlock<C>>>,
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> rpc::RpcHandler;
+		rpc_extensions: impl rpc::IoHandlerExtension<rpc::metadata::Metadata>,
+	) -> RpcHandler;
 }
 
-impl<C: Components> StartRPC<Self> for C where
+impl<C: Components> StartRpc<C> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
 {
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<ComponentBlock<C>>>,
+		system_send_back: mpsc::UnboundedSender<rpc::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> rpc::RpcHandler {
-		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions);
-		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
-		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
-			state,
-			chain,
-			author,
-			system,
-		)
+		rpc_extensions: impl rpc::IoHandlerExtension<rpc::metadata::Metadata>,
+	) -> RpcHandler {
+		use rpc::{chain, state, author, system};
+		let subscriptions = rpc::Subscriptions::new(task_executor.clone());
+		let chain = chain::Chain::new(client.clone(), subscriptions.clone());
+		let state = state::State::new(client.clone(), subscriptions.clone());
+		let author = author::Author::new(client, transaction_pool, subscriptions);
+		let system = system::System::new(rpc_system_info, system_send_back);
+
+		rpc_servers::rpc_handler((
+			state::StateApi::to_delegate(state),
+			chain::ChainApi::to_delegate(chain),
+			author::AuthorApi::to_delegate(author),
+			system::SystemApi::to_delegate(system),
+			rpc_extensions,
+		))
 	}
 }
 
@@ -259,7 +267,7 @@ pub trait ServiceTrait<C: Components>:
 	Deref<Target = Service<C>>
 	+ Send
 	+ 'static
-	+ StartRPC<C>
+	+ StartRpc<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}
@@ -267,7 +275,7 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	T: Deref<Target = Service<C>>
 	+ Send
 	+ 'static
-	+ StartRPC<C>
+	+ StartRpc<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}
@@ -293,6 +301,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
 	type Configuration: Default;
+	/// RPC initialisation.
+	type RpcExtensions: rpc::IoHandlerExtension<rpc::metadata::Metadata>;
 	/// Extended full service type.
 	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
@@ -364,6 +374,12 @@ pub trait ServiceFactory: 'static + Sized {
 			Err("Chain Specification doesn't contain any consensus_engine name".into())
 		}
 	}
+
+	/// Create custom RPC method handlers.
+	fn build_rpc_extension<C: Components>(
+		client: Arc<ComponentClient<C>>,
+		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+	) -> Self::RpcExtensions;
 }
 
 /// A collection of types and function to generalize over full / light client type.
@@ -376,8 +392,10 @@ pub trait Components: Sized + 'static {
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
-	/// A type that can start all runtime-dependent services.
+	/// The type that can start all runtime-dependent services.
 	type RuntimeServices: ServiceTrait<Self>;
+	/// The type that can extend the RPC methods.
+	type RpcExtensions: rpc::IoHandlerExtension<rpc::metadata::Metadata>;
 	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
@@ -422,6 +440,12 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error>;
+
+	/// Build RPC extensions
+	fn build_rpc_extension(
+		client: Arc<ComponentClient<Self>>,
+		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
+	) -> Self::RpcExtensions;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -473,6 +497,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ImportQueue = Factory::FullImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::FullService;
+	type RpcExtensions = Factory::RpcExtensions;
 	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
@@ -529,6 +554,13 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Factory::build_finality_proof_provider(client)
 	}
+
+	fn build_rpc_extension(
+		client: Arc<ComponentClient<Self>>,
+		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
+	) -> Self::RpcExtensions {
+		Factory::build_rpc_extension::<Self>(client, transaction_pool)
+	}
 }
 
 /// A struct that implement `Components` for the light client.
@@ -574,6 +606,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::LightService;
+	type RpcExtensions = Factory::RpcExtensions;
 	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
@@ -622,11 +655,19 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Ok(None)
 	}
+
 	fn build_select_chain(
 		_config: &mut FactoryFullConfiguration<Self::Factory>,
 		_client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error> {
 		Ok(None)
+	}
+
+	fn build_rpc_extension(
+		client: Arc<ComponentClient<Self>>,
+		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
+	) -> Self::RpcExtensions {
+		Factory::build_rpc_extension::<Self>(client, transaction_pool)
 	}
 }
 

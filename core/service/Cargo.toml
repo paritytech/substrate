@@ -29,7 +29,8 @@ client_db = { package = "substrate-client-db", path = "../../core/client/db", fe
 parity-codec = "4.1.1"
 substrate-executor = { path = "../../core/executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
-rpc = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
+rpc-servers = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
+rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
