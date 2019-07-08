@@ -30,10 +30,10 @@ const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-type Metadata = apis::metadata::Metadata;
-type RpcHandler = pubsub::PubSubHandler<Metadata>;
-pub type HttpServer = http::Server;
-pub type WsServer = ws::Server;
+pub type Metadata = apis::metadata::Metadata;
+pub type RpcHandler = pubsub::PubSubHandler<Metadata>;
+
+pub use self::inner::*;
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
@@ -57,62 +57,78 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 	io
 }
 
-/// Start HTTP server listening on given address.
-pub fn start_http(
-	addr: &std::net::SocketAddr,
-	cors: Option<&Vec<String>>,
-	io: RpcHandler,
-) -> io::Result<http::Server> {
-	http::ServerBuilder::new(io)
-		.threads(4)
-		.health_api(("/health", "system_health"))
-		.allowed_hosts(hosts_filtering(cors.is_some()))
-		.rest_api(if cors.is_some() {
-			http::RestApi::Secure
-		} else {
-			http::RestApi::Unsecure
-		})
-		.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-		.max_request_body_size(MAX_PAYLOAD)
-		.start_http(addr)
-}
+#[cfg(not(target_os = "unknown"))]
+mod inner {
+	use super::*;
 
-/// Start WS server listening on given address.
-pub fn start_ws(
-	addr: &std::net::SocketAddr,
-	max_connections: Option<usize>,
-	cors: Option<&Vec<String>>,
-	io: RpcHandler,
-) -> io::Result<ws::Server> {
-	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
-		.max_payload(MAX_PAYLOAD)
-		.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
-		.allowed_origins(map_cors(cors))
-		.allowed_hosts(hosts_filtering(cors.is_some()))
-		.start(addr)
-		.map_err(|err| match err {
-			ws::Error::Io(io) => io,
-			ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
-			e => {
-				error!("{}", e);
-				io::ErrorKind::Other.into()
-			}
-		})
-}
+	pub type HttpServer = http::Server;
+	pub type WsServer = ws::Server;
 
-fn map_cors<T: for<'a> From<&'a str>>(
-	cors: Option<&Vec<String>>
-) -> http::DomainsValidation<T> {
-	cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
-}
-
-fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
-	if enable {
-		// NOTE The listening address is whitelisted by default.
-		// Setting an empty vector here enables the validation
-		// and allows only the listening address.
-		http::DomainsValidation::AllowOnly(vec![])
-	} else {
-		http::DomainsValidation::Disabled
+	/// Start HTTP server listening on given address.
+	///
+	/// **Note**: Only available if `not(target_os = "unknown")`.
+	pub fn start_http(
+		addr: &std::net::SocketAddr,
+		cors: Option<&Vec<String>>,
+		io: RpcHandler,
+	) -> io::Result<http::Server> {
+		http::ServerBuilder::new(io)
+			.threads(4)
+			.health_api(("/health", "system_health"))
+			.allowed_hosts(hosts_filtering(cors.is_some()))
+			.rest_api(if cors.is_some() {
+				http::RestApi::Secure
+			} else {
+				http::RestApi::Unsecure
+			})
+			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
+			.max_request_body_size(MAX_PAYLOAD)
+			.start_http(addr)
 	}
+
+	/// Start WS server listening on given address.
+	///
+	/// **Note**: Only available if `not(target_os = "unknown")`.
+	pub fn start_ws(
+		addr: &std::net::SocketAddr,
+		max_connections: Option<usize>,
+		cors: Option<&Vec<String>>,
+		io: RpcHandler,
+	) -> io::Result<ws::Server> {
+		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+			.max_payload(MAX_PAYLOAD)
+			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
+			.allowed_origins(map_cors(cors))
+			.allowed_hosts(hosts_filtering(cors.is_some()))
+			.start(addr)
+			.map_err(|err| match err {
+				ws::Error::Io(io) => io,
+				ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
+				e => {
+					error!("{}", e);
+					io::ErrorKind::Other.into()
+				}
+			})
+	}
+
+	fn map_cors<T: for<'a> From<&'a str>>(
+		cors: Option<&Vec<String>>
+	) -> http::DomainsValidation<T> {
+		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
+	}
+
+	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
+		if enable {
+			// NOTE The listening address is whitelisted by default.
+			// Setting an empty vector here enables the validation
+			// and allows only the listening address.
+			http::DomainsValidation::AllowOnly(vec![])
+		} else {
+			http::DomainsValidation::Disabled
+		}
+	}
+}
+
+#[cfg(target_os = "unknown")]
+mod inner {
 }
