@@ -146,7 +146,7 @@ fn invulnerability_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		// Make account 11 invulnerable
-		assert_ok!(Staking::set_invulnerables(vec![11]));
+		assert_ok!(Staking::set_invulnerables(Origin::ROOT, vec![11]));
 		// Give account 11 some funds
 		let _ = Balances::make_free_balance_be(&11, 70);
 		// There is no slash grace -- slash immediately.
@@ -213,7 +213,7 @@ fn offline_grace_should_delay_slashing() {
 
 		// Set offline slash grace
 		let offline_slash_grace = 1;
-		assert_ok!(Staking::set_offline_slash_grace(offline_slash_grace));
+		assert_ok!(Staking::set_offline_slash_grace(Origin::ROOT, offline_slash_grace));
 		assert_eq!(Staking::offline_slash_grace(), 1);
 
 		// Check unstake_threshold is 3 (default)
@@ -1846,7 +1846,7 @@ fn phragmen_linear_worse_case_equalize() {
 		}
 
 		assert_eq_uvec!(validator_controllers(), vec![40, 30]);
-		assert_ok!(Staking::set_validator_count(7));
+		assert_ok!(Staking::set_validator_count(Origin::ROOT, 7));
 
 		start_era(1);
 
