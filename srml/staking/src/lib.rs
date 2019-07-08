@@ -651,7 +651,7 @@ decl_module! {
 			}
 
 			// reject a bond which is considered to be _dust_.
-			if  value < T::Currency::minimum_balance() {
+			if value < T::Currency::minimum_balance() {
 				return Err("can not bond with value less than minimum balance")
 			}
 
