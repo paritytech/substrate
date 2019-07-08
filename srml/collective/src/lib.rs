@@ -41,10 +41,10 @@ use rstd::{prelude::*, result};
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::SetMembers,
+	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::ChangeMembers,
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
 };
-use system::{self, ensure_signed};
+use system::{self, ensure_signed, ensure_root};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -105,7 +105,7 @@ decl_storage! {
 		pub Voting get(voting): map T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
-		/// The current members of the collective.
+		/// The current members of the collective. This is stored sorted (just by value).
 		pub Members get(members) config(): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
@@ -142,6 +142,49 @@ decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T, I>() = default;
 
+		/// Set the collective's membership manually to `new_members`. Be nice to the chain and
+		/// provide it pre-sorted.
+		///
+		/// Requires root origin.
+		fn set_members(origin, new_members: Vec<T::AccountId>) {
+			ensure_root(origin)?;
+
+			// stable sorting since they will generally be provided sorted.
+			let mut old_members = <Members<T, I>>::get();
+			old_members.sort();
+			let mut new_members = new_members;
+			new_members.sort();
+			let mut old_iter = old_members.iter();
+			let mut new_iter = new_members.iter();
+			let mut incoming = vec![];
+			let mut outgoing = vec![];
+			let mut old_i = old_iter.next();
+			let mut new_i = new_iter.next();
+			loop {
+				match (old_i, new_i) {
+					(None, None) => break,
+					(Some(old), Some(new)) if old == new => {
+						old_i = old_iter.next();
+						new_i = new_iter.next();
+					}
+					(Some(old), Some(new)) if old < new => {
+						outgoing.push(old.clone());
+						old_i = old_iter.next();
+					}
+					(Some(old), None) => {
+						outgoing.push(old.clone());
+						old_i = old_iter.next();
+					}
+					(_, Some(new)) => {
+						incoming.push(new.clone());
+						new_i = new_iter.next();
+					}
+				}
+			}
+
+			Self::change_members(&incoming, &outgoing, &new_members);
+		}
+
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
@@ -161,7 +204,7 @@ decl_module! {
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(Self::is_member(&who), "proposer not a member ");
+			ensure!(Self::is_member(&who), "proposer not a member");
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 
@@ -257,10 +300,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> SetMembers<T::AccountId> for Module<T, I> {
-	fn set_members(new: &[T::AccountId]) {
+impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
+	fn change_members(_incoming: &[T::AccountId], outgoing: &[T::AccountId], new: &[T::AccountId]) {
 		// remove accounts from all current voting in motions.
-		let mut old = <Members<T, I>>::get();
+		let mut old = outgoing.to_vec();
 		old.sort_unstable();
 		for h in Self::proposals().into_iter() {
 			<Voting<T, I>>::mutate(h, |v|
@@ -365,39 +408,16 @@ impl<
 mod tests {
 	use super::*;
 	use super::RawEvent;
-	use primitives::traits::BlakeTwo256;
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{
+		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
+	};
 	use crate as collective;
 
-	impl_outer_origin! {
-		pub enum Origin for Test {
-			collective<T>
-		}
-	}
-
-	impl_outer_event! {
-		pub enum Event for Test {
-			system<T>,
-			collective<T>,
-		}
-	}
-
-	impl_outer_dispatch! {
-		pub enum Call for Test where origin: Origin {
-			system::System,
-			democracy::Democracy,
-		}
-	}
-
-	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug)]
-	pub struct Test;
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -409,25 +429,38 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 	}
-	impl Trait for Test {
+	impl Trait<Instance1> for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
 	}
-	pub type System = system::Module<Test>;
-	pub type Collective = motions::Module<Test>;
+
+	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = primitives::generic::UncheckedMortalCompactExtrinsic<u32, u64, Call, ()>;
+
+	srml_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: system::{Module, Call, Event},
+			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+		}
+	);
 
 	fn make_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
-			members: vec![1, 2, 3],
-		}.build_storage().unwrap().0);
-		runtime_io::TestExternalities::new(t)
+		GenesisConfig {
+			collective_Instance1: Some(collective::GenesisConfig {
+				members: vec![1, 2, 3],
+				phantom: Default::default(),
+			}),
+		}.build_storage().unwrap().0.into()
 	}
 
 	#[test]
 	fn motions_basic_environment_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
@@ -440,7 +473,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -450,7 +483,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
 			);
-			Collective::set_members(&[]);
+			Collective::change_members(&[4], &[1], &[2, 3, 4]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
@@ -464,7 +497,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
 			);
-			Collective::set_members(&[]);
+			Collective::change_members(&[], &[3], &[2, 4]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })
@@ -474,7 +507,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -488,11 +521,11 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						3,
 					)),
 					topics: vec![],
@@ -503,7 +536,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			assert_noop!(
@@ -515,7 +548,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -526,7 +559,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_bad_index_collective_vote_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -537,7 +570,7 @@ mod tests {
 
 	#[test]
 	fn motions_revoting_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -556,20 +589,20 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						2,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Voted(
 						1,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						false,
 						0,
 						1,
@@ -582,7 +615,7 @@ mod tests {
 
 	#[test]
 	fn motions_disapproval_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -591,21 +624,21 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(
 						RawEvent::Proposed(
 							1,
 							0,
-							hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+							hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 							3,
 						)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Voted(
 						2,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						false,
 						1,
 						1,
@@ -613,9 +646,9 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Disapproved(
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Disapproved(
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 					)),
 					topics: vec![],
 				}
@@ -625,7 +658,7 @@ mod tests {
 
 	#[test]
 	fn motions_approval_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -634,20 +667,20 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						2,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Voted(
 						2,
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						true,
 						2,
 						0,
@@ -655,16 +688,16 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Approved(
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Approved(
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 					)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Executed(
-						hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(),
+					phase: Phase::Finalization,
+					event: Event::collective_Instance1(RawEvent::Executed(
+						hex!["10b209e55d0f37cd45574674bba42519a29bf0ccf3c85c3c773fcbacab820bb4"].into(),
 						false,
 					)),
 					topics: vec![],

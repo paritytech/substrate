@@ -31,7 +31,7 @@ use srml_support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, SetMembers
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
 use parity_codec::{Encode, Decode};
@@ -166,7 +166,7 @@ pub trait Trait: system::Trait {
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// What to do when the members change.
-	type SetMembers: SetMembers<Self::AccountId>;
+	type ChangeMembers: ChangeMembers<Self::AccountId>;
 
 	/// How much should be locked up in order to submit one's candidacy. A reasonable
 	/// default value is 9.
@@ -571,8 +571,8 @@ decl_module! {
 				.into_iter()
 				.filter(|i| i.0 != who)
 				.collect();
-			<Members<T>>::put(new_set);
-			T::SetMembers::set_members(&[]);
+			<Members<T>>::put(&new_set);
+			T::ChangeMembers::change_members(&[], &[who], &new_set);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -848,9 +848,9 @@ impl<T: Trait> Module<T> {
 			.chain(incoming.iter().cloned().map(|a| (a, new_expiry)))
 			.collect();
 		new_set.sort_by_key(|&(_, expiry)| expiry);
-		<Members<T>>::put(new_set);
+		<Members<T>>::put(&new_set);
 
-		T::SetMembers::set_members(&incoming);
+		T::ChangeMembers::change_members(&incoming, &outgoing, &new_set);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -1193,7 +1193,7 @@ mod tests {
 		type BadReaper = ();
 		type BadVoterIndex = ();
 		type LoserCandidate = ();
-		type SetMembers = CouncilMotions;
+		type ChangeMembers = CouncilMotions;
 		type CandidacyBond = CandidacyBond;
 		type VotingBond = VotingBond;
 		type VotingFee = VotingFee;

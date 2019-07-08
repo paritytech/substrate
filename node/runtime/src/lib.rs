@@ -281,7 +281,7 @@ impl elections::Trait for Runtime {
 	type BadReaper = ();
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
-	type SetMembers = Council;
+	type ChangeMembers = Council;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
