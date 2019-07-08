@@ -608,11 +608,11 @@ bitmask! {
 }
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
-pub trait OnMembersChanged<AccountId> {
+pub trait SetMembers<AccountId> {
 	/// A number of members `new` just joined the set and replaced some `old` ones.
-	fn on_members_changed(new: &[AccountId]);
+	fn set_members(new: &[AccountId]);
 }
 
-impl<T> OnMembersChanged<T> for () {
-	fn on_members_changed(_new: &[T]) {}
+impl<T> SetMembers<T> for () {
+	fn set_members(_new: &[T]) {}
 }

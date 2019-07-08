@@ -41,7 +41,7 @@ use rstd::{prelude::*, result};
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::OnMembersChanged,
+	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::SetMembers,
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
 };
 use system::{self, ensure_signed};
@@ -257,8 +257,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> OnMembersChanged<T::AccountId> for Module<T, I> {
-	fn on_members_changed(new: &[T::AccountId]) {
+impl<T: Trait<I>, I: Instance> SetMembers<T::AccountId> for Module<T, I> {
+	fn set_members(new: &[T::AccountId]) {
 		// remove accounts from all current voting in motions.
 		let mut old = <Members<T, I>>::get();
 		old.sort_unstable();
@@ -450,7 +450,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
 			);
-			Collective::on_members_changed(&[]);
+			Collective::set_members(&[]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
@@ -464,7 +464,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
 			);
-			Collective::on_members_changed(&[]);
+			Collective::set_members(&[]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })

@@ -248,6 +248,7 @@ impl democracy::Trait for Runtime {
 	type MinimumDeposit = MinimumDeposit;
 	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilInstance>;
 	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type ExternalPushOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalInstance>;
 	type EmergencyOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilInstance>;
 	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
 	type VetoOrigin = collective::EnsureMember<AccountId, CouncilInstance>;
@@ -280,7 +281,7 @@ impl elections::Trait for Runtime {
 	type BadReaper = ();
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
-	type OnMembersChanged = Council;
+	type SetMembers = Council;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;

@@ -31,7 +31,7 @@ use srml_support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, OnMembersChanged
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, SetMembers
 	}
 };
 use parity_codec::{Encode, Decode};
@@ -166,7 +166,7 @@ pub trait Trait: system::Trait {
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// What to do when the members change.
-	type OnMembersChanged: OnMembersChanged<Self::AccountId>;
+	type SetMembers: SetMembers<Self::AccountId>;
 
 	/// How much should be locked up in order to submit one's candidacy. A reasonable
 	/// default value is 9.
@@ -572,7 +572,7 @@ decl_module! {
 				.filter(|i| i.0 != who)
 				.collect();
 			<Members<T>>::put(new_set);
-			T::OnMembersChanged::on_members_changed(&[]);
+			T::SetMembers::set_members(&[]);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -850,7 +850,7 @@ impl<T: Trait> Module<T> {
 		new_set.sort_by_key(|&(_, expiry)| expiry);
 		<Members<T>>::put(new_set);
 
-		T::OnMembersChanged::on_members_changed(&incoming);
+		T::SetMembers::set_members(&incoming);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -1193,7 +1193,7 @@ mod tests {
 		type BadReaper = ();
 		type BadVoterIndex = ();
 		type LoserCandidate = ();
-		type OnMembersChanged = CouncilMotions;
+		type SetMembers = CouncilMotions;
 		type CandidacyBond = CandidacyBond;
 		type VotingBond = VotingBond;
 		type VotingFee = VotingFee;
