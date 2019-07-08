@@ -572,6 +572,13 @@ impl<T: Trait> Module<T> {
 		let parent_hash = <ParentHash<T>>::take();
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+
+		// move block hash pruning window by one block
+		let block_hash_count = <T::BlockHashCount>::get();
+		if number > block_hash_count {
+			<BlockHash<T>>::remove(number - block_hash_count - One::one());
+		}
+
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
 
@@ -580,12 +587,6 @@ impl<T: Trait> Module<T> {
 		if let Some(storage_changes_root) = storage_changes_root {
 			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
 			digest.push(item);
-		}
-
-		// move block hash pruning window by one block
-		let block_hash_count = <T::BlockHashCount>::get();
-		if number > block_hash_count {
-			<BlockHash<T>>::remove(number - block_hash_count - One::one());
 		}
 
 		// The following fields
