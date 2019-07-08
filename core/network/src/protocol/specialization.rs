@@ -36,7 +36,7 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 		&mut self,
 		ctx: &mut dyn Context<B>,
 		who: PeerId,
-		message: &mut Option<crate::message::Message<B>>
+		message: Vec<u8>
 	);
 
 	/// Called when a network-specific event arrives.
@@ -131,7 +131,7 @@ macro_rules! construct_simple_protocol {
 				&mut self,
 				_ctx: &mut $crate::Context<$block>,
 				_who: $crate::PeerId,
-				_message: &mut Option<$crate::message::Message<$block>>
+				_message: Vec<u8>,
 			) {
 				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
 			}

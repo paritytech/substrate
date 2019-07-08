@@ -114,7 +114,7 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		&mut self,
 		_ctx: &mut dyn Context<Block>,
 		_peer_id: PeerId,
-		_message: &mut Option<crate::message::Message<Block>>,
+		_message: Vec<u8>,
 	) {}
 
 	fn on_event(
