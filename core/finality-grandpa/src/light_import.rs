@@ -84,6 +84,16 @@ pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for GrandpaLightBlockImport<B, E, Block, RA> {
+	fn clone(&self) -> Self {
+		GrandpaLightBlockImport {
+			client: self.client.clone(),
+			authority_set_provider: self.authority_set_provider.clone(),
+			data: self.data.clone(),
+		}
+	}
+}
+
 /// Mutable data of light block importer.
 struct LightImportData<Block: BlockT<Hash=H256>> {
 	last_finalized: Block::Hash,

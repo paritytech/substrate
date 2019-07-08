@@ -39,13 +39,13 @@ mod basic_queue;
 pub mod buffered_link;
 
 /// Shared block import struct used by the queue.
-pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
+pub type BoxBlockImport<B> = Box<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Shared justification import struct used by the queue.
-pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
+pub type BoxJustificationImport<B> = Box<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Shared finality proof import struct used by the queue.
-pub type SharedFinalityProofImport<B> = Arc<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
+pub type BoxFinalityProofImport<B> = Box<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Shared finality proof request builder struct used by the queue.
 pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;

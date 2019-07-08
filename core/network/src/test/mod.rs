@@ -34,7 +34,7 @@ use client::backend::AuxStore;
 use crate::config::Roles;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
-	SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
+	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 	BoxFinalityProofRequestBuilder,
 };
 use consensus::block_import::BlockImport;
@@ -142,7 +142,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn as_block_import(&self) -> SharedBlockImport<Block> {
+	pub fn as_block_import(&self) -> BoxBlockImport<Block> {
 		match *self {
 			PeersClient::Full(ref client) => client.clone() as _,
 			PeersClient::Light(ref client) => client.clone() as _,
@@ -383,9 +383,9 @@ pub trait TestNetFactory: Sized {
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
@@ -709,9 +709,9 @@ impl TestNetFactory for JustificationTestNet {
 
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)

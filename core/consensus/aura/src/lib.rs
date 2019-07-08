@@ -36,7 +36,7 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
 };
 use consensus_common::import_queue::{
-	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 	BoxFinalityProofRequestBuilder,
 };
 use client::{
@@ -668,9 +668,9 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, P>(
 	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,

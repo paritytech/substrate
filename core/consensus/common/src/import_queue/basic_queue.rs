@@ -21,8 +21,8 @@ use runtime_primitives::{Justification, traits::{Block as BlockT, Header as Head
 use crate::error::Error as ConsensusError;
 use crate::block_import::{BlockImport, BlockOrigin};
 use crate::import_queue::{
-	BlockImportResult, BlockImportError, Verifier, SharedBlockImport, SharedFinalityProofImport,
-	BoxFinalityProofRequestBuilder, SharedJustificationImport, ImportQueue, Link, Origin,
+	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
+	BoxFinalityProofRequestBuilder, BoxJustificationImport, ImportQueue, Link, Origin,
 	IncomingBlock, import_single_block,
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
@@ -63,9 +63,9 @@ impl<B: BlockT> BasicQueue<B> {
 	/// finality proof importer.
 	pub fn new<V: 'static + Verifier<B>>(
 		verifier: Arc<V>,
-		block_import: SharedBlockImport<B>,
-		justification_import: Option<SharedJustificationImport<B>>,
-		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+		block_import: BoxBlockImport<B>,
+		justification_import: Option<BoxJustificationImport<B>>,
+		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
@@ -159,9 +159,9 @@ enum ToWorkerMsg<B: BlockT> {
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 	result_sender: BufferedLinkSender<B>,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	verifier: Arc<V>,
 }
 
@@ -169,9 +169,9 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	fn new(
 		result_sender: BufferedLinkSender<B>,
 		verifier: Arc<V>,
-		block_import: SharedBlockImport<B>,
-		justification_import: Option<SharedJustificationImport<B>>,
-		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+		block_import: BoxBlockImport<B>,
+		justification_import: Option<BoxJustificationImport<B>>,
+		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	) -> (impl Future<Item = (), Error = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = mpsc::unbounded();
 

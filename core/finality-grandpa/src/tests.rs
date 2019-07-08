@@ -30,7 +30,7 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 	BoxFinalityProofRequestBuilder,
 };
 use std::collections::{HashMap, HashSet};
@@ -106,9 +106,9 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
 			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)

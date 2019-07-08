@@ -63,6 +63,21 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> {
 	api: Arc<PRA>,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone> Clone for
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+{
+	fn clone(&self) -> Self {
+		GrandpaBlockImport {
+			inner: self.inner.clone(),
+			select_chain: self.select_chain.clone(),
+			authority_set: self.authority_set.clone(),
+			send_voter_commands: self.send_voter_commands.clone(),
+			consensus_changes: self.consensus_changes.clone(),
+			api: self.api.clone(),
+		}
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
 		NumberFor<Block>: grandpa::BlockNumberOps,

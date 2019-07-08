@@ -32,7 +32,7 @@ pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::import_queue::{
-	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 	BoxFinalityProofRequestBuilder,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
@@ -829,9 +829,9 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 /// Start an import queue for the Babe consensus algorithm.
 pub fn import_queue<B, C, E>(
 	config: Config,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
