@@ -14,18 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::prelude::*;
-use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
-use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
-use libp2p::core::swarm::PollParameters;
-use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
-use libp2p::multihash::Multihash;
-use libp2p::multiaddr::Protocol;
-use log::{debug, info, trace, warn};
-use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, clock::Clock};
-
 //! Discovery mechanisms of Substrate.
 //!
 //! The `DiscoveryBehaviour` struct implements the `NetworkBehaviour` trait of libp2p and is
@@ -57,6 +45,18 @@ use tokio_timer::{Delay, clock::Clock};
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 //!
+
+use futures::prelude::*;
+use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
+use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
+use libp2p::core::swarm::PollParameters;
+use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
+use libp2p::multihash::Multihash;
+use libp2p::multiaddr::Protocol;
+use log::{debug, info, trace, warn};
+use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
+use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_timer::{Delay, clock::Clock};
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {
