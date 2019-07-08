@@ -617,7 +617,7 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the  account that controls it.
 		///
-		/// `value` must be more than the `existential_deposit` defined in balances module.
+		/// `value` must be more than the `existential_deposit` defined in the Balances module.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
