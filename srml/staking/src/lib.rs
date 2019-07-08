@@ -288,7 +288,7 @@ use primitives::traits::{
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
@@ -903,7 +903,8 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(#[compact] new: u32) {
+		fn set_validator_count(origin, #[compact] new: u32) {
+			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
 
@@ -917,17 +918,20 @@ decl_module! {
 		/// - Triggers the Phragmen election. Expensive but not user-controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
-		fn force_new_era() {
+		fn force_new_era(origin) {
+			ensure_root(origin)?;
 			Self::apply_force_new_era()
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(#[compact] new: u32) {
+		fn set_offline_slash_grace(origin, #[compact] new: u32) {
+			ensure_root(origin)?;
 			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		fn set_invulnerables(validators: Vec<T::AccountId>) {
+		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
+			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 	}
