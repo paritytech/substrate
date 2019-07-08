@@ -1346,7 +1346,7 @@ mod tests {
 	}
 
 	/// calls `ext_current_block`, loads the current block number from the scratch buffer and
-	/// compares it with the constant &121.
+	/// compares it with the constant 121.
 	const CODE_CURRENT_BLOCK: &str = r#"
 (module
 	(import "env" "ext_current_block" (func $ext_current_block))
