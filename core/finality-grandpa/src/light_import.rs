@@ -547,6 +547,19 @@ pub mod tests {
 		pub GrandpaLightBlockImport<B, E, Block, RA>
 	);
 
+	impl<B, E, Block: BlockT<Hash=H256>, RA> Clone
+		for NoJustificationsImport<B, E, Block, RA> where
+			NumberFor<Block>: grandpa::BlockNumberOps,
+			B: Backend<Block, Blake2Hasher> + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+			DigestFor<Block>: Encode,
+			RA: Send + Sync,
+	{
+		fn clone(&self) -> Self {
+			NoJustificationsImport(self.0.clone())
+		}
+	}
+
 	impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		for NoJustificationsImport<B, E, Block, RA> where
 			NumberFor<Block>: grandpa::BlockNumberOps,

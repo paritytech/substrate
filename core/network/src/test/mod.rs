@@ -144,8 +144,8 @@ impl PeersClient {
 
 	pub fn as_block_import(&self) -> BoxBlockImport<Block> {
 		match *self {
-			PeersClient::Full(ref client) => client.clone() as _,
-			PeersClient::Light(ref client) => client.clone() as _,
+			PeersClient::Full(ref client) => Box::new(client.clone()) as _,
+			PeersClient::Light(ref client) => Box::new(client.clone()) as _,
 		}
 	}
 
@@ -214,7 +214,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	verifier: Arc<dyn Verifier<Block>>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	block_import: Arc<dyn BlockImport<Block, Error = ConsensusError>>,
+	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	to_poll: smallvec::SmallVec<[Box<dyn Future<Item = (), Error = ()> + Send>; 2]>,
 }
@@ -424,7 +424,7 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import.clone(),
+			block_import,
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -502,6 +502,8 @@ pub trait TestNetFactory: Sized {
 				.then(|_| Ok(()))
 		};
 
+		let (block_import, ..) = self.make_block_import(PeersClient::Full(client.clone()));
+
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
@@ -535,7 +537,7 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import.clone(),
+			block_import,
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -571,6 +573,7 @@ pub trait TestNetFactory: Sized {
 				.then(|_| Ok(()))
 		};
 
+		let (block_import, ..) = self.make_block_import(PeersClient::Light(client.clone()));
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
@@ -716,6 +719,6 @@ impl TestNetFactory for JustificationTestNet {
 			Self::PeerData,
 		)
 	{
-		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, None, Default::default())
+		(client.as_block_import(), Some(Box::new(ForceFinalized(client))), None, None, Default::default())
 	}
 }
