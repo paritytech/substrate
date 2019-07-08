@@ -571,7 +571,7 @@ pub mod tests {
 		type Error = ConsensusError;
 
 		fn import_block(
-			&self,
+			&mut self,
 			mut block: ImportBlock<Block>,
 			new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
@@ -580,7 +580,7 @@ pub mod tests {
 		}
 
 		fn check_block(
-			&self,
+			&mut self,
 			hash: Block::Hash,
 			parent_hash: Block::Hash,
 		) -> Result<ImportResult, Self::Error> {
@@ -598,12 +598,12 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 			self.0.on_start()
 		}
 
 		fn import_finality_proof(
-			&self,
+			&mut self,
 			hash: Block::Hash,
 			number: NumberFor<Block>,
 			finality_proof: Vec<u8>,

@@ -246,7 +246,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
 	{
 		let best_hash = self.client.info().chain.best_hash;
@@ -256,7 +256,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Add blocks to the peer -- edit the block before adding. The chain will
 	/// start at the given block iD.
 	fn generate_blocks_at<F>(
-		&self,
+		&mut self,
 		at: BlockId<Block>,
 		count: usize,
 		origin: BlockOrigin,
@@ -298,14 +298,14 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
 		let best_hash = self.client.info().chain.best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
@@ -324,7 +324,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()
@@ -671,7 +671,7 @@ impl JustificationImport<Block> for ForceFinalized {
 	type Error = ConsensusError;
 
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: H256,
 		_number: NumberFor<Block>,
 		justification: Justification,
