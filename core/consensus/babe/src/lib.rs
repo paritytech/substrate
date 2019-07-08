@@ -880,7 +880,7 @@ mod tests {
 	use super::generic::DigestItem;
 	use client::BlockchainEvents;
 	use test_client;
-	use futures::stream::Stream;
+	use futures::{Async, stream::Stream as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -919,11 +919,9 @@ mod tests {
 	}
 
 	const SLOT_DURATION: u64 = 1;
-	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct BabeTestNet {
-		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
-		started: bool,
+		peers: Vec<Peer<(), DummySpecialization>>,
 	}
 
 	impl TestNetFactory for BabeTestNet {
@@ -936,7 +934,6 @@ mod tests {
 			debug!(target: "babe", "Creating test network from config");
 			BabeTestNet {
 				peers: Vec::new(),
-				started: false,
 			}
 		}
 
@@ -963,33 +960,21 @@ mod tests {
 			})
 		}
 
-		fn uses_tokio(&self) -> bool {
-			true
-		}
-
 		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
 			trace!(target: "babe", "Retreiving a peer");
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
 			trace!(target: "babe", "Retreiving peers");
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(
+		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(
 			&mut self,
 			closure: F,
 		) {
 			closure(&mut self.peers);
-		}
-
-		fn started(&self) -> bool {
-			self.started
-		}
-
-		fn set_started(&mut self, new: bool) {
-			self.started = new;
 		}
 	}
 
@@ -1003,10 +988,9 @@ mod tests {
 	fn authoring_blocks() {
 		drop(env_logger::try_init());
 		debug!(target: "babe", "checkpoint 1");
-		let mut net = BabeTestNet::new(3);
+		let net = BabeTestNet::new(3);
 		debug!(target: "babe", "checkpoint 2");
 
-		net.start();
 		debug!(target: "babe", "checkpoint 3");
 
 		let peers = &[
@@ -1060,15 +1044,7 @@ mod tests {
 			.map(drop)
 			.map_err(drop);
 
-		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| {
-				net.lock().send_import_notifications();
-				net.lock().sync_without_disconnects();
-				Ok(())
-			})
-			.map(drop)
-			.map_err(drop);
-
+		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
 	}
 
