@@ -411,18 +411,18 @@ fn multi_era_reward_should_work() {
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
-		start_session(1);
+		start_session(0);
 
 		// session triggered: the reward value stashed should be 10
 		assert_eq!(Staking::current_session_reward(), session_reward);
 		assert_eq!(Staking::current_era_reward(), session_reward);
 
-		start_session(2);
+		start_session(1);
 
 		assert_eq!(Staking::current_session_reward(), session_reward);
 		assert_eq!(Staking::current_era_reward(), 2*session_reward);
 
-		start_session(3);
+		start_session(2);
 
 		// 1 + sum of of the session rewards accumulated
 		let recorded_balance = 1 + 3*session_reward;
@@ -433,13 +433,13 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Staking::current_session_reward(), new_session_reward);
 
 		// fast forward to next era:
-		start_session(5);
+		start_session(4);
 
 		// intermediate test.
 		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
 
 		// new era is triggered here.
-		start_session(6);
+		start_session(5);
 
 		// pay time
 		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
@@ -464,10 +464,7 @@ fn staking_should_work() {
 		for i in 1..5 { let _ = Balances::make_free_balance_be(&i, 2000); }
 
 		// --- Block 1:
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-
+		start_session(1);
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
@@ -476,48 +473,30 @@ fn staking_should_work() {
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// --- Block 2:
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
+		start_session(2);
 
 		// No effects will be seen so far. Era has not been yet triggered.
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 
-		// --- Block 3: the validators will now change.
-		System::set_block_number(3);
-		Session::on_initialize(System::block_number());
-
-		// 2 only voted for 4 and 20
-		assert_eq!(Session::validators().len(), 2);
-		assert_eq_uvec!(Session::validators(), vec![20, 4]);
+		// --- Block 3: the validators will now be queued.
+		start_session(3);
 		assert_eq!(Staking::current_era(), 1);
 
+		// --- Block 4: the validators will now be changed.
+		start_session(4);
 
+		assert_eq_uvec!(Session::validators(), vec![20, 4]);
 		// --- Block 4: Unstake 4 as a validator, freeing up the balance stashed in 3
-		System::set_block_number(4);
-		Session::on_initialize(System::block_number());
-
 		// 4 will chill
 		Staking::chill(Origin::signed(4)).unwrap();
 
-		// nothing should be changed so far.
-		assert_eq_uvec!(Session::validators(), vec![20, 4]);
-		assert_eq!(Staking::current_era(), 1);
-
-
 		// --- Block 5: nothing. 4 is still there.
-		System::set_block_number(5);
-		Session::on_initialize(System::block_number());
+		start_session(5);
 		assert_eq_uvec!(Session::validators(), vec![20, 4]);
-		assert_eq!(Staking::current_era(), 1);
-
 
 		// --- Block 6: 4 will not be a validator.
-		System::set_block_number(6);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 2);
-		assert_eq!(Session::validators().contains(&4), false);
+		start_session(7);
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Note: the stashed value of 4 is still lock
@@ -537,6 +516,7 @@ fn less_than_needed_candidates_works() {
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(false)
+		.num_validators(3)
 		.build(),
 	|| {
 		assert_eq!(Staking::validator_count(), 4);
@@ -564,6 +544,7 @@ fn no_candidate_emergency_condition() {
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(10)
 		.validator_count(15)
+		.num_validators(4)
 		.validator_pool(true)
 		.nominate(false)
 		.build(),
@@ -727,11 +708,11 @@ fn nominating_and_rewards_should_work() {
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
-		let approximation = 3;
+		// NOTE: some addition or substraction (-2, -3, +1) are due to arithmetic approximations
 		if cfg!(feature = "equalize") {
 			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
-			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - approximation);
-			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - approximation);
+			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - 3);
+			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - 3);
 			// Rest for validators.
 			assert_eq!(Balances::total_balance(&10), initial_balance + new_session_reward/2 + 1);
 			assert_eq!(Balances::total_balance(&20), initial_balance + new_session_reward/2 + 1);
@@ -739,16 +720,16 @@ fn nominating_and_rewards_should_work() {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&2),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
 			);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq!(
 				Balances::total_balance(&4),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - approximation
+				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
 			);
 
 			// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
+			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - 1);
 			// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 			assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11 + 2);
 		}
@@ -857,37 +838,37 @@ fn session_and_eras_work() {
 		assert_eq!(Staking::current_era(), 0);
 
 		// Block 1: No change.
-		start_session(1);
+		start_session(0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::current_era(), 0);
 
 		// Block 2: Simple era change.
-		start_session(3);
+		start_session(2);
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::current_era(), 1);
 
 		// Block 3: Schedule an era length change; no visible changes.
-		start_session(4);
+		start_session(3);
 		assert_eq!(Session::current_index(), 4);
 		assert_eq!(Staking::current_era(), 1);
 
 		// Block 4: Era change kicks in.
-		start_session(6);
+		start_session(5);
 		assert_eq!(Session::current_index(), 6);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 5: No change.
-		start_session(7);
+		start_session(6);
 		assert_eq!(Session::current_index(), 7);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 6: No change.
-		start_session(8);
+		start_session(7);
 		assert_eq!(Session::current_index(), 8);
 		assert_eq!(Staking::current_era(), 2);
 
 		// Block 7: Era increment.
-		start_session(9);
+		start_session(8);
 		assert_eq!(Session::current_index(), 9);
 		assert_eq!(Staking::current_era(), 3);
 	});
@@ -1662,22 +1643,19 @@ fn switching_roles() {
 		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
 
 		// new block
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
+		start_session(1);
 
 		// no change
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// new block
-		System::set_block_number(2);
-		Session::on_initialize(System::block_number());
+		start_session(2);
 
 		// no change
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// new block --> ne era --> new validators
-		System::set_block_number(3);
-		Session::on_initialize(System::block_number());
+		start_session(3);
 
 		// with current nominators 10 and 5 have the most stake
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
@@ -1691,17 +1669,14 @@ fn switching_roles() {
 		// 2 : 2000 self vote + 250 vote.
 		// Winners: 20 and 2
 
-		System::set_block_number(4);
-		Session::on_initialize(System::block_number());
+		start_session(4);
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
 
-		System::set_block_number(5);
-		Session::on_initialize(System::block_number());
+		start_session(5);
 		assert_eq_uvec!(Session::validators(), vec![6, 10]);
 
 		// ne era
-		System::set_block_number(6);
-		Session::on_initialize(System::block_number());
+		start_session(6);
 		assert_eq_uvec!(Session::validators(), vec![2, 20]);
 
 		check_exposure_all();

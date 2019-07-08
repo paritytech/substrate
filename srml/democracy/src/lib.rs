@@ -166,8 +166,15 @@ impl Decode for Vote {
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type Error = &'static str;
 
+pub const DEFAULT_ENACTMENT_PERIOD: u32 = 0;
+pub const DEFAULT_LAUNCH_PERIOD: u32 = 0;
+pub const DEFAULT_VOTING_PERIOD: u32 = 0;
+pub const DEFAULT_MINIMUM_DEPOSIT: u32 = 0;
+pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
+pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
+
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -242,7 +249,6 @@ impl<BlockNumber: Parameter, Proposal: Parameter> ReferendumInfo<BlockNumber, Pr
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
-
 		/// The number of (public) proposals that have been made so far.
 		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted.
@@ -319,6 +325,28 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The minimum period of locking and the period between a proposal being approved and enacted.
+		///
+		/// It should generally be a little more than the unstake period to ensure that
+		/// voting stakers have an opportunity to remove themselves from the system in the case where
+		/// they are on the losing side of a vote.
+		const EnactmentPeriod: T::BlockNumber = T::EnactmentPeriod::get();
+
+		/// How often (in blocks) new public referenda are launched.
+		const LaunchPeriod: T::BlockNumber = T::LaunchPeriod::get();
+
+		/// How often (in blocks) to check for new votes.
+		const VotingPeriod: T::BlockNumber = T::VotingPeriod::get();
+
+		/// The minimum amount to be used as a deposit for a public referendum proposal.
+		const MinimumDeposit: BalanceOf<T> = T::MinimumDeposit::get();
+
+		/// Minimum voting period allowed for an emergency referendum.
+		const EmergencyVotingPeriod: T::BlockNumber = T::EmergencyVotingPeriod::get();
+
+		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
+		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Propose a sensitive action to be taken.
@@ -961,6 +989,13 @@ mod tests {
 		type Event = ();
 		type Error = Error;
 	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
+	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
@@ -970,6 +1005,11 @@ mod tests {
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type Error = Error;
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
@@ -1010,12 +1050,7 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
 			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::default().build_storage().unwrap().0);
