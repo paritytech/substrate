@@ -875,7 +875,9 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	fn into_account(&self) -> AccountId { self.into_sub_account(&()) }
 
 	/// Try to convert an account ID into this type. Might not succeed.
-	fn try_from_account(a: &AccountId) -> Option<Self> { Some(Self::try_from_sub_account::<()>(a)?.0) }
+	fn try_from_account(a: &AccountId) -> Option<Self> {
+		Self::try_from_sub_account::<()>(a).map(|x| x.0)
+	}
 
 	/// Convert this value amalgamated with the a secondary "sub" value into an account ID. This is
 	/// infallible.
