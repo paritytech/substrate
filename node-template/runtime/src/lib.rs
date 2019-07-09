@@ -78,7 +78,11 @@ pub mod opaque {
 		}
 	}
 	impl traits::Extrinsic for UncheckedExtrinsic {
+		type Call = ();
 		fn is_signed(&self) -> Option<bool> {
+			None
+		}
+		fn new_unsigned(_call: Self::Call) -> Option<Self> {
 			None
 		}
 	}

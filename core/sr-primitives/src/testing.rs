@@ -133,6 +133,8 @@ impl<'a> Deserialize<'a> for Header {
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
@@ -219,6 +221,8 @@ impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}

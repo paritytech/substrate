@@ -702,10 +702,16 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDes
 }
 
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
+pub trait Extrinsic: Sized {
+	/// The function call.
+	type Call;
+
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
 	fn is_signed(&self) -> Option<bool> { None }
+
+	/// New instance of an unsigned extrinsic aka "inherent".
+	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
 /// Extract the hashing type for a block.
