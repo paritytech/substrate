@@ -214,6 +214,8 @@ fuzz-wasmtime:
     variables:
       - $JOB == $CI_JOB_NAME
   script:
+    - pwd
+    - ls -la
     - git clone --recursive https://github.com/Vurich/wasmtime .
     - cargo install cargo-fuzz
     - cargo fuzz run instantiate_run -- -jobs=$(nproc --all)
