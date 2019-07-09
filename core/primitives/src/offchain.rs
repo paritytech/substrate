@@ -52,6 +52,12 @@ impl TryFrom<u32> for StorageKind {
 	}
 }
 
+impl From<StorageKind> for u32 {
+	fn from(c: StorageKind) -> Self {
+		c as u8 as u32
+	}
+}
+
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -75,15 +81,33 @@ impl TryFrom<u32> for CryptoKind {
 	}
 }
 
+impl From<CryptoKind> for u32 {
+	fn from(c: CryptoKind) -> Self {
+		c as isize as u32
+	}
+}
+
 /// Opaque type for created crypto keys.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CryptoKeyId(pub u16);
 
+impl From<CryptoKeyId> for u32 {
+	fn from(c: CryptoKeyId) -> Self {
+		c.0 as u32
+	}
+}
+
 /// Opaque type for offchain http requests.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct HttpRequestId(pub u16);
+
+impl From<HttpRequestId> for u32 {
+	fn from(c: HttpRequestId) -> Self {
+		c.0 as u32
+	}
+}
 
 /// An error enum returned by some http methods.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -105,6 +129,12 @@ impl TryFrom<u32> for HttpError {
 			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
 			_ => Err(())
 		}
+	}
+}
+
+impl From<HttpError> for u32 {
+	fn from(c: HttpError) -> Self {
+		c as u8 as u32
 	}
 }
 

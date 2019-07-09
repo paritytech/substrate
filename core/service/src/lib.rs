@@ -919,7 +919,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
-/// # use node_primitives::{Block};
+/// # use node_primitives::Block;
 /// # use runtime_primitives::Justification;
 /// # use runtime_primitives::traits::Block as BlockT;
 /// # use grandpa;

@@ -729,7 +729,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;
 
 		match res {
-			Ok(key_id) => Ok(key_id.0 as u32),
+			Ok(key_id) => Ok(key_id.into()),
 			Err(()) => Ok(u32::max_value()),
 		}
 	},
@@ -972,7 +972,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.ok_or_else(|| "Calling unavailable API ext_http_request_start: wasm")?;
 
 		if let Ok(id) = id {
-			Ok(id.0 as u32)
+			Ok(id.into())
 		} else {
 			Ok(u32::max_value())
 		}
@@ -1023,7 +1023,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(match res {
 			Ok(()) => 0,
-			Err(e) => e as u8 as u32,
+			Err(e) => e.into(),
 		})
 	},
 	ext_http_response_wait(
@@ -1101,7 +1101,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				read as u32
 			},
 			Err(err) => {
-				u32::max_value() - err as u8 as u32 + 1
+				u32::max_value() - u32::from(err) + 1
 			}
 		})
 	},

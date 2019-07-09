@@ -889,7 +889,7 @@ impl OffchainApi for () {
 	}
 
 	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
-		let crypto = crypto as isize as u32;
+		let crypto = crypto.into();
 		let ret = unsafe {
 			ext_new_crypto_key.get()(crypto)
 		};
@@ -906,8 +906,8 @@ impl OffchainApi for () {
 		kind: offchain::CryptoKind,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
-		let kind = kind as isize as u32;
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_encrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
@@ -921,8 +921,8 @@ impl OffchainApi for () {
 		kind: offchain::CryptoKind,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
-		let kind = kind as isize as u32;
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_decrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
@@ -936,8 +936,8 @@ impl OffchainApi for () {
 		kind: offchain::CryptoKind,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
-		let kind = kind as isize as u32;
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_sign.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
@@ -952,8 +952,8 @@ impl OffchainApi for () {
 		msg: &[u8],
 		signature: &[u8],
 	) -> Result<bool, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
-		let kind = kind as isize as u32;
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let val = unsafe {
 			ext_verify.get()(
 				key,
@@ -995,7 +995,7 @@ impl OffchainApi for () {
 	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		unsafe {
 			ext_local_storage_set.get()(
-				kind as u8 as u32,
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				value.as_ptr(),
@@ -1007,7 +1007,7 @@ impl OffchainApi for () {
 	fn local_storage_compare_and_set(kind: offchain::StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		unsafe {
 			ext_local_storage_compare_and_set.get()(
-				kind as u8 as u32,
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				old_value.as_ptr(),
@@ -1022,7 +1022,7 @@ impl OffchainApi for () {
 		let mut len = 0u32;
 		unsafe {
 			let ptr = ext_local_storage_get.get()(
-				kind as u8 as u32,
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				&mut len,
@@ -1060,7 +1060,7 @@ impl OffchainApi for () {
 
 		let result = unsafe {
 			ext_http_request_add_header.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				name.as_ptr(),
 				name.len() as u32,
 				value.as_ptr(),
@@ -1082,7 +1082,7 @@ impl OffchainApi for () {
 	) -> Result<(), offchain::HttpError> {
 		let res = unsafe {
 			ext_http_request_write_body.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				chunk.as_ptr(),
 				chunk.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
@@ -1125,7 +1125,7 @@ impl OffchainApi for () {
 		let mut len = 0u32;
 		let raw_result = unsafe {
 			let ptr = ext_http_response_headers.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				&mut len,
 			);
 
@@ -1142,7 +1142,7 @@ impl OffchainApi for () {
 	) -> Result<usize, offchain::HttpError> {
 		let res = unsafe {
 			ext_http_response_read_body.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				buffer.as_mut_ptr(),
 				buffer.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
