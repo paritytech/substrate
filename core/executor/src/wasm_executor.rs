@@ -729,18 +729,26 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;
 
 		match res {
-			Ok(key_id) => Ok(key_id.0 as u32),
+			Ok(key_id) => Ok(key_id.into()),
 			Err(()) => Ok(u32::max_value()),
 		}
 	},
-	ext_encrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+	ext_encrypt(
+		key: u32,
+		kind: u32,
+		data: *const u8,
+		data_len: u32,
+		msg_len: *mut u32
+	) -> *mut u8 => {
 		let key = u32_to_key(key)
 			.map_err(|_| "Key OOB while ext_encrypt: wasm")?;
+		let kind = offchain::CryptoKind::try_from(kind)
+			.map_err(|_| "crypto kind OOB while ext_encrypt: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_encrypt: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.encrypt(key, &*message))
+			.map(|api| api.encrypt(key, kind, &*message))
 			.ok_or_else(|| "Calling unavailable API ext_encrypt: wasm")?;
 
 		let (offset,len) = match res {
@@ -759,14 +767,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(offset)
 	},
-	ext_decrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+	ext_decrypt(
+		key: u32,
+		kind: u32,
+		data: *const u8,
+		data_len: u32,
+		msg_len: *mut u32
+	) -> *mut u8 => {
 		let key = u32_to_key(key)
 			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
+		let kind = offchain::CryptoKind::try_from(kind)
+			.map_err(|_| "crypto kind OOB while ext_decrypt: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_decrypt: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.decrypt(key, &*message))
+			.map(|api| api.decrypt(key, kind, &*message))
 			.ok_or_else(|| "Calling unavailable API ext_decrypt: wasm")?;
 
 		let (offset,len) = match res {
@@ -785,14 +801,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(offset)
 	},
-	ext_sign(key: u32, data: *const u8, data_len: u32, sig_data_len: *mut u32) -> *mut u8  => {
+	ext_sign(
+		key: u32,
+		kind: u32,
+		data: *const u8,
+		data_len: u32,
+		sig_data_len: *mut u32
+	) -> *mut u8  => {
 		let key = u32_to_key(key)
 			.map_err(|_| "Key OOB while ext_sign: wasm")?;
+		let kind = offchain::CryptoKind::try_from(kind)
+			.map_err(|_| "crypto kind OOB while ext_sign: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_sign: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.sign(key, &*message))
+			.map(|api| api.sign(key, kind, &*message))
 			.ok_or_else(|| "Calling unavailable API ext_sign: wasm")?;
 
 		let (offset,len) = match res {
@@ -813,6 +837,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_verify(
 		key: u32,
+		kind: u32,
 		msg: *const u8,
 		msg_len: u32,
 		signature: *const u8,
@@ -820,13 +845,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	) -> u32 => {
 		let key = u32_to_key(key)
 			.map_err(|_| "Key OOB while ext_verify: wasm")?;
+		let kind = offchain::CryptoKind::try_from(kind)
+			.map_err(|_| "crypto kind OOB while ext_verify: wasm")?;
 		let message = this.memory.get(msg, msg_len as usize)
 			.map_err(|_| "OOB while ext_verify: wasm")?;
 		let signature = this.memory.get(signature, signature_len as usize)
 			.map_err(|_| "OOB while ext_verify: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.verify(key, &*message, &*signature))
+			.map(|api| api.verify(key, kind, &*message, &*signature))
 			.ok_or_else(|| "Calling unavailable API ext_verify: wasm")?;
 
 		match res {
@@ -945,7 +972,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.ok_or_else(|| "Calling unavailable API ext_http_request_start: wasm")?;
 
 		if let Ok(id) = id {
-			Ok(id.0 as u32)
+			Ok(id.into())
 		} else {
 			Ok(u32::max_value())
 		}
@@ -996,7 +1023,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(match res {
 			Ok(()) => 0,
-			Err(e) => e as u8 as u32,
+			Err(e) => e.into(),
 		})
 	},
 	ext_http_response_wait(
@@ -1074,7 +1101,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				read as u32
 			},
 			Err(err) => {
-				u32::max_value() - err as u8 as u32 + 1
+				u32::max_value() - u32::from(err) + 1
 			}
 		})
 	},

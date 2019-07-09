@@ -39,7 +39,7 @@ use keystore::Store as Keystore;
 use network::NetworkState;
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, Public, crypto::TypedKey, ed25519};
+use primitives::{Pair, ed25519, crypto};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -74,14 +74,14 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: Option<<Components as components::Components>::SelectChain>,
+	select_chain: Option<Components::SelectChain>,
 	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Option<Keystore>,
+	keystore: AuthorityKeyProvider,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -101,6 +101,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
+		AuthorityKeyProvider,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -192,7 +193,7 @@ impl<Components: components::Components> Service<Components> {
 			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
 				Some(public_key) => public_key.to_string(),
 				None => {
-					let key: ed25519::Pair = keystore.generate(&config.password)?;
+					let key: ed25519::Pair = keystore.generate(&config.password.as_ref())?;
 					let public_key = key.public();
 					info!("Generated a new keypair: {:?}", public_key);
 					public_key.to_string()
@@ -259,6 +260,12 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
+		let keystore_authority_key = AuthorityKeyProvider {
+			roles: config.roles,
+			password: config.password.clone(),
+			keystore: keystore.map(Arc::new),
+		};
+
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -266,6 +273,8 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
+					keystore_authority_key.clone(),
+					config.password.clone(),
 				)))
 			},
 			(true, None) => {
@@ -469,7 +478,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
+			keystore: keystore_authority_key,
 			config,
 			exit,
 			rpc_handlers,
@@ -481,23 +490,10 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key<TPair>(&self) -> Option<TPair>
-	where
-		TPair: Pair + TypedKey,
-		<TPair as Pair>::Public: Public + TypedKey,
-	{
-		if self.config.roles != Roles::AUTHORITY { return None }
-		if let Some(keystore) = &self.keystore {
-			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
-					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
-			{
-				Some(key)
-			} else {
-				None
-			}
-		} else {
-			None
-		}
+	pub fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.authority_key()
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -867,6 +863,39 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
+	}
+}
+
+/// A provider of current authority key.
+#[derive(Clone)]
+pub struct AuthorityKeyProvider {
+	roles: Roles,
+	keystore: Option<Arc<Keystore>>,
+	password: crypto::Protected<String>,
+}
+
+impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
+	fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+				.contents()
+				.map(|keys| keys.get(0)
+					.map(|k| keystore.load(k, self.password.as_ref()))
+				);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
 	}
 }
 
