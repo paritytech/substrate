@@ -302,9 +302,6 @@ decl_storage! {
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
-
-		// A raw vector. Try not using this!
-		Baz get(baz): map u32 => Vec<u32>;
 	}
 }
 
@@ -604,16 +601,6 @@ mod tests {
 			assert_eq!(Example::foo(), 24);
 			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 			assert_eq!(Example::foo(), 25);
-		});
-	}
-
-	#[test]
-	fn can_read_len() {
-		with_externalities(&mut new_test_ext(), || {
-			// <Example as Store>::Baz::insert(1, vec![1,2,3]);
-			let r = <Example as Store>::Baz::len(1);
-			println!("r = {:?}", r);
-			assert!(false);
 		});
 	}
 }
