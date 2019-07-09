@@ -343,7 +343,8 @@ mod tests {
 				invulnerables: vec![alice(), bob(), charlie()],
 			}),
 			democracy: Some(Default::default()),
-			collective: Some(Default::default()),
+			collective_Instance1: Some(Default::default()),
+			collective_Instance2: Some(Default::default()),
 			elections: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			contracts: Some(ContractsConfig {
@@ -358,7 +359,23 @@ mod tests {
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}
+	/*
+	system
+	aura
+	timestamp
+	indices
+	balances
 
+	session
+	staking
+	democracy
+	collective_Instance1
+	collective_Instance2
+	elections
+	contracts
+	sudo
+	grandpa
+*/
 	fn construct_block(
 		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,

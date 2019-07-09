@@ -19,8 +19,8 @@
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
-	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
-	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
+	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig, CouncilConfig,
+	AuraConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
 	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
 	MILLICENTS, SECS_PER_BLOCK,
 };
@@ -130,8 +130,13 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		collective: Some(CollectiveConfig {
+		collective_Instance1: Some(CouncilConfig {
 			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
 		}),
 		elections: Some(ElectionsConfig {
 			members: vec![],
@@ -260,8 +265,13 @@ pub fn testnet_genesis(
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		collective: Some(CollectiveConfig {
+		collective_Instance1: Some(CouncilConfig {
 			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
 		}),
 		elections: Some(ElectionsConfig {
 			members: endowed_accounts.iter()
