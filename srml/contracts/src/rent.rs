@@ -15,11 +15,11 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo,
-	Trait, prefixed_trie_id, AliveContractInfo};
+	Trait, contract_child_trie, AliveContractInfo};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion, Hash as HashT};
 use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
-use srml_support::{storage::child, StorageMap};
+use srml_support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -100,9 +100,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
-		let p_key = prefixed_trie_id(&contract.trie_id);
 
-		if let Some(child_trie) = child::child_trie(p_key.as_ref()) {
+		if let Some(child_trie) = contract_child_trie(&contract.trie_id) {
 			runtime_io::kill_child_storage(&child_trie);
 		}
 		return (RentOutcome::Evicted, None);
@@ -148,8 +147,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// The contract cannot afford the rent payment and has a balance above the subsistence
 		// threshold, so it leaves a tombstone.
 
-		let p_key = prefixed_trie_id(&contract.trie_id);
-		let (o_ct, child_storage_root) = if let Some(child_trie) = child::child_trie(p_key.as_ref()) {
+		let (o_ct, child_storage_root) = if let Some(child_trie) = contract_child_trie(&contract.trie_id) {
 			// Note: this operation is heavy.
 			let child_storage_root = runtime_io::child_storage_root(&child_trie);
 			(Some(child_trie), child_storage_root)

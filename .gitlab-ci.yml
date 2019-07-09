@@ -188,6 +188,8 @@ check-web-wasm:
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
+    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
+    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
@@ -242,7 +244,7 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s

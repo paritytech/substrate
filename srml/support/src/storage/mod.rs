@@ -474,7 +474,7 @@ pub mod child {
 				debug_assert!(updated);
 			},
 			parent,
-			next_keyspace(),
+			|| next_keyspace(),
 		)
 	}
 

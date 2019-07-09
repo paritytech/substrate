@@ -34,8 +34,8 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-use network::{multiaddr, Multiaddr, ManageNetwork};
-use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
+use network::{multiaddr, Multiaddr};
+use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
@@ -160,8 +160,10 @@ fn node_config<F: ServiceFactory> (
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
-		enable_mdns: false,
-		wasm_external_transport: None,
+		transport: TransportConfig::Normal {
+			enable_mdns: false,
+			wasm_external_transport: None,
+		},
 	};
 
 	Configuration {
@@ -192,7 +194,8 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
-		password: "".to_string(),
+		grandpa_voter: false,
+		password: "".to_string().into(),
 	}
 }
 
@@ -299,9 +302,9 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 				service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(
-				|_index, service| service.get().network().peers_debug_info().len() == NUM_FULL_NODES - 1
+				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
 					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().peers_debug_info().len() == NUM_FULL_NODES,
+				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
 			);
 			network.runtime
 		};
@@ -338,9 +341,9 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 				}
 			}
 			network.run_until_all_full(
-				|_index, service| service.get().network().peers_debug_info().len() == NUM_FULL_NODES - 1
+				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
 					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().peers_debug_info().len() == NUM_FULL_NODES,
+				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -369,7 +372,7 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 	info!("Checking block sync");
 	let first_address = {
 		let first_service = &network.full_nodes[0].1;
-		let client = first_service.get().client();
+		let mut client = first_service.get().client();
 		for i in 0 .. NUM_BLOCKS {
 			if i % 128 == 0 {
 				info!("Generating #{}", i);

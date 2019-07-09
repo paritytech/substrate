@@ -39,6 +39,8 @@ pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
 pub use substrate_primitives::child_trie::prefixed_key;
+/// Various re-exports from the `hash-db` crate.
+pub use hash_db::HashDB as HashDBT;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -336,9 +338,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 
 	fn insert(&mut self, prefix: &[u8], value: &[u8]) -> H::Out {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		let key = H::hash(value);
-		self.0.emplace(key.clone(), &derived_prefix, value.into());
-		key
+		self.0.insert(&derived_prefix, value)
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: &[u8], value: T) {

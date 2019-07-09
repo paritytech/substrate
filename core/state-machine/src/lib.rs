@@ -205,6 +205,7 @@ impl offchain::Externalities for NeverOffchainExt {
 	fn encrypt(
 		&mut self,
 		_key: Option<offchain::CryptoKeyId>,
+		_kind: offchain::CryptoKind,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
@@ -213,18 +214,25 @@ impl offchain::Externalities for NeverOffchainExt {
 	fn decrypt(
 		&mut self,
 		_key: Option<offchain::CryptoKeyId>,
+		_kind: offchain::CryptoKind,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
 	}
 
-	fn sign(&mut self, _key: Option<offchain::CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn sign(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_kind: offchain::CryptoKind,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		unreachable!()
 	}
 
 	fn verify(
 		&mut self,
 		_key: Option<offchain::CryptoKeyId>,
+		_kind: offchain::CryptoKind,
 		_msg: &[u8],
 		_signature: &[u8],
 	) -> Result<bool, ()> {
@@ -1153,7 +1161,7 @@ mod tests {
 			|_| None,
 			|_| (),
 			b"testchild",
-			1u128, // child trie counter
+			|| 1u128, // child trie counter
 		);
 		ext.set_child_storage(&child_trie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_trie.node_ref(), b"abc"), Some(b"def".to_vec()));
@@ -1266,8 +1274,8 @@ mod tests {
 		use crate::trie_backend::tests::test_trie;
 		use std::collections::HashSet;
 
-		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x01], 1u128);
-		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x23], 2u128);
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x01], || 1u128);
+		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &[0x23], || 2u128);
 		let mut tr1 = {
 			let mut ttrie = test_trie();
 			let backend = ttrie.as_trie_backend().unwrap();

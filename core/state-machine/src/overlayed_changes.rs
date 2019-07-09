@@ -377,10 +377,10 @@ impl OverlayedChanges {
 			for (storage_key, ChildOverlayChangeSet {extrinsics, values, child_trie}) in self.prospective.children.drain() {
 				let entry = self.committed.children.entry(storage_key)
 					.or_insert_with(|| ChildOverlayChangeSet {
-            extrinsics: None,
-            values: Default::default(),
-            child_trie: child_trie.clone(),
-          });
+						extrinsics: None,
+						values: Default::default(),
+						child_trie: child_trie.clone(),
+					});
 				entry.values.extend(values.iter().map(|(k, v)| (k.clone(), v.clone())));
 				entry.child_trie = child_trie;
 

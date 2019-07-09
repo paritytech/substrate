@@ -45,10 +45,7 @@ const NO_CHILD_KEYSPACE: [u8;0] = [];
 
 /// Generate a new keyspace for a child trie.
 pub fn generate_keyspace(child_counter: u128) -> Vec<u8> {
-	// using 8 for block number and additional encoding targeting ~u64
-	let mut result = Vec::with_capacity(8);
-	parity_codec::Encode::encode_to(&Compact(child_counter), &mut result);
-	result
+	parity_codec::Encode::encode(&Compact(child_counter))
 }
 
 // see FIXME #2741 for removal of this allocation on every operation.
@@ -197,13 +194,13 @@ impl ChildTrie {
 		parent_fetcher: impl FnOnce(&[u8]) -> Option<Self>,
 		child_trie_update: impl FnOnce(ChildTrie),
 		parent: &[u8],
-		child_trie_counter: u128,
+		child_trie_next_counter: impl FnOnce() -> u128,
 	) -> Self {
 		parent_fetcher(parent)
 			.unwrap_or_else(|| {
 			let parent = Self::prefix_parent_key(parent);
 			let ct = ChildTrie {
-				keyspace: generate_keyspace(child_trie_counter),
+				keyspace: generate_keyspace(child_trie_next_counter()),
 				root: Default::default(),
 				parent,
 				extension: Default::default(),

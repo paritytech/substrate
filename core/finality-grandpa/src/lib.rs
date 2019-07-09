@@ -28,9 +28,9 @@
 //! must pass through this wrapper, otherwise consensus is likely to break in
 //! unexpected ways.
 //!
-//! Next, use the `LinkHalf` and a local configuration to `run_grandpa`. This requires a
-//! `Network` implementation. The returned future should be driven to completion and
-//! will finalize blocks in the background.
+//! Next, use the `LinkHalf` and a local configuration to `run_grandpa_voter`.
+//! This requires a `Network` implementation. The returned future should be
+//! driven to completion and will finalize blocks in the background.
 //!
 //! # Changing authority sets
 //!
@@ -102,7 +102,7 @@ pub use observer::run_grandpa_observer;
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
-use until_imported::UntilCommitBlocksImported;
+use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
 use fg_primitives::AuthoritySignature;
@@ -129,19 +129,64 @@ pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
 pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+/// A catch up message for this chain's block type.
+pub type CatchUp<Block> = grandpa::CatchUp<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
 /// A commit message for this chain's block type.
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
 >;
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
-	AuthorityId
+	AuthorityId,
+>;
+/// A global communication input stream for commits and catch up messages. Not
+/// exposed publicly, used internally to simplify types in the communication
+/// layer.
+type CommunicationIn<Block> = grandpa::voter::CommunicationIn<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// Global communication input stream for commits and catch up messages, with
+/// the hash type not being derived from the block, useful for forcing the hash
+/// to some type (e.g. `H256`) when the compiler can't do the inference.
+type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A global communication sink for commits. Not exposed publicly, used
+/// internally to simplify types in the communication layer.
+type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// Global communication sink for commits with the hash type not being derived
+/// from the block, useful for forcing the hash to some type (e.g. `H256`) when
+/// the compiler can't do the inference.
+type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
+	H,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
 >;
 
 /// Configuration for the GRANDPA service.
@@ -358,11 +403,11 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	network: &NetworkBridge<Block, N>,
 ) -> (
 	impl Stream<
-		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Item = CommunicationInH<Block, H256>,
 		Error = CommandOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = voter::CommunicationOut<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		SinkItem = CommunicationOutH<Block, H256>,
 		SinkError = CommandOrError<H256, NumberFor<Block>>,
 	>,
 ) where
@@ -378,37 +423,21 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		.unwrap_or(false);
 
 	// verification stream
-	let (commit_in, commit_out) = network.global_communication(
+	let (global_in, global_out) = network.global_communication(
 		communication::SetId(set_id),
 		voters.clone(),
 		is_voter,
 	);
 
-	// block commit messages until relevant blocks are imported.
-	let commit_in = UntilCommitBlocksImported::new(
+	// block commit and catch up messages until relevant blocks are imported.
+	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
 		client.clone(),
-		commit_in,
+		global_in,
 	);
 
-	let commits_in = commit_in.map_err(CommandOrError::from);
-	let commits_out = commit_out.sink_map_err(CommandOrError::from);
-
-	let global_in = commits_in.map(|(round, commit, mut callback)| {
-		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
-			voter::CommitProcessingOutcome::Good(_) =>
-				callback(communication::CommitProcessingOutcome::Good),
-			voter::CommitProcessingOutcome::Bad(_) =>
-				callback(communication::CommitProcessingOutcome::Bad),
-		}));
-		voter::CommunicationIn::Commit(round, commit, callback)
-	});
-
-	// NOTE: eventually this will also handle catch-up requests
-	let global_out = commits_out.with(|global| match global {
-		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
-		_ => unimplemented!(),
-	});
+	let global_in = global_in.map_err(CommandOrError::from);
+	let global_out = global_out.sink_map_err(CommandOrError::from);
 
 	(global_in, global_out)
 }
@@ -497,7 +526,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let (network, network_startup) = NetworkBridge::new(
 		network,
 		config.clone(),
-		Some(&set_state.read()),
+		set_state.clone(),
 		on_exit.clone(),
 	);
 

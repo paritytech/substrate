@@ -95,6 +95,7 @@ pub use crate::gas::Gas;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
+use substrate_primitives::child_trie::ChildTrie;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
@@ -106,11 +107,12 @@ use srml_support::{
 	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child
 };
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
-use system::{ensure_signed, RawOrigin};
+use system::{ensure_signed, RawOrigin, ensure_root};
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
-// see FIXME #2744 (should result in removing this type)
+// see FIXME #2744 should result in removing this type, and `TrieIdGenerator`
+// and `TrieIdFromParentCounter` (this id being use only for child trie indirection).
 pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
@@ -229,8 +231,6 @@ where
 	}
 }
 
-// See FIXME #2744 (should result in removing this trait
-// by fusing chiltrie node and accountinfo node).
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
 /// Note that it is different than encode because trie id should be collision resistant
 /// (being a proper unique identifier).
@@ -248,7 +248,6 @@ pub trait TrieIdGenerator<AccountId> {
 }
 
 /// Get trie id from `account_id`.
-// see FIXME #2744 this trie id could be remove if fusing nodes.
 pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
 
 /// This generator uses inner counter for account id and applies a hash over
@@ -486,7 +485,8 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		pub fn update_schedule(schedule: Schedule) -> Result {
+		pub fn update_schedule(origin, schedule: Schedule) -> Result {
+			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
@@ -703,41 +703,36 @@ decl_module! {
 			} else {
 				origin_contract.last_write
 			};
-			if let Some(child_trie) = child::child_trie(
-				&prefixed_trie_id(&origin_contract.trie_id[..])[..]
-			) {
+			let child_trie = contract_child_trie(&origin_contract.trie_id)
+				.ok_or_else(|| "Corrupted contract is missing child storage trie")?;
 
-				let key_values_taken = delta.iter()
-					.filter_map(|key| {
-						child::get_raw(child_trie.node_ref(), &blake2_256(key)).map(|value| {
-							child::kill(&child_trie, &blake2_256(key));
-							(key, value)
-						})
+			let key_values_taken = delta.iter()
+				.filter_map(|key| {
+					child::get_raw(child_trie.node_ref(), &blake2_256(key)).map(|value| {
+						child::kill(&child_trie, &blake2_256(key));
+						(key, value)
 					})
-					.collect::<Vec<_>>();
+				})
+				.collect::<Vec<_>>();
 
-				let tombstone = <TombstoneContractInfo<T>>::new(
-					// This operation is cheap enough because last_write (delta not included)
-					// is not this block as it has been checked earlier.
-					&runtime_io::child_storage_root(&child_trie)[..],
-					code_hash,
-				);
+			let tombstone = <TombstoneContractInfo<T>>::new(
+				// This operation is cheap enough because last_write (delta not included)
+				// is not this block as it has been checked earlier.
+				&runtime_io::child_storage_root(&child_trie)[..],
+				code_hash,
+			);
 
-				if tombstone != dest_tombstone {
-					for (key, value) in key_values_taken {
-						child::put_raw(&child_trie, &blake2_256(key), &value);
-					}
-
-					return Err("Tombstones don't match");
+			if tombstone != dest_tombstone {
+				for (key, value) in key_values_taken {
+					child::put_raw(&child_trie, &blake2_256(key), &value);
 				}
 
-				origin_contract.storage_size -= key_values_taken.iter()
-					.map(|(_, value)| value.len() as u32)
-					.sum::<u32>();
-
-			} else {
-				return Err("Corrupted contract is missing child storage trie");
+				return Err("Tombstones don't match");
 			}
+
+			origin_contract.storage_size -= key_values_taken.iter()
+				.map(|(_, value)| value.len() as u32)
+				.sum::<u32>();
 
 			<ContractInfoOf<T>>::remove(&origin);
 			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
@@ -810,6 +805,10 @@ decl_storage! {
 /// contract uses this prefix
 pub const CHILD_CONTRACT_PREFIX: &'static [u8] = b"default:";
 
+fn contract_child_trie(id: &TrieId) -> Option<ChildTrie> {
+	child::child_trie(prefixed_trie_id(id.as_slice()).as_slice())
+}
+
 fn prefixed_trie_id(trie_id: &[u8]) -> Vec<u8> {
 	let mut res = CHILD_CONTRACT_PREFIX.to_vec();
 	res.extend_from_slice(trie_id);
@@ -819,7 +818,7 @@ fn prefixed_trie_id(trie_id: &[u8]) -> Vec<u8> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
-			child::child_trie(&prefixed_trie_id(&info.trie_id[..])[..])
+			contract_child_trie(&info.trie_id)
 				.map(|child_trie| child::kill_storage(&child_trie));
 		}
 		<ContractInfoOf<T>>::remove(who);

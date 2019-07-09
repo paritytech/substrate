@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::Command, env};
+use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::{Command, self}, env};
 
 use toml::value::Table;
 
@@ -97,12 +97,24 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 ///
 /// If the `Cargo.lock` cannot be found, we emit a warning and return `None`.
 fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
-	let mut path = build_helper::out_dir();
+	fn find_impl(mut path: PathBuf) -> Option<PathBuf> {
+		loop {
+			if path.join("Cargo.lock").exists() {
+				return Some(path.join("Cargo.lock"))
+			}
 
-	while path.pop() {
-		if path.join("Cargo.lock").exists() {
-			return Some(path.join("Cargo.lock"))
+			if !path.pop() {
+				return None;
+			}
 		}
+	}
+
+	if let Some(path) = find_impl(build_helper::out_dir()) {
+		return Some(path);
+	}
+
+	if let Some(path) = find_impl(cargo_manifest.to_path_buf()) {
+		return Some(path);
 	}
 
 	build_helper::warning!(
@@ -136,12 +148,13 @@ fn get_wasm_binary_name(cargo_manifest: &Path) -> String {
 fn get_wasm_workspace_root() -> PathBuf {
 	let mut out_dir = build_helper::out_dir();
 
-	while out_dir.parent().is_some() {
-		if out_dir.parent().map(|p| p.ends_with("target")).unwrap_or(false) {
-			return out_dir;
+	loop {
+		match out_dir.parent() {
+			Some(parent) if out_dir.ends_with("build") => return parent.to_path_buf(),
+			_ => if !out_dir.pop() {
+				break;
+			}
 		}
-
-		out_dir.pop();
 	}
 
 	panic!("Could not find target dir in: {}", build_helper::out_dir().display())
@@ -214,12 +227,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 
 	fs::write(
 		project_folder.join("src/lib.rs"),
-		format!(
-			r#"
-				#![no_std]
-				pub use wasm_project::*;
-			"#
-		)
+		"#![no_std] pub use wasm_project::*;",
 	).expect("Project `lib.rs` writing can not fail; qed");
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
@@ -252,9 +260,15 @@ fn is_release_build() -> bool {
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = crate::get_nightly_cargo();
+
+	let rustflags = format!(
+		"-C link-arg=--export-table {}",
+		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
+	);
+
 	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
-		.env("RUSTFLAGS", "-C link-arg=--export-table")
+		.env("RUSTFLAGS", rustflags)
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
@@ -266,7 +280,8 @@ fn build_project(project: &Path) {
 
 	match build_cmd.status().map(|s| s.success()) {
 		Ok(true) => {},
-		_ => panic!("Failed to compile WASM binary"),
+		// Use `process.exit(1)` to have a clean error output.
+		_ => process::exit(1),
 	}
 }
 
@@ -333,4 +348,5 @@ fn generate_rerun_if_changed_instructions(
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
 }
