@@ -376,7 +376,7 @@ where
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
 	if cli.interactive_password {
-		config.password = input_keystore_password()?
+		config.password = input_keystore_password()?.into()
 	}
 
 	config.impl_name = impl_name;
