@@ -36,7 +36,6 @@ use srml_support::{
 };
 use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
-use super::OnMembersChanged;
 
 // no polynomial attacks:
 //
