@@ -390,7 +390,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use srml_support::{Hashable, assert_ok, assert_noop};
+	use srml_support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
