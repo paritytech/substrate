@@ -196,7 +196,7 @@ impl RuntimesCache {
 	/// up an initial runtime instance. The parameter is only needed for calling
 	/// into the Wasm module to find out the `Core_version`.
 	///
-	/// `initial_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
 	/// # Return value
@@ -215,7 +215,7 @@ impl RuntimesCache {
 		&mut self,
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		initial_heap_pages: Option<u64>,
+		default_heap_pages: Option<u64>,
 	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>), Error> {
 		let code_hash = ext.original_storage_hash(well_known_keys::CODE).ok_or(Error::InvalidCode)?;
 
@@ -245,7 +245,7 @@ impl RuntimesCache {
 			Entry::Occupied(o) => handle_result(o.get()),
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = Self::create_wasm_instance(wasm_executor, ext, initial_heap_pages);
+				let result = Self::create_wasm_instance(wasm_executor, ext, default_heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cachce", "cannot create a runtime: {:?}", err);
 				}
@@ -257,7 +257,7 @@ impl RuntimesCache {
 	fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		initial_heap_pages: Option<u64>,
+		default_heap_pages: Option<u64>,
 	) -> Result<CachedRuntime, CacheError> {
 		let code = ext
 			.original_storage(well_known_keys::CODE)
@@ -273,7 +273,7 @@ impl RuntimesCache {
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
 			.and_then(|pages| u64::decode(&mut &pages[..]))
-			.or(initial_heap_pages)
+			.or(default_heap_pages)
 			.unwrap_or(DEFAULT_HEAP_PAGES);
 
 		// Instantiate this module.

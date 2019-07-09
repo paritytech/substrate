@@ -75,17 +75,17 @@ pub struct NativeExecutor<D> {
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
-	initial_heap_pages: Option<u64>,
+	default_heap_pages: Option<u64>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance.
-	pub fn new(initial_heap_pages: Option<u64>) -> Self {
+	pub fn new(default_heap_pages: Option<u64>) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback: WasmExecutor::new(),
 			native_version: D::native_version(),
-			initial_heap_pages: initial_heap_pages,
+			default_heap_pages: default_heap_pages,
 		}
 	}
 }
@@ -96,7 +96,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 			_dummy: Default::default(),
 			fallback: self.fallback.clone(),
 			native_version: D::native_version(),
-			initial_heap_pages: self.initial_heap_pages,
+			default_heap_pages: self.default_heap_pages,
 		}
 	}
 }
@@ -112,7 +112,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	) -> Option<RuntimeVersion> {
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
-			cache.fetch_runtime(&self.fallback, ext, self.initial_heap_pages)
+			cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages)
 				.ok()?.1.clone()
 		})
 	}
@@ -137,7 +137,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
 			let (module, onchain_version) = match cache.fetch_runtime(
-				&self.fallback, ext, self.initial_heap_pages,
+				&self.fallback, ext, self.default_heap_pages,
 			) {
 				Ok((module, onchain_version)) => (module, onchain_version),
 				Err(e) => return (Err(e), false),
