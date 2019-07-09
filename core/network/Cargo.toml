@@ -50,10 +50,9 @@ quickcheck = "0.8.5"
 rand = "0.6.5"
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
-consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common", features = ["test-helpers"] }
 tempdir = "0.3"
 tokio = "0.1.11"
 
 [features]
 default = []
-test-helpers = ["keyring", "test-client", "consensus/test-helpers", "tokio"]
+test-helpers = ["keyring", "test-client", "tokio"]

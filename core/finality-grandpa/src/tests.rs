@@ -158,8 +158,8 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn peer(&self, i: usize) -> &GrandpaPeer {
-		&self.peers[i]
+	fn peer(&mut self, i: usize) -> &mut GrandpaPeer {
+		&mut self.peers[i]
 	}
 
 	fn peers(&self) -> &Vec<GrandpaPeer> {
@@ -949,7 +949,7 @@ fn allows_reimporting_change_blocks() {
 	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let net = GrandpaTestNet::new(api.clone(), 3);
+	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
 	let (block_import, ..) = net.make_block_import(client.clone());
@@ -998,7 +998,7 @@ fn test_bad_justification() {
 	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let net = GrandpaTestNet::new(api.clone(), 3);
+	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
 	let (block_import, ..) = net.make_block_import(client.clone());
