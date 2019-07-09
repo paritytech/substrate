@@ -364,12 +364,12 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -379,12 +379,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -394,12 +394,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});
