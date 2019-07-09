@@ -50,7 +50,7 @@ pub type SlotNumber = u64;
 pub type Weight = u64;
 
 /// BABE epoch information
-#[derive(Decode, Encode, Default)]
+#[derive(Decode, Encode, Default, PartialEq, Eq)]
 pub struct Epoch {
 	/// The slot number this block will start at
 	pub slot_number: SlotNumber,
