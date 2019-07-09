@@ -686,3 +686,64 @@ cfg_if! {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use substrate_test_runtime_client::{
+		prelude::*,
+		DefaultTestClientBuilderExt, TestClientBuilder,
+		runtime::TestAPI,
+	};
+	use runtime_primitives::{
+		generic::BlockId,
+		traits::ProvideRuntimeApi,
+	};
+	use state_machine::ExecutionStrategy;
+
+	#[test]
+	fn returns_mutable_static() {
+		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
+		assert_eq!(ret, 33);
+
+		// We expect that every invocation will need to return the initial
+		// value plus one. If the value increases more than that then it is
+		// a sign that the wasm runtime preserves the memory content.
+		let ret = runtime_api.returns_mutable_static(&block_id).unwrap();
+		assert_eq!(ret, 33);
+	}
+
+	// If we didn't restore the wasm instance properly, on a trap the stack pointer would not be
+	// returned to its initial value and thus the stack space is going to be leaked.
+	//
+	// See https://github.com/paritytech/substrate/issues/2967 for details
+	#[test]
+	fn restoration_of_globals() {
+		// Allocate 32 pages (of 65536 bytes) which gives the runtime 2048KB of heap to operate on
+		// (plus some additional space unused from the initial pages requested by the wasm runtime
+		// module).
+		//
+		// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
+		// to our allocator algorithm there are inefficiencies.
+		const REQUIRED_MEMORY_PAGES: u64 = 32;
+
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.set_heap_pages(REQUIRED_MEMORY_PAGES)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
+		let ret = runtime_api.allocates_huge_stack_array(&block_id, true);
+		assert!(ret.is_err());
+
+		// On the second invocation we allocate yet another 768KB (75%) of stack
+		let ret = runtime_api.allocates_huge_stack_array(&block_id, false);
+		assert!(ret.is_ok());
+	}
+
+}
