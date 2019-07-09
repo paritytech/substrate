@@ -37,13 +37,14 @@ use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 	BoxFinalityProofRequestBuilder,
 };
-use consensus::block_import::BlockImport;
+use consensus::block_import::{BlockImport, ImportResult};
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
+use parking_lot::Mutex;
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, ProtocolConfig};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
@@ -367,6 +368,33 @@ impl SpecializationFactory for DummySpecialization {
 	}
 }
 
+/// Implements `BlockImport` on an `Arc<Mutex<impl BlockImport>>`. Used internally. Necessary to overcome the way the
+/// `TestNet` trait is designed, more specifically `make_block_import` returning a `Box<BlockImport>` makes it
+/// impossible to clone the underlying object.
+struct BlockImportAdapter<T: ?Sized>(Arc<Mutex<Box<T>>>);
+
+impl<T: ?Sized> Clone for BlockImportAdapter<T> {
+	fn clone(&self) -> Self {
+		BlockImportAdapter(self.0.clone())
+	}
+}
+
+impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T> {
+	type Error = T::Error;
+
+	fn check_block(&mut self, hash: Hash, parent_hash: Hash) -> Result<ImportResult, Self::Error> {
+		self.0.lock().check_block(hash, parent_hash)
+	}
+
+	fn import_block(
+		&mut self,
+		block: ImportBlock<Block>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		self.0.lock().import_block(block, cache)
+	}
+}
+
 pub trait TestNetFactory: Sized {
 	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
@@ -422,10 +450,11 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone()));
+		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import,
+			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -449,7 +478,6 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
-		let (block_import, ..) = self.make_block_import(PeersClient::Full(client.clone()));
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
@@ -463,7 +491,7 @@ pub trait TestNetFactory: Sized {
 				client: PeersClient::Full(client),
 				imported_blocks_stream,
 				finality_notification_stream,
-				block_import,
+				block_import: Box::new(block_import),
 				verifier,
 				network,
 			});
@@ -479,10 +507,11 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Light(client.clone()));
+		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import,
+			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -506,7 +535,6 @@ pub trait TestNetFactory: Sized {
 			specialization: self::SpecializationFactory::create(),
 		}).unwrap();
 
-		let (block_import, ..) = self.make_block_import(PeersClient::Light(client.clone()));
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
@@ -518,7 +546,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				verifier,
-				block_import,
+				block_import: Box::new(block_import),
 				client: PeersClient::Light(client),
 				imported_blocks_stream,
 				finality_notification_stream,
