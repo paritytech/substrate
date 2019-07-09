@@ -39,7 +39,7 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -295,6 +295,7 @@ cfg_if! {
 	}
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -303,6 +304,38 @@ impl GetNodeBlockType for Runtime {
 
 impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
+}
+
+runtime_support::impl_outer_origin!{
+	pub enum Origin for Runtime where system = srml_system {}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Event;
+
+impl From<srml_system::Event> for Event {
+	fn from(evt: srml_system::Event) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl srml_system::Trait for Runtime {
+	type Origin = Origin;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+}
+
+impl srml_timestamp::Trait for Runtime {
+	/// A timestamp: seconds since the unix epoch.
+	type Moment = u64;
+	type OnTimestampSet = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -481,12 +514,6 @@ cfg_if! {
 				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
-			impl srml_timestamp::Trait<Block> for Block {
-				/// A timestamp: seconds since the unix epoch.
-				type Moment = u64;
-				type OnTimestampSet = Aura;
-			}
-
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -620,12 +647,6 @@ cfg_if! {
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl srml_timestamp::Trait<Block> for Block {
-				/// A timestamp: seconds since the unix epoch.
-				type Moment = u64;
-				type OnTimestampSet = Aura;
-			}
-
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
@@ -636,7 +657,7 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Block>() }
+				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

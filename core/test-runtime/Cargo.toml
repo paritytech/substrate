@@ -27,6 +27,7 @@ executive = { package = "srml-executive", path = "../../srml/executive", default
 cfg-if = "0.1.6"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
+srml-system = { path = "../../srml/system", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -62,4 +63,5 @@ std = [
 	"executive/std",
 	"srml-babe/std",
 	"srml-timestamp/std",
+	"srml-system/std",
 ]

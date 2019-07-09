@@ -4745,6 +4745,7 @@ dependencies = [
  "srml-babe 2.0.0",
  "srml-executive 2.0.0",
  "srml-support 2.0.0",
+ "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
