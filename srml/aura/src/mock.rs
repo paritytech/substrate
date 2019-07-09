@@ -20,7 +20,7 @@
 
 use primitives::{
 	KeytypeId, BuildStorage, traits::IdentityLookup,
-	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId}};
+	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId}
 };
 use srml_support::impl_outer_origin;
 use runtime_io;
