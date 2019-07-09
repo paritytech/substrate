@@ -35,7 +35,12 @@ use srml_support::{
 	}
 };
 use parity_codec::{Encode, Decode};
+<<<<<<< HEAD:srml/elections/src/lib.rs
 use system::{self, ensure_signed};
+=======
+use system::{self, ensure_signed, ensure_root};
+use super::OnMembersChanged;
+>>>>>>> origin/master:srml/council/src/seats.rs
 
 // no polynomial attacks:
 //
@@ -557,7 +562,8 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		fn set_desired_seats(#[compact] count: u32) {
+		fn set_desired_seats(origin, #[compact] count: u32) {
+			ensure_root(origin)?;
 			DesiredSeats::put(count);
 		}
 
@@ -565,7 +571,8 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
+		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
+			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let new_set: Vec<(T::AccountId, T::BlockNumber)> = Self::members()
 				.into_iter()
@@ -578,13 +585,15 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		fn set_presentation_duration(#[compact] count: T::BlockNumber) {
+		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
+			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
 		}
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		fn set_term_duration(#[compact] count: T::BlockNumber) {
+		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
+			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
 		}
 
@@ -2526,7 +2535,7 @@ mod tests {
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			assert_ok!(Elections::set_desired_seats(3));
+			assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			System::set_block_number(10);
@@ -2814,7 +2823,7 @@ mod tests {
 
 			System::set_block_number(8);
 			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![false, false, true, false], 1, 0));
-			assert_ok!(Elections::set_desired_seats(3));
+			assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			System::set_block_number(10);

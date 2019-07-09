@@ -136,9 +136,6 @@ fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
 
 /// Build and test the generated node-template
 fn build_and_test(path: &Path, cargo_tomls: &[PathBuf]) {
-	// Build wasm
-	assert!(Command::new(path.join("./scripts/build.sh")).current_dir(path).status().expect("Compiles wasm").success());
-
 	// Build node
 	assert!(Command::new("cargo").args(&["build", "--all"]).current_dir(path).status().expect("Compiles node").success());
 

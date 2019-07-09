@@ -44,7 +44,7 @@ where C: Components {
 	let mut last_number = None;
 	let mut last_update = time::Instant::now();
 
-	let display_notifications = service.network_status().for_each(move |net_status| {
+	let display_notifications = service.network_status().for_each(move |(net_status, _)| {
 
 		let info = client.info();
 		let best_number = info.chain.best_number.saturated_into::<u64>();
