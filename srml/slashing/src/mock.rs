@@ -22,7 +22,7 @@ use substrate_primitives::{Blake2Hasher, H256};
 use srml_staking::{GenesisConfig, StakerStatus};
 use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
 use rstd::{marker::PhantomData, cell::RefCell};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 pub type AccountId = u64;
 pub type Exposure = u64;
@@ -280,18 +280,62 @@ impl ExtBuilder {
 	}
 }
 
-pub struct SlashTenPercent<T>(pub T);
+// Almost real unresponsive but for simplicity assume only
+// at most one exposure per accountID
+pub struct Unresponsive<T: srml_staking::Trait> {
+	t: T,
+	reports: Vec<(T::AccountId, Exposure)>,
+}
 
-impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for SlashTenPercent<T> {
+impl<T: srml_staking::Trait> Unresponsive<T> {
+	pub fn new(t: T) -> Self {
+		Self {
+			t,
+			reports: Vec::new(),
+		}
+	}
+}
+
+impl<T: srml_staking::Trait> MisconductReporter<T::AccountId, Exposure> for Unresponsive<T> {
+	fn on_misconduct(&mut self, misbehaved: Vec<(T::AccountId, Exposure)>) {
+		for (who, exposure) in misbehaved {
+
+			// already have exposure ignore
+			if let Some(idx) = self.reports.iter().map(|(w, _)| w).find(|w| w == &&who) {
+			}
+
+			self.reports.push((who, exposure));
+		}
+	}
+}
+
+impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for Unresponsive<T> {
 	type Severity = u64;
+
+	fn severity(&self) -> Fraction<Self::Severity> {
+		let k = self.reports.len() as u64;
+		let n = 50;
+
+		// min(1, 3(k - 1) / n) * 0.05
+
+		let d = 3 * k - 3;
+
+		let five_percent = Fraction::new(1_u64, 20_u64);
+
+		if d >= n {
+			five_percent
+		} else {
+			let f = Fraction::new(d, n);
+			five_percent * f
+		}
+	}
 
 	fn as_misconduct_level(&self, _severity: Fraction<Self::Severity>) -> u8 {
 		1
 	}
 
-	fn on_misconduct(&mut self, _misbehaved: &[(T::AccountId, Exposure)]) -> Fraction<Self::Severity>
-	{
-		Fraction::new(1, 10)
+	fn misbehaved(&self) -> Vec<(T::AccountId, Exposure)> {
+		self.reports.clone()
 	}
 }
 

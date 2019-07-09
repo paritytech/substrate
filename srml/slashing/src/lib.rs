@@ -32,60 +32,47 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Report rolling data misconduct and apply slash accordingly
-pub fn rolling_data<M, OS, AccountId, Exposure>(
-	misbehaved: &[(AccountId, Exposure)],
-	misconduct: &mut M
-) -> u8
+/// Report misbehaviour but don't apply slashing
+pub fn report_misconduct<MR, AccountId, Exposure>(
+	misbehaved: Vec<(AccountId, Exposure)>,
+	misconduct: &mut MR
+)
 where
-	M: Misconduct<AccountId, Exposure>,
-	OS: OnSlashing<AccountId, Exposure, M::Severity>,
-{
-	let seve = misconduct.on_misconduct(misbehaved);
-	OS::slash(misbehaved, seve);
-	misconduct.as_misconduct_level(seve)
-}
-
-/// Report misconduct during an era but do not perform any slashing
-pub fn era_data<M, OS, AccountId, Exposure>(misbehaved: &[(AccountId, Exposure)], misconduct: &mut M)
-where
-	M: Misconduct<AccountId, Exposure>,
-	OS: OnSlashing<AccountId, Exposure, M::Severity>,
+	MR: MisconductReporter<AccountId, Exposure>,
 {
 	misconduct.on_misconduct(misbehaved);
 }
 
-/// Slash in the end of era
-pub fn end_of_era<E, OS, AccountId, Exposure>(end_of_era: &E) -> u8
+/// Slash the misbehaviours
+pub fn slash<M, OS, AccountId, Exposure>(slash: &M) -> u8
 where
-	E: OnEndEra<AccountId, Exposure>,
-	OS: OnSlashing<AccountId, Exposure, E::Severity>,
+	M: Misconduct<AccountId, Exposure>,
+	OS: OnSlashing<AccountId, Exposure, M::Severity>,
 {
-	let seve = end_of_era.severity();
-	let misbehaved = end_of_era.misbehaved();
+	let seve = slash.severity();
+	let misbehaved = slash.misbehaved();
 	OS::slash(&misbehaved, seve);
-	end_of_era.as_misconduct_level(seve)
+	slash.as_misconduct_level(seve)
 }
 
 /// Base trait for representing misconducts
-pub trait Misconduct<AccountId, Exposure>
+pub trait MisconductReporter<AccountId, Exposure>
 {
-	/// Severity
-	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
-
-	/// Report misconduct and estimates the current severity level
-	// TODO: replace this with Self::Severity
-	fn on_misconduct(&mut self, misbehaved: &[(AccountId, Exposure)]) -> Fraction<Self::Severity>;
-
-	/// Convert severity level into misconduct level (1, 2, 3 or 4)
-	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
+	/// Report misconduct
+	fn on_misconduct(&mut self, misbehaved: Vec<(AccountId, Exposure)>);
 }
 
 /// Apply slash in the end of the era
-pub trait OnEndEra<AccountId, Exposure>: Misconduct<AccountId, Exposure> {
-	/// Get severity level accumulated during the current the era
+pub trait Misconduct<AccountId, Exposure> {
+	/// Severity
+	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
+
+	/// Get estimated severity level
 	// TODO: replace this with Self::Severity
 	fn severity(&self) -> Fraction<Self::Severity>;
+
+	/// Convert severity level into misconduct level (1, 2, 3 or 4)
+	fn as_misconduct_level(&self, severity: Fraction<Self::Severity>) -> u8;
 
 	/// Get all misbehaved validators of the current era
 	fn misbehaved(&self) -> Vec<(AccountId, Exposure)>;
