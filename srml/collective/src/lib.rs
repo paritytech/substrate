@@ -407,7 +407,6 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::RawEvent;
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
