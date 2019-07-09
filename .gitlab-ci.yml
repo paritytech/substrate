@@ -209,6 +209,7 @@ fuzz-wasmtime:
     - cargo install cargo-fuzz
     - cargo fuzz run instantiate_run -- -jobs=$(nproc --all)
 
+
 .build-only:                       &build-only
   only:
     - master
