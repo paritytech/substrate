@@ -49,6 +49,17 @@ pub type SlotNumber = u64;
 /// The weight of an authority.
 pub type Weight = u64;
 
+/// BABE epoch information
+#[derive(Decode, Encode, Default)]
+pub struct Epoch {
+	/// The slot number this block will start at
+	pub slot_number: SlotNumber,
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, Weight)>,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
 /// An consensus log item for BABE.
 #[derive(Decode, Encode)]
 pub enum ConsensusLog {
@@ -57,7 +68,7 @@ pub enum ConsensusLog {
 	/// and the next epoch randomness. The information for the _next_ epoch should already
 	/// be available.
 	#[codec(index = "1")]
-	NextEpochData(SlotNumber, Vec<(AuthorityId, Weight)>, [u8; VRF_OUTPUT_LENGTH]),
+	NextEpochData(Epoch),
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
 	OnDisabled(AuthorityIndex),
@@ -122,19 +133,7 @@ decl_runtime_apis! {
 		/// Dynamic configuration may be supported in the future.
 		fn startup_data() -> BabeConfiguration;
 
-		/// Get the current authorites for Babe.
-		fn authorities() -> Vec<AuthorityId>;
-
-		/// Get the current randomness for Babe.
-		fn randomness() -> [u8; 32];
+		/// Get the current epoch data for Babe.
+		fn authorities() -> Epoch;
 	}
-}
-
-/// A BABE epoch
-#[derive(Encode, Decode, Eq, PartialEq, Clone)]
-pub struct Epoch {
-	/// The epoch randomness
-	pub randomness: [u8; 32],
-	/// The epoch authorities
-	pub authorities: Vec<AuthorityId>,
 }
