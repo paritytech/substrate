@@ -32,6 +32,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub mod misconduct;
+
 /// Report misbehaviour but don't apply slashing
 pub fn report_misconduct<MR, AccountId, Exposure>(
 	misbehaved: Vec<(AccountId, Exposure)>,
@@ -55,6 +58,14 @@ where
 	slash.as_misconduct_level(seve)
 }
 
+/// Slash the misbehaviours
+pub fn end_of_era<M, AccountId, Exposure>(m: &mut M)
+where
+	M: Misconduct<AccountId, Exposure>,
+{
+	m.end_of_era();
+}
+
 /// Report misconducts
 pub trait MisconductReporter<AccountId, Exposure>
 {
@@ -76,6 +87,9 @@ pub trait Misconduct<AccountId, Exposure> {
 
 	/// Get all misbehaved validators of the current era
 	fn misbehaved(&self) -> Vec<(AccountId, Exposure)>;
+
+	/// Apply action after era expired
+	fn end_of_era(&mut self);
 }
 
 /// Slash misbehaved, should be implemented by some `module` that has access to `Currency`
