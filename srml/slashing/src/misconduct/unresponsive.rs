@@ -1,8 +1,6 @@
 use crate::*;
 use crate::mock::*;
 
-type ValidatorCount = u64;
-
 /// An actor taking too long to respond
 /// Slash after each era, 0.05 * min(3(k-1) / n, 1)
 pub struct Unresponsive<T: srml_staking::Trait> {
@@ -24,7 +22,7 @@ impl<T: srml_staking::Trait> MisconductReporter<T::AccountId, Exposure> for Unre
 		for (who, exposure) in misbehaved {
 
 			// already have exposure just replace it
-			if let Some(idx) = self.reports.iter().map(|(w, _, _)| w).position(|w| w == &who) {
+			if let Some(idx) = self.reports.iter().map(|(w, _,)| w).position(|w| w == &who) {
 				self.reports[idx] = (who, exposure);
 			} else {
 				self.reports.push((who, exposure));
@@ -43,7 +41,7 @@ impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for Unresponsive
 			Fraction::zero()
 		} else {
 			// validator set is supposed to be fixed under the era
-			let validator_count: u64 = Staking::validator_count().into();
+			let n: u64 = Staking::validator_count().into();
 
 			// min(1, 3(k - 1) / n) * 0.05
 
@@ -69,7 +67,7 @@ impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for Unresponsive
 	}
 
 	fn misbehaved(&self) -> Vec<(T::AccountId, Exposure)> {
-		self.reports.iter().cloned().map(|(who, exp, _)| (who, exp)).collect()
+		self.reports.clone()
 	}
 
 	fn end_of_era(&mut self) {

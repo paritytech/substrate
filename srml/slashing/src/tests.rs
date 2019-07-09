@@ -51,7 +51,7 @@ fn slash_unresponsive() {
 		assert_eq!(1, misconduct_level);
 
 		// now it is end of era
-		end_of_era(&mut misconduct);
+		misconduct.end_of_era();
 		assert_eq!(1, misconduct_level);
 		assert_eq!(Fraction::zero(), misconduct.severity());
 	});
