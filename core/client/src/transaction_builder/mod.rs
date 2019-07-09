@@ -14,14 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use wasm_builder_runner::{build_current_project, WasmBuilderSource};
+//! Utility struct to build a transaction.
 
-fn main() {
-	build_current_project(
-		"wasm_binary.rs",
-		WasmBuilderSource::CratesOrPath {
-			path: "../../core/utils/wasm-builder",
-			version: "1.0.4",
-		},
-	);
-}
+#[cfg(feature = "std")]
+mod transaction_builder;
+#[cfg(feature = "std")]
+pub use transaction_builder::*;

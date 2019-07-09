@@ -35,6 +35,7 @@ pub mod in_mem;
 #[cfg(feature = "std")]
 pub mod genesis;
 pub mod block_builder;
+pub mod transaction_builder;
 #[cfg(feature = "std")]
 pub mod light;
 #[cfg(feature = "std")]

@@ -34,7 +34,7 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../transact
 num-traits = { version = "0.2" }
 
 [dev-dependencies]
-consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }
+# consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 grandpa = { package = "finality-grandpa", git = "https://github.com/paritytech/finality-grandpa/", branch = "marcio/grandpa-primitives", features = ["derive-codec", "test-helpers"] }
 # grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }

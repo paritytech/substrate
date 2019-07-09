@@ -65,6 +65,7 @@
 //! - `TRIGGER_WASM_BUILD` - Can be set to trigger a WASM build. On subsequent calls the value of the variable
 //!                          needs to change. As WASM builder instructs `cargo` to watch for file changes
 //!                          this environment variable should only be required in certain circumstances.
+//! - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the WASM binary.
 //!
 //! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 //! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -78,7 +79,7 @@
 //! - wasm-gc
 //!
 
-use std::{env, fs, path::PathBuf, process::{Command, Stdio}};
+use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
 
 mod prerequisites;
 mod wasm_project;
@@ -91,6 +92,9 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 ///
 /// By default the WASM binary uses the same build type as the main cargo build.
 const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
+
+/// Environment variable to extend the `RUSTFLAGS` variable given to the WASM build.
+const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
 
 /// Build the currently built project as WASM binary.
 ///
@@ -107,24 +111,16 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 	let cargo_manifest = PathBuf::from(cargo_manifest);
 
 	if !cargo_manifest.exists() {
-		create_out_file(
-			file_name,
-			format!("compile_error!(\"'{}' does not exists!\")", cargo_manifest.display())
-		);
-		return
+		panic!("'{}' does not exist!", cargo_manifest.display());
 	}
 
 	if !cargo_manifest.ends_with("Cargo.toml") {
-		create_out_file(
-			file_name,
-			format!("compile_error!(\"'{}' no valid path to a `Cargo.toml`!\")", cargo_manifest.display())
-		);
-		return
+		panic!("'{}' no valid path to a `Cargo.toml`!", cargo_manifest.display());
 	}
 
 	if let Some(err_msg) = prerequisites::check() {
-		create_out_file(file_name, format!("compile_error!(\"{}\");", err_msg));
-		return
+		eprintln!("{}", err_msg);
+		process::exit(1);
 	}
 
 	let (wasm_binary, bloaty) = wasm_project::create_and_compile(&cargo_manifest);

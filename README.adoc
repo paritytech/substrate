@@ -138,7 +138,7 @@ Now, edit `~/chainspec.json` in your editor. There are a lot of individual field
 [source, json]
 ----
      "timestamp": {
-        "period": 10
+        "minimumPeriod": 10
       },
 ----
 

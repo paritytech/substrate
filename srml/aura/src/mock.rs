@@ -18,7 +18,10 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use primitives::{
+	KeytypeId, BuildStorage, traits::IdentityLookup,
+	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId}};
+};
 use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher, sr25519};
