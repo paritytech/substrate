@@ -85,7 +85,7 @@ use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::Contains
+	StorageMap, Parameter, for_each_tuple, traits::Contains,
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
@@ -205,24 +205,28 @@ decl_module! {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		fn set_heap_pages(pages: u64) {
+		fn set_heap_pages(origin, pages: u64) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
-		pub fn set_code(new: Vec<u8>) {
+		pub fn set_code(origin, new: Vec<u8>) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
-		fn set_storage(items: Vec<KeyValue>) {
+		fn set_storage(origin, items: Vec<KeyValue>) {
+			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
 		}
 
 		/// Kill some items from storage.
-		fn kill_storage(keys: Vec<Key>) {
+		fn kill_storage(origin, keys: Vec<Key>) {
+			ensure_root(origin)?;
 			for key in &keys {
 				storage::unhashed::kill(&key);
 			}

@@ -25,4 +25,3 @@ test-client = { package = "substrate-test-runtime-client", path = "../../test-ru
 
 [features]
 default = []
-test-helpers = []

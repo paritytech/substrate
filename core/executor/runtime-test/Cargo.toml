@@ -12,7 +12,7 @@ sandbox = { package = "sr-sandbox", path = "../../sr-sandbox", default-features 
 substrate-primitives = { path = "../../primitives", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.1", path = "../../utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
