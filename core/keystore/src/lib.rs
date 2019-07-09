@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use substrate_primitives::crypto::{KeyTypeId, Pair, Public, TypedKey};
+use substrate_primitives::crypto::{KeyTypeId, Pair, Public};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -69,7 +69,7 @@ impl Store {
 		Ok(Store { path, additional: HashMap::new() })
 	}
 
-	fn get_pair<TPair: Pair + TypedKey>(&self, public: &TPair::Public) -> Result<Option<TPair>> {
+	fn get_pair<TPair: Pair>(&self, public: &TPair::Public) -> Result<Option<TPair>> {
 		let key = (TPair::KEY_TYPE, public.to_raw_vec());
 		if let Some(bytes) = self.additional.get(&key) {
 			let pair = TPair::from_seed_slice(bytes)
@@ -79,13 +79,13 @@ impl Store {
 		Ok(None)
 	}
 
-	fn insert_pair<TPair: Pair + TypedKey>(&mut self, pair: &TPair) {
+	fn insert_pair<TPair: Pair>(&mut self, pair: &TPair) {
 		let key = (TPair::KEY_TYPE, pair.public().to_raw_vec());
 		self.additional.insert(key, pair.to_raw_vec());
 	}
 
 	/// Generate a new key, placing it into the store.
-	pub fn generate<TPair: Pair + TypedKey>(&self, password: &str) -> Result<TPair> {
+	pub fn generate<TPair: Pair>(&self, password: &str) -> Result<TPair> {
 		let (pair, phrase, _) = TPair::generate_with_phrase(Some(password));
 		let mut file = File::create(self.key_file_path::<TPair>(&pair.public()))?;
 		::serde_json::to_writer(&file, &phrase)?;
@@ -94,7 +94,7 @@ impl Store {
 	}
 
 	/// Create a new key from seed. Do not place it into the store.
-	pub fn generate_from_seed<TPair: Pair + TypedKey>(&mut self, seed: &str) -> Result<TPair> {
+	pub fn generate_from_seed<TPair: Pair>(&mut self, seed: &str) -> Result<TPair> {
 		let pair = TPair::from_string(seed, None)
 			.ok().ok_or(Error::InvalidSeed)?;
 		self.insert_pair(&pair);
@@ -102,7 +102,7 @@ impl Store {
 	}
 
 	/// Load a key file with given public key.
-	pub fn load<TPair: Pair + TypedKey>(&self, public: &TPair::Public, password: &str) -> Result<TPair> {
+	pub fn load<TPair: Pair>(&self, public: &TPair::Public, password: &str) -> Result<TPair> {
 		if let Some(pair) = self.get_pair(public)? {
 			return Ok(pair)
 		}
@@ -120,7 +120,7 @@ impl Store {
 	}
 
 	/// Get public keys of all stored keys.
-	pub fn contents<TPublic: Public + TypedKey>(&self) -> Result<Vec<TPublic>> {
+	pub fn contents<TPublic: Public>(&self) -> Result<Vec<TPublic>> {
 		let mut public_keys: Vec<TPublic> = self.additional.keys()
 			.filter_map(|(ty, public)| {
 				if *ty != TPublic::KEY_TYPE {
@@ -151,7 +151,7 @@ impl Store {
 		Ok(public_keys)
 	}
 
-	fn key_file_path<TPair: Pair + TypedKey>(&self, public: &TPair::Public) -> PathBuf {
+	fn key_file_path<TPair: Pair>(&self, public: &TPair::Public) -> PathBuf {
 		let mut buf = self.path.clone();
 		let bytes: [u8; 4] = TPair::KEY_TYPE.to_le_bytes();
 		let key_type = hex::encode(bytes);

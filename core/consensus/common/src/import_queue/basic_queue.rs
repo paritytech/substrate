@@ -21,8 +21,8 @@ use runtime_primitives::{Justification, traits::{Block as BlockT, Header as Head
 use crate::error::Error as ConsensusError;
 use crate::block_import::{BlockImport, BlockOrigin};
 use crate::import_queue::{
-	BlockImportResult, BlockImportError, Verifier, SharedBlockImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder, SharedJustificationImport, ImportQueue, Link, Origin,
+	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
+	BoxFinalityProofRequestBuilder, BoxJustificationImport, ImportQueue, Link, Origin,
 	IncomingBlock, import_single_block,
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
@@ -44,7 +44,7 @@ pub struct BasicQueue<B: BlockT> {
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
 	/// Sent through the link as soon as possible.
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	/// Since we have to be in a tokio context in order to spawn background tasks, we first store
 	/// the task to spawn here, then extract it as soon as we are in a tokio context.
 	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
@@ -63,10 +63,10 @@ impl<B: BlockT> BasicQueue<B> {
 	/// finality proof importer.
 	pub fn new<V: 'static + Verifier<B>>(
 		verifier: Arc<V>,
-		block_import: SharedBlockImport<B>,
-		justification_import: Option<SharedJustificationImport<B>>,
-		finality_proof_import: Option<SharedFinalityProofImport<B>>,
-		finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+		block_import: BoxBlockImport<B>,
+		justification_import: Option<BoxJustificationImport<B>>,
+		finality_proof_import: Option<BoxFinalityProofImport<B>>,
+		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
 		let (future, worker_sender) = BlockImportWorker::new(
@@ -148,9 +148,9 @@ enum ToWorkerMsg<B: BlockT> {
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 	result_sender: BufferedLinkSender<B>,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	verifier: Arc<V>,
 }
 
@@ -158,9 +158,9 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	fn new(
 		result_sender: BufferedLinkSender<B>,
 		verifier: Arc<V>,
-		block_import: SharedBlockImport<B>,
-		justification_import: Option<SharedJustificationImport<B>>,
-		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+		block_import: BoxBlockImport<B>,
+		justification_import: Option<BoxJustificationImport<B>>,
+		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	) -> (impl Future<Item = (), Error = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = mpsc::unbounded();
 
@@ -172,13 +172,13 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			finality_proof_import,
 		};
 
-		if let Some(justification_import) = worker.justification_import.as_ref() {
+		if let Some(justification_import) = worker.justification_import.as_mut() {
 			for (hash, number) in justification_import.on_start() {
 				worker.result_sender.request_justification(&hash, number);
 			}
 		}
 
-		if let Some(finality_proof_import) = worker.finality_proof_import.as_ref() {
+		if let Some(finality_proof_import) = worker.finality_proof_import.as_mut() {
 			for (hash, number) in finality_proof_import.on_start() {
 				worker.result_sender.request_finality_proof(&hash, number);
 			}
@@ -211,7 +211,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 
 	fn import_a_batch_of_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		let (imported, count, results) = import_many_blocks(
-			&*self.block_import,
+			&mut *self.block_import,
 			origin,
 			blocks,
 			self.verifier.clone(),
@@ -295,8 +295,9 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
-		let result = self.finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
+		let verifier = &*self.verifier;
+		let result = self.finality_proof_import.as_mut().map(|finality_proof_import| {
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, verifier)
 				.map_err(|e| {
 					debug!(
 						"Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}",
@@ -319,7 +320,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		number: NumberFor<B>,
 		justification: Justification
 	) {
-		let success = self.justification_import.as_ref().map(|justification_import| {
+		let success = self.justification_import.as_mut().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
 					debug!(
@@ -340,7 +341,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 
 /// Import several blocks at once, returning import result for each block.
 fn import_many_blocks<B: BlockT, V: Verifier<B>>(
-	import_handle: &dyn BlockImport<B, Error = ConsensusError>,
+	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,

@@ -50,7 +50,7 @@ construct_simple_protocol! {
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	pub grandpa_import_setup: Option<(grandpa::BlockImportForService<F>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
 
@@ -100,7 +100,7 @@ construct_service_factory! {
 						Arc::new(aura_key),
 						client,
 						select_chain,
-						block_import.clone(),
+						block_import,
 						proposer,
 						service.network(),
 						service.config.custom.inherent_data_providers.clone(),
@@ -161,15 +161,14 @@ construct_service_factory! {
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
-				let block_import = Arc::new(block_import);
 				let justification_import = block_import.clone();
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				import_queue::<_, _, AuraPair>(
 					slot_duration,
-					block_import,
-					Some(justification_import),
+					Box::new(block_import),
+					Some(Box::new(justification_import)),
 					None,
 					None,
 					client,
@@ -186,15 +185,14 @@ construct_service_factory! {
 				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
 					client.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
-				let block_import = Arc::new(block_import);
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
 				import_queue::<_, _, AuraPair>(
 					SlotDuration::get_or_compute(&*client)?,
-					block_import,
+					Box::new(block_import),
 					None,
-					Some(finality_proof_import),
+					Some(Box::new(finality_proof_import)),
 					Some(finality_proof_request_builder),
 					client,
 					config.custom.inherent_data_providers.clone(),

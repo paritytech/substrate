@@ -71,8 +71,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 106,
-	impl_version: 106,
+	spec_version: 107,
+	impl_version: 107,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -111,6 +111,10 @@ pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
 pub const HOURS: Moment = MINUTES * 60;
 pub const DAYS: Moment = HOURS * 24;
 
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+}
+
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = Index;
@@ -121,6 +125,7 @@ impl system::Trait for Runtime {
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl aura::Trait for Runtime {

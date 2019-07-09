@@ -23,7 +23,7 @@ use primitives::{
 	traits::IdentityLookup,
 	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId},
 };
-use srml_support::impl_outer_origin;
+use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
@@ -36,6 +36,10 @@ impl_outer_origin!{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -46,6 +50,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 
 impl timestamp::Trait for Test {
