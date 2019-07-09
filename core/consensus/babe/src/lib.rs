@@ -1098,7 +1098,7 @@ mod tests {
 			slot_number: 1,
 		};
 		loop {
-			match claim_slot(randomness, i, 0, epoch, &pair, u64::MAX / 10) {
+			match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
 				None => i += 1,
 				Some(s) => {
 					debug!(target: "babe", "Authored block {:?}", s);
