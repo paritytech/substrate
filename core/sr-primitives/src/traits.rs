@@ -875,7 +875,7 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	fn into_account(&self) -> AccountId { self.into_sub_account(&()) }
 
 	/// Try to convert an account ID into this type. Might not succeed.
-	fn try_from_account(a: &AccountId) -> Option<Self> { Self::try_from_sub_account::<()>(a).0 }
+	fn try_from_account(a: &AccountId) -> Option<Self> { Some(Self::try_from_sub_account::<()>(a)?.0) }
 
 	/// Convert this value amalgamated with the a secondary "sub" value into an account ID. This is
 	/// infallible.
@@ -886,10 +886,10 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	/// - `self.into_sub_account(0u32)`
 	/// - `self.into_sub_account(vec![0u8; 0])`
 	/// - `self.into_account()`
-	fn into_sub_account<S: Encode>(&self, sub: S) -> T;
+	fn into_sub_account<S: Encode>(&self, sub: S) -> AccountId;
 
 	/// Try to convert an account ID into this type. Might not succeed.
-	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)>;
+	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
 }
 
 /// Provide a simple 4 byte identifier for a type.
