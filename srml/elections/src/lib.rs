@@ -41,7 +41,8 @@ use system::{self, ensure_signed, ensure_root};
 //
 // all unbonded public operations should be constant time.
 // all other public operations must be linear time in terms of prior public operations and:
-// - those "valid" ones that cost nothing be limited to a constant number per single protected operation
+// - those "valid" ones that cost nothing be limited to a constant number per single protected
+//   operation
 // - the rest costing the same order as the computational complexity
 // all protected operations must complete in at most O(public operations)
 //
@@ -50,12 +51,14 @@ use system::{self, ensure_signed, ensure_root};
 // any storage requirements should be bonded by the same order as the volume.
 
 // public operations:
-// - express approvals (you pay in a "voter" bond the first time you do this; O(1); one extra DB entry, one DB change)
+// - express approvals (you pay in a "voter" bond the first time you do this; O(1); one extra DB
+//   entry, one DB change)
 // - remove active voter (you get your "voter" bond back; O(1); one fewer DB entry, one DB change)
-// - remove inactive voter (either you or the target is removed; if the target, you get their "voter" bond back; O(1); one fewer DB entry, one DB change)
+// - remove inactive voter (either you or the target is removed; if the target, you get their
+//   "voter" bond back; O(1); one fewer DB entry, one DB change)
 // - submit candidacy (you pay a "candidate" bond; O(1); one extra DB entry, two DB changes)
-// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation is invalid; O(voters) compute; )
-// protected operations:
+// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation
+//   is invalid; O(voters) compute; ) protected operations:
 // - remove candidacy (remove all votes for a candidate) (one fewer DB entry, two DB changes)
 
 // to avoid a potentially problematic case of not-enough approvals prior to voting causing a
@@ -98,7 +101,8 @@ pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
 	/// Last VoteIndex in which one of this voter's approvals won.
-	/// Note that `last_win = N` indicates a last win at index `N-1`, hence `last_win = 0` means no win ever.
+	/// Note that `last_win = N` indicates a last win at index `N-1`, hence `last_win = 0` means no
+	/// win ever.
 	last_win: VoteIndex,
 	/// The amount of stored weight as a result of not winning but changing approvals.
 	pot: Balance,
