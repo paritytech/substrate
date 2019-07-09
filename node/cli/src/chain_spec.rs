@@ -40,6 +40,10 @@ pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/flaming-fir.json"))
 }
 
+fn session_keys(key: ed25519::Public) -> SessionKeys {
+	SessionKeys { ed25519: key }
+}
+
 fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
 	// generated with secret:
@@ -112,7 +116,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -239,7 +243,7 @@ pub fn testnet_genesis(
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,

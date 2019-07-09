@@ -126,6 +126,29 @@ pub trait VerifySeal<Header, Author> {
 	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 
+/// Something which can compute and check proofs of
+/// a historical key owner and return full identification data of that
+/// key owner.
+pub trait KeyOwnerProofSystem<Key> {
+	/// The proof of membership itself.
+	type Proof: Codec;
+	/// The full identification of a key owner.
+	type FullIdentification: Codec;
+
+	/// Prove membership of a key owner in the current block-state.
+	///
+	/// This should typically only be called off-chain, since it may be
+	/// computationally heavy.
+	///
+	/// Returns `Some` iff the key owner referred to by the given `key` is a
+	/// member of the current set.
+	fn prove(key: Key) -> Option<Self::Proof>;
+
+	/// Check a proof of membership on-chain. Return `Some` iff the proof is
+	/// valid and recent enough to check.
+	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
+}
+
 /// Handler for when some currency "account" decreased in balance for
 /// some reason.
 ///

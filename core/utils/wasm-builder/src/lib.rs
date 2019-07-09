@@ -65,6 +65,7 @@
 //! - `TRIGGER_WASM_BUILD` - Can be set to trigger a WASM build. On subsequent calls the value of the variable
 //!                          needs to change. As WASM builder instructs `cargo` to watch for file changes
 //!                          this environment variable should only be required in certain circumstances.
+//! - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the WASM binary.
 //!
 //! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 //! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -91,6 +92,9 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 ///
 /// By default the WASM binary uses the same build type as the main cargo build.
 const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
+
+/// Environment variable to extend the `RUSTFLAGS` variable given to the WASM build.
+const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
 
 /// Build the currently built project as WASM binary.
 ///
