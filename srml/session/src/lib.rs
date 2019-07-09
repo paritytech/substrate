@@ -122,7 +122,7 @@
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::{Decode, Encode};
 use primitives::KeyTypeId;
-use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash};
+use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash, One, SimpleArithmetic};
 use srml_support::{
 	dispatch::Result,
 	storage,
@@ -158,13 +158,13 @@ pub struct PeriodicSessions<
 >(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + One + SimpleArithmetic,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn should_end_session(now: BlockNumber) -> bool {
-		let offset = Offset::get();
-		now >= offset && ((now - offset) % Period::get()).is_zero()
+		let period = BlockNumber::one() + BlockNumber::one() + BlockNumber::one() + BlockNumber::one();
+		((now.saturating_sub(Offset::get())) % period).is_zero()
 	}
 }
 
@@ -376,6 +376,7 @@ decl_module! {
 		/// Called when a block is finalized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) {
+			//print("===================================// on_initialize");
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
 			}
@@ -388,6 +389,14 @@ impl<T: Trait> Module<T> {
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
 	pub fn rotate_session() {
+		// print("===================================// rotate_session");
+		/*
+		let now = <timestamp::Module<T>>::get();
+		let time_elapsed = now.clone() - Self::current_start();
+		let session_index = <CurrentIndex<T>>::get() + One::one();
+		*/
+
+		// Increment current session index.
 		let session_index = CurrentIndex::get();
 
 		let changed = QueuedChanged::get();
@@ -428,6 +437,14 @@ impl<T: Trait> Module<T> {
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys);
+		/*
+		let amalgamated = validators.into_iter()
+			.map(|a| { let k = <NextKeyFor<T>>::get(&a).unwrap_or_default(); (a, k) })
+			.collect::<Vec<_>>();
+
+		//print("===================================// calling on_new_session");
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &amalgamated);
+		*/
 	}
 
 	/// Disable the validator of index `i`.

@@ -201,6 +201,7 @@ decl_module! {
 			_signature: Vec<u8>
 		) {
 			ensure_none(origin)?;
+			print("heartbeat");
 
 			let current_session = <session::Module<T>>::current_index();
 			let exists = <ReceivedHeartbeats<T>>::exists(current_session, &heartbeat.authority_id);
@@ -301,6 +302,7 @@ decl_module! {
 			if next_gossip < now && not_yet_gossipped {
 				set_worker_status::<T>(now, false);
 
+				print("gossipping");
 				match gossip_at::<T>(now) {
 					Ok(_) => {},
 					Err(err) => print(err),
