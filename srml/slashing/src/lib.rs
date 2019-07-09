@@ -55,14 +55,14 @@ where
 	slash.as_misconduct_level(seve)
 }
 
-/// Base trait for representing misconducts
+/// Report misconducts
 pub trait MisconductReporter<AccountId, Exposure>
 {
 	/// Report misconduct
 	fn on_misconduct(&mut self, misbehaved: Vec<(AccountId, Exposure)>);
 }
 
-/// Apply slash in the end of the era
+/// Misconduct interface
 pub trait Misconduct<AccountId, Exposure> {
 	/// Severity
 	type Severity: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
