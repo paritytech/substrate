@@ -36,7 +36,7 @@ use fg_primitives::{
 	AuthorityId, Challenge, FinalizedBlockProof, ChallengedVote,
 	ChallengedVoteSet, SignedPrecommit,
 };
-use srml_grandpa::{Signal, ChallengedVote};
+use srml_grandpa::Signal;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
@@ -454,72 +454,72 @@ where
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
 			Ok(Some(challenge)) => {
 
-				let challenged_votes = challenge.challenged_vote_set.challenged_votes.clone();
-				let prevote_challenged = false;
-				let precommit_challenged = false;
+				// let challenged_votes = challenge.challenged_vote_set.challenged_votes.clone();
+				// let prevote_challenged = false;
+				// let precommit_challenged = false;
 
-				for ChallengedVote { vote, authority, signature } in challenged_votes {
-					if true { //me == authority {
-						match vote {
-							Prevote { target_hash, target_number } => prevote_challenged = true,
-							Precommit { target_hash, target_number } => precommit_challenged = true,
-						}
-					}
-				}
+				// for ChallengedVote { vote, authority, signature } in challenged_votes {
+				// 	if true { //me == authority {
+				// 		match vote {
+				// 			Prevote { target_hash, target_number } => prevote_challenged = true,
+				// 			Precommit { target_hash, target_number } => precommit_challenged = true,
+				// 		}
+				// 	}
+				// }
 
-				let votes_seen = self.votes_seen_when_prevoted(challenge.challenged_vote_set.round);
-				let votes_seen = vec![
-					SignedMessage {
-						message:, // Prevote, Precommit, PrimaryPropose.
-						signature:,
-						id:,
-					}
-				];
-				let challenge = Challenge {
-					finalized_block: (H, N),
-					finalized_block_proof: FinalizedBlockProof {
-						commit: Commit {
-							target_hash:,
-							target_number:,
-							precommits: vec![
-								SignedPrecommit {
-									precommit:,
-									signature:,
-									id:,
-								},
-							],
-						},
-						headers: vec![],
-					},
-					challenged_vote_set: ChallengedVoteSet {
-						challenged_votes: vec![
-							ChallengedVote {
-							}
-						],
-						set_id: u64,
-						round: u64,
-					},
-					previous_challenge: Option<H>,
-				};
+				// let votes_seen = self.votes_seen_when_prevoted(challenge.challenged_vote_set.round);
+				// let votes_seen = vec![
+				// 	SignedMessage {
+				// 		message:, // Prevote, Precommit, PrimaryPropose.
+				// 		signature:,
+				// 		id:,
+				// 	}
+				// ];
+				// let challenge = Challenge {
+				// 	finalized_block: (H, N),
+				// 	finalized_block_proof: FinalizedBlockProof {
+				// 		commit: Commit {
+				// 			target_hash:,
+				// 			target_number:,
+				// 			precommits: vec![
+				// 				SignedPrecommit {
+				// 					precommit:,
+				// 					signature:,
+				// 					id:,
+				// 				},
+				// 			],
+				// 		},
+				// 		headers: vec![],
+				// 	},
+				// 	challenged_vote_set: ChallengedVoteSet {
+				// 		challenged_votes: vec![
+				// 			ChallengedVote {
+				// 			}
+				// 		],
+				// 		set_id: u64,
+				// 		round: u64,
+				// 	},
+				// 	previous_challenge: Option<H>,
+				// };
 
 
-				if challenged {
-					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+				// if challenged {
+				// 	let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 					
-					self.api.runtime_api()
-						.construct_report_unjustified_prevotes_call(
-							&block_id,
-							challenge,
-						)
-						.map(|call| {
-							self.transaction_pool.as_ref().map(|txpool|
-								txpool.submit_report_call(self.inner.as_ref(), call.as_slice())
-							);
-							info!(target: "afg", "Unjustified prevotes report has been submitted")
-						}).unwrap_or_else(|err|
-							error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
-						);
-				}
+				// 	self.api.runtime_api()
+				// 		.construct_report_unjustified_prevotes_call(
+				// 			&block_id,
+				// 			challenge,
+				// 		)
+				// 		.map(|call| {
+				// 			self.transaction_pool.as_ref().map(|txpool|
+				// 				txpool.submit_report_call(self.inner.as_ref(), call.as_slice())
+				// 			);
+				// 			info!(target: "afg", "Unjustified prevotes report has been submitted")
+				// 		}).unwrap_or_else(|err|
+				// 			error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
+				// 		);
+				// }
 
 				Ok(Some(()))
 			},
