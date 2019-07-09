@@ -34,7 +34,7 @@ pub use paste;
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::{prelude::*, ops};
+use rstd::{prelude::*, ops, convert::TryInto};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -43,7 +43,7 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -406,19 +406,28 @@ impl Fixed64 {
 	}
 }
 
+impl UniqueSaturatedInto<u32> for Fixed64 {
+	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
+	/// expected to be lossy.
+	fn unique_saturated_into(self) -> u32 {
+		(self.0.abs() / DIV).try_into().unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
 impl Saturating for Fixed64 {
 	fn saturating_add(self, rhs: Self) -> Self {
 		Self(self.0.saturating_add(rhs.0))
 	}
 	fn saturating_mul(self, rhs: Self) -> Self {
 		Self(self.0.saturating_mul(rhs.0) / DIV)
-
 	}
 	fn saturating_sub(self, rhs: Self) -> Self {
 		Self(self.0.saturating_sub(rhs.0))
 	}
 }
 
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
+/// safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -427,6 +436,8 @@ impl ops::Add for Fixed64 {
 	}
 }
 
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
+/// safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 
