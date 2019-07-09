@@ -838,6 +838,17 @@ mod test_append_and_len {
 			assert_eq!(MapVec::len(1).unwrap(), 6);
 		});
 	}
+
+	#[test]
+	fn len_works_for_uninitialized() {
+		// both to vec and vec will return Default::default() in case the key does not exists.
+		// the ::len() should behave accordingly.
+		with_externalities(&mut TestExternalities::default(), || {
+			assert_eq!(JustVec::len().unwrap(), 0);
+			assert_eq!(MapVec::len(0).unwrap(), 0);
+			assert_eq!(MapVec::len(2).unwrap(), 0);
+		});
+	}
 }
 
 

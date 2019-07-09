@@ -23,7 +23,7 @@ use rstd::{result, convert::TryFrom};
 use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
-	decl_module, decl_storage, decl_event, ensure,
+	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap,
 	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
@@ -368,9 +368,8 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
-			let mut props = Self::public_props();
-			props.push((index, (*proposal).clone(), who));
-			<PublicProps<T>>::put(props);
+			<PublicProps<T>>::append(&[(index, (*proposal).clone(), who)])
+				.expect("vec can always append; qed");
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -757,7 +756,7 @@ impl<T: Trait> Module<T> {
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+			<VotersFor<T>>::append(ref_index, &[who.clone()]).expect("vec can always append; qed");
 		}
 		<VoteOf<T>>::insert(&(ref_index, who), vote);
 		Ok(())
@@ -895,10 +894,10 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				Self::enact_proposal(info.proposal, index);
 			} else {
-				<DispatchQueue<T>>::mutate(
+				<DispatchQueue<T>>::append(
 					now + info.delay,
-					|q| q.push(Some((info.proposal, index)))
-				);
+					&[Some((info.proposal, index))]
+				).expect("map to vec can always append; qed");
 			}
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
