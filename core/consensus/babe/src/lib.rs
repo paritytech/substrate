@@ -1093,7 +1093,7 @@ mod tests {
 		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
 		let epoch = Epoch {
-			authorities: vec![pair.public()],
+			authorities: vec![(pair.public(), 0)],
 			randomness: [0; 32],
 			slot_number: 1,
 		};
