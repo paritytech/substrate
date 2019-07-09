@@ -38,7 +38,7 @@ where
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-pub struct UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
+pub struct UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,
 	Index: HasCompact + Codec,
@@ -49,27 +49,19 @@ where
 	pub signature: Option<SignatureContent<Address, Index, Signature>>,
 	/// The function that should be called.
 	pub function: Call,
-	/// The tip for this transaction
-	pub tip: Tip<Balance>,
 }
 
-impl<Address, Index, Signature, Call, Balance> UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
+impl<Address, Index, Signature, Call> UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,
 	Index: HasCompact + Codec,
 	Signature: Codec,
 {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(index: Index,
-		function: Call,
-		signed: Address,
-		signature: Signature,
-		tip: Tip<Balance>,
-	) -> Self {
+	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature) -> Self {
 		UncheckedExtrinsic {
 			signature: Some(SignatureContent{signed, signature, index}),
 			function,
-			tip,
 		}
 	}
 
@@ -78,13 +70,12 @@ where
 		UncheckedExtrinsic {
 			signature: None,
 			function,
-			tip: Tip::None,
 		}
 	}
 }
 
-impl<Address, Index, Signature, Call, AccountId, Context, Balance> traits::Checkable<Context>
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
+impl<Address, Index, Signature, Call, AccountId, Context> traits::Checkable<Context>
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Member + MaybeDisplay + Codec,
 	Index: Member + MaybeDisplay + SimpleArithmetic + Codec,
@@ -92,14 +83,13 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId> + Codec,
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
-	Balance: Member + Encode,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, u64>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some(SignatureContent{signed, signature, index}) => {
-				let payload = (index, self.function, self.tip);
+				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err(crate::BAD_SIGNATURE)
@@ -107,18 +97,13 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
 					function: payload.1,
-					tip: payload.2,
+					tip: Tip::None,
 				}
 			}
-			None => {
-				if self.tip == Tip::None {
-					return Err(crate::UNSIGNED_TIP);
-				}
-				CheckedExtrinsic {
-					signed: None,
-					function: self.function,
-					tip: self.tip,
-				}
+			None => CheckedExtrinsic {
+				signed: None,
+				function: self.function,
+				tip: Tip::None,
 			},
 		})
 	}
@@ -129,20 +114,15 @@ impl<
 	Index: HasCompact + Codec,
 	Signature: Codec,
 	Call,
-	Balance,
-> Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
+> Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature> {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 }
 
-impl<
-	Address: Codec,
-	Index: HasCompact + Codec,
-	Signature: Codec,
-	Call: Decode,
-	Balance: Decode
-> Decode for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode> Decode
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+{
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
@@ -153,70 +133,52 @@ impl<
 		Some(UncheckedExtrinsic {
 			signature: Decode::decode(input)?,
 			function: Decode::decode(input)?,
-			tip: Decode::decode(input).unwrap_or_default(),
 		})
 	}
 }
 
-impl<
-	Address: Codec,
-	Index: HasCompact + Codec,
-	Signature: Codec,
-	Call: Encode,
-	Balance: Encode
-> Encode for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> Encode
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+{
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
 			self.signature.encode_to(v);
 			self.function.encode_to(v);
-			self.tip.encode_to(v);
 		})
 	}
 }
 
 #[cfg(feature = "std")]
-impl<
-	Address: Codec,
-	Index: HasCompact + Codec,
-	Signature: Codec,
-	Call: Encode,
-	Balance: Codec
-> serde::Serialize for UncheckedExtrinsic<Address, Index, Call, Signature, Balance> {
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> serde::Serialize
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+{
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
-impl<Address, Index, Signature, Call, Balance> fmt::Debug
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Balance>
+impl<Address, Index, Signature, Call> fmt::Debug
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: fmt::Debug + Codec,
 	Index: fmt::Debug + HasCompact + Codec,
 	Signature: Codec,
 	Call: fmt::Debug,
-	Balance: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(
-			f,
-			"UncheckedExtrinsic({:?}, {:?}, {:?})",
-			self.signature.as_ref().map(|x| (&x.signed, &x.index)),
-			self.function,
-			self.tip,
-		)
+		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.signed, &x.index)), self.function)
 	}
 }
 
 #[cfg(test)]
 mod test {
 	use crate::codec::{Decode, Encode};
-	use super::{UncheckedExtrinsic};
-	type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32, u32>;
-
+	use super::UncheckedExtrinsic;
 
 	#[test]
 	fn encoding_matches_vec() {
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
 		let ex = Extrinsic::new_unsigned(42);
 		let encoded = ex.encode();
 		let decoded = Extrinsic::decode(&mut encoded.as_slice()).unwrap();
@@ -225,11 +187,13 @@ mod test {
 		assert_eq!(as_vec.encode(), encoded);
 	}
 
+
 	#[test]
 	#[cfg(feature = "std")]
 	fn serialization_of_unchecked_extrinsics() {
-		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32, u32>;
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
 		let ex = Extrinsic::new_unsigned(42);
-		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x18002a00000000\"");
+
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x14002a000000\"");
 	}
 }

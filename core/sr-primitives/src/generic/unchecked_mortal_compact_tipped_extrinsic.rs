@@ -14,18 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic implementation of an unchecked (pre-verification) extrinsic.
+//! Generic implementation of an unchecked (pre-verification) extrinsic with tip.
 
 #[cfg(feature = "std")]
 use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input};
-use crate::traits::{
-	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
-	Lookup, Checkable, Extrinsic, SaturatedConversion
-};
+use crate::codec::{Decode, Encode, Input, Compact};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
+	Lookup, Checkable, Extrinsic, SaturatedConversion};
 use super::{CheckedExtrinsic, Era, Tip};
 
 const TRANSACTION_VERSION: u8 = 1;
@@ -33,46 +31,60 @@ const TRANSACTION_VERSION: u8 = 1;
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+pub struct UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance> {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature, Index, Era)>,
+	pub signature: Option<(Address, Signature, Compact<Index>, Era)>,
 	/// The function that should be called.
 	pub function: Call,
+	/// The tip for this transaction
+	pub tip: Tip<Balance>,
 }
 
-impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+impl<Address, Index, Call, Signature, Balance>
+	UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
+{
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature, era: Era) -> Self {
-		UncheckedMortalExtrinsic {
-			signature: Some((signed, signature, index, era)),
+	pub fn new_signed(
+		index: Index,
+		function: Call,
+		signed: Address,
+		signature: Signature,
+		era: Era,
+		tip: Tip<Balance>
+	) -> Self {
+		UncheckedMortalCompactTippedExtrinsic {
+			signature: Some((signed, signature, index.into(), era)),
 			function,
+			tip,
 		}
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
 	pub fn new_unsigned(function: Call) -> Self {
-		UncheckedMortalExtrinsic {
+		UncheckedMortalCompactTippedExtrinsic {
 			signature: None,
 			function,
+			tip: Tip::None
 		}
 	}
 }
 
-impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode> Extrinsic
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode, Balance> Extrinsic
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
 {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber> Checkable<Context>
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber, Balance> Checkable<Context>
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Member + MaybeDisplay,
-	Index: Encode + Member + MaybeDisplay + SimpleArithmetic,
+	Index: Member + MaybeDisplay + SimpleArithmetic,
+	Compact<Index>: Encode,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
@@ -81,10 +93,9 @@ where
 	Context: Lookup<Source=Address, Target=AccountId>
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
+	Balance: Member + Encode,
 {
-	/// NOTE: this transaction is not tipped i.e. the tip value will be `None`. It does not really
-	/// matter what the last generic is since it is always `None`.
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, u64>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, Balance>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -93,8 +104,7 @@ where
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
 					.ok_or("transaction birth block ancient")?;
 				let signed = context.lookup(signed)?;
-				let raw_payload = (index, self.function, era, h);
-
+				let raw_payload = (index, self.function, self.tip, era, h);
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -105,27 +115,36 @@ where
 					return Err(crate::BAD_SIGNATURE)
 				}
 				CheckedExtrinsic {
-					signed: Some((signed, raw_payload.0)),
+					signed: Some((signed, (raw_payload.0).0)),
 					function: raw_payload.1,
-					tip: Tip::None,
+					tip: raw_payload.2,
 				}
 			}
-			None => CheckedExtrinsic {
-				signed: None,
-				function: self.function,
-				tip: Tip::None,
+			None => {
+				// An unsigned transaction cannot have a tip. The decode code should replace it with
+				// `Tip::None` and ignore the input bytes.
+				if self.tip != Tip::None {
+					return Err(crate::UNSIGNED_TIP);
+				}
+				CheckedExtrinsic {
+					signed: None,
+					function: self.function,
+					tip: self.tip
+				}
 			},
 		})
 	}
 }
 
-impl<Address, Index, Call, Signature> Decode
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, Index, Call, Signature, Balance> Decode
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Decode,
 	Signature: Decode,
-	Index: Decode,
+	Compact<Index>: Decode,
 	Call: Decode,
+	Balance: Decode,
+
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -142,20 +161,22 @@ where
 			return None
 		}
 
-		Some(UncheckedMortalExtrinsic {
+		Some(UncheckedMortalCompactTippedExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
+			tip: if is_signed { Decode::decode(input)? } else { Tip::None },
 		})
 	}
 }
 
-impl<Address, Index, Call, Signature> Encode
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, Index, Call, Signature, Balance> Encode
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: Encode,
 	Signature: Encode,
-	Index: Encode,
+	Compact<Index>: Encode,
 	Call: Encode,
+	Balance: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
@@ -170,13 +191,17 @@ where
 				}
 			}
 			self.function.encode_to(v);
+			if self.signature.is_some() {
+				self.tip.encode_to(v);
+			}
 		})
 	}
 }
 
 #[cfg(feature = "std")]
-impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Serialize
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address: Encode, Index, Signature: Encode, Call: Encode, Balance: Encode> serde::Serialize
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
+	where Compact<Index>: Encode
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
@@ -184,19 +209,21 @@ impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Ser
 }
 
 #[cfg(feature = "std")]
-impl<Address, Index, Call, Signature> fmt::Debug
-	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+impl<Address, Index, Call, Signature, Balance> fmt::Debug
+	for UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance>
 where
 	Address: fmt::Debug,
 	Index: fmt::Debug,
 	Call: fmt::Debug,
+	Balance: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(
 			f,
-			"UncheckedMortalExtrinsic({:?}, {:?})",
+			"UncheckedMortalCompactTippedExtrinsic({:?}, {:?}, {:?})",
 			self.signature.as_ref().map(|x| (&x.0, &x.2)),
-			self.function
+			self.function,
+			self.tip,
 		)
 	}
 }
@@ -226,17 +253,20 @@ mod tests {
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
-	impl traits::Verify for TestSig {
+	impl traits::Verify for TestSig  {
 		type Signer = u64;
 		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 			*signer == self.0 && msg.get() == &self.1[..]
 		}
 	}
 
-	const DUMMY_ACCOUNTID: u64 = 0;
+	type Balance = u64;
 
-	type Ex = UncheckedMortalExtrinsic<u64, u64, Vec<u8>, TestSig>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, u64>;
+	const DUMMY_ACCOUNTID: u64 = 0;
+	const TIP: Tip<Balance> = Tip::Sender(66);
+
+	type Ex = UncheckedMortalCompactTippedExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
 
 	#[test]
 	fn unsigned_codec_should_work() {
@@ -247,14 +277,31 @@ mod tests {
 
 	#[test]
 	fn signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8; 0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::immortal(), 0u64).encode()),
+			Era::immortal(),
+			TIP
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn large_signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8; 257], Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8; 0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8; 257], TIP, Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()
+			),
+			Era::immortal(),
+			TIP
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
@@ -268,42 +315,107 @@ mod tests {
 
 	#[test]
 	fn badly_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, vec![0u8]), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8; 0],
+			DUMMY_ACCOUNTID,
+			TestSig(DUMMY_ACCOUNTID, vec![0u8]),
+			Era::immortal(),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn immortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::immortal(), 0u64).encode()
+			),
+			Era::immortal(),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
+		);
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::mortal(32, 42), 42u64).encode()
+			),
+			Era::mortal(32, 42),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP }));
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], TIP, Era::mortal(32, 11), 11u64).encode()
+			),
+			Era::mortal(32, 11),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Tip::None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
+		);
 	}
 
 	#[test]
 	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::mortal(32, 10), 10u64).encode()
+			),
+			Era::mortal(32, 10),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8;0], TIP, Era::mortal(32, 43), 43u64).encode()
+			),
+			Era::mortal(32, 43),
+			TIP,
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
@@ -316,5 +428,41 @@ mod tests {
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+	#[test]
+	fn missing_tip_in_signature_payload_should_fail() {
+		let ux = Ex::new_signed(
+			0,
+			vec![0u8;0],
+			DUMMY_ACCOUNTID,
+			TestSig(
+				DUMMY_ACCOUNTID,
+				(DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()
+			),
+			Era::immortal(),
+			TIP,
+		);
+		assert!(ux.is_signed().unwrap_or(false));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+	}
+
+	#[test]
+	#[should_panic]
+	fn unsigned_cannot_have_tip() {
+		let ux = UncheckedMortalCompactTippedExtrinsic {signature: None, tip: Tip::Sender(100), function: vec![0u8;0]};
+		let _ = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
+	}
+
+	#[test]
+	fn unprovided_tip_will_not_fail() {
+		// unsigned with no tips
+		let bytes =  vec![40, 1, 32, 8, 8, 8, 8, 8, 8, 8, 8];
+
+		// decoding will yield the default tip
+		let decoded = Ex::decode(&mut bytes.as_slice()).unwrap();
+		assert_eq!(
+			decoded,
+			UncheckedMortalCompactTippedExtrinsic { signature: None, tip: Tip::None, function: vec![8u8;8]})
 	}
 }

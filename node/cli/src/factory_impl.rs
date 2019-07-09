@@ -247,13 +247,11 @@ fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 			UncheckedExtrinsic {
 				signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 				function: payload.1,
-				tip: Tip::default(),
 			}
 		}
 		None => UncheckedExtrinsic {
 			signature: None,
 			function: xt.function,
-			tip: Tip::default(),
 		},
 	};
 

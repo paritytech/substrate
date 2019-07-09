@@ -166,7 +166,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.public().into(),
 				signature.into(),
 				era,
-				Tip::default(),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -208,7 +207,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.public().into(),
 				signature.into(),
 				era,
-				Tip::default(),
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));

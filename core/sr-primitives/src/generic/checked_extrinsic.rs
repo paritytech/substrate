@@ -17,9 +17,10 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SaturatedConversion};
 use crate::weights::{Weighable, Weight};
 use crate::generic::tip::{Tip, Tippable};
+
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -69,12 +70,31 @@ where
 	}
 }
 
-impl<AccountId, Index, Call, Balance> Tippable<Balance>
-	for CheckedExtrinsic<AccountId, Index, Call, Balance>
+/// `ExtBalance` is the balance type fed by the `check()` implementation of various unchecked
+/// extrinsics. `NodeBalance` is the actual balance type used as a primitive type of the substrate
+/// node.
+///
+/// In practice, if they underlying unchecked transaction is tip-aware, they are the same. Otherwise,
+/// the tip is always `Tip::None` and the type is of no importance.
+impl<AccountId, Index, Call, ExtBalance, NodeBalance> Tippable<NodeBalance>
+	for CheckedExtrinsic<AccountId, Index, Call, ExtBalance>
 where
-	Balance: Clone,
+	ExtBalance: Clone + Copy,
+	NodeBalance: From<ExtBalance>,
 {
-	fn tip(&self) -> Tip<Balance> {
-		self.tip.clone()
+	fn tip(&self) -> Tip<NodeBalance> {
+		// This is a hacky way to prevent `unchecked_mortal[_compact]_extrinsic` types, which
+		// don't have a tip, become generic over a balance type.
+		// Basically, this CheckedExtrinsic is built either 1- from an
+		// `UncheckedMortalCompactTippedExtrinsic`, which is tip aware and hence, the second arm
+		// will be trivially executed and the type conversion will be safe (the compiler is probably)
+		// smart enough to remove it in fact. Or 2- this is built from all other types of unchecked
+		// extrinsic which do not have tip and hence are not balance-aware. These module will naively
+		// place a u64 (can be `()` in practice) as the type and it does not matter since `Tip::None`
+		// is used in this case.
+		match self.tip {
+			Tip::None => <Tip<NodeBalance>>::None,
+			<Tip<ExtBalance>>::Sender(v) => <Tip<NodeBalance>>::Sender(NodeBalance::from(v))
+		}
 	}
 }

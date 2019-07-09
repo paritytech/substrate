@@ -21,6 +21,7 @@
 mod unchecked_extrinsic;
 mod unchecked_mortal_extrinsic;
 mod unchecked_mortal_compact_extrinsic;
+mod unchecked_mortal_compact_tipped_extrinsic;
 mod era;
 mod checked_extrinsic;
 mod header;
@@ -33,6 +34,7 @@ mod tests;
 pub use self::unchecked_extrinsic::UncheckedExtrinsic;
 pub use self::unchecked_mortal_extrinsic::UncheckedMortalExtrinsic;
 pub use self::unchecked_mortal_compact_extrinsic::UncheckedMortalCompactExtrinsic;
+pub use self::unchecked_mortal_compact_tipped_extrinsic::UncheckedMortalCompactTippedExtrinsic;
 pub use self::era::{Era, Phase};
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;

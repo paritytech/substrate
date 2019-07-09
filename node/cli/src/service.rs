@@ -269,7 +269,6 @@ mod tests {
 			let payload = (
 				0,
 				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
-				Tip::default(),
 				Era::immortal(),
 				service.client().genesis_hash()
 			);
@@ -278,7 +277,6 @@ mod tests {
 			let xt = UncheckedExtrinsic {
 				signature: Some((RawAddress::Id(id), signature, payload.0, Era::immortal())),
 				function: payload.1,
-				tip: Tip::default(),
 			}.encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 			OpaqueExtrinsic(v)
@@ -372,7 +370,6 @@ mod tests {
 				from.into(),
 				signature.into(),
 				era,
-				Tip::default(),
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 
