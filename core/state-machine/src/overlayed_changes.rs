@@ -291,6 +291,18 @@ impl OverlayedChanges {
 	}
 }
 
+#[cfg(feature = "bench")]
+/// Expose private function of overlay for benching.
+pub struct BenchOverlay<'a>(pub &'a mut OverlayedChanges);
+
+
+#[cfg(feature = "bench")]
+impl<'a> BenchOverlay<'a> {
+	pub fn bench_set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+		self.0.set_storage(key, val)
+	}
+}
+
 #[cfg(test)]
 impl From<Option<Vec<u8>>> for OverlayedValue {
 	fn from(value: Option<Vec<u8>>) -> OverlayedValue {

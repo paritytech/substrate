@@ -19,3 +19,13 @@ num-traits = "0.2"
 
 [dev-dependencies]
 hex-literal = "0.2.0"
+criterion = "0.2"
+rand = "0.6"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[features]
+default = ["bench"]
+bench = []
