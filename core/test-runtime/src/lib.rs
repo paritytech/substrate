@@ -39,7 +39,7 @@ use runtime_primitives::{
 	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -295,6 +295,7 @@ cfg_if! {
 	}
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -303,6 +304,38 @@ impl GetNodeBlockType for Runtime {
 
 impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
+}
+
+runtime_support::impl_outer_origin!{
+	pub enum Origin for Runtime where system = srml_system {}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Event;
+
+impl From<srml_system::Event> for Event {
+	fn from(evt: srml_system::Event) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl srml_system::Trait for Runtime {
+	type Origin = Origin;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+}
+
+impl srml_timestamp::Trait for Runtime {
+	/// A timestamp: seconds since the unix epoch.
+	type Moment = u64;
+	type OnTimestampSet = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -471,13 +504,14 @@ cfg_if! {
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
+						median_required_blocks: 0,
 						slot_duration: 1,
 						expected_block_time: 1,
-						threshold: std::u64::MAX,
-						median_required_blocks: 100,
+						threshold: core::u64::MAX,
+						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
+				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
@@ -620,9 +654,10 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
+						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
+				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

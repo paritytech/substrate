@@ -262,7 +262,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
+		let epoch = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
 				error!(
@@ -277,7 +277,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
-
+		let Epoch { ref authorities, .. } = epoch;
 		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "babe", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "babe.skipping_proposal_slot";
@@ -292,9 +292,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
-			&[0u8; 0],
-			0,
-			&authorities,
+			slot_info.number / self.slots_per_epoch,
+			epoch,
 			&pair,
 			self.threshold,
 		) {
@@ -436,7 +435,7 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 			(s, false) => pre_digest = s,
 		}
 	}
-	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
+	Ok((epoch, pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))?))
 }
 
 /// check a header has been signed by the right key. If the slot is too far in
@@ -469,12 +468,13 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let pre_digest = find_pre_digest::<B>(&header)?;
+	let (_epoch, pre_digest) = find_pre_digest::<B>(&header)?;
+
 	let BabePreDigest { slot_num, index, ref proof, ref vrf_output, epoch: _ } = pre_digest;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot_num))
+		Ok(CheckedHeader::Deferred(([0; 32], header), slot_num))
 	} else if index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
@@ -483,7 +483,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
-					Default::default(),
+					&randomness,
 					slot_num,
 					Default::default(),
 					0,
@@ -517,7 +517,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			}
 
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+			Ok(CheckedHeader::Checked((randomness, header), (pre_digest, seal)))
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
 		}
@@ -623,9 +623,10 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
+		let Epoch { authorities, randomness, .. } =
+			authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
+		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
@@ -635,10 +636,11 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			header,
 			hash,
 			&authorities[..],
+			randomness,
 			self.config.threshold(),
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
+			CheckedHeader::Checked((_randomness, pre_header), (pre_digest, seal)) => {
 				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
@@ -704,7 +706,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 }
 
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
-	Vec<AuthorityId>,
+	Epoch,
 	ConsensusError,
 > where
 	B: Block,
@@ -719,8 +721,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
-				panic!("We don’t support deprecated code with new consensus algorithms, \
-						therefore this is unreachable; qed")
+				None
 			}
 		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 }
@@ -777,18 +778,13 @@ fn claim_slot(
 	slot_number: u64,
 	genesis_hash: &[u8],
 	epoch: u64,
-	authorities: &[AuthorityId],
+	Epoch { ref authorities, .. }: Epoch,
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
-	let index = authorities.iter().position(|s| s == public)?;
-	let transcript = make_transcript(
-		randomness,
-		slot_number,
-		genesis_hash,
-		epoch,
-	);
+	let index = authorities.iter().position(|s| &s.0 == public)?;
+	let transcript = make_transcript(randomness, slot_number, epoch);
 
 	// Compute the threshold we will use.
 	//
@@ -1085,8 +1081,13 @@ mod tests {
 		let randomness = &[];
 		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
+		let epoch = Epoch {
+			authorities: vec![(pair.public(), 0)],
+			randomness: [0; 32],
+			slot_number: 1,
+		};
 		loop {
-			match claim_slot(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
+			match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
 				None => i += 1,
 				Some(s) => {
 					debug!(target: "babe", "Authored block {:?}", s);
@@ -1102,10 +1103,10 @@ mod tests {
 		let client = test_client::new();
 
 		assert_eq!(client.info().chain.best_number, 0);
-		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into()
+		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap().authorities, vec![
+			(Keyring::Alice.into(), 0),
+			(Keyring::Bob.into(), 0),
+			(Keyring::Charlie.into(), 0),
 		]);
 	}
 }

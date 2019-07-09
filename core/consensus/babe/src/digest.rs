@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 use primitives::sr25519::Signature;
-use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber};
+use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber, Epoch};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
@@ -52,8 +52,8 @@ type RawBabePreDigest = (
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp: RawBabePreDigest = (
-			self.epoch,
 			*self.vrf_output.as_bytes(),
+			self.epoch,
 			self.proof.to_bytes(),
 			self.index,
 			self.slot_num,
@@ -64,7 +64,7 @@ impl Encode for BabePreDigest {
 
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (epoch, output, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
+		let (output, epoch, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
 		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;

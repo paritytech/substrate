@@ -23,15 +23,15 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
-use primitives::ConsensusEngineId;
+use primitives::{generic::DigestItem, ConsensusEngineId};
+use primitives::traits::{SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -116,7 +116,7 @@ decl_storage! {
 		LastTimestamp get(last): T::Moment;
 
 		/// The current authorities set.
-		Authorities get(authorities): Vec<(AuthorityId, u64)>;
+		Authorities get(authorities): Vec<(AuthorityId, Weight)>;
 
 		/// The epoch randomness.
 		///
@@ -133,8 +133,8 @@ decl_storage! {
 		/// The randomness under construction
 		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
 
-		/// The randomness for the next epoch
-		NextEpochRandomness: [u8; VRF_OUTPUT_LENGTH];
+		/// The data for the next epoch
+		NextEpoch get(next_epoch): Epoch;
 
 		/// The current epoch
 		EpochIndex get(epoch_index): u64;
@@ -159,13 +159,27 @@ decl_module! {
 				} else {
 					None
 				}) {
-				if i.0 != EpochIndex::get() {
-					// New epoch reported by validator
+				let slot_index = i.0
+					.checked_add(1)
+					.expect("slot numbers will never reach 2^64 in our lifetimes; qed");
+				let epoch_change_slot = slot_index
+					.checked_add(Self::slots_per_epoch())
+					.expect("slot numbers will never reach 2^64 in our lifetimes; qed");
+				if epoch_change_slot == slot_index {
+					// New epoch
 					LastSlotInEpoch::put(true)
 				}
 				return Self::deposit_vrf_output(&i.1)
 			}
 		}
+	}
+}
+
+pub fn epoch<T: Trait>() -> Epoch {
+	Epoch {
+		randomness: EpochRandomness::get(),
+		authorities: Authorities::get(),
+		slot_number: SlotsPerEpoch::get().wrapping_add(EpochIndex::get()),
 	}
 }
 
@@ -216,8 +230,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn change_authorities(new: Epoch) {
-		Authorities::put(&new.authorities);
-		Self::deposit_consensus(new)
+		NextEpoch::put(&new);
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(new))
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
@@ -239,21 +254,14 @@ impl<T: Trait> session::ShouldEndSession<u64> for Module<T> {
 	}
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, (AuthorityId, u64))>
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		// instant changes
-		if changed {
-			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			let last_authorities = <Module<T>>::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(Epoch { authorities: next_authorities })
-			}
-		}
-
+		use staking::BalanceOf;
+		let to_votes = |b: BalanceOf<T>|
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b);
 		let rho = UnderConstruction::get();
 		UnderConstruction::put([0; 32]);
 		let last_epoch_randomness = EpochRandomness::get();
@@ -261,20 +269,32 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 		EpochIndex::put(epoch_index);
-		EpochRandomness::put(NextEpochRandomness::get());
+		let next_authorities = validators.map(|(account, k)| {
+			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		}).collect::<Vec<_>>();
+		let Epoch {
+			slot_number,
+			authorities,
+			randomness,
+		} = NextEpoch::get();
+		EpochRandomness::put(randomness);
+		Authorities::put(authorities);
 		let mut s = [0; 72];
 		s[..32].copy_from_slice(&last_epoch_randomness);
 		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
 		s[40..].copy_from_slice(&rho);
-		NextEpochRandomness::put(runtime_io::blake2_256(&s))
+		let randomness = runtime_io::blake2_256(&s);
+		Self::change_authorities(Epoch {
+			randomness,
+			authorities: next_authorities,
+			slot_number: slot_number
+				.checked_add(Self::slots_per_epoch())
+				.expect("slot numbers will not overflow in our lifetime; qed"),
+		})
 	}
 
 	fn on_disabled(i: usize) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
-			BABE_ENGINE_ID,
-			ConsensusLog::OnDisabled(i as u64).encode(),
-		);
-		<system::Module<T>>::deposit_log(log.into());
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
 	}
 }
 
