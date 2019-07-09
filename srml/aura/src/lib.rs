@@ -200,8 +200,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+	fn on_disabled(i: usize) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::<T::AuthorityId>::OnDisabled(i as u64).encode(),
+		);
+
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 

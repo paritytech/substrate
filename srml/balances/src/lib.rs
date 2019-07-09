@@ -163,7 +163,7 @@ use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating, Bounded
 };
-use system::{IsDeadAccount, OnNewAccount, ensure_signed};
+use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -436,10 +436,12 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
 		fn set_balance(
+			origin,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] new_free: T::Balance,
 			#[compact] new_reserved: T::Balance
 		) {
+			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
 			let current_free = <FreeBalance<T, I>>::get(&who);

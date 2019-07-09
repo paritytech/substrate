@@ -564,14 +564,19 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
-				// `Consensus` is the Aura-specific authorities change log.
+				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
-					.convert_first(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
+					.logs()
+					.iter()
+					.filter_map(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
 						OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)
 					))
-					.map(|ConsensusLog::AuthoritiesChange(a)|
-						vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
-					);
+					.find_map(|l| match l {
+						ConsensusLog::AuthoritiesChange(a) => Some(
+							vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
+						),
+						_ => None,
+					});
 
 				let import_block = ImportBlock {
 					origin,

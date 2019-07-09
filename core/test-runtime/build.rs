@@ -17,11 +17,15 @@
 use wasm_builder_runner::{build_current_project, WasmBuilderSource};
 
 fn main() {
-	build_current_project(
+	build_current_project_with_rustflags(
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../utils/wasm-builder",
-			version: "1.0.3",
+			version: "1.0.4",
 		},
+		// Note that we set the stack-size to 1MB explicitly even though it is set
+		// to this value by default. This is because some of our tests (`restoration_of_globals`)
+		// depend on the stack-size.
+		"-Clink-arg=-zstack-size=1048576",
 	);
 }
