@@ -231,6 +231,31 @@ build-linux-release:
     - cp -r scripts/docker/* ./artifacts
     - sccache -s
 
+build-linux-subkey:
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  # <<:                              *build-only
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd subkey
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release
+    # - time cargo build --release
+    - mkdir -p ./artifacts
+    - mv ./target/release/subkey ./artifacts/.
+    - echo -n "Subkey version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/SUBKEY-VERSION;
+      else
+        ./artifacts/subkey --version |
+        sed -n -r 's/^subkey ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+        tee ./artifacts/SUBKEY-VERSION;
+      fi
+    - sha256sum ./artifacts/subkey | tee ./artifacts/subkey.sha256
+    - sccache -s
+
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
@@ -312,6 +337,8 @@ publish-s3-release:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
+
+publish-s3-subkey:
 
 publish-s3-doc:
   stage:                           publish
