@@ -84,6 +84,7 @@ impl<Block> LightStorage<Block>
 		Self::from_kvdb(db as Arc<_>)
 	}
 
+	/// Create new memory-backed `LightStorage` for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		use utils::NUM_COLUMNS;

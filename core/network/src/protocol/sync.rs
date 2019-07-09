@@ -37,7 +37,7 @@ use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
+use consensus::{BlockOrigin, import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
 use extra_requests::ExtraRequests;
@@ -171,7 +171,7 @@ pub struct ChainSync<B: BlockT> {
 	queue_blocks: HashSet<B::Hash>,
 	/// The best block number that we are currently importing
 	best_importing_number: NumberFor<B>,
-	request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 }
 
 /// Reported sync state.
@@ -662,7 +662,7 @@ impl<B: BlockT> ChainSync<B> {
 			protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
 				id: 0,
 				block: request.0,
-				request: self.request_builder.as_ref()
+				request: self.request_builder.as_mut()
 					.map(|builder| builder.build_request_data(&request.0))
 					.unwrap_or_default()
 			})
@@ -715,7 +715,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.extra_finality_proofs.try_finalize_root(request_block, finalization_result, true);
 	}
 
-	pub fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
+	pub fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
 		self.request_builder = Some(builder)
 	}
 

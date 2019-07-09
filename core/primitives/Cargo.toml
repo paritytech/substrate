@@ -14,19 +14,20 @@ byteorder = { version = "1.3.1", default-features = false }
 primitive-types = { version = "0.4.0", default-features = false, features = ["codec"] }
 impl-serde = { version = "0.1", optional = true }
 wasmi = { version = "0.4.3", optional = true }
-hash-db = { version = "0.12", default-features = false }
-hash256-std-hasher = { version = "0.12", default-features = false }
+hash-db = { version = "0.14.0", default-features = false }
+hash256-std-hasher = { version = "0.14.0", default-features = false }
 ed25519-dalek = { version = "1.0.0-pre.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
-schnorrkel = { version = "0.1", optional = true }
+schnorrkel = { version = "0.1.1", optional = true }
 rand = { version = "0.6", optional = true }
 sha2 = { version = "0.8", optional = true }
-substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39", optional = true }
+substrate-bip39 = { version = "0.2.2", optional = true }
 tiny-bip39 = { version = "0.6.1", optional = true }
 hex = { version = "0.3", optional = true }
 regex = { version = "1.1", optional = true }
 num-traits = { version = "0.2", default-features = false }
+zeroize = { version = "0.9.2", default-features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -72,4 +73,5 @@ std = [
 	"schnorrkel",
 	"regex",
 	"num-traits/std",
+	"zeroize/std"
 ]

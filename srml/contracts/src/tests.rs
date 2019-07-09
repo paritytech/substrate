@@ -33,9 +33,10 @@ use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
-	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
-	traits::Currency, StorageMap, StorageValue
+	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
 };
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use substrate_primitives::storage::well_known_keys;
 use substrate_primitives::Blake2Hasher;
@@ -64,8 +65,38 @@ impl_outer_dispatch! {
 	}
 }
 
+thread_local! {
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
+	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
+	static BLOCK_GAS_LIMIT: RefCell<u64> = RefCell::new(0);
+}
+
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
+}
+
+pub struct TransferFee;
+impl Get<u64> for TransferFee {
+	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct CreationFee;
+impl Get<u64> for CreationFee {
+	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct BlockGasLimit;
+impl Get<u64> for BlockGasLimit {
+	fn get() -> u64 { BLOCK_GAS_LIMIT.with(|v| *v.borrow()) }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -76,6 +107,11 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
+	type BlockHashCount = BlockHashCount;
+}
+parameter_types! {
+	pub const BalancesTransactionBaseFee: u64 = 0;
+	pub const BalancesTransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
@@ -85,10 +121,29 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = BalancesTransactionBaseFee;
+	type TransactionByteFee = BalancesTransactionByteFee;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+}
+parameter_types! {
+	pub const SignedClaimHandicap: u64 = 2;
+	pub const TombstoneDeposit: u64 = 16;
+	pub const StorageSizeOffset: u32 = 8;
+	pub const RentByteFee: u64 = 4;
+	pub const RentDepositOffset: u64 = 10_000;
+	pub const SurchargeReward: u64 = 150;
+	pub const TransactionBaseFee: u64 = 2;
+	pub const TransactionByteFee: u64 = 6;
+	pub const ContractFee: u64 = 21;
+	pub const CallBaseFee: u64 = 135;
+	pub const CreateBaseFee: u64 = 175;
+	pub const MaxDepth: u32 = 100;
 }
 impl Trait for Test {
 	type Currency = Balances;
@@ -98,6 +153,21 @@ impl Trait for Test {
 	type ComputeDispatchFee = DummyComputeDispatchFee;
 	type TrieIdGenerator = DummyTrieIdGenerator;
 	type GasPayment = ();
+	type SignedClaimHandicap = SignedClaimHandicap;
+	type TombstoneDeposit = TombstoneDeposit;
+	type StorageSizeOffset = StorageSizeOffset;
+	type RentByteFee = RentByteFee;
+	type RentDepositOffset = RentDepositOffset;
+	type SurchargeReward = SurchargeReward;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type ContractFee = ContractFee;
+	type CallBaseFee = CallBaseFee;
+	type CreateBaseFee = CreateBaseFee;
+	type MaxDepth = MaxDepth;
+	type BlockGasLimit = BlockGasLimit;
 }
 
 type Balances = balances::Module<Test>;
@@ -182,16 +252,18 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
+	pub fn set_associated_consts(&self) {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
+		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
+		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
 				balances: vec![],
-				existential_deposit: self.existential_deposit,
-				transfer_fee: self.transfer_fee,
-				creation_fee: self.creation_fee,
 				vesting: vec![],
 			}
 			.build_storage()
@@ -200,21 +272,8 @@ impl ExtBuilder {
 		);
 		t.extend(
 			GenesisConfig::<Test> {
-				signed_claim_handicap: 2,
-				rent_byte_price: 4,
-				rent_deposit_offset: 10_000,
-				storage_size_offset: 8,
-				surcharge_reward: 150,
-				tombstone_deposit: 16,
-				transaction_base_fee: 2,
-				transaction_byte_fee: 6,
-				transfer_fee: self.transfer_fee,
-				creation_fee: self.creation_fee,
-				contract_fee: 21,
-				gas_price: self.gas_price,
-				max_depth: 100,
-				block_gas_limit: self.block_gas_limit,
 				current_schedule: Default::default(),
+				gas_price: self.gas_price,
 			}
 			.build_storage()
 			.unwrap()
@@ -253,7 +312,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&1, 110);
 				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: trie_id1.clone(),
-					storage_size: Contract::storage_size_offset(),
+					storage_size: <Test as Trait>::StorageSizeOffset::get(),
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(1),
 					rent_allowance: 40,
@@ -268,7 +327,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&2, 110);
 				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: trie_id2.clone(),
-					storage_size: Contract::storage_size_offset(),
+					storage_size: <Test as Trait>::StorageSizeOffset::get(),
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(2),
 					rent_allowance: 40,
@@ -795,15 +854,15 @@ fn storage_size() {
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+			assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4 + 4);
+			assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4 + 4);
 
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::remove_storage_4_byte()));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+			assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 		}
 	);
 }
@@ -872,7 +931,11 @@ fn deduct_blocks() {
 
 #[test]
 fn call_contract_removals() {
-	removals(|| Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()).is_ok());
+	removals(|| {
+		// Call on already-removed account might fail, and this is fine.
+		Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null());
+		true
+	});
 }
 
 #[test]
@@ -1060,6 +1123,45 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	);
 }
 
+#[test]
+fn call_removed_contract() {
+	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+
+	// Balance reached and superior to subsistence threshold
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
+			));
+
+			// Calling contract should succeed.
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+
+			// Calling contract should remove contract and fail.
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
+
+ 			// Subsequent contract calls should also fail.
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
+		}
+	)
+}
+
 const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
@@ -1239,7 +1341,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	// same copy of this (modulo hex notation differences) in `CODE_RESTORATION`.
 	//
 	// When this assert is triggered make sure that you update the literals here and in
-	// `CODE_RESTORATION`. Hopefully, we switch to automatical injection of the code.
+	// `CODE_RESTORATION`. Hopefully, we switch to automatic injection of the code.
 	const ENCODED_CALL_LITERAL: &str =
 		"0105020000000000000069aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf320000\
 		0000000000080100000000000000000000000000000000000000000000000000000000000000010000000000000\
@@ -1313,7 +1415,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 			// we expect that it will get removed leaving tombstone.
-			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+			assert_err!(
+				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+				"contract has been evicted"
+			);
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
 			/// Create another account with the address `DJANGO` with `CODE_RESTORATION`.

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
+use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
 use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use srml_support::traits::{Currency, ExistenceRequirement, WithdrawReason};
+use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -50,9 +50,10 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
 	handicap: T::BlockNumber,
 	pay_rent: bool,
-) -> RentOutcome {
-	let contract = match <ContractInfoOf<T>>::get(account) {
-		None | Some(ContractInfo::Tombstone(_)) => return RentOutcome::Exempted,
+) -> (RentOutcome, Option<ContractInfo<T>>) {
+	let contract_info = <ContractInfoOf<T>>::get(account);
+	let contract = match contract_info {
+		None | Some(ContractInfo::Tombstone(_)) => return (RentOutcome::Exempted, contract_info),
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
@@ -65,7 +66,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let n = effective_block_number.saturating_sub(contract.deduct_block);
 		if n.is_zero() {
 			// Rent has already been paid
-			return RentOutcome::Exempted;
+			return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)));
 		}
 		n
 	};
@@ -75,31 +76,31 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	// An amount of funds to charge per block for storage taken up by the contract.
 	let fee_per_block = {
 		let free_storage = balance
-			.checked_div(&<Module<T>>::rent_deposit_offset())
+			.checked_div(&T::RentDepositOffset::get())
 			.unwrap_or_else(Zero::zero);
 
 		let effective_storage_size =
 			<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
 
 		effective_storage_size
-			.checked_mul(&<Module<T>>::rent_byte_price())
+			.checked_mul(&T::RentByteFee::get())
 			.unwrap_or(<BalanceOf<T>>::max_value())
 	};
 
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
 		// gets the rent for free.
-		return RentOutcome::Exempted;
+		return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)));
 	}
 
 	// The minimal amount of funds required for a contract not to be evicted.
-	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
+	let subsistence_threshold = T::Currency::minimum_balance() + T::TombstoneDeposit::get();
 
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
 		runtime_io::kill_child_storage(&contract.trie_id);
-		return RentOutcome::Evicted;
+		return (RentOutcome::Evicted, None);
 	}
 
 	let dues = fee_per_block
@@ -149,33 +150,34 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			&child_storage_root[..],
 			contract.code_hash,
 		);
-		<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
+		let tombstone_info = ContractInfo::Tombstone(tombstone);
+		<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
 		runtime_io::kill_child_storage(&contract.trie_id);
 
-		return RentOutcome::Evicted;
+		return (RentOutcome::Evicted, Some(tombstone_info));
 	}
 
 	if pay_rent {
-		<ContractInfoOf<T>>::mutate(account, |contract| {
-			let contract = contract
-				.as_mut()
-				.and_then(|c| c.as_alive_mut())
-				.expect("Dead or nonexistent account has been exempt above; qed");
+		let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
+			rent_allowance: contract.rent_allowance - dues, // rent_allowance is not exceeded
+			deduct_block: current_block_number,
+			..contract
+		});
 
-			contract.rent_allowance -= dues; // rent_allowance is not exceeded
-			contract.deduct_block = current_block_number;
-		})
+		<ContractInfoOf<T>>::insert(account, &contract_info);
+
+		return (RentOutcome::Ok, Some(contract_info));
 	}
 
-	RentOutcome::Ok
+	(RentOutcome::Ok, Some(ContractInfo::Alive(contract)))
 }
 
 /// Make account paying the rent for the current block number
 ///
 /// NOTE: This function acts eagerly.
-pub fn pay_rent<T: Trait>(account: &T::AccountId) {
-	let _ = try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true);
+pub fn pay_rent<T: Trait>(account: &T::AccountId) -> Option<ContractInfo<T>> {
+	try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true).1
 }
 
 /// Evict the account if it should be evicted at the given block number.
@@ -186,5 +188,5 @@ pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 ///
 /// NOTE: This function acts eagerly.
 pub fn try_evict<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
-	try_evict_or_and_pay_rent::<T>(account, handicap, false)
+	try_evict_or_and_pay_rent::<T>(account, handicap, false).0
 }

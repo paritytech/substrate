@@ -16,13 +16,14 @@
 
 //! Service configuration.
 
-use std::net::SocketAddr;
-use transaction_pool;
-use crate::chain_spec::ChainSpec;
 pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
-pub use network::ExtTransport;
-pub use network::config::{NetworkConfiguration, Roles};
+pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+
+use std::{path::PathBuf, net::SocketAddr};
+use transaction_pool;
+use crate::chain_spec::ChainSpec;
+use primitives::crypto::Protected;
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
@@ -44,9 +45,9 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
-	pub keystore_path: String,
+	pub keystore_path: Option<PathBuf>,
 	/// Path to the database.
-	pub database_path: String,
+	pub database_path: PathBuf,
 	/// Cache Size for internal database in MiB
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes
@@ -90,7 +91,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
 	pub grandpa_voter: bool,
 	/// Node keystore's password
-	pub password: String,
+	pub password: Protected<String>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -125,7 +126,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			force_authoring: false,
 			disable_grandpa: false,
 			grandpa_voter: false,
-			password: "".to_string(),
+			password: "".to_string().into(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 

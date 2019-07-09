@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Conrete externalities implementation.
+//! Concrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;

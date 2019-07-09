@@ -27,6 +27,7 @@ use proc_macro2::{TokenStream as TokenStream2, Span};
 use syn::{
 	Ident,
 	GenericParam,
+	WhereClause,
 	spanned::Spanned,
 	parse::{
 		Error,
@@ -68,6 +69,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		crate_ident: cratename,
 		content: ext::Braces { content: storage_lines, ..},
 		extra_genesis,
+		where_clause,
 		..
 	} = def;
 
@@ -110,6 +112,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&storage_lines,
 		&extra_genesis.inner,
+		&where_clause,
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -118,6 +121,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&cratename,
 		&storage_lines,
+		&where_clause,
 	);
 
 	let decl_store_items = decl_store_items(
@@ -140,6 +144,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traittype,
 		&instance_opts,
 		&storage_lines,
+		&where_clause,
 	);
 
 	let InstanceOpts {
@@ -156,10 +161,14 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#decl_store_items
 		}
 		#store_default_struct
-		impl<#traitinstance: #traittype, #instance #bound_instantiable> #storetype for #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: #traittype, #instance #bound_instantiable> #storetype
+			for #module_ident<#traitinstance, #instance> #where_clause
+		{
 			#impl_store_items
 		}
-		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
+			#module_ident<#traitinstance, #instance> #where_clause
+		{
 			#impl_store_fns
 			#[doc(hidden)]
 			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageEntryMetadata] {
@@ -184,6 +193,7 @@ fn decl_store_extra_genesis(
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	extra_genesis: &Option<AddExtraGenesis>,
+	where_clause: &Option<syn::WhereClause>,
 ) -> Result<TokenStream2> {
 
 	let InstanceOpts {
@@ -479,7 +489,26 @@ fn decl_store_extra_genesis(
 
 		let impl_trait = quote!(BuildModuleGenesisStorage<#traitinstance, #inherent_instance>);
 
-		let builders_clone_bound = quote!( #( #builders_clone_bound: Clone ),* );
+		let extend_where_clause = |to_extend: &mut WhereClause| {
+			if let Some(where_clause) = where_clause {
+				to_extend.predicates.extend(where_clause.predicates.iter().cloned());
+			}
+		};
+
+		let mut genesis_where_clause: WhereClause = syn::parse_quote!(
+			where #( #builders_clone_bound: Clone ),*
+		);
+		let mut fn_where_clause = genesis_where_clause.clone();
+
+
+		let mut build_storage_where_clause = genesis_where_clause.clone();
+		extend_where_clause(&mut build_storage_where_clause);
+
+		if is_trait_needed {
+			extend_where_clause(&mut genesis_where_clause);
+		} else if assimilate_require_generic {
+			extend_where_clause(&mut fn_where_clause);
+		}
 
 		let res = quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
@@ -487,13 +516,13 @@ fn decl_store_extra_genesis(
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
 			#serde_bug_bound
-			pub struct GenesisConfig#fparam_struct {
+			pub struct GenesisConfig#fparam_struct #genesis_where_clause {
 				#config_field
 				#genesis_extrafields
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl Default for GenesisConfig#sparam {
+			impl#fparam_impl Default for GenesisConfig#sparam #genesis_where_clause {
 				fn default() -> Self {
 					GenesisConfig {
 						#config_field_default
@@ -503,14 +532,14 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl GenesisConfig#sparam where #builders_clone_bound {
+			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
 						#scrate::runtime_primitives::StorageOverlay,
 						#scrate::runtime_primitives::ChildrenStorageOverlay,
 					),
 					String
-				> {
+				> #fn_where_clause {
 					let mut storage = Default::default();
 					let mut child_storage = Default::default();
 					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
@@ -522,7 +551,7 @@ fn decl_store_extra_genesis(
 					self,
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
-				) -> std::result::Result<(), String> {
+				) -> std::result::Result<(), String> #fn_where_clause {
 					let storage = r;
 
 					#builders
@@ -535,7 +564,7 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
-				for GenesisConfig#sparam where #builders_clone_bound
+				for GenesisConfig#sparam #build_storage_where_clause
 			{
 				fn build_module_genesis_storage(
 					self,
@@ -589,6 +618,7 @@ fn decl_storage_items(
 	instance_opts: &InstanceOpts,
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+	where_clause: &Option<WhereClause>,
 ) -> TokenStream2 {
 
 	let mut impls = TokenStream2::new();
@@ -728,6 +758,7 @@ fn decl_storage_items(
 			prefix: build_prefix(cratename, name),
 			name,
 			attrs,
+			where_clause,
 		};
 
 		let implementation = match kind {
@@ -899,6 +930,7 @@ fn store_functions_to_metadata (
 	traittype: &syn::TypeParamBound,
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+	where_clause: &Option<WhereClause>,
 ) -> (TokenStream2, TokenStream2) {
 
 	let InstanceOpts {
@@ -1008,12 +1040,18 @@ fn store_functions_to_metadata (
 
 		let def_get = quote! {
 			#[doc(hidden)]
-			pub struct #struct_name<#traitinstance, #instance #bound_instantiable #equal_default_instance>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
+			pub struct #struct_name<
+				#traitinstance, #instance #bound_instantiable #equal_default_instance
+			>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
+
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
 			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+
 			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
+				for #struct_name<#traitinstance, #instance> #where_clause
+			{
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
@@ -1022,8 +1060,11 @@ fn store_functions_to_metadata (
 					}).clone()
 				}
 			}
+
 			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
+				for #struct_name<#traitinstance, #instance> #where_clause
+			{
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #value_type = #default;
