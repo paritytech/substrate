@@ -872,10 +872,24 @@ impl<'a> codec::Input for TrailingZeroInput<'a> {
 /// This type can be converted into and possibly from an AccountId (which itself is generic).
 pub trait AccountIdConversion<AccountId>: Sized {
 	/// Convert into an account ID. This is infallible.
-	fn into_account(&self) -> AccountId;
+	fn into_account(&self) -> AccountId { self.into_sub_account(&()) }
 
 	/// Try to convert an account ID into this type. Might not succeed.
-	fn try_from_account(a: &AccountId) -> Option<Self>;
+	fn try_from_account(a: &AccountId) -> Option<Self> { Self::try_from_sub_account::<()>(a).0 }
+
+	/// Convert this value amalgamated with the a secondary "sub" value into an account ID. This is
+	/// infallible.
+	///
+	/// NOTE: The account IDs from this and from `into_account` are *not* guaranteed to be distinct
+	/// for any given value of `self`, nor are different invocations to this with different types
+	/// `T`. For example, the following will all encode to the same account ID value:
+	/// - `self.into_sub_account(0u32)`
+	/// - `self.into_sub_account(vec![0u8; 0])`
+	/// - `self.into_account()`
+	fn into_sub_account<S: Encode>(&self, sub: S) -> T;
+
+	/// Try to convert an account ID into this type. Might not succeed.
+	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)>;
 }
 
 /// Provide a simple 4 byte identifier for a type.
@@ -884,27 +898,9 @@ pub trait TypeId {
 	const TYPE_ID: [u8; 4];
 }
 
-/// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to fill AccountId.
+/// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to
+/// fill AccountId.
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
-	fn into_account(&self) -> T {
-		(Id::TYPE_ID, self).using_encoded(|b|
-			T::decode(&mut TrailingZeroInput(b))
-		).unwrap_or_default()
-	}
-
-	fn try_from_account(x: &T) -> Option<Self> {
-		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID { return None }
-			let mut cursor = &d[4..];
-			let result = Decode::decode(&mut cursor)?;
-			if cursor.iter().all(|x| *x == 0) {
-				Some(result)
-			} else {
-				None
-			}
-		})
-	}
-
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
 		(Id::TYPE_ID, self, sub).using_encoded(|b|
 			T::decode(&mut TrailingZeroInput(b))
