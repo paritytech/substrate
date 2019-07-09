@@ -87,6 +87,9 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
+	/// Run GRANDPA voter even when no additional key seed is specified. This can for example be of interest when
+	/// running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
+	pub grandpa_voter: bool,
 	/// Node keystore's password
 	pub password: Protected<String>,
 }
@@ -122,6 +125,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			offchain_worker: Default::default(),
 			force_authoring: false,
 			disable_grandpa: false,
+			grandpa_voter: false,
 			password: "".to_string().into(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
@@ -154,4 +158,3 @@ pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
 }
-
