@@ -197,6 +197,18 @@ check-web-wasm:
     - time cargo web build -p substrate-trie
     - sccache -s
 
+fuzz-wasmtime:
+  stage:                           test
+  <<:                              *docker-env
+  allow_failure:                   true
+  only:
+    variables:
+      - $JOB == $CI_JOB_NAME
+  script:
+    - git clone --recursive https://github.com/Vurich/wasmtime .
+    - cargo install cargo-fuzz
+    - cargo fuzz run instantiate_run -- -jobs=$(nproc --all)
+
 .build-only:                       &build-only
   only:
     - master
