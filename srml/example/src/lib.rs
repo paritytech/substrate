@@ -504,7 +504,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{assert_ok, impl_outer_origin, parameter_types, StorageMap, DecodeLengthStorageMap};
+	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
