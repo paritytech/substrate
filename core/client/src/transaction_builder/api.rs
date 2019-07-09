@@ -14,10 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility struct to build a transaction.
+//! The runtime api for building transactions.
 
-#[cfg(feature = "std")]
-pub mod transaction_builder;
-#[cfg(feature = "std")]
-pub use self::transaction_builder::*;
-pub mod api;
+use runtime_primitives::AnySignature;
+use sr_api_macros::decl_runtime_apis;
+use rstd::vec::Vec;
+
+decl_runtime_apis! {
+	/// The `TransactionBuilder` trait that provides required functions
+	/// for building a transaction from a Call for the runtime.
+	pub trait TransactionBuilder {
+		/// Construct the payload.
+		fn signing_payload(encoded_call: Vec<u8>, encoded_account_id: Vec<u8>) -> Vec<u8>;
+		/// Build the transaction.
+		fn build_transaction(signing_payload: Vec<u8>, encoded_account_id: Vec<u8>, signature: AnySignature) -> Vec<u8>;
+	}
+}

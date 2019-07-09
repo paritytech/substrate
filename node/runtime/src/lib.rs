@@ -18,14 +18,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit="256"]
+#![recursion_limit="1024"]
 
 use rstd::prelude::*;
 use support::{
 	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
 };
-use substrate_primitives::u32_trait::{_1, _2, _3, _4};
-use parity_codec::Encode;
+use substrate_primitives::{u32_trait::{_1, _2, _3, _4}};
+use parity_codec::{Encode, Decode, Compact};
 use node_primitives::{
 	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
@@ -37,9 +37,14 @@ use grandpa::fg_primitives::{
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
+	transaction_builder::api::{self as transaction_builder_api},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
+use runtime_primitives::{
+	ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types,
+	AnySignature, generic::{UncheckedMortalExtrinsic, Era},
+	traits::BlockNumberToHash
+};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
@@ -424,6 +429,8 @@ construct_runtime!(
 	}
 );
 
+/// The type used as a helper for interpreting the sender of transactions.
+pub type Context = system::ChainContext<Runtime>;
 /// The address format for describing accounts.
 pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
@@ -576,6 +583,35 @@ impl_runtime_apis! {
 			let report_call = Call::Aura(AuraCall::report_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
+		}
+	}
+
+	impl transaction_builder_api::TransactionBuilder<Block> for Runtime {
+		fn signing_payload(encoded_call: Vec<u8>, encoded_account_id: Vec<u8>) -> Vec<u8> {
+			let account_id: AccountId = Decode::decode(&mut encoded_account_id.as_slice())
+				.expect("we provide it so it should be possible to decode; qed");
+			let nonce = 1000;
+			let context = Context::default();
+			let genesis_hash = context.genesis_hash();
+			let call: Call = Decode::decode(&mut encoded_call.as_slice())
+				.expect("We constructed it so it should be possible to decode; qed");
+			let payload = (nonce, call, Era::immortal(), genesis_hash);
+			payload.encode()
+		}
+
+		fn build_transaction(signing_payload: Vec<u8>, encoded_account_id: Vec<u8>, signature: AnySignature) -> Vec<u8> {
+			let account_id: AccountId = Decode::decode(&mut encoded_account_id.as_slice())
+				.expect("we provide it so it should be possible to decode; qed");
+			let (nonce, call, era, genesis_hash): (u64, Call, Era, Hash) = Decode::decode(&mut signing_payload.as_slice())
+				.expect("we provide it so it should be possible to decode; qed");
+			let tx = UncheckedMortalExtrinsic::new_signed(
+				nonce,
+				call,
+				Address::from(account_id),
+				signature,
+				era,
+			);
+			tx.encode()
 		}
 	}
 }

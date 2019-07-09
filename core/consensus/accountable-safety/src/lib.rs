@@ -21,10 +21,11 @@
 use client;
 use transaction_pool::txpool::{self, PoolApi};
 use parity_codec::{Encode, Decode};
-use runtime_primitives::traits::{Block as BlockT};
+use runtime_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
 use log::info;
 use client::blockchain::HeaderBackend;
+use client::transaction_builder::api::TransactionBuilder;
 
 /// Trait to submit report calls to the transaction pool.
 pub trait SubmitReport<C, Block> {
@@ -37,7 +38,8 @@ where
 	Block: BlockT + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
 	<Block as BlockT>::Extrinsic: Decode,
-	C: HeaderBackend<Block>,
+	C: HeaderBackend<Block> + ProvideRuntimeApi,
+	C::Api: TransactionBuilder<Block>,
 {
 	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
