@@ -241,6 +241,12 @@ pub trait Externalities {
 	/// The transaction will end up in the pool and be propagated to others.
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 
+	/// Returns information about the local node's network state.
+	fn local_network_state(&self) -> Result<Vec<u8>, ()>;
+
+	/// Returns the locally configured authority public key, if available.
+	fn local_authority_pubkey(&self, crypto: CryptoKind) -> Result<Vec<u8>, ()>;
+
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
 	/// Returns an error if given crypto kind is not supported.
@@ -396,6 +402,14 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 
 	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
 		(&mut **self).encrypt(key, kind, data)
+	}
+
+	fn local_network_state(&self) -> Result<Vec<u8>, ()> {
+		(& **self).local_network_state()
+	}
+
+	fn local_authority_pubkey(&self, key:CryptoKind) -> Result<Vec<u8>, ()> {
+		(&**self).local_authority_pubkey(key)
 	}
 
 	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {

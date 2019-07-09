@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
@@ -33,6 +33,10 @@ use runtime_primitives::{
 	traits::{self, Extrinsic},
 };
 use transaction_pool::txpool::{Pool, ChainApi};
+use network::NetworkStateInfo;
+use parity_multiaddr::Multiaddr;
+use serde::{Serialize, Deserialize};
+use bincode;
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {
@@ -51,6 +55,13 @@ enum Key {
 	Ed25519(ed25519::Pair),
 }
 
+/// Information about the local node's network state.
+#[derive(Serialize, Deserialize)]
+pub struct LocalNetworkState {
+	external_addresses: HashSet<Multiaddr>,
+	peer_id: String,
+}
+
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
@@ -59,6 +70,7 @@ pub(crate) struct Api<Storage, KeyProvider> {
 	db: Storage,
 	keys_password: Protected<String>,
 	key_provider: KeyProvider,
+	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -156,6 +168,32 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		self.db.set(KEYS_PREFIX, &id_encoded, &CryptoKey { phrase, kind } .encode());
 
 		Ok(CryptoKeyId(id))
+	}
+
+	fn local_authority_pubkey(&self, kind: CryptoKind) -> Result<Vec<u8>, ()> {
+		match self.read_key(None, kind) {
+			Ok(key) => {
+				let public = match key {
+					Key::Sr25519(pair) => pair.public().encode(),
+					Key::Ed25519(pair) => pair.public().encode(),
+				};
+
+				Ok(public)
+			},
+			Err(e) => Err(e),
+		}
+	}
+
+	fn local_network_state(&self) -> Result<Vec<u8>, ()> {
+		let network_state = &self.network_state;
+		let state = LocalNetworkState {
+			external_addresses: network_state.external_addresses(),
+
+			// TODO derive `Serialize` for `libp2p::core::PeerId`
+			peer_id: network_state.peer_id().to_string(),
+		};
+
+		bincode::serialize(&state).map_err(|_| ())
 	}
 
 	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _kind: CryptoKind, _data: &[u8]) -> Result<Vec<u8>, ()> {
@@ -302,6 +340,7 @@ impl<A: ChainApi> AsyncApi<A> {
 		keys_password: Protected<String>,
 		key_provider: P,
 		at: BlockId<A::Block>,
+		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, P>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
@@ -310,6 +349,7 @@ impl<A: ChainApi> AsyncApi<A> {
 			db,
 			keys_password,
 			key_provider,
+			network_state,
 		};
 
 		let async_api = AsyncApi {
@@ -357,6 +397,19 @@ mod tests {
 	use super::*;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
+	use network::PeerId;
+
+	struct MockNetworkStateInfo();
+
+	impl NetworkStateInfo for MockNetworkStateInfo {
+		fn external_addresses(&self) -> HashSet<Multiaddr> {
+			HashSet::new()
+		}
+
+		fn peer_id(&self) -> PeerId {
+			PeerId::random()
+		}
+	}
 
 	fn offchain_api() -> (Api<LocalStorage, TestProvider>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
@@ -366,7 +419,8 @@ mod tests {
 			Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone()))
 		);
 
-		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0))
+		let mock = Arc::new(MockNetworkStateInfo());
+		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0), mock)
 	}
 
 	#[test]

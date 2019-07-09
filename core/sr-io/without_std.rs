@@ -385,6 +385,20 @@ pub mod ext {
 		/// - nonzero otherwise.
 		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
 
+		/// Returns information about the local node's network state.
+		///
+		/// # Returns
+		///
+		/// - The encoded `Result<offchain::LocalNetworkState, ()>`.
+		fn ext_local_network_state(msg_len: *mut u32) -> *mut u8;
+
+		/// Returns the locally configured authority public key, if available.
+		///
+		/// # Returns
+		///
+		/// - The encoded `Result<PublicKey encoded to Vec<u8>, ()>`.
+		fn ext_local_authority_pubkey(crypto: u32, msg_len: *mut u32) -> *mut u8;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// # Returns
@@ -886,6 +900,30 @@ impl OffchainApi for () {
 		} else {
 			Err(())
 		}
+	}
+
+	fn local_network_state() -> Result<Vec<u8>, ()> {
+		let mut len = 0_u32;
+		unsafe {
+			let ptr = ext_local_network_state.get()(&mut len);
+
+			from_raw_parts(ptr, len).ok_or(())
+		}
+	}
+
+	fn local_authority_pubkey(kind: offchain::CryptoKind) -> Result<Vec<u8>, ()> {
+		let kind = kind as isize as u32;
+
+		let mut len = 0u32;
+		let raw_result = unsafe {
+			let ptr = ext_local_authority_pubkey.get()(
+				kind,
+				&mut len,
+			);
+
+			from_raw_parts(ptr, len).expect("ext_local_authority_pubkey never return u32::max_value; qed")
+		};
+		codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(()))
 	}
 
 	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {

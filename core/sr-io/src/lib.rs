@@ -239,6 +239,12 @@ export_api! {
 		/// The transaction will end up in the pool.
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
+		/// Returns information about the local node's network state.
+		fn local_network_state() -> Result<Vec<u8>, ()>;
+
+		/// Returns the currently configured authority public key, if available.
+		fn local_authority_pubkey(crypto: CryptoKind) -> Result<Vec<u8>, ()>;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.

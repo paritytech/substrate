@@ -139,6 +139,14 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
+	fn local_network_state(&self) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn local_authority_pubkey(&self, _kind: CryptoKind) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
 	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
 		unimplemented!("not needed in tests so far")
 	}

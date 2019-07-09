@@ -240,6 +240,19 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
+	fn local_network_state(
+		&self,
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn local_authority_pubkey(
+		&self,
+		_crypto: offchain::CryptoKind,
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
 	fn new_crypto_key(
 		&mut self,
 		_crypto: offchain::CryptoKind,
