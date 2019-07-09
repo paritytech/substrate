@@ -28,7 +28,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::SharedFinalityProofRequestBuilder;
+use consensus::import_queue::BoxFinalityProofRequestBuilder;
 use message::{
 	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -1245,7 +1245,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.block_imported(hash, number)
 	}
 
-	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
 		self.sync.set_finality_proof_request_builder(request_builder)
 	}
 
