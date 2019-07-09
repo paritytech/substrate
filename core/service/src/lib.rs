@@ -967,9 +967,9 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None, None)) },
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 /// 				#[allow(deprecated)]

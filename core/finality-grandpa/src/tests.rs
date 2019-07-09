@@ -30,8 +30,8 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+	BoxFinalityProofRequestBuilder,
 };
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -106,10 +106,10 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)
 	{
@@ -124,8 +124,9 @@ impl TestNetFactory for GrandpaTestNet {
 					Arc::new(self.test_config.clone()),
 					select_chain,
 				).expect("Could not create block import for fresh peer.");
-				let shared_import = Arc::new(import);
-				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
+				let justification_import = Box::new(import.clone());
+				let block_import = Box::new(import);
+				(block_import, Some(justification_import), None, None, Mutex::new(Some(link)))
 			},
 			PeersClient::Light(ref client) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
@@ -139,8 +140,9 @@ impl TestNetFactory for GrandpaTestNet {
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
-				let shared_import = Arc::new(import);
-				(shared_import.clone(), None, Some(shared_import), Some(finality_proof_req_builder), Mutex::new(None))
+				let proof_import = Box::new(import.clone());
+				let block_import = Box::new(import);
+				(block_import, None, Some(proof_import), Some(finality_proof_req_builder), Mutex::new(None))
 			},
 		}
 	}
@@ -952,7 +954,7 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1001,7 +1003,7 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (block_import, ..) = net.make_block_import(client.clone());
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1093,15 +1095,16 @@ fn voter_persists_its_votes() {
 				on_exit: Exit,
 				telemetry_on_connect: None,
 			};
-			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
-			let voter = future::poll_fn(move || {
-				// we need to keep the block_import alive since it owns the
-				// sender for the voter commands channel, if that gets dropped
-				// then the voter will stop
-				let _block_import = _block_import.clone();
-				voter.poll()
-			});
+			let voter = run_grandpa_voter(grandpa_params)
+				.expect("all in order with client and network")
+				.then(move |r| {
+					// we need to keep the block_import alive since it owns the
+					// sender for the voter commands channel, if that gets dropped
+					// then the voter will stop
+					drop(_block_import);
+					r
+				});
 
 			voter.select2(rx.into_future()).then(|res| match res {
 				Ok(future::Either::A(x)) => {
