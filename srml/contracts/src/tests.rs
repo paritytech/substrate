@@ -94,6 +94,9 @@ impl Get<u64> for BlockGasLimit {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -104,6 +107,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
+	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
 	pub const BalancesTransactionBaseFee: u64 = 0;

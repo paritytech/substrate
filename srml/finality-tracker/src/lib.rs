@@ -297,6 +297,9 @@ mod tests {
 		}
 	}
 
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -307,6 +310,7 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
+		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

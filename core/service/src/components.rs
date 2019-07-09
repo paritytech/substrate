@@ -21,7 +21,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service};
+use crate::{error, Service, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -191,7 +191,7 @@ fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
 ) -> error::Result<()> where
-	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
@@ -231,6 +231,7 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -246,6 +247,7 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
+			AuthorityKeyProvider,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,

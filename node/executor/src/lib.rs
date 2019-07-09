@@ -55,7 +55,8 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CENTS, DOLLARS, MILLICENTS
+		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys,
+		CENTS, DOLLARS, MILLICENTS,
 	};
 	use wabt;
 	use primitives::map;
@@ -290,7 +291,9 @@ mod tests {
 	}
 
 	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
-		SessionKeys(ring.to_owned().into(), ring.to_owned().into())
+		SessionKeys {
+			ed25519: ring.to_owned().into(),
+		}
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {

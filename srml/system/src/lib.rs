@@ -79,17 +79,15 @@ use rstd::map;
 use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+	Zero,
 }};
-#[cfg(any(feature = "std", test))]
-use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::Contains
+	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get},
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
-use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -184,6 +182,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
+
+	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+	type BlockHashCount: Get<Self::BlockNumber>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -205,24 +206,28 @@ decl_module! {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		fn set_heap_pages(pages: u64) {
+		fn set_heap_pages(origin, pages: u64) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
-		pub fn set_code(new: Vec<u8>) {
+		pub fn set_code(origin, new: Vec<u8>) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
-		fn set_storage(items: Vec<KeyValue>) {
+		fn set_storage(origin, items: Vec<KeyValue>) {
+			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
 		}
 
 		/// Kill some items from storage.
-		fn kill_storage(keys: Vec<Key>) {
+		fn kill_storage(origin, keys: Vec<Key>) {
+			ensure_root(origin)?;
 			for key in &keys {
 				storage::unhashed::kill(&key);
 			}
@@ -566,6 +571,18 @@ impl<T: Trait> Module<T> {
 		let parent_hash = <ParentHash<T>>::take();
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+
+		// move block hash pruning window by one block
+		let block_hash_count = <T::BlockHashCount>::get();
+		if number > block_hash_count {
+			let to_remove = number - block_hash_count - One::one();
+
+			// keep genesis hash
+			if to_remove != Zero::zero() {
+				<BlockHash<T>>::remove(to_remove);
+			}
+		}
+
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
 
@@ -767,7 +784,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use srml_support::impl_outer_origin;
+	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -775,6 +792,11 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 10;
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -785,6 +807,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
+		type BlockHashCount = BlockHashCount;
 	}
 
 	impl From<Event> for u16 {
@@ -901,5 +924,38 @@ mod tests {
 				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
+	}
+
+	#[test]
+	fn prunes_block_hash_mappings() {
+		with_externalities(&mut new_test_ext(), || {
+			// simulate import of 15 blocks
+			for n in 1..=15 {
+				System::initialize(
+					&n,
+					&[n as u8 - 1; 32].into(),
+					&[0u8; 32].into(),
+					&Default::default(),
+				);
+
+				System::finalize();
+			}
+
+			// first 5 block hashes are pruned
+			for n in 0..5 {
+				assert_eq!(
+					System::block_hash(n),
+					H256::zero(),
+				);
+			}
+
+			// the remaining 10 are kept
+			for n in 5..15 {
+				assert_eq!(
+					System::block_hash(n),
+					[n as u8; 32].into(),
+				);
+			}
+		})
 	}
 }

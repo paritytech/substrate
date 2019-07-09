@@ -79,7 +79,7 @@ impl client::backend::OffchainStorage for LocalStorage {
 		&mut self,
 		prefix: &[u8],
 		item_key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
@@ -91,11 +91,10 @@ impl client::backend::OffchainStorage for LocalStorage {
 		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			is_set = self.db.get(columns::OFFCHAIN, &key)
+			let val = self.db.get(columns::OFFCHAIN, &key)
 				.ok()
-				.and_then(|x| x)
-				.map(|v| &*v == old_value)
-				.unwrap_or(true);
+				.and_then(|x| x);
+			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {
 				self.set(prefix, item_key, new_value)
@@ -130,8 +129,20 @@ mod tests {
 		storage.set(prefix, key, value);
 		assert_eq!(storage.get(prefix, key), Some(value.to_vec()));
 
-		assert_eq!(storage.compare_and_set(prefix, key, value, b"asd"), true);
+		assert_eq!(storage.compare_and_set(prefix, key, Some(value), b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}
+
+	#[test]
+	fn should_compare_and_set_on_empty_field() {
+		let mut storage = LocalStorage::new_test();
+		let prefix = b"prefix";
+		let key = b"key";
+
+		assert_eq!(storage.compare_and_set(prefix, key, None, b"asd"), true);
+		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
+		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
+	}
+
 }

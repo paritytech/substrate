@@ -513,16 +513,19 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
-		fn cancel_referendum(#[compact] ref_index: ReferendumIndex) {
+		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
+			ensure_root(origin)?;
 			Self::clear_referendum(ref_index);
 		}
 
 		/// Cancel a proposal queued for enactment.
 		fn cancel_queued(
+			origin,
 			#[compact] when: T::BlockNumber,
 			#[compact] which: u32,
 			#[compact] what: ReferendumIndex
 		) {
+			ensure_root(origin)?;
 			let which = which as usize;
 			let mut items = <DispatchQueue<T>>::get(when);
 			if items.get(which).and_then(Option::as_ref).map_or(false, |x| x.1 == what) {
@@ -968,6 +971,9 @@ mod tests {
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -978,6 +984,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
+		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1473,9 +1480,9 @@ mod tests {
 				Some((set_balance_proposal(2), 0))
 			]);
 
-			assert_noop!(Democracy::cancel_queued(3, 0, 0), "proposal not found");
-			assert_noop!(Democracy::cancel_queued(4, 1, 0), "proposal not found");
-			assert_ok!(Democracy::cancel_queued(4, 0, 0));
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 3, 0, 0), "proposal not found");
+			assert_noop!(Democracy::cancel_queued(Origin::ROOT, 4, 1, 0), "proposal not found");
+			assert_ok!(Democracy::cancel_queued(Origin::ROOT, 4, 0, 0));
 			assert_eq!(Democracy::dispatch_queue(4), vec![None]);
 		});
 	}
@@ -1774,7 +1781,7 @@ mod tests {
 				0
 			).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
-			assert_ok!(Democracy::cancel_referendum(r.into()));
+			assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r.into()));
 
 			next_block();
 			next_block();
