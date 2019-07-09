@@ -20,7 +20,7 @@ use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event}
 use runtime_io::{with_externalities, Blake2Hasher};
 use substrate_primitives::H256;
 use primitives::{
-	BuildStorage, traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	testing::Header,
 };
 
@@ -73,7 +73,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0.into()
+	system::GenesisConfig::default().build_storage().unwrap().0.into()
 }
 
 fn deposit_events(n: usize) {
