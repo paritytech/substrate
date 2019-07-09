@@ -199,7 +199,16 @@ check-web-wasm:
 
 fuzz-wasmtime:
   stage:                           test
-  <<:                              *docker-env
+  # <<:                              *docker-env
+  image:                           parity/rust-builder:latest
+  variables:
+    GIT_STRATEGY:                  none
+  before_script:
+    - rustup show
+    - cargo --version
+    # - sccache -s
+  tags:
+    - linux-docker
   allow_failure:                   true
   only:
     variables:
