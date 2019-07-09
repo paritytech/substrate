@@ -33,7 +33,7 @@ pub fn check() -> Option<&'static str> {
 		.status()
 		.map(|s| !s.success()).unwrap_or(true)
 	{
-		return Some("wasm-gc not installed, please install it!")
+		return Some("`wasm-gc` not installed, please install it!")
 	}
 
 	if !check_wasm_toolchain_installed() {

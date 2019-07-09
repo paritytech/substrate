@@ -16,13 +16,13 @@
 
 //! Service configuration.
 
+pub use client::ExecutionStrategies;
+pub use client_db::PruningMode;
+pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
-pub use client::ExecutionStrategies;
-pub use client_db::PruningMode;
-pub use network::ExtTransport;
-pub use network::config::{NetworkConfiguration, Roles};
 use primitives::crypto::Protected;
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};

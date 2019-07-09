@@ -49,6 +49,7 @@ By using environment variables, you can configure which WASM binaries are built 
 - `TRIGGER_WASM_BUILD` - Can be set to trigger a WASM build. On subsequent calls the value of the variable
                          needs to change. As WASM builder instructs `cargo` to watch for file changes
                          this environment variable should only be required in certain circumstances.
+- `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the WASM binary.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
