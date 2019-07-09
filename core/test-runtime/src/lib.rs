@@ -481,7 +481,7 @@ cfg_if! {
 				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
-			impl srml_timestamp::Trait<Block> for Runtime {
+			impl srml_timestamp::Trait<Block> for Block {
 				/// A timestamp: seconds since the unix epoch.
 				type Moment = u64;
 				type OnTimestampSet = Aura;
@@ -620,6 +620,12 @@ cfg_if! {
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
+			impl srml_timestamp::Trait<Block> for Block {
+				/// A timestamp: seconds since the unix epoch.
+				type Moment = u64;
+				type OnTimestampSet = Aura;
+			}
+
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
@@ -630,13 +636,7 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
-			}
-
-			impl srml_timestamp::Trait<Block> for Runtime {
-				/// A timestamp: seconds since the unix epoch.
-				type Moment = u64;
-				type OnTimestampSet = srml_babe::Module;
+				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Block>() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

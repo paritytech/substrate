@@ -89,7 +89,6 @@ use srml_support::{
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
-use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
