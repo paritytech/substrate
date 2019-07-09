@@ -44,6 +44,12 @@ impl TypedKey for UintAuthorityId {
 	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
 }
 
+impl AsRef<[u8]> for UintAuthorityId {
+	fn as_ref(&self) -> &[u8] {
+		unsafe { &std::mem::transmute::<_, &[u8; 4]>(self.0)[..] }
+	}
+}
+
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 

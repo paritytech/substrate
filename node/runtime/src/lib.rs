@@ -45,7 +45,7 @@ use council::{motions as council_motions, VoteIndex};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::OpaqueMetadata;
+use substrate_primitives::{offchain::CryptoKind, OpaqueMetadata};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
@@ -185,7 +185,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa, Aura);
+type SessionHandlers = (Grandpa, Aura, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -376,6 +376,23 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+impl im_online::Trait for Runtime {
+	type AuthorityId = AuraId;
+	type Call = Call;
+	type Event = Event;
+	type SessionsPerEra = SessionsPerEra;
+	type UncheckedExtrinsic = UncheckedExtrinsic;
+
+	// The crypto kind must equal the crypto used for `AuthorityId`!
+	const CRYPTO_KIND: CryptoKind = CryptoKind::Ed25519;
+
+	fn is_valid_authority_id(authority_id: &<Self as im_online::Trait>::AuthorityId) -> bool {
+		Aura::authorities()
+			.iter()
+			.any(|id| id == authority_id)
+	}
+}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -414,6 +431,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
+		ImOnline: im_online::{default, ValidateUnsigned},
 	}
 );
 

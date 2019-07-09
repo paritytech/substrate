@@ -156,7 +156,7 @@ pub trait Trait: timestamp::Trait {
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + TypedKey + Default;
+	type AuthorityId: Member + Parameter + TypedKey + Default + AsRef<[u8]>;
 }
 
 decl_storage! {
