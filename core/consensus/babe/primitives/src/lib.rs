@@ -51,6 +51,7 @@ pub type Weight = u64;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
 	/// The slot number this block will start at
 	pub slot_number: SlotNumber,

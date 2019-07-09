@@ -1092,8 +1092,13 @@ mod tests {
 		let randomness = &[];
 		let (pair, _) = sr25519::Pair::generate();
 		let mut i = 0;
+		let epoch = Epoch {
+			authorities: vec![pair.public()],
+			randomness: [0; 32],
+			slot_number: 1,
+		};
 		loop {
-			match claim_slot(randomness, i, 0, &[pair.public()], &pair, u64::MAX / 10) {
+			match claim_slot(randomness, i, 0, epoch, &pair, u64::MAX / 10) {
 				None => i += 1,
 				Some(s) => {
 					debug!(target: "babe", "Authored block {:?}", s);
@@ -1109,10 +1114,10 @@ mod tests {
 		let client = test_client::new();
 
 		assert_eq!(client.info().chain.best_number, 0);
-		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into()
+		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap().authorities, vec![
+			(Keyring::Alice.into(), 0),
+			(Keyring::Bob.into(), 0),
+			(Keyring::Charlie.into(), 0),
 		]);
 	}
 }
