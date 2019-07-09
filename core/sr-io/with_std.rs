@@ -435,9 +435,32 @@ pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
 	let mut alt_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	let mut ext: BasicExternalities = alt_storage.into();
+	let mut ext = BasicExternalities::new(alt_storage);
 	let r = ext::using(&mut ext, f);
-	*storage = ext.into();
+	*storage = ext.into_storages().0;
+	r
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage` and `children_storage`.
+/// Forwards the value that the closure returns.
+pub fn with_storage_and_children<R, F: FnOnce() -> R>(
+	storage: &mut StorageOverlay,
+	children_storage: &mut ChildrenStorageOverlay,
+	f: F
+) -> R {
+	let mut alt_storage = Default::default();
+	let mut alt_children_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	rstd::mem::swap(&mut alt_children_storage, children_storage);
+
+	let mut ext = BasicExternalities::new_with_children(alt_storage, alt_children_storage);
+	let r = ext::using(&mut ext, f);
+
+	let storage_tuple = ext.into_storages();
+	*storage = storage_tuple.0;
+	*children_storage = storage_tuple.1;
+
 	r
 }
 
