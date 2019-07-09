@@ -7,7 +7,7 @@ type ValidatorCount = u64;
 /// Slash after each era, 0.05 * min(3(k-1) / n, 1)
 pub struct Unresponsive<T: srml_staking::Trait> {
 	_t: T,
-	reports: Vec<(T::AccountId, Exposure, ValidatorCount)>,
+	reports: Vec<(T::AccountId, Exposure)>,
 }
 
 impl<T: srml_staking::Trait> Unresponsive<T> {
@@ -23,13 +23,11 @@ impl<T: srml_staking::Trait> MisconductReporter<T::AccountId, Exposure> for Unre
 	fn on_misconduct(&mut self, misbehaved: Vec<(T::AccountId, Exposure)>) {
 		for (who, exposure) in misbehaved {
 
-			let validator_count: u64 = Staking::validator_count().into();
-
 			// already have exposure just replace it
 			if let Some(idx) = self.reports.iter().map(|(w, _, _)| w).position(|w| w == &who) {
-				self.reports[idx] = (who, exposure, validator_count);
+				self.reports[idx] = (who, exposure);
 			} else {
-				self.reports.push((who, exposure, validator_count));
+				self.reports.push((who, exposure));
 			}
 		}
 	}
@@ -44,8 +42,8 @@ impl<T: srml_staking::Trait> Misconduct<T::AccountId, Exposure> for Unresponsive
 		if k == 0 {
 			Fraction::zero()
 		} else {
-			let validator_sum: u64 = self.reports.iter().map(|(_, _, c)| c).sum();
-			let n = validator_sum / self.reports.len() as u64;
+			// validator set is supposed to be fixed under the era
+			let validator_count: u64 = Staking::validator_count().into();
 
 			// min(1, 3(k - 1) / n) * 0.05
 

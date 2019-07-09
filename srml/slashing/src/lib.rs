@@ -37,8 +37,8 @@ pub mod misconduct;
 
 /// Report misbehaviour but don't apply slashing
 pub fn report_misconduct<MR, AccountId, Exposure>(
-	misbehaved: Vec<(AccountId, Exposure)>,
-	misconduct: &mut MR
+    misbehaved: Vec<(AccountId, Exposure)>,
+    misconduct: &mut MR,
 )
 where
 	MR: MisconductReporter<AccountId, Exposure>,
@@ -56,14 +56,6 @@ where
 	let misbehaved = slash.misbehaved();
 	OS::slash(&misbehaved, seve);
 	slash.as_misconduct_level(seve)
-}
-
-/// Slash the misbehaviours
-pub fn end_of_era<M, AccountId, Exposure>(m: &mut M)
-where
-	M: Misconduct<AccountId, Exposure>,
-{
-	m.end_of_era();
 }
 
 /// Report misconducts
