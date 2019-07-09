@@ -50,7 +50,7 @@ pub type SlotNumber = u64;
 pub type Weight = u64;
 
 /// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq)]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
 	/// The slot number this block will start at
@@ -62,7 +62,7 @@ pub struct Epoch {
 }
 
 /// An consensus log item for BABE.
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the
 	/// epoch _after_ next: what slot number it will start at, who are the authorities (and their weights)
