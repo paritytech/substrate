@@ -359,23 +359,7 @@ mod tests {
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}
-	/*
-	system
-	aura
-	timestamp
-	indices
-	balances
 
-	session
-	staking
-	democracy
-	collective_Instance1
-	collective_Instance2
-	elections
-	contracts
-	sudo
-	grandpa
-*/
 	fn construct_block(
 		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,
