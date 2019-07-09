@@ -35,12 +35,8 @@ use srml_support::{
 	}
 };
 use parity_codec::{Encode, Decode};
-<<<<<<< HEAD:srml/elections/src/lib.rs
-use system::{self, ensure_signed};
-=======
 use system::{self, ensure_signed, ensure_root};
 use super::OnMembersChanged;
->>>>>>> origin/master:srml/council/src/seats.rs
 
 // no polynomial attacks:
 //
