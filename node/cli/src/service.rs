@@ -125,7 +125,7 @@ construct_service_factory! {
 				};
 
 				match config.local_key {
-					None => {
+					None if !service.config.grandpa_voter => {
 						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
@@ -133,7 +133,8 @@ construct_service_factory! {
 							service.on_exit(),
 						)?));
 					},
-					Some(_) => {
+					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
+					_ => {
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};

@@ -194,6 +194,7 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
+		grandpa_voter: false,
 		password: "".to_string().into(),
 	}
 }

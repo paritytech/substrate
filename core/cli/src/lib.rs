@@ -441,6 +441,8 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
+	config.grandpa_voter = cli.grandpa_voter;
+
 
 	let is_dev = cli.shared_params.dev;
 
