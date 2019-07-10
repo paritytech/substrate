@@ -21,7 +21,7 @@
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic,
+	MaybeSerializeDebug, SimpleArithmetic
 };
 use crate::runtime_primitives::ConsensusEngineId;
 

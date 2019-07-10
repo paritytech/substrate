@@ -80,7 +80,7 @@ use primitives::{ApplyOutcome, ApplyError,
 	weights::Weighable,
 	transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity},
 	traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, SaturatedConversion,
+		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned,
 		SimpleArithmetic,
 	},
 };
@@ -287,6 +287,12 @@ where
 			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
+			// pay any tip if provided..
+			if let Some(tip) = xt.tip() {
+				let tip = tip.value();
+				Payment::make_raw_payment(sender, tip).map_err(|_| internal::ApplyError::CantPay)?;
+			}
+
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
 			// a linker error unless the compiler can prove it cannot be called).
@@ -366,12 +372,8 @@ where
 				// pay and burn the tip if provided.
 				if let Some(tip) = xt.tip() {
 					let tip = tip.value();
-					let weight = xt.weight(encoded_len);
-
-					if !tip.is_zero() {
-						if Payment::make_raw_payment(sender, tip).is_err() {
-							return TransactionValidity::Invalid(ApplyError::CantPay as i8)
-						}
+					if Payment::make_raw_payment(sender, tip).is_err() {
+						return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 					}
 				}
 
@@ -389,7 +391,7 @@ where
 					vec![]
 				};
 
-				// TODO: maximise (fee + tip) per weight unit here.
+				// TODO TODO: maximise (fee + tip) per weight unit here.
 				TransactionValidity::Valid {
 					priority: (encoded_len as TransactionPriority),
 					requires,

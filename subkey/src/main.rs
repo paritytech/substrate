@@ -24,7 +24,7 @@ use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256};
 use parity_codec::{Encode, Decode, Compact};
-use sr_primitives::generic::{Era, Tip};
+use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
 
@@ -153,7 +153,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
 			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, Tip::<Balance>::default(), era, genesis_hash);
+			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
@@ -192,7 +192,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			let era = Era::immortal();
 
-			let raw_payload = (Compact(index), function, era, Tip::<Balance>::default(), prior_block_hash);
+			let raw_payload = (Compact(index), function, era, prior_block_hash);
 			let signature = raw_payload.using_encoded(|payload|
 				if payload.len() > 256 {
 					signer.sign(&blake2_256(payload)[..])

@@ -15,13 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
+
 #[cfg(feature = "std")]
 use std::fmt;
 
 use rstd::prelude::*;
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
-use super::{CheckedExtrinsic};
+use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct SignatureContent<Address, Index, Signature>

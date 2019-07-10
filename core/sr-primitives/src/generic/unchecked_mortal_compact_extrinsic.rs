@@ -41,7 +41,7 @@ pub struct UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature> {
 }
 
 impl<Address, Index, Call, Signature>
-UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature>
+	UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature>
 {
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature, era: Era) -> Self {

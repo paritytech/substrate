@@ -885,15 +885,13 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
-		let block = big_block().0;
-		let r = Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block,
+			&big_block().0,
 			true,
 			None,
-		);
-		r.0.unwrap();
+		).0.unwrap();
 	}
 
 	#[test]

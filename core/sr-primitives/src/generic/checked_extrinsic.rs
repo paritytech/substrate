@@ -21,7 +21,6 @@ use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use crate::weights::{Weighable, Weight};
 use crate::generic::tip::{Tip, Tippable};
 
-
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
 /// regards to the signature.
@@ -33,7 +32,7 @@ pub struct CheckedExtrinsic<AccountId, Index, Call, Balance> {
 	pub signed: Option<(AccountId, Index)>,
 	/// The function that should be called.
 	pub function: Call,
-	/// The validated tip value for this transaction.
+	/// An optional tip value that may or may not exist based on the underlying unchecked extrinsic.
 	pub tip: Option<Tip<Balance>>,
 }
 

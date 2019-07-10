@@ -58,7 +58,6 @@ macro_rules! impl_outer_inherent {
 
 				let mut inherents = Vec::new();
 
-				// TODO: fix tip value here.
 				$(
 					if let Some(inherent) = $module::create_inherent(self) {
 						inherents.push($uncheckedextrinsic::new_unsigned(

@@ -26,7 +26,7 @@ use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight,
 	Lookup, Checkable, Extrinsic, SaturatedConversion};
 use super::{CheckedExtrinsic, Era, Tip};
 
-const TRANSACTION_VERSION: u8 = 1;
+const TRANSACTION_VERSION: u8 = 2;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
