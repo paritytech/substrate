@@ -22,34 +22,43 @@ use client;
 use transaction_pool::txpool::{self, PoolApi};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
-use runtime_primitives::generic::BlockId;
-use log::info;
+use runtime_primitives::{generic::BlockId, AnySignature};
+use log::{info, warn};
 use client::blockchain::HeaderBackend;
-use client::transaction_builder::api::TransactionBuilder;
+use client::transaction_builder::api::TransactionBuilder as TransactionBuilderApi;
+use substrate_primitives::crypto::Pair as PairT;
 
 /// Trait to submit report calls to the transaction pool.
-pub trait SubmitReport<C, Block> {
+pub trait SubmitReport<C, Block, Pair> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, extrinsic: &[u8]);
+	fn submit_report_call(&self, client: &C, pair: Pair, encoded_call: &[u8]);
 }
 
-impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block> for T 
+impl<C, Block, T: PoolApi + Send + Sync + 'static, P> SubmitReport<C, Block, P> for T 
 where 
 	Block: BlockT + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
 	<Block as BlockT>::Extrinsic: Decode,
 	C: HeaderBackend<Block> + ProvideRuntimeApi,
-	C::Api: TransactionBuilder<Block>,
+	C::Api: TransactionBuilderApi<Block>,
+	P: PairT,
+	P::Public: Encode + Decode,
+	AnySignature: From<<P as PairT>::Signature>,
 {
-	fn submit_report_call(&self, client: &C, mut extrinsic: &[u8]) {
+	fn submit_report_call(&self, client: &C, pair: P, encoded_call: &[u8]) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
-		if let Some(uxt) = Decode::decode(&mut extrinsic) {
-			let block_id = BlockId::<Block>::number(client.info().best_number);
-			if let Err(e) = self.submit_one(&block_id, uxt) {
-				info!(target: "accountable-safety", "Error importing misbehavior report: {:?}", e);
-			}
-		} else {
-			info!(target: "accountable-safety", "Error decoding report call");
+		let block_id = BlockId::<Block>::number(client.info().best_number);
+		let encoded_account_id = pair.public().encode();
+		let signing_payload = client.runtime_api().signing_payload(&block_id, encoded_account_id.clone(), encoded_call.to_vec())
+			.expect("FIXME");
+		let signature = AnySignature::from(pair.sign(signing_payload.as_slice()));
+		let encoded_extrinsic = client.runtime_api().build_transaction(&block_id, signing_payload, encoded_account_id, signature)
+			.expect("FIXME");
+		let uxt = Decode::decode(&mut encoded_extrinsic.as_slice())
+			.expect("Encoded extrinsic is valid");
+		match self.submit_one(&block_id, uxt) {
+			Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+			Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
 		}
 	}
 }
