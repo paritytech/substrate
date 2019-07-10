@@ -313,7 +313,7 @@ impl<
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, Error>(
-	::rstd::marker::PhantomData<(N, D, AccountId, Error)>
+	rstd::marker::PhantomData<(N, D, AccountId, Error)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
