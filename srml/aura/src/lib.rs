@@ -72,6 +72,7 @@ use substrate_consensus_aura_primitives::{
 	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author, AuraEquivocationProof
 };
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
+use system::ensure_signed;
 
 mod mock;
 mod tests;
@@ -168,15 +169,14 @@ pub trait Trait: timestamp::Trait {
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
 }
 
-fn handle_equivocation_proof<T: Trait>(
+fn valid_equivocation_proof<T: Trait>(
 	proof: &AuraEquivocationProof<T::Header, T::Signature>
-) -> TransactionValidity 
-{
+) -> bool {
 	let header1 = proof.first_header();
 	let header2 = proof.second_header();
 
 	if header1 == header2 {
-		return TransactionValidity::Invalid(0)
+		return false
 	}
 
 	let maybe_slot1 = find_pre_digest::<_, T::Signature>(header1);
@@ -189,46 +189,26 @@ fn handle_equivocation_proof<T: Trait>(
 		let authorities = <Module<T>>::authorities();
 
 		let author = match slot_author(slot, authorities.as_slice()) {
-			None => return TransactionValidity::Invalid(0),
+			None => return false,
 			Some(author) => author,
 		};
 
 		let pre_hash1 = header1.hash();
 
 		if !proof.first_signature().verify(pre_hash1.as_ref(), author) {
-			return TransactionValidity::Invalid(0)
+			return false
 		}
 
 		let pre_hash2 = header2.hash();
 
 		if !proof.second_signature().verify(pre_hash2.as_ref(), author) {
-			return TransactionValidity::Invalid(0)
+			return false
 		}
 
-		return TransactionValidity::Valid {
-			priority: 10,
-			requires: vec![],
-			provides: vec![],
-			longevity: 18446744073709551615,
-			propagate: true,
-		}
+		return true;
 	}
 
-	TransactionValidity::Invalid(0)
-}
-
-impl<T> ValidateUnsigned for Module<T> 
-where
-	T: Trait,
-{
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		match call {
-			Call::report_equivocation(proof) => handle_equivocation_proof::<T>(proof),
-			_ => TransactionValidity::Invalid(0),
-		}
-	}
+	false
 }
 
 decl_storage! {
@@ -245,10 +225,14 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
 		/// Report equivocation.
 		fn report_equivocation(
-			_origin,
-			_equivocation_proof: AuraEquivocationProof<T::Header, T::Signature>
+			origin,
+			equivocation_proof: AuraEquivocationProof<T::Header, T::Signature>
 		) {
-			// This is the place where we will slash.
+			let who = ensure_signed(origin)?;
+
+			if valid_equivocation_proof::<T>(&equivocation_proof) {
+				// This is the place where we will slash.
+			}
 		}
 	}
 }
