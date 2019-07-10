@@ -10,7 +10,7 @@
 #
 # Usage:
 #
-# 1. Build `target/debug/substrate` binary: `cargo build`
+# 1. Build `target/release/substrate` binary: `cargo build --release`
 #
 # 2. Start networks and containers: `sudo docker-compose -f scripts/sentry-node/docker-compose.yml up`
 #
@@ -27,7 +27,7 @@ services:
     ports:
       - "9944:9944"
     volumes:
-      - ../../target/debug/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate:/usr/local/bin/substrate
     image: parity/substrate
     networks:
       - network-a
@@ -45,8 +45,8 @@ services:
       - "--validator"
       - "--name"
       - "AlicesNode"
-      - "--bootnodes"
-      - "/dns4/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
+      - "--reserved-nodes"
+      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       # Not only bind to localhost.
       - "--ws-external"
       - "--rpc-external"
@@ -63,7 +63,7 @@ services:
     ports:
       - "9946:9944"
     volumes:
-      - ../../target/debug/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate:/usr/local/bin/substrate
     networks:
       - network-a
       - internet
@@ -102,7 +102,7 @@ services:
     ports:
       - "9945:9944"
     volumes:
-      - ../../target/debug/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate:/usr/local/bin/substrate
     networks:
       - internet
     command:
@@ -121,6 +121,8 @@ services:
       - "BobsNode"
       - "--bootnodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "--bootnodes"
+      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"

@@ -29,6 +29,7 @@ pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
+pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
@@ -120,6 +121,9 @@ pub trait Ext {
 
 	/// Rent allowance of the contract
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
+
+	/// Returns the current block number.
+	fn block_number(&self) -> BlockNumberOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -363,6 +367,7 @@ where
 							caller: self.self_account.clone(),
 							value_transferred: value,
 							timestamp: timestamp::Module::<T>::now(),
+							block_number: <system::Module<T>>::block_number(),
 						},
 						input_data,
 						empty_output_buf,
@@ -433,6 +438,7 @@ where
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
 						timestamp: timestamp::Module::<T>::now(),
+						block_number: <system::Module<T>>::block_number(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -585,6 +591,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
+	block_number: T::BlockNumber,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -673,6 +680,8 @@ where
 		self.ctx.overlay.get_rent_allowance(&self.ctx.self_account)
 			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
+
+	fn block_number(&self) -> T::BlockNumber { self.block_number }
 }
 
 /// These tests exercise the executive layer.
