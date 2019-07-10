@@ -325,7 +325,8 @@ decl_storage! {
 						// <= begin it should be >= balance
 						// >= begin+length it should be <= 0
 
-						let per_block = (balance - liquid) / length.max(primitives::traits::One::one());
+						let balance = balance.saturating_sub(liquid);
+						let per_block = balance / length.max(primitives::traits::One::one());
 						let offset = begin * per_block + balance;
 
 						(who.clone(), VestingSchedule { offset, per_block })

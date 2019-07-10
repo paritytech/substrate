@@ -574,8 +574,8 @@ fn check_vesting_status() {
 			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
 			assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
 			let user1_vesting_schedule = VestingSchedule {
-				offset: 256 * 5,
-				per_block: 256,
+				offset: 128 * 10,
+				per_block: 128,
 			};
 			let user2_vesting_schedule = VestingSchedule {
 				offset: 256 * 30,
@@ -585,7 +585,7 @@ fn check_vesting_status() {
 			assert_eq!(Balances::vesting(&2), Some(user2_vesting_schedule)); // Account 2 has a vesting schedule
 
 			// Account 1 has only 256 units vested from their illiquid 256 * 5 units at block 1
-			assert_eq!(Balances::vesting_balance(&1), 256 * 4);
+			assert_eq!(Balances::vesting_balance(&1), 128 * 9);
 
 			System::set_block_number(10);
 			assert_eq!(System::block_number(), 10);
@@ -615,10 +615,10 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(System::block_number(), 1);
 			let user1_free_balance = Balances::free_balance(&1);
 			assert_eq!(user1_free_balance, 100); // Account 1 has free balance
-			// Account 1 has only 10 units vested at block 1 (plus 50 unvested)
-			assert_eq!(Balances::vesting_balance(&1), 40);
+			// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_noop!(
-				Balances::transfer(Some(1).into(), 2, 61),
+				Balances::transfer(Some(1).into(), 2, 56),
 				"vesting balance too high to send value"
 			); // Account 1 cannot send more than vested amount
 		}
@@ -637,9 +637,9 @@ fn vested_balance_should_transfer() {
 			assert_eq!(System::block_number(), 1);
 			let user1_free_balance = Balances::free_balance(&1);
 			assert_eq!(user1_free_balance, 100); // Account 1 has free balance
-			// Account 1 has only 10 units vested at block 1 (plus 50 unvested)
-			assert_eq!(Balances::vesting_balance(&1), 40);
-			assert_ok!(Balances::transfer(Some(1).into(), 2, 60));
+			// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+			assert_eq!(Balances::vesting_balance(&1), 45);
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 		}
 	);
 }
@@ -658,7 +658,8 @@ fn extra_balance_should_transfer() {
 			let user1_free_balance = Balances::free_balance(&1);
 			assert_eq!(user1_free_balance, 200); // Account 1 has 100 more free balance than normal
 
-			assert_eq!(Balances::vesting_balance(&1), 40); // Account 1 has 90 units vested at block 1
+			// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
+			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_ok!(Balances::transfer(Some(1).into(), 2, 155)); // Account 1 can send extra units gained
 		}
 	);

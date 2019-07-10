@@ -164,7 +164,7 @@ impl ExtBuilder {
 				vec![]
 			},
 			vesting: if self.vesting && self.monied {
-				vec![(1, 0, 10, 5), (2, 10, 20, 0)]
+				vec![(1, 0, 10, 5 * self.existential_deposit), (2, 10, 20, 0)]
 			} else {
 				vec![]
 			},
