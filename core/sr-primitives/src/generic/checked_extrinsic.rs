@@ -33,6 +33,10 @@ pub struct CheckedExtrinsic<AccountId, Index, Call, Balance> {
 	/// The function that should be called.
 	pub function: Call,
 	/// An optional tip value that may or may not exist based on the underlying unchecked extrinsic.
+	///
+	/// Most often this is:
+	/// - `None` if the unchecked extrinsic does not have a tip OR it is unsigned.
+	/// - `Some` if the opposite.
 	pub tip: Option<Tip<Balance>>,
 }
 
