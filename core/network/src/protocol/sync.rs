@@ -797,7 +797,7 @@ impl<B: BlockT> ChainSync<B> {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number.is_zero() {
-			warn!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
+			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return false;
 		}
 		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()
