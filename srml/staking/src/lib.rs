@@ -1349,8 +1349,6 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
-		let validators = <Module<T>>::select_validators().1;
-
-		validators
+		<Module<T>>::select_validators().1
 	}
 }
