@@ -297,7 +297,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
+		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
 			aura: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
@@ -353,7 +353,7 @@ mod tests {
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
-		}.build_storage().unwrap().0);
+		}.build_storage().unwrap());
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}

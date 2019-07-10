@@ -98,7 +98,7 @@ pub struct GenesisParameters {
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> MapTransaction {
 		let mut storage = genesis_config(self.support_changes_trie).genesis_map();
 
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
@@ -107,7 +107,7 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.extend(additional_storage_with_genesis(&block));
 
-		(storage, Default::default())
+		MapTransaction { top: storage, children: Default::default() }
 	}
 }
 

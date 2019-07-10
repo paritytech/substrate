@@ -18,69 +18,66 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use crate::backend::{Backend, InMemory, MapTransaction};
 use hash_db::Hasher;
-use trie::trie_root;
+use trie::{trie_root, default_child_trie_root};
 use primitives::offchain;
-use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use primitives::child_trie::ChildTrie;
-use primitives::child_trie::ChildTrieReadRef;
+use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
+use primitives::child_trie::{ChildTrie, ChildTrieReadRef, KeySpace};
 use parity_codec::Encode;
-use super::{Externalities, OverlayedChanges};
+use super::Externalities;
 use log::warn;
 
 /// Simple HashMap-based Externalities impl.
+#[derive(Debug)]
 pub struct BasicExternalities {
-	inner: HashMap<Vec<u8>, Vec<u8>>,
-	changes: OverlayedChanges,
-	code: Option<Vec<u8>>,
+	top: HashMap<Vec<u8>, Vec<u8>>,
+	children: HashMap<KeySpace, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
+	pending_child: HashMap<Vec<u8>, Option<KeySpace>>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_code(&[], inner)
+	pub fn new(top: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_children(MapTransaction { top, children: Default::default() })
 	}
 
-	/// Create a new instance of `BasicExternalities`
-	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		let mut overlay = OverlayedChanges::default();
-		super::set_changes_trie_config(
-			&mut overlay,
-			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
-			false,
-		).expect("changes trie configuration is correct in test env; qed");
-
-		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
-
+	/// Create a new instance of `BasicExternalities` with children
+	pub fn new_with_children(mut map: MapTransaction) -> Self {
+		map.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		let pending_child = map.children.values()
+			.map(|(_, child_trie)| (
+					child_trie.parent_slice().to_vec(),
+					Some(child_trie.keyspace().clone())
+			)).collect();
 		BasicExternalities {
-			inner,
-			changes: overlay,
-			code: Some(code.to_vec()),
+			top: map.top,
+			children: map.children,
+			pending_child,
 		}
 	}
 
 	/// Insert key/value
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) -> Option<Vec<u8>> {
-		self.inner.insert(k, v)
+		self.top.insert(k, v)
 	}
-}
 
-impl ::std::fmt::Debug for BasicExternalities {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{:?}", self.inner)
+	/// Consume self and returns inner storages
+	pub fn into_storages(self) -> MapTransaction {
+		MapTransaction {top: self.top, children: self.children}
 	}
 }
 
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
-		self.inner.eq(&other.inner)
+		self.top.eq(&other.top) && self.children.eq(&other.children)
 	}
 }
 
 impl FromIterator<(Vec<u8>, Vec<u8>)> for BasicExternalities {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
-		let mut t = Self::new(Default::default());
-		t.inner.extend(iter);
+		let mut t = Self::default();
+		t.top.extend(iter);
 		t
 	}
 }
@@ -89,80 +86,127 @@ impl Default for BasicExternalities {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl From<BasicExternalities> for HashMap<Vec<u8>, Vec<u8>> {
-	fn from(tex: BasicExternalities) -> Self {
-		tex.inner.into()
-	}
-}
-
-impl From< HashMap<Vec<u8>, Vec<u8>> > for BasicExternalities {
+impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		BasicExternalities {
-			inner: hashmap,
-			changes: Default::default(),
-			code: None,
+			top: hashmap,
+			children: Default::default(),
+			pending_child: Default::default(),
 		}
 	}
 }
 
 impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		match key {
-			CODE => self.code.clone(),
-			_ => self.inner.get(key).cloned(),
-		}
+		self.top.get(key).cloned()
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, _child_trie: ChildTrieReadRef, _key: &[u8]) -> Option<Vec<u8>> {
-		unreachable!("basic not used for child trie");
+	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+		let keyspace = child_trie.keyspace();
+		self.children.get(keyspace).and_then(|child| child.0.get(key)).cloned()
 	}
 
-	fn child_trie(&self, _storage_key: &[u8]) -> Option<ChildTrie> {
-		unreachable!("basic not used for child trie");
-	}
-
-	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
-		self.changes.set_storage(key.clone(), maybe_value.clone());
-		match key.as_ref() {
-			CODE => self.code = maybe_value,
-			_ => {
-				match maybe_value {
-					Some(value) => { self.inner.insert(key, value); }
-					None => { self.inner.remove(&key); }
-				}
-			}
+	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
+		match self.pending_child.get(storage_key) {
+			Some(Some(keyspace)) => {
+				let map = self.children.get(keyspace)
+					.expect("pending entry always have a children association; qed");
+				return Some(map.1.clone());
+			},
+			Some(None) => None,
+			None => None,
 		}
 	}
 
-	fn place_child_storage(&mut self, _child_trie: &ChildTrie, _key: Vec<u8>, _value: Option<Vec<u8>>) {
-		unreachable!("basic not used for child trie");
+	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
+		if is_child_storage_key(&key) {
+			warn!(target: "trie", "Refuse to set child storage key via main storage");
+			return;
+		}
+
+		match maybe_value {
+			Some(value) => { self.top.insert(key, value); }
+			None => { self.top.remove(&key); }
+		}
 	}
 
-	fn kill_child_storage(&mut self, _child_trie: &ChildTrie) {
-		unreachable!("basic not used for child trie");
+	fn place_child_storage(
+		&mut self,
+		child_trie: &ChildTrie,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>
+	) {
+		let p = &mut self.children;
+		let pc = &mut self.pending_child;
+		let child_map = p.entry(child_trie.keyspace().clone())
+			.or_insert_with(|| {
+				let parent = child_trie.parent_slice().to_vec();
+				pc.insert(parent, Some(child_trie.keyspace().clone()));
+				(Default::default(), child_trie.clone())
+			});
+
+		if let Some(value) = value {
+			child_map.0.insert(key, value);
+		} else {
+			child_map.0.remove(&key);
+		}
 	}
 
-	fn set_child_trie(&mut self, _ct: ChildTrie) -> bool {
-		unreachable!("basic not used for child trie");
+	fn kill_child_storage(&mut self, child_trie: &ChildTrie) {
+		let keyspace = child_trie.keyspace();
+		if let Some((map_val, _ct)) = self.children.get_mut(keyspace) {
+			map_val.clear();
+		}
 	}
 
+	fn set_child_trie(&mut self, child_trie: ChildTrie) -> bool {
+		let keyspace = child_trie.keyspace();
+		if let Some((_, old_ct)) = self.children.get_mut(keyspace) {
+			if old_ct.root_initial_value() != child_trie.root_initial_value()
+				|| old_ct.keyspace() != child_trie.keyspace()
+				|| old_ct.parent_slice() != child_trie.parent_slice() {
+				return false;
+			} else {
+				*old_ct = child_trie;
+			}
+		} else {
+			self.pending_child.insert(child_trie.parent_slice().to_vec(), Some(child_trie.keyspace().clone()));
+			self.children.insert(keyspace.to_vec(), (Default::default(), child_trie));
+		}
+		true
+	}
+	
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.changes.clear_prefix(prefix);
-		self.inner.retain(|key, _| !key.starts_with(prefix));
+		if is_child_storage_key(prefix) {
+			warn!(
+				target: "trie",
+				"Refuse to clear prefix that is part of child storage key via main storage"
+			);
+			return;
+		}
+
+		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.inner.clone())
+		trie_root::<H, _, _, _>(self.top.clone())
 	}
 
-	fn child_storage_root(&mut self, _child_trie: &ChildTrie) -> Vec<u8> {
-		unreachable!("basic not used for child trie");
+	fn child_storage_root(&mut self, child_trie: &ChildTrie) -> Vec<u8> {
+		let keyspace = child_trie.keyspace();
+		if let Some(child) = self.children.get(keyspace) {
+			let delta = child.0.clone().into_iter().map(|(k, v)| (k, Some(v)));
+
+			InMemory::<H>::default().child_storage_root(&child.1, delta).0
+		} else {
+			default_child_trie_root::<H>()
+		}
 	}
 
 	fn storage_changes_root(&mut self, _parent: H::Out) -> Result<Option<H::Out>, ()> {
@@ -178,7 +222,8 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, H256};
+	use primitives::{Blake2Hasher, H256, map};
+	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
 	#[test]
@@ -201,5 +246,34 @@ mod tests {
 		ext.set_storage(CODE.to_vec(), code.clone());
 
 		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+	}
+
+	#[test]
+	fn children_works() {
+		let child_storage = b":child_storage:default:test";
+
+		// use a dummy child trie (keyspace and undefined trie).
+		let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), child_storage, || 1u128);
+		let mut ext = BasicExternalities::new_with_children(MapTransaction {
+			top: Default::default(),
+			children: map![
+				child_trie.keyspace().to_vec() => (map![
+					b"doe".to_vec() => b"reindeer".to_vec()
+				], child_trie.clone())
+			],
+    });
+
+		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
+
+		assert_eq!(ext.child_storage(child_trie.node_ref(), b"doe"), Some(b"reindeer".to_vec()));
+
+		ext.set_child_storage(&child_trie, b"dog".to_vec(), b"puppy".to_vec());
+		assert_eq!(ext.child_storage(child_trie.node_ref(), b"dog"), Some(b"puppy".to_vec()));
+
+		ext.clear_child_storage(&child_trie, b"dog");
+		assert_eq!(ext.child_storage(child_trie.node_ref(), b"dog"), None);
+
+		ext.kill_child_storage(&child_trie);
+		assert_eq!(ext.child_storage(child_trie.node_ref(), b"doe"), None);
 	}
 }

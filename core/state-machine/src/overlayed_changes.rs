@@ -172,7 +172,7 @@ impl OverlayedChanges {
 		match self.prospective.pending_child.get(storage_key) {
 			Some(Some(keyspace)) => {
 				let map = self.prospective.children.get(keyspace)
-					.expect("children entry always have a pending association; qed");
+					.expect("pending entry always have a children association; qed");
 				return Some(Some(map.child_trie.clone()));
 			},
 			Some(None) => return Some(None),
@@ -182,7 +182,7 @@ impl OverlayedChanges {
 		match self.committed.pending_child.get(storage_key) {
 			Some(Some(keyspace)) => {
 				let map = self.committed.children.get(keyspace)
-					.expect("children entry always have a pending association; qed");
+					.expect("pending entry always have a children association; qed");
 				return Some(Some(map.child_trie.clone()));
 			},
 			Some(None) => return Some(None),
@@ -242,7 +242,7 @@ impl OverlayedChanges {
 		if let Some(Some(old_ct)) = self.prospective.pending_child
 			.get(child_trie.parent_slice()) {
 			let old_ct = self.prospective.children.get_mut(old_ct)
-				.expect("children entry always have a pending association; qed");
+				.expect("pending entry always have a children association; qed");
 			let exts = &mut old_ct.extrinsics;
 			let old_ct = &mut old_ct.child_trie;
 			if old_ct.root_initial_value() != child_trie.root_initial_value()

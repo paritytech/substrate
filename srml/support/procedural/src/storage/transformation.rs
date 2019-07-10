@@ -534,16 +534,13 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
-					(
-						#scrate::runtime_primitives::StorageOverlay,
-						#scrate::runtime_primitives::ChildrenStorageOverlay,
-					),
+					#scrate::runtime_primitives::MapTransaction,
 					String
 				> #fn_where_clause {
 					let mut storage = Default::default();
 					let mut child_storage = Default::default();
 					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
-					Ok((storage, child_storage))
+					Ok(#scrate::runtime_primitives::MapTransaction { top: storage, children: child_storage })
 				}
 
 				/// Assimilate the storage for this module into pre-existing overlays.

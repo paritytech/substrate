@@ -32,7 +32,7 @@ pub use rstd;
 pub use paste;
 
 #[cfg(feature = "std")]
-pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay, MapTransaction};
 
 use rstd::{prelude::*, ops};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
@@ -108,11 +108,11 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		let mut storage = Default::default();
-		let mut child_storage = Default::default();
-		self.assimilate_storage(&mut storage, &mut child_storage)?;
-		Ok((storage, child_storage))
+	fn build_storage(self) -> Result<MapTransaction, String> {
+		let mut top = Default::default();
+		let mut children = Default::default();
+		self.assimilate_storage(&mut top, &mut children)?;
+		Ok(MapTransaction{ top, children })
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
@@ -135,8 +135,8 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageOverlay {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		Ok((self, Default::default()))
+	fn build_storage(self) -> Result<MapTransaction, String> {
+		Ok(MapTransaction{ top: self, children: Default::default() })
 	}
 	fn assimilate_storage(
 		self,
@@ -149,8 +149,8 @@ impl BuildStorage for StorageOverlay {
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+impl BuildStorage for MapTransaction {
+	fn build_storage(self) -> Result<MapTransaction, String> {
 		Ok(self)
 	}
 	fn assimilate_storage(
@@ -158,8 +158,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 		storage: &mut StorageOverlay,
 		child_storage: &mut ChildrenStorageOverlay
 	)-> Result<(), String> {
-		storage.extend(self.0);
-		child_storage.extend(self.1);
+		self.assimilate_storage(storage, child_storage);
 		Ok(())
 	}
 }

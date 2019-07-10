@@ -27,7 +27,7 @@ pub use consensus;
 pub use executor::{NativeExecutor, self};
 pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 pub use primitives::Blake2Hasher;
-pub use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+pub use runtime_primitives::MapTransaction;
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
@@ -53,11 +53,11 @@ pub struct LightFetcher;
 /// A genesis storage initialisation trait.
 pub trait GenesisInit: Default {
 	/// Construct genesis storage.
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay);
+	fn genesis_storage(&self) -> MapTransaction;
 }
 
 impl GenesisInit for () {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> MapTransaction {
 		Default::default()
 	}
 }
@@ -180,7 +180,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<
 					// block 0
 					|| 1u128,
 				);
-				storage.1.insert(
+				storage.children.insert(
 					child_trie.keyspace().clone(),
 					(value.into_iter().collect(), child_trie),
 				);

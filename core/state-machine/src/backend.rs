@@ -18,7 +18,7 @@
 
 use std::{error, fmt};
 use std::cmp::Ord;
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use std::marker::PhantomData;
 use log::warn;
 use hash_db::Hasher;
@@ -26,6 +26,12 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,	KeySpacedDBMut};
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
+
+/// A set of key value pairs for storage.
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, ChildTrie)>;
 
 #[derive(Default, Clone, PartialEq)]
 // see FIXME #2740 related to performance.
@@ -35,9 +41,46 @@ use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 /// third field is to be created child trie map.
 pub struct MapTransaction {
 	/// Key value for top trie.
-	pub top: HashMap<Vec<u8>, Vec<u8>>,
+	pub top: StorageOverlay,
 	/// Key value and child trie update (stored by `KeySpace`).
-	pub children: HashMap<KeySpace, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
+	pub children: ChildrenStorageOverlay,
+}
+
+impl MapTransaction {
+	/// Equivalent to `Extend` rust trait, less flexible.
+	/// It merges both contents.
+	pub fn extend(&mut self, other: MapTransaction) {
+		self.top.extend(other.top);
+		for (k, (other_map, other_child_trie)) in other.children.into_iter() {
+			if let Some((map, child_trie)) = self.children.get_mut(&k) {
+				map.extend(other_map);
+				// warning this can result in loss of info if both map are not
+				// build other same backend.
+				*child_trie = other_child_trie;
+			} else {
+				self.children.insert(k, (other_map, other_child_trie));
+			}
+		}
+	}
+	/// Assimilate this map transaction into other storage.
+	/// This is pretty close to a reverse `extend`
+	pub fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) {
+		storage.extend(self.top);
+		for (k, (other_map, other_child_trie)) in self.children.into_iter() {
+			if let Some((map, child_trie)) = child_storage.get_mut(&k) {
+				map.extend(other_map);
+				// warning this can result in loss of info if both map are not
+				// build other same backend.
+				*child_trie = other_child_trie;
+			} else {
+				child_storage.insert(k, (other_map, other_child_trie));
+			}
+		}
+	}
 }
 
 // see FIXME #2740 related to performance.

@@ -21,7 +21,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
+use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay, MapTransaction};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;
@@ -66,10 +66,13 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+	fn build_storage(self) -> Result<MapTransaction, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
+			Genesis::Raw(map) => Ok(MapTransaction {
+				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				children: Default::default(),
+			}),
 		}
 	}
 	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
@@ -214,7 +217,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.0.into_iter()
+				let storage = g.build_storage()?.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
 

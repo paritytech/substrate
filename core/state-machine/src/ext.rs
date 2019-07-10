@@ -329,7 +329,7 @@ where
 				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())));
 
 			(child_trie, committed_iter.chain(prospective_iter))
-    });
+		});
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))

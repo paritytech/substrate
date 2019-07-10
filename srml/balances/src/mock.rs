@@ -156,7 +156,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
@@ -168,7 +168,7 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-		}.build_storage().unwrap().0);
+		}.build_storage().unwrap());
 		t.into()
 	}
 }

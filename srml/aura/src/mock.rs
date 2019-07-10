@@ -64,13 +64,13 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	t.extend(timestamp::GenesisConfig::<Test>{
 		minimum_period: 1,
-	}.build_storage().unwrap().0);
+	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().0);
+	}.build_storage().unwrap());
 	t.into()
 }
 

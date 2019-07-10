@@ -27,11 +27,14 @@ pub use substrate_state_machine::{
 	TestExternalities,
 };
 
+pub use substrate_state_machine::backend::{
+	MapTransaction,
+	StorageOverlay,
+	ChildrenStorageOverlay,
+};
+
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
-
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
@@ -415,20 +418,33 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake
 	ext::using(ext, f)
 }
 
-/// A set of key value pairs for storage.
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, ChildTrie)>;
-
 /// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage`. Forwards the value that the closure returns.
 pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
 	let mut alt_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	let mut ext: BasicExternalities = alt_storage.into();
+	let mut ext = BasicExternalities::new(alt_storage);
 	let r = ext::using(&mut ext, f);
-	*storage = ext.into();
+	*storage = ext.into_storages().top;
+	r
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage` and `children_storage`.
+/// Forwards the value that the closure returns.
+pub fn with_storage_and_children<R, F: FnOnce() -> R>(
+	storage: &mut MapTransaction,
+	f: F
+) -> R {
+	let mut alt_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+
+	let mut ext = BasicExternalities::new_with_children(alt_storage);
+	let r = ext::using(&mut ext, f);
+
+	let storage_tuple = ext.into_storages();
+	*storage = storage_tuple;
+
 	r
 }
 

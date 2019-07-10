@@ -305,10 +305,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
+			let genesis_storage = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation()?;
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
-			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
+			let state_root = op.reset_storage(genesis_storage.top, genesis_storage.children)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),

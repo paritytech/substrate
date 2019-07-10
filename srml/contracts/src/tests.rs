@@ -261,26 +261,16 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(
-			balances::GenesisConfig::<Test> {
-				balances: vec![],
-				vesting: vec![],
-			}
-			.build_storage()
-			.unwrap()
-			.0,
-		);
-		t.extend(
-			GenesisConfig::<Test> {
-				current_schedule: Default::default(),
-				gas_price: self.gas_price,
-			}
-			.build_storage()
-			.unwrap()
-			.0,
-		);
-		runtime_io::TestExternalities::new(t)
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		balances::GenesisConfig::<Test> {
+			balances: vec![],
+			vesting: vec![],
+		}.assimilate_storage(&mut t.top, &mut t.children).unwrap();
+		GenesisConfig::<Test> {
+			current_schedule: Default::default(),
+			gas_price: self.gas_price,
+		}.assimilate_storage(&mut t.top, &mut t.children).unwrap();
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 }
 

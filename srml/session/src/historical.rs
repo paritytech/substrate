@@ -326,17 +326,17 @@ mod tests {
 	type Historical = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.extend(timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
-		let (storage, _child_storage) = crate::GenesisConfig::<Test> {
+		}.build_storage().unwrap());
+		let storage = crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
 		}.build_storage().unwrap();
 		t.extend(storage);
-		runtime_io::TestExternalities::new(t)
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 
 	#[test]

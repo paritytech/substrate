@@ -171,57 +171,57 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_child_trie(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			k: *mut *mut u8,
-			kl: *mut u32,
-			r: *mut *mut u8,
-			rl: *mut u32,
-			p: *mut *mut u8,
-			pl: *mut u32,
-			e: *mut *mut u8,
-			el: *mut u32
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		k: *mut *mut u8,
+		kl: *mut u32,
+		r: *mut *mut u8,
+		rl: *mut u32,
+		p: *mut *mut u8,
+		pl: *mut u32,
+		e: *mut *mut u8,
+		el: *mut u32
 	) -> u32 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| "Invalid attempt to determine storage_key in ext_get_child_trie")?;
 
-			Ok(if let Some(ct) = this.ext.child_trie(&storage_key) {
+		Ok(if let Some(ct) = this.ext.child_trie(&storage_key) {
 
-				let mut alloc_vec =
-					|value: Option<&[u8]>, dest_vec, dest_len| -> Result<()> {
-					if let Some(value) = value {
-						let offset = this.heap.allocate(value.len() as u32)? as u32;
-						this.memory.set(offset, &value)
-							.map_err(|_| "Invalid attempt to set memory in ext_child_trie")?;
-						this.memory.write_primitive(dest_len, value.len() as u32)
-							.map_err(|_| "Invalid attempt to write length in ext_child_trie")?;
-						this.memory.write_primitive(dest_vec, offset)
-							.map_err(|_| "Invalid attempt to write vec ptr in ext_child_trie")?;
-					} else {
-						this.memory.write_primitive(dest_len, u32::max_value())
-							.map_err(|_| "Invalid attempt to write failed length in ext_child_trie")?;
-					}
-					Ok(())
-				};
-				let fields = ct.to_ptr_vec();
-				alloc_vec(Some(fields.0), k, kl)?;
-				alloc_vec(fields.1, r, rl)?;
-				alloc_vec(Some(fields.2), p, pl)?;
-				alloc_vec(Some(fields.3), e, el)?;
-				1
-			} else {
-				0
-			})
+			let mut alloc_vec =
+				|value: Option<&[u8]>, dest_vec, dest_len| -> Result<()> {
+				if let Some(value) = value {
+					let offset = this.heap.allocate(value.len() as u32)? as u32;
+					this.memory.set(offset, &value)
+						.map_err(|_| "Invalid attempt to set memory in ext_child_trie")?;
+					this.memory.write_primitive(dest_len, value.len() as u32)
+						.map_err(|_| "Invalid attempt to write length in ext_child_trie")?;
+					this.memory.write_primitive(dest_vec, offset)
+						.map_err(|_| "Invalid attempt to write vec ptr in ext_child_trie")?;
+				} else {
+					this.memory.write_primitive(dest_len, u32::max_value())
+						.map_err(|_| "Invalid attempt to write failed length in ext_child_trie")?;
+				}
+				Ok(())
+			};
+			let fields = ct.to_ptr_vec();
+			alloc_vec(Some(fields.0), k, kl)?;
+			alloc_vec(fields.1, r, rl)?;
+			alloc_vec(Some(fields.2), p, pl)?;
+			alloc_vec(Some(fields.3), e, el)?;
+			1
+		} else {
+			0
+		})
 	},
 	ext_set_child_trie(
-			keyspace: *const u8,
-			keyspace_len: u32,
-			root: *const u8,
-			root_len: u32,
-			parent: *const u8,
-			parent_len: u32,
-			extension: *const u8,
-			extension_len: u32
+		keyspace: *const u8,
+		keyspace_len: u32,
+		root: *const u8,
+		root_len: u32,
+		parent: *const u8,
+		parent_len: u32,
+		extension: *const u8,
+		extension_len: u32
 	) -> u32 => {
 		let keyspace = this.memory.get(keyspace, keyspace_len as usize)
 			.map_err(|_| "Invalid attempt to determine keyspace in ext_set_child_trie")?;
@@ -234,7 +234,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let parent = this.memory.get(parent, parent_len as usize)
 			.map_err(|_| "Invalid attempt to determine parent in ext_set_child_trie")?;
 		let extension = this.memory.get(extension, extension_len as usize)
-			.map_err(|_| "Invalid attempt to determine f4 in ext_set_child_trie")?;
+			.map_err(|_| "Invalid attempt to determine extension in ext_set_child_trie")?;
 		let ct = ChildTrie::unsafe_from_ptr_vecs(keyspace, root, parent, extension);
 		Ok(if this.ext.set_child_trie(ct) { 1 } else { 0 })
 	},
