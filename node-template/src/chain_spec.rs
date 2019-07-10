@@ -97,9 +97,6 @@ fn testnet_genesis(initial_authorities: Vec<AuraId>, endowed_accounts: Vec<Accou
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
 		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 5, // 10 second block time.
-		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),

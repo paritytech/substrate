@@ -144,9 +144,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
 		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
-		}),
+		timestamp: Some(TimestampConfig::default()),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
 			gas_price: 1 * MILLICENTS,
@@ -281,9 +279,7 @@ pub fn testnet_genesis(
 			term_duration: 1000000,
 			desired_seats: desired_seats,
 		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 2,                    // 2*2=4 second block time.
-		}),
+		timestamp: Some(TimestampConfig::default()),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
 				enable_println, // this should only be enabled on development chains
@@ -344,7 +340,7 @@ pub(crate) mod tests {
 
 	fn local_testnet_genesis_instant() -> GenesisConfig {
 		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
+		genesis.timestamp = Some(TimestampConfig::default());
 		genesis
 	}
 
@@ -357,7 +353,7 @@ pub(crate) mod tests {
 			None,
 			false,
 		);
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
+		genesis.timestamp = Some(TimestampConfig::default());
 		genesis
 	}
 
