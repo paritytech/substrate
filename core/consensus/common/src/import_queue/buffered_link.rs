@@ -51,6 +51,15 @@ pub struct BufferedLinkSender<B: BlockT> {
 	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
 }
 
+impl<B: BlockT> BufferedLinkSender<B> {
+	/// Returns true if the sender points to nowhere.
+	///
+	/// Once `true` is returned, it is pointless to use the sender anymore.
+	pub fn is_closed(&self) -> bool {
+		self.tx.is_closed()
+	}
+}
+
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
@@ -140,5 +149,18 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.set_finality_proof_request_builder(builder),
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use test_client::runtime::Block;
+
+	#[test]
+	fn is_closed() {
+		let (tx, rx) = super::buffered_link::<Block>();
+		assert!(!tx.is_closed());
+		drop(rx);
+		assert!(tx.is_closed());
 	}
 }

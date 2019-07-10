@@ -201,11 +201,13 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	}
 
 	fn import_a_batch_of_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+		let result_sender = &self.result_sender;
 		let (imported, count, results) = import_many_blocks(
 			&mut *self.block_import,
 			origin,
 			blocks,
 			self.verifier.clone(),
+			|| !result_sender.is_closed(),
 		);
 
 		self.result_sender.blocks_processed(imported, count, results);
@@ -257,11 +259,15 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 }
 
 /// Import several blocks at once, returning import result for each block.
+///
+/// The `keep_going` closure will be called regularly. If it returns false, then the function will
+/// end prematurely.
 fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,
+	keep_going: impl Fn() -> bool,
 ) -> (usize, usize, Vec<(
 	Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 	B::Hash,
@@ -286,6 +292,10 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
+		if !keep_going() {
+			return (imported, count, results);
+		}
+
 		let block_hash = block.hash;
 		let import_result = if has_error {
 			Err(BlockImportError::Cancelled)
