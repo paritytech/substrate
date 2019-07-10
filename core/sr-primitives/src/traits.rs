@@ -131,7 +131,7 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	type Error = &'static str;
+	type Error = ();
 	fn lookup(x: T) -> result::Result<T, Self::Error> { Ok(x) }
 	fn unlookup(x: T) -> T { x }
 }
