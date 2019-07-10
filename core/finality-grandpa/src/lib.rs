@@ -416,7 +416,7 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	select_chain: SC,
@@ -433,7 +433,7 @@ where
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
 	// A: txpool::ChainApi,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
 {
 	use runtime_primitives::traits::Zero;
 
