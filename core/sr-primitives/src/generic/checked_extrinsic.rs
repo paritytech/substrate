@@ -34,7 +34,7 @@ pub struct CheckedExtrinsic<AccountId, Index, Call, Balance> {
 	/// The function that should be called.
 	pub function: Call,
 	/// The validated tip value for this transaction.
-	pub tip: Tip<Balance>,
+	pub tip: Option<Tip<Balance>>,
 }
 
 impl<AccountId, Index, Call, Balance> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call, Balance>
@@ -75,27 +75,26 @@ where
 /// node.
 ///
 /// In practice, if they underlying unchecked transaction is tip-aware, they are the same. Otherwise,
-/// the tip is always `Tip::None` and the type is of no importance.
+/// the tip is always `None` and the type is of no importance.
 impl<AccountId, Index, Call, ExtBalance, NodeBalance> Tippable<NodeBalance>
 	for CheckedExtrinsic<AccountId, Index, Call, ExtBalance>
 where
 	ExtBalance: Clone + Copy,
 	NodeBalance: From<ExtBalance>,
 {
-	fn tip(&self) -> Tip<NodeBalance> {
+	fn tip(&self) -> Option<Tip<NodeBalance>> {
 		// This is a hacky way to prevent `unchecked_mortal[_compact]_extrinsic` types, which
 		// don't have a tip, become generic over a balance type.
 		// Basically, this CheckedExtrinsic is built either 1- from an
 		// `UncheckedMortalCompactTippedExtrinsic`, which is tip-aware and hence, the second arm
 		// will be trivially executed and the type conversion will be safe (the compiler is probably
 		// smart enough to remove it in fact). In this case, NodeBalance and ExtBalance are the same.
-		// Or 2- this is built from all other types of unchecked
-		// extrinsic which do not have tip and hence are not tip-aware. These modules will naively
-		// place a u32 (can be `()` in practice) as the type and it does not matter since `Tip::None`
-		// is used in this case (first arm).
+		// Or 2- this is built from all other types of uncheckedextrinsic which do not have tip and
+		// hence are not tip-aware. These modules will naively place a u32 (can be `()` in practice)
+		// as the type and it does not matter since `None` is used in this case (first arm).
 		match self.tip {
-			Tip::None => Tip::None,
-			Tip::Sender(v) => Tip::Sender(NodeBalance::from(v))
+			None => None,
+			Some(Tip::Sender(v)) => Some(Tip::Sender(NodeBalance::from(v))),
 		}
 	}
 }

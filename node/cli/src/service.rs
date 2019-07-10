@@ -217,14 +217,14 @@ mod tests {
 	use std::sync::Arc;
 	use consensus::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
-	use node_primitives::{DigestItem, Balance};
+	use node_primitives::DigestItem;
 	use node_runtime::{Call, BalancesCall, UncheckedExtrinsic};
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest, Tip}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};

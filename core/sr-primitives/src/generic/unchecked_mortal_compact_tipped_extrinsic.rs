@@ -30,6 +30,11 @@ const TRANSACTION_VERSION: u8 = 1;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
+///
+/// This type transaction:
+///   - _Must_ always have a valid `Tip` encoded, and included in the signature payload if it is
+///   signed.
+///   - _Must_ not provide any `Tip` if it is unsigned.
 #[derive(PartialEq, Eq, Clone)]
 pub struct UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance> {
 	/// The signature, address, number of extrinsics have come before from
@@ -39,7 +44,7 @@ pub struct UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature
 	/// The function that should be called.
 	pub function: Call,
 	/// The tip for this transaction
-	pub tip: Tip<Balance>,
+	pub tip: Option<Tip<Balance>>,
 }
 
 impl<Address, Index, Call, Signature, Balance>
@@ -52,7 +57,7 @@ impl<Address, Index, Call, Signature, Balance>
 		signed: Address,
 		signature: Signature,
 		era: Era,
-		tip: Tip<Balance>
+		tip: Option<Tip<Balance>>
 	) -> Self {
 		UncheckedMortalCompactTippedExtrinsic {
 			signature: Some((signed, signature, index.into(), era)),
@@ -66,7 +71,7 @@ impl<Address, Index, Call, Signature, Balance>
 		UncheckedMortalCompactTippedExtrinsic {
 			signature: None,
 			function,
-			tip: Tip::None
+			tip: None
 		}
 	}
 }
@@ -122,14 +127,14 @@ where
 			}
 			None => {
 				// An unsigned transaction cannot have a tip. The decode code should replace it with
-				// `Tip::None` and ignore the input bytes.
-				if self.tip != Tip::None {
+				// `None` and ignore the input bytes.
+				if self.tip.is_some() {
 					return Err(crate::UNSIGNED_TIP);
 				}
 				CheckedExtrinsic {
 					signed: None,
 					function: self.function,
-					tip: self.tip
+					tip: None
 				}
 			},
 		})
@@ -164,7 +169,7 @@ where
 		Some(UncheckedMortalCompactTippedExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
-			tip: if is_signed { Decode::decode(input)? } else { Tip::None },
+			tip: if is_signed { Decode::decode(input)? } else { None },
 		})
 	}
 }
@@ -261,9 +266,9 @@ mod tests {
 	}
 
 	type Balance = u64;
-
+	type TipType = Tip<Balance>;
 	const DUMMY_ACCOUNTID: u64 = 0;
-	const TIP: Tip<Balance> = Tip::Sender(66);
+	const TIP: Option<TipType> = Some(Tip::Sender(66));
 
 	type Ex = UncheckedMortalCompactTippedExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
 	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
@@ -450,7 +455,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn unsigned_cannot_have_tip() {
-		let ux = UncheckedMortalCompactTippedExtrinsic {signature: None, tip: Tip::Sender(100), function: vec![0u8;0]};
+		let ux = UncheckedMortalCompactTippedExtrinsic {signature: None, tip: Some(Tip::Sender(100)), function: vec![0u8;0]};
 		let _ = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
 	}
 
@@ -463,6 +468,6 @@ mod tests {
 		let decoded = Ex::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(
 			decoded,
-			UncheckedMortalCompactTippedExtrinsic { signature: None, tip: Tip::None, function: vec![8u8;8]})
+			UncheckedMortalCompactTippedExtrinsic { signature: None, tip: None, function: vec![8u8;8]})
 	}
 }

@@ -21,7 +21,7 @@ use std::fmt;
 use rstd::prelude::*;
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
-use super::{CheckedExtrinsic, Tip};
+use super::{CheckedExtrinsic};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct SignatureContent<Address, Index, Signature>
@@ -97,13 +97,13 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
 					function: payload.1,
-					tip: Tip::None,
+					tip: None,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
-				tip: Tip::None,
+				tip: None,
 			},
 		})
 	}

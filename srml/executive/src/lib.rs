@@ -364,12 +364,14 @@ where
 				}
 
 				// pay and burn the tip if provided.
-				let tip = xt.tip().value();
-				let weight = xt.weight(encoded_len);
+				if let Some(tip) = xt.tip() {
+					let tip = tip.value();
+					let weight = xt.weight(encoded_len);
 
-				if !tip.is_zero() {
-					if Payment::make_raw_payment(sender, tip).is_err() {
-						return TransactionValidity::Invalid(ApplyError::CantPay as i8)
+					if !tip.is_zero() {
+						if Payment::make_raw_payment(sender, tip).is_err() {
+							return TransactionValidity::Invalid(ApplyError::CantPay as i8)
+						}
 					}
 				}
 
@@ -389,7 +391,7 @@ where
 
 				// TODO: maximise (fee + tip) per weight unit here.
 				TransactionValidity::Valid {
-					priority: (encoded_len as TransactionPriority) + tip.saturated_into::<TransactionPriority>(),
+					priority: (encoded_len as TransactionPriority),
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),

@@ -141,7 +141,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			),
-			tip: Tip::default(),
+			tip: None,
 		}, key, &prior_block_hash, phase)
 	}
 

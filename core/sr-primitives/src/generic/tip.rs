@@ -27,8 +27,6 @@ use crate::traits::Zero;
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub enum Tip<Balance> {
-    /// This transaction does not include any tips.
-    None,
     /// The sender of the transaction has included some tip.
     Sender(Balance),
 }
@@ -39,15 +37,14 @@ impl<Balance: Zero + Copy> Tip<Balance> {
     pub fn value(&self) -> Balance {
         match *self {
             Tip::Sender(value) => value,
-            Tip::None => Zero::zero(),
         }
     }
 }
 
 /// Default implementation for tip.
-impl<Balance> Default for Tip<Balance> {
+impl<Balance> Default for Tip<Balance> where Balance: Zero {
     fn default() -> Self {
-        Tip::None
+        Tip::Sender(Zero::zero())
     }
 }
 
@@ -55,5 +52,5 @@ impl<Balance> Default for Tip<Balance> {
 /// that translates to "no tip" but this trait must always be implemented for `UncheckedExtrinsic`.
 pub trait Tippable<Balance> {
     /// Return the tip associated with this transaction.
-    fn tip(&self) -> Tip<Balance>;
+    fn tip(&self) -> Option<Tip<Balance>>;
 }

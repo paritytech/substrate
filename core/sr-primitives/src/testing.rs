@@ -226,7 +226,7 @@ impl<Call> Weighable for TestXt<Call> {
 	}
 }
 impl<Call, Balance> generic::Tippable<Balance> for TestXt<Call> {
-	fn tip(&self) -> generic::Tip<Balance> {
-		generic::Tip::None
+	fn tip(&self) -> Option<generic::Tip<Balance>> {
+		None
 	}
 }
