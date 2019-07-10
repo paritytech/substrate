@@ -599,7 +599,10 @@ decl_storage! {
 		| {
 			with_storage(storage, || {
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
-					assert!(T::Currency::free_balance(&stash) >= balance);
+					assert!(
+						T::Currency::free_balance(&stash) >= balance,
+						"Stash does not have enough balance to bond."
+					);
 					let _ = <Module<T>>::bond(
 						T::Origin::from(Some(stash.clone()).into()),
 						T::Lookup::unlookup(controller.clone()),
@@ -648,7 +651,7 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
-		/// be the  account that controls it.
+		/// be the account that controls it.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
@@ -693,7 +696,7 @@ decl_module! {
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
-		/// for  staking.
+		/// for staking.
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
