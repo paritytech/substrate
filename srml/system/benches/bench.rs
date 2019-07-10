@@ -54,6 +54,9 @@ impl_outer_event! {
 	}
 }
 
+srml_support::parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 impl system::Trait for Runtime {
@@ -66,6 +69,7 @@ impl system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl module::Trait for Runtime {
@@ -73,7 +77,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::default().build_storage().unwrap().0.into()
+	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
 }
 
 fn deposit_events(n: usize) {
