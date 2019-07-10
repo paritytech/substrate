@@ -28,7 +28,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::BoxFinalityProofRequestBuilder;
+use consensus::import_queue::{BoxFinalityProofRequestBuilder, BlockImportResult, BlockImportError};
 use message::{
 	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -1226,11 +1226,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// errors.
 	pub fn blocks_processed(
 		&mut self,
-		processed_blocks: Vec<B::Hash>,
-		has_error: bool
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
+		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		self.sync.blocks_processed(&mut context, processed_blocks, has_error);
+		self.sync.blocks_processed(&mut context, imported, count, results, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
 	/// Restart the sync process.

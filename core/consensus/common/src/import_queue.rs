@@ -117,7 +117,12 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
 	/// Batch of blocks imported, with or without error.
-	fn blocks_processed(&mut self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
+	fn blocks_processed(
+		&mut self,
+		_imported: usize,
+		_count: usize,
+		_results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {}
 	/// Justification import result.
 	fn justification_imported(&mut self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
 	/// Clear all pending justification requests.

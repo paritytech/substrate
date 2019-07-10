@@ -27,14 +27,14 @@
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
-//! tx.blocks_processed(vec![], false);
-//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(vec![], false)`
+//! tx.blocks_processed(0, 0, vec![]);
+//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(0, 0, vec![])`
 //! ```
 //!
 
 use futures::{prelude::*, sync::mpsc};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::import_queue::{Origin, Link, BoxFinalityProofRequestBuilder};
+use crate::import_queue::{Origin, Link, BoxFinalityProofRequestBuilder, BlockImportResult, BlockImportError};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -53,7 +53,7 @@ pub struct BufferedLinkSender<B: BlockT> {
 
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
-	BlocksProcessed(Vec<B::Hash>, bool),
+	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	ClearJustificationRequests,
 	RequestJustification(B::Hash, NumberFor<B>),
@@ -65,8 +65,13 @@ enum BlockImportWorkerMsg<B: BlockT> {
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
-	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -136,8 +141,8 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			};
 
 			match msg {
-				BlockImportWorkerMsg::BlocksProcessed(blocks, has_error) =>
-					link.blocks_processed(blocks, has_error),
+				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
+					link.blocks_processed(imported, count, results),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
 					link.justification_imported(who, &hash, number, success),
 				BlockImportWorkerMsg::ClearJustificationRequests =>

@@ -27,15 +27,6 @@ use crate::import_queue::{
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
 
-/// Reputation change for peers which send us a block with an incomplete header.
-const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change for peers which send us a block which we fail to verify.
-const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change for peers which send us a bad block.
-const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
-/// Reputation change for peers which send us a block with bad justifications.
-const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
-
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with pluggable verification.
 pub struct BasicQueue<B: BlockT> {
@@ -217,79 +208,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			self.verifier.clone(),
 		);
 
-		trace!(target: "sync", "Imported {} of {}", imported, count);
-
-		let mut has_error = false;
-		let mut hashes = vec![];
-		for (result, hash) in results {
-			hashes.push(hash);
-
-			if has_error {
-				continue;
-			}
-
-			if result.is_err() {
-				has_error = true;
-			}
-
-			match result {
-				Ok(BlockImportResult::ImportedKnown(_number)) => {}
-				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
-					if aux.clear_justification_requests {
-						trace!(
-							target: "sync",
-							"Block imported clears all pending justification requests {}: {:?}",
-							number,
-							hash
-						);
-						self.result_sender.clear_justification_requests();
-					}
-
-					if aux.needs_justification {
-						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
-						self.result_sender.request_justification(&hash, number);
-					}
-
-					if aux.bad_justification {
-						if let Some(peer) = who {
-							info!("Sent block with bad justification to import");
-							self.result_sender.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
-						}
-					}
-
-					if aux.needs_finality_proof {
-						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
-						self.result_sender.request_finality_proof(&hash, number);
-					}
-				},
-				Err(BlockImportError::IncompleteHeader(who)) => {
-					if let Some(peer) = who {
-						info!("Peer sent block with incomplete header to import");
-						self.result_sender.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::VerificationFailed(who, e)) => {
-					if let Some(peer) = who {
-						info!("Verification failed from peer: {}", e);
-						self.result_sender.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::BadBlock(who)) => {
-					if let Some(peer) = who {
-						info!("Bad block");
-						self.result_sender.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
-					self.result_sender.restart();
-				},
-			};
-		}
-
-		self.result_sender.blocks_processed(hashes, has_error);
+		self.result_sender.blocks_processed(imported, count, results);
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {

@@ -37,7 +37,8 @@ use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder}};
+use consensus::BlockOrigin;
+use consensus::import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder, BlockImportError, BlockImportResult};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
 use extra_requests::ExtraRequests;
@@ -71,6 +72,14 @@ const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
 const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
 /// Reputation change when a peer sent us a status message with a different genesis than us.
 const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
+/// Reputation change for peers which send us a block with an incomplete header.
+const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a block which we fail to verify.
+const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a bad block.
+const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
+/// Reputation change for peers which send us a block with bad justifications.
+const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
 
 /// Context for a network-specific handler.
 pub trait Context<B: BlockT> {
@@ -610,13 +619,95 @@ impl<B: BlockT> ChainSync<B> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, protocol: &mut dyn Context<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		for hash in processed_blocks {
+	///
+	/// `peer_info` is passed in case of a restart.
+	pub fn blocks_processed(
+		&mut self,
+		protocol: &mut dyn Context<B>,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		mut peer_info: impl FnMut(&PeerId) -> Option<ProtocolPeerInfo<B>>
+	) {
+		trace!(target: "sync", "Imported {} of {}", imported, count);
+
+		let mut has_error = false;
+		let mut hashes = vec![];
+		for (result, hash) in results {
+			hashes.push(hash);
+
+			if has_error {
+				continue;
+			}
+
+			if result.is_err() {
+				has_error = true;
+			}
+
+			match result {
+				Ok(BlockImportResult::ImportedKnown(_number)) => {}
+				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
+					if aux.clear_justification_requests {
+						trace!(
+							target: "sync",
+							"Block imported clears all pending justification requests {}: {:?}",
+							number,
+							hash
+						);
+						self.clear_justification_requests();
+					}
+
+					if aux.needs_justification {
+						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
+						self.request_justification(&hash, number, protocol);
+					}
+
+					if aux.bad_justification {
+						if let Some(peer) = who {
+							info!("Sent block with bad justification to import");
+							protocol.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
+						}
+					}
+
+					if aux.needs_finality_proof {
+						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
+						self.request_finality_proof(&hash, number, protocol);
+					}
+				},
+				Err(BlockImportError::IncompleteHeader(who)) => {
+					if let Some(peer) = who {
+						info!("Peer sent block with incomplete header to import");
+						protocol.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
+						self.restart(protocol, &mut peer_info);
+					}
+				},
+				Err(BlockImportError::VerificationFailed(who, e)) => {
+					if let Some(peer) = who {
+						info!("Verification failed from peer: {}", e);
+						protocol.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
+						self.restart(protocol, &mut peer_info);
+					}
+				},
+				Err(BlockImportError::BadBlock(who)) => {
+					if let Some(peer) = who {
+						info!("Bad block");
+						protocol.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
+						self.restart(protocol, &mut peer_info);
+					}
+				},
+				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
+					self.restart(protocol, &mut peer_info);
+				},
+			};
+		}
+
+		for hash in hashes {
 			self.queue_blocks.remove(&hash);
 		}
 		if has_error {
 			self.best_importing_number = Zero::zero();
 		}
+
 		self.maintain_sync(protocol)
 	}
 
