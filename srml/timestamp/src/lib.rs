@@ -346,7 +346,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
-		const MinimumPeriod: u64 = 5;
+		pub const MinimumPeriod: u64 = 5;
 	}
 	impl Trait for Test {
 		type Moment = u64;
@@ -357,8 +357,7 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -369,8 +368,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -381,8 +379,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
