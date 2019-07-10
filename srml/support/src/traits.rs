@@ -630,3 +630,13 @@ bitmask! {
 	}
 }
 
+/// Trait for type that can handle incremental changes to a set of account IDs.
+pub trait ChangeMembers<AccountId> {
+	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
+	/// new set is thus given by `_new`.
+	fn change_members(_incoming: &[AccountId], _outgoing: &[AccountId], _new: &[AccountId]);
+}
+
+impl<T> ChangeMembers<T> for () {
+	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
+}
