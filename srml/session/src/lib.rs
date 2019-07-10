@@ -240,8 +240,7 @@ pub trait SelectInitialValidators<ValidatorId> {
 }
 
 /// Implementation of `SelectInitialValidators` that does nothing.
-pub struct ConfigValidators;
-impl<V> SelectInitialValidators<V> for ConfigValidators {
+impl<V> SelectInitialValidators<V> for () {
 	fn select_initial_validators() -> Option<Vec<V>> {
 		None
 	}
