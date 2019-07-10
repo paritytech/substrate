@@ -483,7 +483,6 @@ mod tests {
 		// session change => consensus authorities change => authorities change digest item appears
 		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
 		assert_eq!(digest.logs().len(), 0);
-		// assert!(digest.logs()[0].as_consensus().is_some());
 
 		(block1, block2)
 	}
