@@ -22,7 +22,7 @@ use node_runtime::{
 	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig, CouncilConfig,
 	AuraConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
 	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
-	MILLICENTS, SECS_PER_BLOCK,
+	MILLICENTS,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
