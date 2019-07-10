@@ -2295,9 +2295,10 @@ dependencies = [
  "srml-aura 2.0.0",
  "srml-authorship 0.1.0",
  "srml-balances 2.0.0",
+ "srml-collective 2.0.0",
  "srml-contracts 2.0.0",
- "srml-council 2.0.0",
  "srml-democracy 2.0.0",
+ "srml-elections 2.0.0",
  "srml-executive 2.0.0",
  "srml-finality-tracker 2.0.0",
  "srml-grandpa 2.0.0",
@@ -3643,6 +3644,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-collective"
+version = "2.0.0"
+dependencies = [
+ "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-balances 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "srml-contracts"
 version = "2.0.0"
 dependencies = [
@@ -3667,10 +3685,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "srml-council"
+name = "srml-democracy"
 version = "2.0.0"
 dependencies = [
- "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3678,16 +3695,16 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-balances 2.0.0",
- "srml-democracy 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
 [[package]]
-name = "srml-democracy"
+name = "srml-elections"
 version = "2.0.0"
 dependencies = [
+ "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
