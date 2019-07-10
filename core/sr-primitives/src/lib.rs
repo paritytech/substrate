@@ -65,7 +65,7 @@ pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
 pub const BLOCK_FULL: &str = "block size limit is reached";
 
 /// Unsigned message containing tip error message.
-pub const UNSIGNED_TIP: &str = "unsigned message with tip not allowed";
+pub const UNSIGNED_TIP: &str = "unsigned extrinsic with tip not allowed";
 
 /// Justification type.
 pub type Justification = Vec<u8>;

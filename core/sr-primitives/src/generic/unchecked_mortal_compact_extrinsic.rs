@@ -86,7 +86,7 @@ where
 	/// NOTE: this transaction is not tipped i.e. the tip value will be `None`. It does not really
 	/// matter what the last generic is since it is always `None`.
 	// TODO: try and use () here since it is a bit nicer.
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, u64>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, u32>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -238,7 +238,7 @@ mod tests {
 	const DUMMY_ACCOUNTID: u64 = 0;
 
 	type Ex = UncheckedMortalCompactExtrinsic<u64, u64, Vec<u8>, TestSig>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, u64>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, u32>;
 
 	#[test]
 	fn unsigned_codec_should_work() {

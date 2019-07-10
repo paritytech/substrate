@@ -17,7 +17,7 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SaturatedConversion};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use crate::weights::{Weighable, Weight};
 use crate::generic::tip::{Tip, Tippable};
 
@@ -86,15 +86,16 @@ where
 		// This is a hacky way to prevent `unchecked_mortal[_compact]_extrinsic` types, which
 		// don't have a tip, become generic over a balance type.
 		// Basically, this CheckedExtrinsic is built either 1- from an
-		// `UncheckedMortalCompactTippedExtrinsic`, which is tip aware and hence, the second arm
-		// will be trivially executed and the type conversion will be safe (the compiler is probably)
-		// smart enough to remove it in fact. Or 2- this is built from all other types of unchecked
-		// extrinsic which do not have tip and hence are not balance-aware. These module will naively
-		// place a u64 (can be `()` in practice) as the type and it does not matter since `Tip::None`
-		// is used in this case.
+		// `UncheckedMortalCompactTippedExtrinsic`, which is tip-aware and hence, the second arm
+		// will be trivially executed and the type conversion will be safe (the compiler is probably
+		// smart enough to remove it in fact). In this case, NodeBalance and ExtBalance are the same.
+		// Or 2- this is built from all other types of unchecked
+		// extrinsic which do not have tip and hence are not tip-aware. These modules will naively
+		// place a u32 (can be `()` in practice) as the type and it does not matter since `Tip::None`
+		// is used in this case (first arm).
 		match self.tip {
-			Tip::None => <Tip<NodeBalance>>::None,
-			<Tip<ExtBalance>>::Sender(v) => <Tip<NodeBalance>>::Sender(NodeBalance::from(v))
+			Tip::None => Tip::None,
+			Tip::Sender(v) => Tip::Sender(NodeBalance::from(v))
 		}
 	}
 }

@@ -358,7 +358,7 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, Tip::<Balance>::default(), era, genesis_hash);
+			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {

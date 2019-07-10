@@ -84,7 +84,7 @@ where
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, u64>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, u32>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {

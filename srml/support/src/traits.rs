@@ -21,7 +21,7 @@
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic
+	MaybeSerializeDebug, SimpleArithmetic,
 };
 use crate::runtime_primitives::ConsensusEngineId;
 
@@ -91,20 +91,25 @@ pub enum UpdateBalanceOutcome {
 }
 
 /// Simple trait designed for hooking into a transaction payment.
-pub trait MakePayment<AccountId, Balance> {
+pub trait MakePayment<AccountId> {
+	/// Balance type used for payment.
+	type Balance: SimpleArithmetic + Copy;
+
 	/// Make transaction payment from `who` for an extrinsic of encoded length
 	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
 	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 
-	/// Make a raw transactiona payment from `who` with the value `value`.
+	/// Make a raw transaction payment from `who` with the value `value`.
 	/// This is most often used to deduct optional fees from a transactor.
 	/// Return `Ok` iff the payment was successful.
-	fn make_raw_payment(who: &AccountId, value: Balance) -> Result<(), &'static str>;
+	fn make_raw_payment(who: &AccountId, value: Self::Balance) -> Result<(), &'static str>;
 }
 
-impl<T, B> MakePayment<T, B> for () {
+impl<T> MakePayment<T> for () {
+	// fine since we don't care about it.
+	type Balance = u32;
 	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-	fn make_raw_payment(_: &T, _: B) -> Result<(), &'static str> { Ok(()) }
+	fn make_raw_payment(_: &T, _: Self::Balance) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained

@@ -114,6 +114,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+pub type BalanceOf<P, A> = <P as MakePayment<A>>::Balance;
 
 pub struct Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, Payment, Balance, UnsignedValidator, AllModules)>
@@ -123,15 +124,17 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId, Balance>,
+	Payment: MakePayment<System::AccountId>,
 	Balance,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
 where
-	Block::Extrinsic: Checkable<Context> + Tippable<Balance> + Codec,
+	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable + Tippable<Balance>,
+		Applyable<Index=System::Index, AccountId=System::AccountId> +
+		Weighable +
+		Tippable<BalanceOf<Payment, System::AccountId>>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -145,7 +148,7 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId, Balance>,
+	Payment: MakePayment<System::AccountId>,
 	Balance: SimpleArithmetic + Copy,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
@@ -153,7 +156,9 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable + Tippable<Balance>,
+		Applyable<Index=System::Index, AccountId=System::AccountId> +
+		Weighable +
+		Tippable<BalanceOf<Payment, System::AccountId>>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
