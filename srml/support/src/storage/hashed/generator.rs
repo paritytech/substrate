@@ -16,7 +16,7 @@
 
 //! Abstract storage to use on HashedStorage trait
 
-use crate::codec;
+use crate::codec::{self, Encode};
 use crate::rstd::prelude::{Vec, Box};
 #[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
@@ -184,6 +184,13 @@ pub trait StorageValue<T: codec::Codec> {
 		storage.put(Self::key(), val)
 	}
 
+	/// Store a value under this key into the provided storage instance; this can take any reference
+	/// type that derefs to `T` (and has `Encode` implemented).
+	/// Store a value under this key into the provided storage instance.
+	fn put_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(val: &Arg, storage: &mut S) where T: AsRef<Arg> {
+		val.using_encoded(|b| storage.put_raw(Self::key(), b))
+	}
+
 	/// Mutate this value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: HashedStorage<Twox128>>(f: F, storage: &mut S) -> R;
 
@@ -234,6 +241,17 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// Store a value to be associated with the given key from the map.
 	fn insert<S: HashedStorage<Self::Hasher>>(key: &K, val: &V, storage: &mut S) {
 		storage.put(&Self::key_for(key)[..], val);
+	}
+
+	/// Store a value under this key into the provided storage instance; this can take any reference
+	/// type that derefs to `T` (and has `Encode` implemented).
+	/// Store a value under this key into the provided storage instance.
+	fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(
+		key: &K,
+		val: &Arg,
+		storage: &mut S
+	) where V: AsRef<Arg> {
+		val.using_encoded(|b| storage.put_raw(&Self::key_for(key)[..], b))
 	}
 
 	/// Remove the value under a key.

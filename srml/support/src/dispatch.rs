@@ -870,10 +870,12 @@ macro_rules! decl_module {
 		) { $( $impl:tt )* }
 	) => {
 		$(#[doc = $doc_attr])*
+		#[allow(unreachable_code)]
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::Result {
 			{ $( $impl )* }
+			// May be unreachable.
 			Ok(())
 		}
 	};
@@ -1285,9 +1287,11 @@ macro_rules! impl_outer_dispatch {
 		}
 		$(
 			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
+				#[allow(unreachable_patterns)]
 				fn is_aux_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
 						$call_type::$camelcase(ref r) => Some(r),
+						// May be unreachable
 						_ => None,
 					}
 				}
