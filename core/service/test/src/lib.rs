@@ -194,7 +194,8 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
-		password: "".to_string(),
+		grandpa_voter: false,
+		password: "".to_string().into(),
 	}
 }
 
@@ -371,7 +372,7 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 	info!("Checking block sync");
 	let first_address = {
 		let first_service = &network.full_nodes[0].1;
-		let client = first_service.get().client();
+		let mut client = first_service.get().client();
 		for i in 0 .. NUM_BLOCKS {
 			if i % 128 == 0 {
 				info!("Generating #{}", i);

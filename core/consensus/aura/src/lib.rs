@@ -36,8 +36,8 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
 };
 use consensus_common::import_queue::{
-	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+	BoxFinalityProofRequestBuilder,
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -54,6 +54,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{Future, IntoFuture, future};
+use parking_lot::Mutex;
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
@@ -134,7 +135,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	local_key: Arc<P>,
 	client: Arc<C>,
 	select_chain: SC,
-	block_import: Arc<I>,
+	block_import: I,
 	env: Arc<E>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
@@ -157,7 +158,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 {
 	let worker = AuraWorker {
 		client: client.clone(),
-		block_import,
+		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		local_key,
 		sync_oracle: sync_oracle.clone(),
@@ -179,7 +180,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 
 struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
-	block_import: Arc<I>,
+	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
@@ -339,7 +340,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				"hash_previously" => ?header_hash
 			);
 
-			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "aura", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
@@ -673,10 +674,10 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, P>(
 	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
+	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where

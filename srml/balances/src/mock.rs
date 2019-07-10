@@ -21,7 +21,7 @@
 use primitives::{traits::IdentityLookup, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types, traits::Get};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -55,6 +55,9 @@ impl Get<u64> for CreationFee {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
@@ -66,6 +69,7 @@ impl system::Trait for Runtime {
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {
 	type Balance = u64;

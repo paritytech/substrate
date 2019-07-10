@@ -240,8 +240,7 @@ pub trait SelectInitialValidators<ValidatorId> {
 }
 
 /// Implementation of `SelectInitialValidators` that does nothing.
-pub struct ConfigValidators;
-impl<V> SelectInitialValidators<V> for ConfigValidators {
+impl<V> SelectInitialValidators<V> for () {
 	fn select_initial_validators() -> Option<Vec<V>> {
 		None
 	}
@@ -315,6 +314,8 @@ decl_storage! {
 
 				let initial_validators = T::SelectInitialValidators::select_initial_validators()
 					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+
+				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
 
 				let queued_keys: Vec<_> = initial_validators
 					.iter()
@@ -563,17 +564,16 @@ mod tests {
 	};
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(timestamp::GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test> {
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap().0);
-		runtime_io::TestExternalities::new(t)
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 
 	fn initialize_block(block: u64) {

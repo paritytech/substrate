@@ -52,10 +52,9 @@ thread_local! {
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, validators: &[(AccountId, Ks)]) {
-		SESSION.with(|x| {
-			let v = validators.iter().map(|(ref a, _)| a).cloned().collect::<Vec<_>>();
+		SESSION.with(|x|
 			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
-		});
+		);
 	}
 
 	fn on_disabled(validator_index: usize) {
@@ -86,6 +85,9 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -97,6 +99,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
 	pub const TransferFee: Balance = 0;

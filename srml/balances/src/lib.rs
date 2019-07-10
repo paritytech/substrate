@@ -728,6 +728,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Header = T::Header;
 	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
+	type BlockHashCount = T::BlockHashCount;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
