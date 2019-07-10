@@ -644,7 +644,7 @@ pub trait DoSlash<Identification, Severity> {
 #[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub enum MisbehaviorKind {
 	/// ..
-	Equivocation,
+	Equivocation = 0,
 	/// ..
-	InvalidBlock,
+	InvalidBlock = 1,
 }
