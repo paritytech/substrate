@@ -33,6 +33,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use rstd::prelude::*;
+use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use parity_codec::{self as codec, Encode, Decode, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
@@ -53,10 +54,10 @@ use fg_primitives::{
 	Chain, validate_commit, VoterSet
 };
 pub use fg_primitives::{
-	AuthorityId, AuthorityWeight, AuthoritySignature, ChallengedVoteSet,
+	AuthorityId, AuthorityWeight, AuthoritySignature, RejectingVoteSet,
 	ChallengedVote, Challenge, CHALLENGE_SESSION_LENGTH
 };
-use system::DigestOf;
+use system::{DigestOf, ensure_signed};
 use num_traits as num;
 use core::iter::FromIterator;
 
@@ -251,40 +252,72 @@ decl_module! {
 
 		/// Report unjustified precommit votes.
 		fn report_unjustified_prevotes(
-			_origin,
-			proof: Challenge<
+			origin,
+			challenge: Challenge<
 				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
 			>
 		) {
-			// Check that is a new report: ???
-
-			// I guess there should be some mechanism to manage the pending challenge in case
-			// of new challenges being pushed by the tx. Leaving it like this for now.
-			if !<PendingChallenge<T>>::exists() {
-				// Need to create session
-				let parent_hash = <system::Module<T>>::parent_hash();
-				let current_height = <system::ChainContext::<T>>::default().current_height();
-
-				let challenge_session = StoredPendingChallenge {
-					scheduled_at: current_height,
-					delay: CHALLENGE_SESSION_LENGTH.into(),
-					parent_hash,
-					prevote_challenge: Some(proof),
-					precommit_challenge: None,
-				};
-
-				<PendingChallenge<T>>::put(challenge_session);
-			}
+			// Slash?
 		}
 
 		/// Report unjustified precommit votes.
 		fn report_unjustified_precommits(
-			_origin,
-			_proof: Challenge<
+			origin,
+			challenge: Challenge<
 				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
 			>
 		) {
-			// Slash?
+			ensure_signed(origin)?;
+			// TODO: Check that is a *new* challenge?
+			
+			// TODO: Check these two guys.
+			let round_s = challenge.rejecting_set.round;
+			let round_b = challenge.finalized_block_proof.round;
+
+			if round_b == round_s {
+				// Case 1: Rejecting set contains only precommits.
+				let mut authority_vote_map = BTreeMap::new();
+				let mut equivocators_set = BTreeSet::new();
+
+				for challenged_vote in challenge.rejecting_set.votes {
+					// TODO: Check signature.
+					let ChallengedVote { vote, authority, signature } = challenged_vote;
+					match authority_vote_map.get(&authority) {
+						Some(previous_vote) => {
+							if &vote != previous_vote {
+								equivocators_set.insert(authority);
+							}
+						},
+						None => {
+							authority_vote_map.insert(authority, vote);
+						},
+					}
+				}
+
+				// TODO: Slash the equivocators?
+			}
+
+			if round_s > round_b {
+				// In this case we need to iterate by attaching a digest?
+
+				// I guess there should be some mechanism to manage the pending challenge in case
+				// of new challenges being pushed by the tx. Leaving it like this for now.
+				// if !<PendingChallenge<T>>::exists() {
+					// Need to create session
+					// let parent_hash = <system::Module<T>>::parent_hash();
+					// let current_height = <system::ChainContext::<T>>::default().current_height();
+
+					// let challenge_session = StoredPendingChallenge {
+					// 	scheduled_at: current_height,
+					// 	delay: CHALLENGE_SESSION_LENGTH.into(),
+					// 	parent_hash,
+					// 	prevote_challenge: None,
+					// 	precommit_challenge: Some(challenge.clone()),
+					// };
+
+					// <PendingChallenge<T>>::put(challenge_session);
+				// }
+			}
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {

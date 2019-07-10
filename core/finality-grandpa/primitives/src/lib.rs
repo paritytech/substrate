@@ -194,9 +194,10 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Challenge<H, N, Header, S, Id, Vote> {
+	pub culprits: Vec<Id>, // TODO: Optimize.
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
-	pub challenged_vote_set: ChallengedVoteSet<Vote>,
+	pub rejecting_set: RejectingVoteSet<Vote>,
 	pub previous_challenge: Option<H>,
 }
 
@@ -205,13 +206,13 @@ pub struct Challenge<H, N, Header, S, Id, Vote> {
 pub struct FinalizedBlockProof<H, N, Header, S, Id> {
 	pub commit: Commit<H, N, S, Id>,
 	pub headers: Vec<Header>,
+	pub round: u64,
 }
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct ChallengedVoteSet<Vote> {
-	pub challenged_votes: Vec<ChallengedVote<Vote>>,
-	pub set_id: u64,
+pub struct RejectingVoteSet<Vote> {
+	pub votes: Vec<ChallengedVote<Vote>>,
 	pub round: u64,
 }
 

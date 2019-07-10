@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::Arc, collections::{HashMap, HashSet}};
 
 use log::{debug, trace, info, error};
 use parity_codec::Encode;
@@ -35,7 +35,7 @@ use consensus_accountable_safety::SubmitReport;
 use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature,
 	AuthorityId, Challenge, FinalizedBlockProof, ChallengedVote,
-	ChallengedVoteSet, SignedPrecommit,
+	RejectingVoteSet, SignedPrecommit,
 };
 use srml_grandpa::Signal;
 use runtime_primitives::Justification;
@@ -445,7 +445,7 @@ where
 	}
 
 	fn answer_misbehaviour_reports(&self, block: &mut ImportBlock<Block>, hash: Block::Hash)
-		-> Result<Option<()>, ConsensusError> {
+		-> Result<Option<Vec<AuthorityId>>, ConsensusError> {
 		let header = &block.header;
 		let at = BlockId::<Block>::hash(*header.parent_hash());
 		let digest = header.digest();
@@ -457,7 +457,34 @@ where
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
 			Ok(Some(challenge)) => {
 
-				// let challenged_votes = challenge.challenged_vote_set.challenged_votes.clone();
+				// let round_s = challenge.rejecting_set.round;
+				// let round_b = challenge.finalized_block_proof.round;
+
+				// if round_b == round_s {
+				// 	// Case 1: Rejecting set contains only precommits.
+				// 	let mut authority_vote_map = HashMap::new();
+				// 	let mut equivocators_set = HashSet::new();
+
+				// 	for challenged_vote in challenge.rejecting_set.votes {
+				// 		let ChallengedVote { vote, authority, signature } = challenged_vote;
+				// 		match authority_vote_map.get(&authority) {
+				// 			Some(previous_vote) => {
+				// 				if &vote != previous_vote {
+				// 					equivocators_set.insert(authority);
+				// 				}
+				// 			},
+				// 			None => {
+				// 				authority_vote_map.insert(authority, vote);
+				// 			},
+				// 		}
+				// 	}
+
+				// 	let equivocators = equivocators_set.drain().collect();
+
+				// 	return Ok(Some(equivocators))
+				// }
+
+				// let rejecting_set = challenge.rejecting_set.votes.clone();
 				// let prevote_challenged = false;
 				// let precommit_challenged = false;
 
@@ -470,7 +497,7 @@ where
 				// 	}
 				// }
 
-				// let votes_seen = self.votes_seen_when_prevoted(challenge.challenged_vote_set.round);
+				// let votes_seen = self.votes_seen_when_prevoted(challenge.rejecting_votes.round);
 				// let votes_seen = vec![
 				// 	SignedMessage {
 				// 		message:, // Prevote, Precommit, PrimaryPropose.
@@ -507,25 +534,25 @@ where
 
 
 				// if challenged {
-					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+				// 	let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 					
-					self.api.runtime_api()
-						.construct_report_unjustified_prevotes_call(
-							&block_id,
-							challenge,
-						)
-						.map(|call| {
-							self.transaction_pool.as_ref().map(|txpool| {
-								let pair = Pair::from_string("FIXME", None).expect("FIXME");
-								txpool.submit_report_call(self.inner.as_ref(), pair, call.as_slice())
-							});
-							info!(target: "afg", "Unjustified prevotes report has been submitted")
-						}).unwrap_or_else(|err|
-							error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
-						);
+				// 	self.api.runtime_api()
+				// 		.construct_report_unjustified_prevotes_call(
+				// 			&block_id,
+				// 			challenge,
+				// 		)
+				// 		.map(|call| {
+				// 			self.transaction_pool.as_ref().map(|txpool| {
+				// 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
+				// 				txpool.submit_report_call(self.inner.as_ref(), pair, call.as_slice())
+				// 			});
+				// 			info!(target: "afg", "Unjustified prevotes report has been submitted")
+				// 		}).unwrap_or_else(|err|
+				// 			error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
+				// 		);
 				// }
 
-				Ok(Some(()))
+				Ok(None)
 			},
 			Ok(None) => Ok(None),
 		}

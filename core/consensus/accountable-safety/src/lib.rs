@@ -49,10 +49,12 @@ where
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
 		let block_id = BlockId::<Block>::number(client.info().best_number);
 		let encoded_account_id = pair.public().encode();
-		let signing_payload = client.runtime_api().signing_payload(&block_id, encoded_account_id.clone(), encoded_call.to_vec())
+		let signing_payload = client.runtime_api()
+			.signing_payload(&block_id, encoded_account_id.clone(), encoded_call.to_vec())
 			.expect("FIXME");
 		let signature = AnySignature::from(pair.sign(signing_payload.as_slice()));
-		let encoded_extrinsic = client.runtime_api().build_transaction(&block_id, signing_payload, encoded_account_id, signature)
+		let encoded_extrinsic = client.runtime_api()
+			.build_transaction(&block_id, signing_payload, encoded_account_id, signature)
 			.expect("FIXME");
 		let uxt = Decode::decode(&mut encoded_extrinsic.as_slice())
 			.expect("Encoded extrinsic is valid");
