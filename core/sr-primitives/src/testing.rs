@@ -46,7 +46,8 @@ impl TypedKey for UintAuthorityId {
 
 impl AsRef<[u8]> for UintAuthorityId {
 	fn as_ref(&self) -> &[u8] {
-		unsafe { &std::mem::transmute::<_, &[u8; 4]>(&self.0)[..] }
+		let ptr = self.0 as *const _;
+		unsafe { std::slice::from_raw_parts(ptr, 8) }
 	}
 }
 
