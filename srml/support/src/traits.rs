@@ -631,13 +631,13 @@ bitmask! {
 }
 
 /// A generic trait for reporting slashing violations.
-pub trait ReportSlash<Hash, Identification> {
-    fn slash(misbehavior_footprint: Hash, identfication: Identification);
+pub trait ReportSlash<Identification, Hash> {
+    fn slash(identfication: Identification, footprint: Hash);
 }
 
 /// A generic trait for enacting slashes.
-pub trait DoSlash<Severity, Identification> {
-    fn do_slash(severity: Severity, identification: Identification);
+pub trait DoSlash<Identification, Severity> {
+    fn do_slash(identification: Identification, severity: Severity);
 }
 
 /// temp, obviosly not a trait
