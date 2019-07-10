@@ -56,7 +56,7 @@ pub use generic::{DigestItem, Digest};
 pub enum Error {
 	/// Unknown error
 	/// This exists only to make implementation easier. Should be avoid as much as possible.
-	Unknown(&'static str),
+	Other(&'static str),
 	/// Indicating an invalid signature in extrinsic.
 	BadSignature,
 	/// Full block error.
