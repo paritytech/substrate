@@ -116,8 +116,6 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
-	/// Block imported.
-	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Batch of blocks imported, with or without error.
 	fn blocks_processed(&mut self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
 	/// Justification import result.

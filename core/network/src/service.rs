@@ -640,9 +640,6 @@ struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 }
 
 impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().block_imported(&hash, number)
-	}
 	fn blocks_processed(&mut self, hashes: Vec<B::Hash>, has_error: bool) {
 		self.protocol.user_protocol_mut().blocks_processed(hashes, has_error)
 	}

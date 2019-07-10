@@ -1240,11 +1240,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.restart(&mut context, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
-	/// Notify about successful import of the given block.
-	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.block_imported(hash, number)
-	}
-
 	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
 		self.sync.set_finality_proof_request_builder(request_builder)
 	}

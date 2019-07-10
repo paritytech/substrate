@@ -719,11 +719,6 @@ impl<B: BlockT> ChainSync<B> {
 		self.request_builder = Some(builder)
 	}
 
-	/// Log that a block has been successfully imported
-	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
-	}
-
 	/// Notify about finalization of the given block.
 	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut dyn Context<B>) {
 		let r = self.extra_finality_proofs.on_block_finalized(hash, number, |base, block| {

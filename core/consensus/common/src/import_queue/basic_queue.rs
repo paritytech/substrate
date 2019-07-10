@@ -233,10 +233,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			}
 
 			match result {
-				Ok(BlockImportResult::ImportedKnown(number)) => self.result_sender.block_imported(&hash, number),
+				Ok(BlockImportResult::ImportedKnown(_number)) => {}
 				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
-					self.result_sender.block_imported(&hash, number);
-
 					if aux.clear_justification_requests {
 						trace!(
 							target: "sync",

@@ -53,7 +53,6 @@ pub struct BufferedLinkSender<B: BlockT> {
 
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
-	BlockImported(B::Hash, NumberFor<B>),
 	BlocksProcessed(Vec<B::Hash>, bool),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	ClearJustificationRequests,
@@ -66,10 +65,6 @@ enum BlockImportWorkerMsg<B: BlockT> {
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlockImported(hash.clone(), number));
-	}
-
 	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
 	}
@@ -141,8 +136,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			};
 
 			match msg {
-				BlockImportWorkerMsg::BlockImported(hash, number) =>
-					link.block_imported(&hash, number),
 				BlockImportWorkerMsg::BlocksProcessed(blocks, has_error) =>
 					link.blocks_processed(blocks, has_error),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
