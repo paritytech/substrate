@@ -316,6 +316,8 @@ decl_storage! {
 				let initial_validators = T::SelectInitialValidators::select_initial_validators()
 					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
 
+				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
+
 				let queued_keys: Vec<_> = initial_validators
 					.iter()
 					.cloned()
