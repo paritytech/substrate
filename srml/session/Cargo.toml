@@ -13,14 +13,16 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
+substrate-trie = { path = "../../core/trie", default-features = false, optional = true }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives" }
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 lazy_static = "1.0"
 
 [features]
-default = ["std"]
+default = ["std", "historical"]
+historical = ["substrate-trie"]
 std = [
 	"serde",
 	"safe-mix/std",
@@ -28,5 +30,6 @@ std = [
 	"rstd/std",
 	"srml-support/std",
 	"primitives/std",
-	"timestamp/std"
+	"timestamp/std",
+	"substrate-trie/std"
 ]

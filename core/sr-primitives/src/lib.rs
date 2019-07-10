@@ -51,6 +51,9 @@ pub mod transaction_validity;
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
+/// Re-export this since it's part of the API of this crate.
+pub use substrate_primitives::crypto::{key_types, KeyTypeId};
+
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
 
@@ -71,6 +74,14 @@ pub const UNSIGNED_TIP: &str = "unsigned extrinsic with tip not allowed";
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
+
+/// A module identifier. These are per module and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct ModuleId(pub [u8; 8]);
+
+impl traits::TypeId for ModuleId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
 
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]

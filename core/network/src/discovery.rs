@@ -14,6 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Discovery mechanisms of Substrate.
+//!
+//! The `DiscoveryBehaviour` struct implements the `NetworkBehaviour` trait of libp2p and is
+//! responsible for discovering other nodes that are part of the network.
+//!
+//! Substrate uses the following mechanisms in order to discover nodes that are part of the network:
+//!
+//! - Bootstrap nodes. These are hard-coded node identities and addresses passed in the constructor
+//! of the `DiscoveryBehaviour`. You can also call `add_known_address` later to add an entry.
+//!
+//! - mDNS. As of the writing of this documentation, mDNS is handled somewhere else. It is planned
+//! to be moved here.
+//!
+//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
+//! order for nodes to propagate to us their view of the network. This is performed automatically
+//! by the `DiscoveryBehaviour`.
+//!
+//! Additionally, the `DiscoveryBehaviour` is also capable of storing and loading value in the
+//! network-wide DHT.
+//!
+//! ## Usage
+//!
+//! The `DiscoveryBehaviour` generates events of type `DiscoveryOut`, most notably
+//! `DiscoveryOut::Discovered` that is generated whenever we discover a node.
+//! Only the identity of the node is returned. The node's addresses are stored within the
+//! `DiscoveryBehaviour` and can be queried through the `NetworkBehaviour` trait.
+//!
+//! **Important**: In order for the discovery mechanism to work properly, there needs to be an
+//! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
+//! of a node's address, you must call `add_self_reported_address`.
+//!
+
 use futures::prelude::*;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
@@ -22,7 +54,7 @@ use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
 use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, num::NonZeroU8, time::Duration};
+use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 
@@ -37,10 +69,14 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
+	/// Discovered nodes to return.
+	discoveries: VecDeque<PeerId>,
 	/// `Clock` instance that uses the current execution context's source of time.
 	clock: Clock,
 	/// Identity of our local node.
 	local_peer_id: PeerId,
+	/// Number of nodes we're currently connected to.
+	num_connections: u64,
 }
 
 impl<TSubstream> DiscoveryBehaviour<TSubstream> {
@@ -59,8 +95,10 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			kademlia,
 			next_kad_random_query: Delay::new(clock.now()),
 			duration_to_next_kad: Duration::from_secs(1),
+			discoveries: VecDeque::new(),
 			clock,
 			local_peer_id: local_public_key.into_peer_id(),
+			num_connections: 0,
 		}
 	}
 
@@ -72,24 +110,35 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Adds a hard-coded address for the given peer, that never expires.
 	///
 	/// This adds an entry to the parameter that was passed to `new`.
+	///
+	/// If we didn't know this address before, also generates a `Discovered` event.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		if self.user_defined.iter().all(|(p, a)| *p != peer_id && *a != addr) {
+			self.discoveries.push_back(peer_id.clone());
 			self.user_defined.push((peer_id, addr));
 		}
 	}
 
 	/// Call this method when a node reports an address for itself.
+	///
+	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
+	/// not properly work.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
 		self.kademlia.add_address(peer_id, addr);
 	}
 
-	/// Get a record from the DHT.
+	/// Start fetching a record from the DHT.
+	///
+	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: &Multihash) {
 		self.kademlia.get_value(key, NonZeroU8::new(10)
 								.expect("Casting 10 to NonZeroU8 should succeed; qed"));
 	}
 
-	/// Put a record into the DHT.
+	/// Start putting a record into the DHT. Other nodes can later fetch that value with
+	/// `get_value`.
+	///
+	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
 		self.kademlia.put_value(key, value);
 	}
@@ -143,10 +192,12 @@ where
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+		self.num_connections += 1;
 		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+		self.num_connections -= 1;
 		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
 	}
 
@@ -181,63 +232,10 @@ where
 			Self::OutEvent,
 		>,
 	> {
-		// Poll Kademlia.
-		match self.kademlia.poll(params) {
-			Async::NotReady => (),
-			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
-				match ev {
-					KademliaOut::Discovered { .. } => {}
-					KademliaOut::KBucketAdded { peer_id, .. } => {
-						let ev = DiscoveryOut::Discovered(peer_id);
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaOut::FindNodeResult { key, closer_peers } => {
-						trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
-							key, closer_peers.len());
-						if closer_peers.is_empty() {
-							warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
-								results");
-						}
-					}
-					KademliaOut::GetValueResult(res) => {
-						let ev = match res {
-							GetValueResult::Found { results } => {
-								let results = results
-										.into_iter()
-										.map(|r| (r.key, r.value))
-										.collect();
-
-								DiscoveryOut::ValueFound(results)
-							}
-							GetValueResult::NotFound { key, .. } => {
-								DiscoveryOut::ValueNotFound(key)
-							}
-						};
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					KademliaOut::PutValueResult(res) => {
-						let ev = match res {
-							PutValueResult::Ok{ key, .. } =>  {
-								DiscoveryOut::ValuePut(key)
-							}
-							PutValueResult::Err { key, .. } => {
-								DiscoveryOut::ValuePutFailed(key)
-							}
-						};
-						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-					}
-					// We never start any other type of query.
-					KademliaOut::GetProvidersResult { .. } => {}
-				}
-			},
-			Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
-			Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+		// Immediately process the content of `discovered`.
+		if let Some(peer_id) = self.discoveries.pop_front() {
+			let ev = DiscoveryOut::Discovered(peer_id);
+			return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
@@ -259,6 +257,67 @@ where
 					warn!(target: "sub-libp2p", "Kademlia query timer errored: {:?}", err);
 					break
 				}
+			}
+		}
+
+		// Poll Kademlia.
+		loop {
+			match self.kademlia.poll(params) {
+				Async::NotReady => break,
+				Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
+					match ev {
+						KademliaOut::Discovered { .. } => {}
+						KademliaOut::KBucketAdded { peer_id, .. } => {
+							let ev = DiscoveryOut::Discovered(peer_id);
+							return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaOut::FindNodeResult { key, closer_peers } => {
+							trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
+								key, closer_peers.len());
+							if closer_peers.is_empty() && self.num_connections != 0 {
+								warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
+									results");
+							}
+						}
+						KademliaOut::GetValueResult(res) => {
+							let ev = match res {
+								GetValueResult::Found { results } => {
+									let results = results
+											.into_iter()
+											.map(|r| (r.key, r.value))
+											.collect();
+
+									DiscoveryOut::ValueFound(results)
+								}
+								GetValueResult::NotFound { key, .. } => {
+									DiscoveryOut::ValueNotFound(key)
+								}
+							};
+							return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaOut::PutValueResult(res) => {
+							let ev = match res {
+								PutValueResult::Ok{ key, .. } =>  {
+									DiscoveryOut::ValuePut(key)
+								}
+								PutValueResult::Err { key, .. } => {
+									DiscoveryOut::ValuePutFailed(key)
+								}
+							};
+							return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						// We never start any other type of query.
+						KademliaOut::GetProvidersResult { .. } => {}
+					}
+				},
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+					return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
 		}
 

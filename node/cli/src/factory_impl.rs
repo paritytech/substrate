@@ -28,7 +28,7 @@ use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
-use sr_primitives::generic::{Era, Tip};
+use sr_primitives::generic::Era;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;

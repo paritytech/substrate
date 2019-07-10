@@ -31,13 +31,14 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
 use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::{hash::{H256, H512}, crypto::UncheckedFrom};
+use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "std")]
-use schnorrkel::keys::MINI_SECRET_KEY_LENGTH;
+use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
 #[cfg(feature = "std")]
@@ -50,6 +51,17 @@ pub struct Public(pub [u8; 32]);
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
 #[cfg(feature = "std")]
 pub struct Pair(Keypair);
+
+#[cfg(feature = "std")]
+impl Clone for Pair {
+	fn clone(&self) -> Self {
+		Pair(schnorrkel::Keypair {
+			public: self.0.public.clone(),
+			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
+				.expect("key is always the correct size; qed")
+		})
+	}
+}
 
 impl AsRef<Public> for Public {
 	fn as_ref(&self) -> &Public {
@@ -282,16 +294,6 @@ impl Public {
 		Public(data)
 	}
 
-	/// A new instance from the given slice that should be 32 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		Public(r)
-	}
-
 	/// A new instance from an H256.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -300,20 +302,32 @@ impl Public {
 		Public(x.into())
 	}
 
+	/// Return a slice filled with raw data.
+	pub fn as_array_ref(&self) -> &[u8; 32] {
+		self.as_ref()
+	}
+}
+
+impl TraitPublic for Public {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 32];
+		r.copy_from_slice(data);
+		Public(r)
+	}
+
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	pub fn into_raw_vec(self) -> Vec<u8> {
+	fn to_raw_vec(&self) -> Vec<u8> {
 		self.0.to_vec()
 	}
 
 	/// Return a slice filled with raw data.
-	pub fn as_slice(&self) -> &[u8] {
+	fn as_slice(&self) -> &[u8] {
 		&self.0
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
-		self.as_ref()
 	}
 }
 
@@ -365,6 +379,7 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
 }
 
+/// The raw secret seed, which can be used to recreate the `Pair`.
 #[cfg(feature = "std")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
@@ -397,14 +412,22 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase(), from_phrase()
 	fn from_seed_slice(seed: &[u8]) -> Result<Pair, SecretStringError> {
-		if seed.len() != MINI_SECRET_KEY_LENGTH {
-			Err(SecretStringError::InvalidSeedLength)
-		} else {
-			Ok(Pair(
-				MiniSecretKey::from_bytes(seed)
-					.map_err(|_| SecretStringError::InvalidSeed)?
-					.expand_to_keypair()
-			))
+		match seed.len() {
+			MINI_SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					MiniSecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.expand_to_keypair()
+				))
+			}
+			SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					SecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.to_keypair()
+				))
+			}
+			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
 
@@ -478,6 +501,11 @@ impl TraitPair for Pair {
 			Err(_) => false,
 		}
 	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8> {
+		self.0.secret.to_bytes().to_vec()
+	}
 }
 
 #[cfg(feature = "std")]
@@ -493,6 +521,19 @@ impl Pair {
 		let kp = mini_key.expand_to_keypair();
 		(Pair(kp), mini_key.to_bytes())
 	}
+}
+
+impl TypedKey for Public {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+}
+
+impl TypedKey for Signature {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+}
+
+#[cfg(feature = "std")]
+impl TypedKey for Pair {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
 }
 
 #[cfg(test)]

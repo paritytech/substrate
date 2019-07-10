@@ -25,6 +25,7 @@ use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
 use crate::generic::{Digest, DigestItem};
+pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -160,6 +161,13 @@ impl<A, B: Default> Convert<A, B> for () {
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
+}
+
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct ConvertInto;
+
+impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+	fn convert(a: A) -> B { a.into() }
 }
 
 /// A meta trait for arithmetic.
@@ -594,6 +602,21 @@ pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
 
+/// A type that provides a randomness beacon.
+pub trait RandomnessBeacon {
+	/// Returns 32 bytes of random data. The output will change eventually, but
+	/// is not guaranteed to be different between any two calls.
+	///
+	/// # Security
+	///
+	/// This MUST NOT be used for gambling, as it can be influenced by a
+	/// malicious validator in the short term.  It MAY be used in many
+	/// cryptographic protocols, however, so long as one remembers that this
+	/// (like everything else on-chain) is public.  For example, it can be
+	/// used where a number is needed that cannot have been chosen by an
+	/// adversary, for purposes such as public-coin zero-knowledge proofs.
+	fn random() -> [u8; 32];
+}
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
@@ -820,14 +843,138 @@ pub trait ValidateUnsigned {
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
-	/// Return the number of encoded keys.
-	fn count() -> usize { 0 }
-	/// Get the raw bytes of key with index `i`.
-	fn get_raw(&self, i: usize) -> &[u8];
+	/// An iterator over the type IDs of keys that this holds.
+	type KeyTypeIds: IntoIterator<Item=super::KeyTypeId>;
+
+	/// Return an iterator over the key-type IDs supported by this set.
+	fn key_ids() -> Self::KeyTypeIds;
+	/// Get the raw bytes of key with key-type ID `i`.
+	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
-	fn get<T: Decode>(&self, i: usize) -> Option<T> { T::decode(&mut self.get_raw(i)) }
+	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> { T::decode(&mut self.get_raw(i)) }
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
+}
+
+struct TrailingZeroInput<'a>(&'a [u8]);
+impl<'a> codec::Input for TrailingZeroInput<'a> {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = into.len().min(self.0.len());
+		into[..len].copy_from_slice(&self.0[..len]);
+		for i in &mut into[len..] {
+			*i = 0;
+		}
+		self.0 = &self.0[len..];
+		into.len()
+	}
+}
+
+/// This type can be converted into and possibly from an AccountId (which itself is generic).
+pub trait AccountIdConversion<AccountId>: Sized {
+	/// Convert into an account ID. This is infallible.
+	fn into_account(&self) -> AccountId { self.into_sub_account(&()) }
+
+	/// Try to convert an account ID into this type. Might not succeed.
+	fn try_from_account(a: &AccountId) -> Option<Self> {
+		Self::try_from_sub_account::<()>(a).map(|x| x.0)
+	}
+
+	/// Convert this value amalgamated with the a secondary "sub" value into an account ID. This is
+	/// infallible.
+	///
+	/// NOTE: The account IDs from this and from `into_account` are *not* guaranteed to be distinct
+	/// for any given value of `self`, nor are different invocations to this with different types
+	/// `T`. For example, the following will all encode to the same account ID value:
+	/// - `self.into_sub_account(0u32)`
+	/// - `self.into_sub_account(vec![0u8; 0])`
+	/// - `self.into_account()`
+	fn into_sub_account<S: Encode>(&self, sub: S) -> AccountId;
+
+	/// Try to convert an account ID into this type. Might not succeed.
+	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
+}
+
+/// Provide a simple 4 byte identifier for a type.
+pub trait TypeId {
+	/// Simple 4 byte identifier.
+	const TYPE_ID: [u8; 4];
+}
+
+/// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to
+/// fill AccountId.
+impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
+	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
+		(Id::TYPE_ID, self, sub).using_encoded(|b|
+			T::decode(&mut TrailingZeroInput(b))
+		).unwrap_or_default()
+	}
+
+	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
+		x.using_encoded(|d| {
+			if &d[0..4] != Id::TYPE_ID { return None }
+			let mut cursor = &d[4..];
+			let result = Decode::decode(&mut cursor)?;
+			if cursor.iter().all(|x| *x == 0) {
+				Some(result)
+			} else {
+				None
+			}
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::AccountIdConversion;
+	use crate::codec::{Encode, Decode};
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U32Value(u32);
+	impl super::TypeId for U32Value {
+		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
+	}
+	// cafef00d
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U16Value(u16);
+	impl super::TypeId for U16Value {
+		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
+	}
+	// f00dcafe
+
+	type AccountId = u64;
+
+	#[test]
+	fn into_account_should_work() {
+		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
+		assert_eq!(r, 0x_deadbeef_cafef00d);
+	}
+
+	#[test]
+	fn try_from_account_should_work() {
+		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
+		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
+	}
+
+	#[test]
+	fn into_account_with_fill_should_work() {
+		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
+		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+	}
+
+	#[test]
+	fn try_from_account_with_fill_should_work() {
+		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
+		assert_eq!(r.unwrap(), U16Value(0xc0da));
+	}
+
+	#[test]
+	fn bad_try_from_account_should_fail() {
+		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
+		assert!(r.is_none());
+		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
+		assert!(r.is_none());
+	}
 }
 
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
@@ -850,41 +997,62 @@ macro_rules! count {
 	};
 }
 
-#[macro_export]
-/// Just implement `OpaqueKeys` for a given tuple-struct.
+/// Implement `OpaqueKeys` for a described struct.
 /// Would be much nicer for this to be converted to `derive` code.
+///
+/// Every field type must be equivalent implement `as_ref()`, which is expected
+/// to hold the standard SCALE-encoded form of that key. This is typically
+/// just the bytes of the key.
+///
+/// ```rust
+/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId};
+///
+/// impl_opaque_keys! {
+/// 	pub struct Keys {
+/// 		#[id(key_types::ED25519)]
+/// 		pub ed25519: [u8; 32],
+/// 		#[id(key_types::SR25519)]
+/// 		pub sr25519: [u8; 32],
+/// 	}
+/// }
+/// ```
+#[macro_export]
 macro_rules! impl_opaque_keys {
 	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-	) => {
-		impl_opaque_keys! {
-			pub struct $name ( $( $t ,)* );
-			impl OpaqueKeys for _ {}
-		}
-	};
-	(
-		pub struct $name:ident ( $( $t:ty ),* $(,)* );
-		impl OpaqueKeys for _ {
-			$($rest:tt)*
+		pub struct $name:ident {
+			$(
+				#[id($key_id:expr)]
+				pub $field:ident: $type:ty,
+			)*
 		}
 	) => {
 		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
-		pub struct $name($( pub $t ,)*);
+		pub struct $name {
+			$(
+				pub $field: $type,
+			)*
+		}
+
 		impl $crate::traits::OpaqueKeys for $name {
-			fn count() -> usize {
-				let mut c = 0;
-				$( let _: $t; c += 1; )*
-				c
+			type KeyTypeIds = $crate::rstd::iter::Cloned<
+				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
+			>;
+
+			fn key_ids() -> Self::KeyTypeIds {
+				[
+					$($key_id),*
+				].iter().cloned()
 			}
-			fn get_raw(&self, i: usize) -> &[u8] {
-				$crate::count!(impl_opaque_keys (!! self i) $($t),*);
-				&[]
+
+			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
+				match i {
+					$(
+						i if i == $key_id => self.$field.as_ref(),
+					)*
+					_ => &[],
+				}
 			}
-			$($rest)*
 		}
 	};
-	( !! $self:ident $param_i:ident $i:tt) => {
-		if $param_i == $i { return $self.$i.as_ref() }
-	}
 }

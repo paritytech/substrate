@@ -17,7 +17,7 @@
 
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
-	Parameter,
+	Parameter, traits::Get, parameter_types,
 	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 };
 use inherents::{
@@ -37,26 +37,43 @@ pub trait Currency {}
 mod module1 {
 	use super::*;
 
-	pub trait Trait<I>: system::Trait {
+	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
+		type SomeParameter: Get<u32>;
+		type GenericType: Default + Clone + parity_codec::Codec;
 	}
 
 	srml_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
+		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
+			origin: <T as system::Trait>::Origin,
+			T::BlockNumber: From<u32>
+		{
+			fn offchain_worker() {}
+
 			fn deposit_event<T, I>() = default;
 
-			fn one() {
+			fn one(origin) {
+				system::ensure_root(origin)?;
 				Self::deposit_event(RawEvent::AnotherVariant(3));
 			}
 		}
 	}
 
 	srml_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 {
-			pub Value config(value): u64;
+		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
+			T::BlockNumber: From<u32> + std::fmt::Display
+		{
+			pub Value config(value): T::GenericType;
 			pub Map: map u32 => u64;
 			pub LinkedMap: linked_map u32 => u64;
+		}
+
+		add_extra_genesis {
+			config(test) : T::BlockNumber;
+			build(|_, _, config: &Self| {
+				println!("{}", config.test);
+			});
 		}
 	}
 
@@ -69,14 +86,16 @@ mod module1 {
 
 	#[derive(PartialEq, Eq, Clone)]
 	#[cfg_attr(feature = "std", derive(Debug))]
-	pub enum Origin<T: Trait<I>, I> {
+	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> {
+	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> where
+		T::BlockNumber: From<u32>
+	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<RuntimeString>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -85,7 +104,7 @@ mod module1 {
 			unimplemented!();
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 	}
@@ -106,7 +125,9 @@ mod module2 {
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
 	srml_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
+		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
+			origin: <T as system::Trait>::Origin
+		{
 			fn deposit_event<T, I>() = default;
 		}
 	}
@@ -165,13 +186,21 @@ mod module3 {
 	}
 }
 
+parameter_types! {
+	pub const SomeValue: u32 = 100;
+}
+
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type SomeParameter = SomeValue;
+	type GenericType = u32;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type SomeParameter = SomeValue;
+	type GenericType = u32;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
@@ -219,10 +248,10 @@ srml_support::construct_runtime!(
 	{
 		System: system::{Module, Call, Event},
 		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config, Origin<T>, Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config, Origin<T>, Inherent
+			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{
@@ -246,9 +275,11 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,
+			test: 2,
 		}),
 		module1_Instance2: Some(module1::GenesisConfig {
 			value: 4,
+			test: 5,
 		}),
 		module2: Some(module2::GenesisConfig {
 			value: 4,

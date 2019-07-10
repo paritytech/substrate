@@ -33,7 +33,12 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, HttpError, CryptoKind, CryptoKeyId};
+use primitives::offchain::{
+	Timestamp,
+	HttpRequestId, HttpRequestStatus, HttpError,
+	CryptoKind, CryptoKeyId,
+	StorageKind,
+};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -244,28 +249,33 @@ export_api! {
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn encrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn encrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Decrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-		fn decrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn decrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Sign a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn sign(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn sign(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
 		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
 		/// Returns an error in case the key is not available or does not exist or the parameters
 		/// lengths are incorrect.
-		fn verify(key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
+		fn verify(
+			key: Option<CryptoKeyId>,
+			kind: CryptoKind,
+			msg: &[u8],
+			signature: &[u8]
+		) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;
@@ -283,23 +293,25 @@ export_api! {
 		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_set(key: &[u8], value: &[u8]);
+		fn local_storage_set(kind: StorageKind, key: &[u8], value: &[u8]);
 
 		/// Sets a value in the local storage if it matches current value.
 		///
 		/// Since multiple offchain workers may be running concurrently, to prevent
 		/// data races use CAS to coordinate between them.
 		///
+		/// Returns `true` if the value has been set, `false` otherwise.
+		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]);
+		fn local_storage_compare_and_set(kind: StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
 
 		/// Gets a value from the local storage.
 		///
 		/// If the value does not exist in the storage `None` will be returned.
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_get(key: &[u8]) -> Option<Vec<u8>>;
+		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Initiaties a http request given HTTP verb and the URL.
 		///
@@ -382,7 +394,10 @@ mod imp {
 }
 
 #[cfg(feature = "std")]
-pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage, with_externalities};
+pub use self::imp::{
+	StorageOverlay, ChildrenStorageOverlay, with_storage, with_storage_and_children,
+	with_externalities
+};
 #[cfg(not(feature = "std"))]
 pub use self::imp::ext::*;
 

@@ -353,7 +353,7 @@ impl Peerset {
 	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
 	///
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
-	/// connection implicitely means `Connect`, but incoming connections aren't cancelled by
+	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
 	///
 	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
