@@ -19,6 +19,10 @@
 use crate::codec::{Encode, Decode};
 use crate::traits::Zero;
 
+/// A placeholder tip type that is used to fulfill the generic requirements of `checked_extrinsic`
+/// when the underlying `unchecked_extrinsic` actually does not have a tip.
+pub type NoTipBalance = u32;
+
 /// Representation of a transaction tip.
 ///
 /// Provided as an enum to support potential future use cases such as:
@@ -28,6 +32,8 @@ use crate::traits::Zero;
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub enum Tip<Balance> {
     /// The sender of the transaction has included some tip.
+    ///
+    /// this must be signed and included in the signature payload.
     Sender(Balance),
 }
 

@@ -22,6 +22,7 @@ use std::fmt;
 use rstd::prelude::*;
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
+use crate::generic::tip::NoTipBalance;
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -85,7 +86,7 @@ where
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, u32>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, NoTipBalance>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {

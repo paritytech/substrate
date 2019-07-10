@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,14 +26,14 @@ use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight,
 	Lookup, Checkable, Extrinsic, SaturatedConversion};
 use super::{CheckedExtrinsic, Era, Tip};
 
-const TRANSACTION_VERSION: u8 = 2;
+const TRANSACTION_VERSION: u8 = 64;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 ///
 /// This type transaction:
-///   - _Must_ always have a valid `Tip` encoded, and included in the signature payload if it is
-///   signed.
+///   - _Must_ always have a valid `Tip` (not an option!) encoded, and included in the signature
+///  payload if it is signed.
 ///   - _Must_ not provide any `Tip` if it is unsigned.
 #[derive(PartialEq, Eq, Clone)]
 pub struct UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature, Balance> {
@@ -43,7 +43,8 @@ pub struct UncheckedMortalCompactTippedExtrinsic<Address, Index, Call, Signature
 	pub signature: Option<(Address, Signature, Compact<Index>, Era)>,
 	/// The function that should be called.
 	pub function: Call,
-	/// The tip for this transaction
+	/// The tip for this transaction. This is always `Some` for a signed transaction and always
+	/// `None` for unsigned.
 	pub tip: Option<Tip<Balance>>,
 }
 
@@ -57,12 +58,12 @@ impl<Address, Index, Call, Signature, Balance>
 		signed: Address,
 		signature: Signature,
 		era: Era,
-		tip: Option<Tip<Balance>>
+		tip: Tip<Balance>,
 	) -> Self {
 		UncheckedMortalCompactTippedExtrinsic {
 			signature: Some((signed, signature, index.into(), era)),
 			function,
-			tip,
+			tip: Some(tip),
 		}
 	}
 
@@ -71,7 +72,7 @@ impl<Address, Index, Call, Signature, Balance>
 		UncheckedMortalCompactTippedExtrinsic {
 			signature: None,
 			function,
-			tip: None
+			tip: None,
 		}
 	}
 }
@@ -105,11 +106,12 @@ where
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
+				let tip = self.tip.ok_or("signed transaction must always have a tip.")?;
 				let current_u64 = context.current_height().saturated_into::<u64>();
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
 					.ok_or("transaction birth block ancient")?;
 				let signed = context.lookup(signed)?;
-				let raw_payload = (index, self.function, self.tip, era, h);
+				let raw_payload = (index, self.function, tip, era, h);
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -122,7 +124,7 @@ where
 				CheckedExtrinsic {
 					signed: Some((signed, (raw_payload.0).0)),
 					function: raw_payload.1,
-					tip: raw_payload.2,
+					tip: Some(raw_payload.2),
 				}
 			}
 			None => {
@@ -169,7 +171,7 @@ where
 		Some(UncheckedMortalCompactTippedExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
-			tip: if is_signed { Decode::decode(input)? } else { None },
+			tip: if is_signed { Some(Decode::decode(input)?) } else { None },
 		})
 	}
 }
@@ -197,7 +199,7 @@ where
 			}
 			self.function.encode_to(v);
 			if self.signature.is_some() {
-				self.tip.encode_to(v);
+				self.tip.as_ref().unwrap().encode_to(v);
 			}
 		})
 	}
@@ -268,7 +270,7 @@ mod tests {
 	type Balance = u64;
 	type TipType = Tip<Balance>;
 	const DUMMY_ACCOUNTID: u64 = 0;
-	const TIP: Option<TipType> = Some(Tip::Sender(66));
+	const TIP: TipType = Tip::Sender(66);
 
 	type Ex = UncheckedMortalCompactTippedExtrinsic<u64, u64, Vec<u8>, TestSig, Balance>;
 	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, Balance>;
@@ -348,7 +350,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Some(TIP) })
 		);
 	}
 
@@ -368,7 +370,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP }));
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Some(TIP) }));
 	}
 
 	#[test]
@@ -387,7 +389,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: TIP })
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: Some(TIP) })
 		);
 	}
 
@@ -460,7 +462,7 @@ mod tests {
 			function: vec![0u8;0]
 		};
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap(),
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
 			Err(crate::UNSIGNED_TIP)
 		);
 	}

@@ -26,6 +26,7 @@ use crate::traits::{
 	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
 	Lookup, Checkable, Extrinsic, SaturatedConversion
 };
+use crate::generic::tip::NoTipBalance;
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;
@@ -84,7 +85,7 @@ where
 {
 	/// NOTE: this transaction is not tipped i.e. the tip value will be `None`. It does not really
 	/// matter what the last generic is since it is always `None`.
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, u32>;
+	type Checked = CheckedExtrinsic<AccountId, Index, Call, NoTipBalance>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
@@ -236,7 +237,7 @@ mod tests {
 	const DUMMY_ACCOUNTID: u64 = 0;
 
 	type Ex = UncheckedMortalExtrinsic<u64, u64, Vec<u8>, TestSig>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, u32>;
+	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, NoTipBalance>;
 
 	#[test]
 	fn unsigned_codec_should_work() {

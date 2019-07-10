@@ -40,7 +40,7 @@ pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{Digest, DigestItem, DigestItemRef, OpaqueDigestItemId};
-pub use self::tip::{Tip, Tippable};
+pub use self::tip::{Tip, Tippable, NoTipBalance};
 
 use crate::codec::Encode;
 use rstd::prelude::*;

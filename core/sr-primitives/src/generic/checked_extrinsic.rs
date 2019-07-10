@@ -91,9 +91,9 @@ where
 		// Or 2- this is built from all other types of uncheckedextrinsic which do not have tip and
 		// hence are not tip-aware. These modules will naively place a u32 (can be `()` in practice)
 		// as the type and it does not matter since `None` is used in this case (first arm).
-		match self.tip {
+		match &self.tip {
 			None => None,
-			Some(Tip::Sender(v)) => Some(Tip::Sender(NodeBalance::from(v))),
+			Some(Tip::Sender(v)) => Some(Tip::Sender(NodeBalance::from(*v))),
 		}
 	}
 }

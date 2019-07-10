@@ -69,7 +69,7 @@
 //! # 	}
 //! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Balances, Runtime, AllModules>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -81,7 +81,6 @@ use primitives::{ApplyOutcome, ApplyError,
 	transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity},
 	traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned,
-		SimpleArithmetic,
 	},
 };
 use srml_support::{Dispatchable, traits::MakePayment};
@@ -116,8 +115,8 @@ pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 pub type BalanceOf<P, A> = <P as MakePayment<A>>::Balance;
 
-pub struct Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, Payment, Balance, UnsignedValidator, AllModules)>
+pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
+	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
 );
 
 impl<
@@ -125,10 +124,9 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	Balance,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -140,7 +138,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
 
@@ -149,10 +147,9 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	Balance: SimpleArithmetic + Copy,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> Executive<System, Block, Context, Payment, Balance, UnsignedValidator, AllModules>
+> Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -499,7 +496,6 @@ mod tests {
 		Block<TestXt>,
 		system::ChainContext<Runtime>,
 		balances::Module<Runtime>,
-		u64,
 		Runtime,
 		()
 	>;

@@ -48,7 +48,7 @@ mod tests {
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
-	use runtime_primitives::{generic::{Era, Tip}, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
