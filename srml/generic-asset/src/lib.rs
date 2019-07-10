@@ -151,7 +151,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Decode, Encode, HasCompact};
+use parity_codec::{Decode, Encode, HasCompact, Input, Output};
 
 use primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
@@ -240,9 +240,16 @@ pub struct PermissionsV1<AccountId> {
 	pub burn: Owner<AccountId>,
 }
 
-/// Versioned asset permission
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[repr(u8)]
+enum PermissionVersionNumber {
+	V1 = 0,
+}
+
+/// Versioned asset permission
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
@@ -263,6 +270,28 @@ pub type PermissionLatest<AccountId> = PermissionsV1<AccountId>;
 impl<AccountId> Default for PermissionVersions<AccountId> {
 	fn default() -> Self {
 		PermissionVersions::V1(Default::default())
+	}
+}
+
+impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		match self {
+			PermissionVersions::V1(payload) => {
+				dest.push(&PermissionVersionNumber::V1);
+				dest.push(payload);
+			},
+		}
+	}
+}
+
+impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let version = PermissionVersionNumber::decode(input)?;
+		Some(
+			match version {
+				PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?)
+			}
+		)
 	}
 }
 
