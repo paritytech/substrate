@@ -292,7 +292,7 @@ mod tests {
 			self.rent_allowance
 		}
 
-		fn current_block(&self) -> &u64 { &121 }
+		fn current_block(&self) -> u64 { 121 }
 	}
 
 	fn execute<E: Ext>(
