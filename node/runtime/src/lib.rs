@@ -406,7 +406,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
