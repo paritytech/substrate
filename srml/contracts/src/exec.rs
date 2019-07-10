@@ -29,6 +29,7 @@ pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
+pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
@@ -121,8 +122,8 @@ pub trait Ext {
 	/// Rent allowance of the contract
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
 
-	// Returns a reference to the current block number.
-	fn current_block(&self) -> &<Self::T as system::Trait>::BlockNumber;
+	// Returns the current block number.
+	fn current_block(&self) -> BlockNumberOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
