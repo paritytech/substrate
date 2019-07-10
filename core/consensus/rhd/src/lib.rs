@@ -1265,8 +1265,6 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
 				}
 			};
-			/// NOTE: This is not compatible with the new signature payload.
-			/// a tip must be present as the third argument.
 			let payload = (
 				next_index,
 				Call::Consensus(ConsensusCall::report_misbehavior(report)),

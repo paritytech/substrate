@@ -885,6 +885,7 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
+
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",

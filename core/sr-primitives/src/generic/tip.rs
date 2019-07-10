@@ -21,9 +21,9 @@ use crate::traits::Zero;
 
 /// Representation of a transaction tip.
 ///
-/// Upon decoding, all transaction types try and decode this from the end of the encoded byte
-/// stream.
-/// If non-existent, the default implementation will be used.
+/// Provided as an enum to support potential future use cases such as:
+///  - Tipped by a third party (software or exchange).
+///  - Unsigned tip.
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub enum Tip<Balance> {
@@ -41,15 +41,8 @@ impl<Balance: Zero + Copy> Tip<Balance> {
     }
 }
 
-/// Default implementation for tip.
-impl<Balance> Default for Tip<Balance> where Balance: Zero {
-    fn default() -> Self {
-        Tip::Sender(Zero::zero())
-    }
-}
-
 /// A trait for a generic transaction that contains a tip. The tip itself might yield something
-/// that translates to "no tip" but this trait must always be implemented for `UncheckedExtrinsic`.
+/// that translates to "no tip".
 pub trait Tippable<Balance> {
     /// Return the tip associated with this transaction.
     fn tip(&self) -> Option<Tip<Balance>>;

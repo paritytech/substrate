@@ -85,7 +85,6 @@ where
 {
 	/// NOTE: this transaction is not tipped i.e. the tip value will be `None`. It does not really
 	/// matter what the last generic is since it is always `None`.
-	// TODO: try and use () here since it is a bit nicer.
 	type Checked = CheckedExtrinsic<AccountId, Index, Call, u32>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
@@ -279,21 +278,30 @@ mod tests {
 	fn immortal_signed_check_should_work() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal());
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None })
+		);
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None })
+		);
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: vec![0u8;0], tip: None })
+		);
 	}
 
 	#[test]
