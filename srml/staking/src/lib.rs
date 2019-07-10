@@ -653,6 +653,8 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
+		/// `value` must be more than the `existential_deposit` defined in the Balances module.
+		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
 		/// # <weight>
@@ -662,10 +664,6 @@ decl_module! {
 		///
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
 		/// the `origin` falls below _existential deposit_ and gets removed as dust.
-		///
-		/// NOTE: At the moment, there are no financial restrictions to bond
-		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts from
-		/// spamming `Staking` storage by bonding 1 UNIT. See test case: `bond_with_no_staked_value`.
 		/// # </weight>
 		fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
@@ -684,6 +682,11 @@ decl_module! {
 				return Err("controller already paired")
 			}
 
+			// reject a bond which is considered to be _dust_.
+			if value < T::Currency::minimum_balance() {
+				return Err("can not bond with value less than minimum balance")
+			}
+
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, controller.clone());
@@ -699,6 +702,8 @@ decl_module! {
 		/// for staking.
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
+		/// Unlike [`bond`] or [`unbond`] this function does not impose any limitation on the amount
+		/// that can be added.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
@@ -781,9 +786,9 @@ decl_module! {
 		/// See also [`Call::unbond`].
 		///
 		/// # <weight>
-		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist. It implies
-		///   `consolidate_unlocked` which loops over `Ledger.unlocking`, which is indirectly
-		///   user-controlled. See [`unbond`] for more detail.
+		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist.
+		///  It implies `consolidate_unlocked` which loops over `Ledger.unlocking`, which is
+		///  indirectly user-controlled. See [`unbond`] for more detail.
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
@@ -791,7 +796,20 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let ledger = ledger.consolidate_unlocked(Self::current_era());
-			Self::update_ledger(&controller, &ledger);
+
+			if ledger.unlocking.is_empty() && ledger.active.is_zero() {
+				// This account must have called `unbond()` with some value that caused the active
+				// portion to fall below existential deposit + will have no more unlocking chunks
+				// left. We can now safely remove this.
+				let stash = ledger.stash;
+				// remove the lock.
+				T::Currency::remove_lock(STAKING_ID, &stash);
+				// remove all staking-related information.
+				Self::kill_stash(&stash);
+			} else {
+				// This was the consequence of a partial unbond. just update the ledger and move on.
+				Self::update_ledger(&controller, &ledger);
+			}
 		}
 
 		/// Declare the desire to validate for the origin controller.
@@ -1241,6 +1259,21 @@ impl<T: Trait> Module<T> {
 		ForceNewEra::put(true);
 	}
 
+	/// Remove all associated data of a stash account from the staking system.
+	///
+	/// This is called :
+	/// - Immediately when an account's balance falls below existential deposit.
+	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
+	fn kill_stash(stash: &T::AccountId) {
+		if let Some(controller) = <Bonded<T>>::take(stash) {
+			<Ledger<T>>::remove(&controller);
+		}
+		<Payee<T>>::remove(stash);
+		<SlashCount<T>>::remove(stash);
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
+	}
+
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offenses the validator has committed.
 	///
@@ -1315,13 +1348,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
-		if let Some(controller) = <Bonded<T>>::take(stash) {
-			<Ledger<T>>::remove(&controller);
-		}
-		<Payee<T>>::remove(stash);
-		<SlashCount<T>>::remove(stash);
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
+		Self::kill_stash(stash);
 	}
 }
 
