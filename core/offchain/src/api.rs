@@ -34,7 +34,7 @@ use runtime_primitives::{
 };
 use transaction_pool::txpool::{Pool, ChainApi};
 use network::NetworkStateInfo;
-use parity_multiaddr::Multiaddr;
+use network::multiaddr::Multiaddr;
 use serde::{Serialize, Deserialize};
 use bincode;
 
