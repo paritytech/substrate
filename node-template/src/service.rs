@@ -100,7 +100,7 @@ construct_service_factory! {
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
+						Box::new(client.clone()),
 						None,
 						None,
 						None,
@@ -115,7 +115,7 @@ construct_service_factory! {
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
+						Box::new(client.clone()),
 						None,
 						None,
 						None,

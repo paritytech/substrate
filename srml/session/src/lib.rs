@@ -563,17 +563,16 @@ mod tests {
 	};
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(timestamp::GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		timestamp::GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test> {
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap().0);
-		runtime_io::TestExternalities::new(t)
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 
 	fn initialize_block(block: u64) {
