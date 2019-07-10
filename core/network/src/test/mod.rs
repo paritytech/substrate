@@ -35,14 +35,13 @@ use crate::config::Roles;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
-	BoxFinalityProofRequestBuilder,
 };
 use consensus::block_import::{BlockImport, ImportResult};
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
-use crate::config::{NetworkConfiguration, TransportConfig};
+use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use primitives::{H256, Blake2Hasher};
@@ -457,7 +456,6 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			finality_proof_request_builder,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -471,6 +469,7 @@ pub trait TestNetFactory: Sized {
 			},
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Full(client.clone())),
+			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
@@ -514,7 +513,6 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			finality_proof_request_builder,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -528,6 +526,7 @@ pub trait TestNetFactory: Sized {
 			},
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Light(client.clone())),
+			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),

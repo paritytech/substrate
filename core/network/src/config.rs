@@ -54,6 +54,11 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// from us.
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 
+	/// How to build requests for proofs of finality.
+	///
+	/// This object, if `Some`, is used when we need a proof of finality from another node.
+	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
+
 	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
 	/// If `Some`, the network worker will process these requests and answer them.
 	/// Normally used only for light clients.
@@ -115,6 +120,25 @@ impl parity_codec::Decode for Roles {
 		Self::from_bits(input.read_byte()?)
 	}
 }
+
+/// Finality proof request builder.
+pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
+	/// Build data blob, associated with the request.
+	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
+}
+
+/// Implementation of `FinalityProofRequestBuilder` that builds a dummy empty request.
+#[derive(Debug, Default)]
+pub struct DummyFinalityProofRequestBuilder;
+
+impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuilder {
+	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
+/// Shared finality proof request builder struct used by the queue.
+pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
