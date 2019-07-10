@@ -1036,6 +1036,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return;
 			}
 		};
+
+		// don't announce genesis block since it will be ignored
+		if header.number().is_zero() {
+			return;
+		}
+
 		let hash = header.hash();
 
 		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
