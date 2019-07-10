@@ -278,7 +278,7 @@ use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, DoSlash
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
@@ -1347,5 +1347,16 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
 		<Module<T>>::select_validators().1
+	}
+}
+
+
+/// StakingSlasher
+pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
+
+
+impl<T: Trait, Severity> DoSlash<Severity, (T::AccountId, Exposure<T::AccountId, u64>)> for StakingSlasher<T> {
+	fn do_slash(severity: Severity, (who, exposure): (T::AccountId, Exposure<T::AccountId, u64>)) {
+		// implement
 	}
 }

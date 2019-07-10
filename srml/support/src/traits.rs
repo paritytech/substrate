@@ -630,3 +630,21 @@ bitmask! {
 	}
 }
 
+/// A generic trait for reporting slashing violations.
+pub trait ReportSlash<Hash, Identification> {
+    fn slash(misbehavior_footprint: Hash, identfication: Identification);
+}
+
+/// A generic trait for enacting slashes.
+pub trait DoSlash<Severity, Identification> {
+    fn do_slash(severity: Severity, identification: Identification);
+}
+
+/// temp, obviosly not a trait
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
+pub enum MisbehaviorKind {
+	/// ..
+	Equivocation,
+	/// ..
+	InvalidBlock,
+}
