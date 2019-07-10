@@ -50,7 +50,8 @@ use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 pub use consensus_babe::AuthorityId;
-
+#[cfg(any(feature = "std", test))]
+use keyring::sr25519::Keyring;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type AuraId = AuthorityId;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
@@ -320,6 +321,10 @@ impl From<srml_system::Event> for Event {
 	}
 }
 
+runtime_support::parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+}
+
 impl srml_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
@@ -330,6 +335,7 @@ impl srml_system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl srml_timestamp::Trait for Runtime {

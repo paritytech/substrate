@@ -116,7 +116,9 @@ decl_storage! {
 		LastTimestamp get(last): T::Moment;
 
 		/// The current authorities set.
-		Authorities get(authorities): Vec<(AuthorityId, Weight)>;
+		Authorities get(authorities) build(|config: &GenesisConfig| {
+			config.authorities.clone()
+		}): Vec<(AuthorityId, Weight)>;
 
 		/// The epoch randomness.
 		///
@@ -150,6 +152,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(slots_per_epoch): u64;
+		config(authorities): Vec<(AuthorityId, Weight)>;
 	}
 }
 

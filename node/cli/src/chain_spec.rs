@@ -19,7 +19,7 @@
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
-	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
+	AuraConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
 	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
 	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
 	MILLICENTS, SECS_PER_BLOCK,
@@ -279,6 +279,9 @@ pub fn testnet_genesis(
 			key: root_key,
 		}),
 		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		}),
+		babe: Some(BabeConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
 		grandpa: Some(GrandpaConfig {
