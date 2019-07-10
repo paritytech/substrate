@@ -453,21 +453,15 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn unsigned_cannot_have_tip() {
-		let ux = UncheckedMortalCompactTippedExtrinsic {signature: None, tip: Some(Tip::Sender(100)), function: vec![0u8;0]};
-		let _ = <Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap();
-	}
-
-	#[test]
-	fn unprovided_tip_will_not_fail() {
-		// unsigned with no tips
-		let bytes =  vec![40, 1, 32, 8, 8, 8, 8, 8, 8, 8, 8];
-
-		// decoding will yield the default tip
-		let decoded = Ex::decode(&mut bytes.as_slice()).unwrap();
+		let ux = UncheckedMortalCompactTippedExtrinsic {
+			signature: None,
+			tip: Some(Tip::Sender(100)),
+			function: vec![0u8;0]
+		};
 		assert_eq!(
-			decoded,
-			UncheckedMortalCompactTippedExtrinsic { signature: None, tip: None, function: vec![8u8;8]})
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext).unwrap(),
+			Err(crate::UNSIGNED_TIP)
+		);
 	}
 }
