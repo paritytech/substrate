@@ -36,6 +36,7 @@ use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::{runtime_api::BlockT, Client};
+use consensus_common::block_validation::DefaultBlockAnnounceValidator;
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
@@ -199,6 +200,7 @@ macro_rules! new_impl {
 			import_queue,
 			protocol_id,
 			specialization: network_protocol,
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

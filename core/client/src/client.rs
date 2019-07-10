@@ -49,7 +49,7 @@ use state_machine::{
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockImportParams,
+	Error as ConsensusError, BlockStatus, BlockImportParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
@@ -171,21 +171,6 @@ pub struct ClientInfo<Block: BlockT> {
 	pub chain: ChainInfo<Block>,
 	/// State Cache Size currently used by the backend
 	pub used_state_cache_size: Option<usize>,
-}
-
-/// Block status.
-#[derive(Debug, PartialEq, Eq)]
-pub enum BlockStatus {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the blockchain and the state is available.
-	InChainWithState,
-	/// In the blockchain, but the state is not available.
-	InChainPruned,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Not in the queue or the blockchain.
-	Unknown,
 }
 
 /// Summary of an imported block
@@ -1936,6 +1921,16 @@ pub mod utils {
 
 			Ok(tree_route.common_block().hash == *base)
 		}
+	}
+}
+
+impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
+	where BE: backend::Backend<B, Blake2Hasher>,
+		  E: CallExecutor<B, Blake2Hasher>,
+		  B: BlockT<Hash = H256>
+{
+	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
+		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 

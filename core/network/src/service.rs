@@ -113,9 +113,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(
-		params: Params<B, S, H>,
-	) -> Result<NetworkWorker<B, S, H>, Error> {
+	pub fn new(params: Params<B, S, H>) -> Result<NetworkWorker<B, S, H>, Error> {
 		let (to_worker, from_worker) = mpsc::unbounded();
 
 		if let Some(ref path) = params.network_config.net_config_path {
@@ -178,6 +176,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.finality_proof_request_builder,
 			params.protocol_id,
 			peerset_config,
+			params.block_announce_validator
 		)?;
 
 		// Build the swarm.

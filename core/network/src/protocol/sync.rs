@@ -28,8 +28,8 @@
 //!
 
 use blocks::BlockCollection;
-use client::{BlockStatus, ClientInfo, error::Error as ClientError};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, BlockImportResult, BlockImportError}};
+use client::{ClientInfo, error::Error as ClientError};
+use consensus::{BlockOrigin, BlockStatus, import_queue::{IncomingBlock, BlockImportResult, BlockImportError}};
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
 	message::{self, generic::FinalityProofRequest, BlockAttributes, BlockRequest, BlockResponse, FinalityProofResponse},

@@ -23,14 +23,17 @@ use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use primitives::storage::StorageKey;
-use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
+use consensus::{
+	BlockOrigin,
+	block_validation::{BlockAnnounceValidator, Validation},
+	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
+};
 use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::{BlockImportResult, BlockImportError};
-use message::{BlockAttributes, Direction, FromBlock, Message, RequestId};
+use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
@@ -112,6 +115,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: LegacyProto<B, Substream<StreamMuxerBox>>,
+	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 }
 
 /// A peer that we are connected to
@@ -360,6 +364,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: peerset::PeersetConfig,
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(config.roles, chain.clone(), &info, finality_proof_request_builder);
@@ -370,7 +375,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let protocol = Protocol {
 			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
-			config: config,
+			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
 				chain,
@@ -378,13 +383,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			light_dispatch: LightDispatch::new(checker),
 			genesis_hash: info.chain.genesis_hash,
 			sync,
-			specialization: specialization,
+			specialization,
 			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
 			transaction_pool,
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
+			block_announce_validator
 		};
 
 		Ok((protocol, peerset_handle))
@@ -1049,22 +1055,27 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.send_message(who, GenericMessage::Status(status))
 	}
 
-	fn on_block_announce(
-		&mut self,
-		who: PeerId,
-		announce: message::BlockAnnounce<B::Header>
-	) -> CustomMessageOutcome<B>  {
+	fn on_block_announce(&mut self, who: PeerId, announce: BlockAnnounce<B::Header>) -> CustomMessageOutcome<B> {
 		let header = announce.header;
 		let hash = header.hash();
-		{
-			if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
-				peer.known_blocks.insert(hash.clone());
-			}
+		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
+			peer.known_blocks.insert(hash.clone());
 		}
 		self.light_dispatch.update_best_number(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
+
+		let associated_data = &[]; // TODO: add associated data to block announcement
+		match self.block_announce_validator.validate(&header, associated_data) {
+			Ok(Validation::Success) => (),
+			Ok(Validation::Failure) => return CustomMessageOutcome::None,
+			Ok(Validation::Unknown) => (), // TODO: Is this correct?
+			Err(e) => {
+				error!(target: "sync", "block validation failed: {}", e);
+				return CustomMessageOutcome::None // TODO: not sure, `sync` maps this to "unknown block"
+			}
+		}
 
 		match self.sync.on_block_announce(who.clone(), hash, &header) {
 			sync::OnBlockAnnounce::Request(peer, req) => {
