@@ -27,6 +27,7 @@ tiny-bip39 = { version = "0.6.1", optional = true }
 hex = { version = "0.3", optional = true }
 regex = { version = "1.1", optional = true }
 num-traits = { version = "0.2", default-features = false }
+zeroize = { version = "0.9.2", default-features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -72,4 +73,5 @@ std = [
 	"schnorrkel",
 	"regex",
 	"num-traits/std",
+	"zeroize/std"
 ]

@@ -34,15 +34,13 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, generic, create_runtime_str};
+use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };
 use version::RuntimeVersion;
-use council::{motions as council_motions, VoteIndex};
-#[cfg(feature = "std")]
-use council::seats as council_seats;
+use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
@@ -54,7 +52,7 @@ pub use runtime_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use contracts::Gas;
-pub use runtime_primitives::{Permill, Perbill, impl_opaque_keys};
+pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
@@ -71,8 +69,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 105,
-	impl_version: 105,
+	spec_version: 109,
+	impl_version: 109,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -111,6 +109,10 @@ pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
 pub const HOURS: Moment = MINUTES * 60;
 pub const DAYS: Moment = HOURS * 24;
 
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+}
+
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = Index;
@@ -121,6 +123,7 @@ impl system::Trait for Runtime {
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl aura::Trait for Runtime {
@@ -181,8 +184,12 @@ parameter_types! {
 }
 
 type SessionHandlers = (Grandpa, Aura);
+
 impl_opaque_keys! {
-	pub struct SessionKeys(grandpa::AuthorityId, AuraId);
+	pub struct SessionKeys {
+		#[id(key_types::ED25519)]
+		pub ed25519: GrandpaId,
+	}
 }
 
 // NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
@@ -197,7 +204,14 @@ impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type Event = Event;
 	type Keys = SessionKeys;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = staking::StashOf<Self>;
 	type SelectInitialValidators = Staking;
+}
+
+impl session::historical::Trait for Runtime {
+	type FullIdentification = staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = staking::ExposureOf<Runtime>;
 }
 
 parameter_types! {
@@ -228,6 +242,7 @@ impl staking::Trait for Runtime {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
 }
 
 parameter_types! {
@@ -248,12 +263,20 @@ impl democracy::Trait for Runtime {
 	type VotingPeriod = VotingPeriod;
 	type EmergencyVotingPeriod = EmergencyVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
-	type ExternalOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId>;
-	type ExternalMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId>;
-	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId>;
-	type VetoOrigin = council_motions::EnsureMember<AccountId>;
+	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilInstance>;
+	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type ExternalPushOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalInstance>;
+	type EmergencyOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilInstance>;
+	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type VetoOrigin = collective::EnsureMember<AccountId, CouncilInstance>;
 	type CooloffPeriod = CooloffPeriod;
+}
+
+type CouncilInstance = collective::Instance1;
+impl collective::Trait<CouncilInstance> for Runtime {
+	type Origin = Origin;
+	type Proposal = Call;
+	type Event = Event;
 }
 
 parameter_types! {
@@ -264,28 +287,30 @@ parameter_types! {
 	pub const CarryCount: u32 = 6;
 	// one additional vote should go by before an inactive voter can be reaped.
 	pub const InactiveGracePeriod: VoteIndex = 1;
-	pub const CouncilVotingPeriod: BlockNumber = 2 * DAYS;
+	pub const ElectionsVotingPeriod: BlockNumber = 2 * DAYS;
 	pub const DecayRatio: u32 = 0;
 }
 
-impl council::Trait for Runtime {
+impl elections::Trait for Runtime {
 	type Event = Event;
+	type Currency = Balances;
 	type BadPresentation = ();
 	type BadReaper = ();
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
-	type OnMembersChanged = CouncilMotions;
+	type ChangeMembers = Council;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
-	type CouncilVotingPeriod = CouncilVotingPeriod;
+	type VotingPeriod = ElectionsVotingPeriod;
 	type DecayRatio = DecayRatio;
 }
 
-impl council::motions::Trait for Runtime {
+type TechnicalInstance = collective::Instance2;
+impl collective::Trait<TechnicalInstance> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
@@ -300,8 +325,8 @@ parameter_types! {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = council_motions::EnsureMembers<_4, AccountId>;
-	type RejectOrigin = council_motions::EnsureMembers<_2, AccountId>;
+	type ApproveOrigin = collective::EnsureMembers<_4, AccountId, CouncilInstance>;
+	type RejectOrigin = collective::EnsureMembers<_2, AccountId, CouncilInstance>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
@@ -386,12 +411,12 @@ construct_runtime!(
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
 		Balances: balances,
-		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
+		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
-		Council: council::{Module, Call, Storage, Event<T>},
-		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
-		CouncilSeats: council_seats::{Config<T>},
+		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		TechnicalCommittee: collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		Elections: elections::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury::{Module, Call, Storage, Event<T>},

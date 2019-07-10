@@ -16,13 +16,14 @@
 
 //! Service configuration.
 
+pub use client::ExecutionStrategies;
+pub use client_db::PruningMode;
+pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
-pub use client::ExecutionStrategies;
-pub use client_db::PruningMode;
-pub use network::ExtTransport;
-pub use network::config::{NetworkConfiguration, Roles};
+use primitives::crypto::Protected;
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
@@ -51,8 +52,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_cache_size: Option<u32>,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
-	/// Size in percent of cache size dedicated to child tries 
-	pub state_cache_child_ratio: Option<usize>, 
+	/// Size in percent of cache size dedicated to child tries
+	pub state_cache_child_ratio: Option<usize>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Additional key seeds.
@@ -86,8 +87,11 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
+	/// Run GRANDPA voter even when no additional key seed is specified. This can for example be of interest when
+	/// running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
+	pub grandpa_voter: bool,
 	/// Node keystore's password
-	pub password: String,
+	pub password: Protected<String>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -121,7 +125,8 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			offchain_worker: Default::default(),
 			force_authoring: false,
 			disable_grandpa: false,
-			password: "".to_string(),
+			grandpa_voter: false,
+			password: "".to_string().into(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 
@@ -153,4 +158,3 @@ pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
 }
-

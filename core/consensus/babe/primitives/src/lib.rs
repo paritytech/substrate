@@ -40,6 +40,29 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 /// The length of the public key
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
+/// The index of an authority.
+pub type AuthorityIndex = u64;
+
+/// A slot number.
+pub type SlotNumber = u64;
+
+/// The weight of an authority.
+pub type Weight = u64;
+
+/// An consensus log item for BABE.
+#[derive(Decode, Encode)]
+pub enum ConsensusLog {
+	/// The epoch has changed. This provides information about the
+	/// epoch _after_ next: what slot number it will start at, who are the authorities (and their weights)
+	/// and the next epoch randomness. The information for the _next_ epoch should already
+	/// be available.
+	#[codec(index = "1")]
+	NextEpochData(SlotNumber, Vec<(AuthorityId, Weight)>, [u8; VRF_OUTPUT_LENGTH]),
+	/// Disable the authority with given index.
+	#[codec(index = "2")]
+	OnDisabled(AuthorityIndex),
+}
+
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
 pub struct BabeConfiguration {

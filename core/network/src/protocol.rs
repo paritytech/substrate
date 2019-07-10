@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DiscoveryNetBehaviour, ProtocolId};
+use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use futures::prelude::*;
 use libp2p::{Multiaddr, PeerId};
@@ -28,7 +28,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::SharedFinalityProofRequestBuilder;
+use consensus::import_queue::BoxFinalityProofRequestBuilder;
 use message::{
 	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -115,12 +115,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
-}
-
-/// A peer from whom we have received a Status message.
-#[derive(Clone)]
-pub struct ConnectedPeer<B: BlockT> {
-	pub peer_info: PeerInfo<B>
 }
 
 /// A peer that we are connected to
@@ -448,16 +442,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.behaviour.is_enabled(peer_id)
 	}
 
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Message<B>) {
-		self.behaviour.send_packet(target, message)
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.behaviour.peerset_debug_info()
@@ -592,6 +576,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(who, response),
+			GenericMessage::RemoteReadChildRequest(_) => {}
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -601,10 +586,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					);
 				}
 			}
-			other => self.specialization.on_message(
+			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 				who,
-				&mut Some(other),
+				msg,
 			),
 		}
 
@@ -1051,6 +1036,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return;
 			}
 		};
+
+		// don't announce genesis block since it will be ignored
+		if header.number().is_zero() {
+			return;
+		}
+
 		let hash = header.hash();
 
 		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
@@ -1260,7 +1251,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.block_imported(hash, number)
 	}
 
-	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
 		self.sync.set_finality_proof_request_builder(request_builder)
 	}
 

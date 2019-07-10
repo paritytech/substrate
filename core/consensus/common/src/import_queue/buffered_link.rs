@@ -34,7 +34,7 @@
 
 use futures::{prelude::*, sync::mpsc};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::import_queue::{Origin, Link, SharedFinalityProofRequestBuilder};
+use crate::import_queue::{Origin, Link, BoxFinalityProofRequestBuilder};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -60,11 +60,9 @@ enum BlockImportWorkerMsg<B: BlockT> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	RequestFinalityProof(B::Hash, NumberFor<B>),
-	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
+	SetFinalityProofRequestBuilder(BoxFinalityProofRequestBuilder<B>),
 	ReportPeer(Origin, i32),
 	Restart,
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronized,
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -109,7 +107,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
 	}
 
-	fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+	fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::SetFinalityProofRequestBuilder(request_builder));
 	}
 
@@ -119,11 +117,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 	fn restart(&mut self) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
-	}
-
-	#[cfg(any(test, feature = "test-helpers"))]
-	fn synchronized(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Synchronized);
 	}
 }
 
@@ -168,9 +161,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.report_peer(who, reput),
 				BlockImportWorkerMsg::Restart =>
 					link.restart(),
-				#[cfg(any(test, feature = "test-helpers"))]
-				BlockImportWorkerMsg::Synchronized =>
-					link.synchronized(),
 			}
 		}
 	}

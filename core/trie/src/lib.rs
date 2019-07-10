@@ -46,6 +46,9 @@ pub use memory_db::KeyFunction;
 pub use memory_db::prefixed_key;
 #[cfg(feature = "legacy-trie")]
 pub use memory_db::legacy_prefixed_key as prefixed_key;
+/// Various re-exports from the `hash-db` crate.
+pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
+
 
 #[derive(Default)]
 /// substrate trie layout
@@ -114,7 +117,6 @@ impl<H: Hasher> TrieOps for LegacyLayout<H> {
 		codec::Encode::encode(&codec::Compact(input))
 	}
 }
-
 
 /// `trie_db`, error type.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
