@@ -213,7 +213,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 		&mut self,
 		prefix: &[u8],
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool;
 }

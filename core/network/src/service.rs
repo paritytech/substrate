@@ -28,7 +28,7 @@
 use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
+use consensus::import_queue::{ImportQueue, Link, BoxFinalityProofRequestBuilder};
 use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
 use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
@@ -683,7 +683,7 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 	fn restart(&mut self) {
 		self.protocol.user_protocol_mut().restart()
 	}
-	fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
+	fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
 		self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)
 	}
 }

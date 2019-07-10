@@ -416,6 +416,9 @@ mod tests {
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
@@ -426,6 +429,7 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
+		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -478,13 +482,13 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime> {
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			vesting: vec![],
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
