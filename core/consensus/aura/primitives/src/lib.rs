@@ -21,7 +21,7 @@
 use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
-use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT, traits::Verify};
+use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Verify}};
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 mod digest;

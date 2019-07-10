@@ -20,14 +20,17 @@
 
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
-use runtime_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519::Public;
+use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT};
+use substrate_primitives::sr25519::{Public, Signature};
 use substrate_client::decl_runtime_apis;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
 pub type AuthorityId = Public;
+
+/// A Babe authority signature.
+pub type AuthoritySignature = Signature;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -96,6 +99,11 @@ decl_runtime_apis! {
 
 		/// Get the current authorites for Babe.
 		fn authorities() -> Vec<AuthorityId>;
+
+		/// Construct a call to report the equivocation.
+		fn construct_equivocation_report_call(
+			proof: BabeEquivocationProof<<Block as BlockT>::Header, AuthoritySignature>,
+		) -> Vec<u8>;
 	}
 }
 
