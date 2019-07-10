@@ -154,7 +154,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 }
 
 /// Block import error.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<Origin>),
@@ -164,8 +164,10 @@ pub enum BlockImportError {
 	BadBlock(Option<Origin>),
 	/// Block has an unknown parent
 	UnknownParent,
-	/// Other Error.
-	Error,
+	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
+	Cancelled,
+	/// Other error.
+	Other(ConsensusError),
 }
 
 /// Single block import function.
@@ -212,7 +214,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			},
 			Err(e) => {
 				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-				Err(BlockImportError::Error)
+				Err(BlockImportError::Other(e))
 			}
 		}
 	};

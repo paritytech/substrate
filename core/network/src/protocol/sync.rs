@@ -695,7 +695,9 @@ impl<B: BlockT> ChainSync<B> {
 						self.restart(protocol, &mut peer_info);
 					}
 				},
-				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
+				Err(BlockImportError::UnknownParent) |
+				Err(BlockImportError::Cancelled) |
+				Err(BlockImportError::Other(_)) => {
 					self.restart(protocol, &mut peer_info);
 				},
 			};

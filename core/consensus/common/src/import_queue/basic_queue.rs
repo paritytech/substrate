@@ -288,7 +288,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	for block in blocks {
 		let block_hash = block.hash;
 		let import_result = if has_error {
-			Err(BlockImportError::Error)
+			Err(BlockImportError::Cancelled)
 		} else {
 			import_single_block(
 				import_handle,
