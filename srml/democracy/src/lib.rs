@@ -204,6 +204,11 @@ pub trait Trait: system::Trait + Sized {
 	/// a majority-carries referendum.
 	type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
 
+	/// Origin from which the next referendum proposed by the external majority may be immediately
+	/// tabled to vote asynchronously in a similar manner to the emergency origin. It remains a
+	/// majority-carries vote.
+	type ExternalPushOrigin: EnsureOrigin<Self::Origin>;
+
 	/// Origin from which emergency referenda may be scheduled.
 	type EmergencyOrigin: EnsureOrigin<Self::Origin>;
 
@@ -443,12 +448,7 @@ decl_module! {
 			// resubmission in the case of a mistakenly low `vote_period`; better to just let the
 			// referendum take place with the lowest valid value.
 			let period = voting_period.max(T::EmergencyVotingPeriod::get());
-			Self::inject_referendum(
-				now + period,
-				*proposal,
-				threshold,
-				delay,
-			).map(|_| ())?;
+			Self::inject_referendum(now + period, *proposal, threshold, delay).map(|_| ())?;
 		}
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
@@ -486,6 +486,31 @@ decl_module! {
 				ensure!(<system::Module<T>>::block_number() >= until, "proposal still blacklisted");
 			}
 			<NextExternal<T>>::put((*proposal, VoteThreshold::SimpleMajority));
+		}
+
+		/// Schedule the currently externally-proposed majority-carries referendum to be tabled
+		/// immediately. If there is no externally-proposed referendum currently, or if there is one
+		/// but it is not a majority-carries referendum then it fails.
+		///
+		/// - `proposal_hash`: The hash of the current external proposal.
+		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// - `delay`: The number of block after voting has ended in approval and this should be
+		///   enacted. Increased to `EmergencyVotingPeriod` if too low.
+		fn external_push(origin,
+			proposal_hash: T::Hash,
+			voting_period: T::BlockNumber,
+			delay: T::BlockNumber
+		) {
+			T::ExternalPushOrigin::ensure_origin(origin)?;
+			let (proposal, threshold) = <NextExternal<T>>::get().ok_or("no proposal made")?;
+			ensure!(threshold == VoteThreshold::SimpleMajority, "next external proposal not simple majority");
+			ensure!(proposal_hash == T::Hashing::hash_of(&proposal), "invalid hash");
+
+			<NextExternal<T>>::kill();
+			let now = <system::Module<T>>::block_number();
+			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
+			let period = voting_period.max(T::EmergencyVotingPeriod::get());
+			Self::inject_referendum(now + period, proposal, threshold, delay).map(|_| ())?;
 		}
 
 		/// Veto and blacklist the external proposal hash.
@@ -734,7 +759,7 @@ impl<T: Trait> Module<T> {
 		<Proxy<T>>::insert(proxy, stash)
 	}
 
-	/// Start a referendum. Can be called directly by the council.
+	/// Start a referendum.
 	pub fn internal_start_referendum(
 		proposal: T::Proposal,
 		threshold: VoteThreshold,
@@ -748,7 +773,7 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Remove a referendum. Can be called directly by the council.
+	/// Remove a referendum.
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
 		Self::deposit_event(RawEvent::Cancelled(ref_index));
 		<Module<T>>::clear_referendum(ref_index);
@@ -1038,6 +1063,7 @@ mod tests {
 		type EmergencyOrigin = EnsureSignedBy<One, u64>;
 		type ExternalOrigin = EnsureSignedBy<Two, u64>;
 		type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
+		type ExternalPushOrigin = EnsureSignedBy<Five, u64>;
 		type CancellationOrigin = EnsureSignedBy<Four, u64>;
 		type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 		type CooloffPeriod = CooloffPeriod;
@@ -1399,6 +1425,46 @@ mod tests {
 					threshold: VoteThreshold::SimpleMajority,
 					delay: 2,
 				})
+			);
+		});
+	}
+
+	#[test]
+	fn external_push_referendum_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(0);
+			let h = BlakeTwo256::hash_of(&set_balance_proposal(2));
+			assert_noop!(Democracy::external_push(Origin::signed(5), h, 3, 2), "no proposal made");
+			assert_ok!(Democracy::external_propose_majority(
+				Origin::signed(3),
+				Box::new(set_balance_proposal(2))
+			));
+			assert_noop!(Democracy::external_push(Origin::signed(1), h, 3, 2), "Invalid origin");
+			assert_ok!(Democracy::external_push(Origin::signed(5), h, 0, 0));
+			assert_eq!(
+				Democracy::referendum_info(0),
+				Some(ReferendumInfo {
+					end: 1,
+					proposal: set_balance_proposal(2),
+					threshold: VoteThreshold::SimpleMajority,
+					delay: 0,
+				})
+			);
+		});
+	}
+
+	#[test]
+	fn external_push_referendum_fails_when_no_simple_majority() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(0);
+			let h = BlakeTwo256::hash_of(&set_balance_proposal(2));
+			assert_ok!(Democracy::external_propose(
+				Origin::signed(2),
+				Box::new(set_balance_proposal(2))
+			));
+			assert_noop!(
+				Democracy::external_push(Origin::signed(5), h, 3, 2),
+				"next external proposal not simple majority"
 			);
 		});
 	}

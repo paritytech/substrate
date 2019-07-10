@@ -648,7 +648,7 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
-		/// be the  account that controls it.
+		/// be the account that controls it.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
@@ -693,7 +693,7 @@ decl_module! {
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
-		/// for  staking.
+		/// for staking.
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///

@@ -19,9 +19,8 @@
 #![cfg(test)]
 
 use primitives::{
-	KeyTypeId,
 	traits::IdentityLookup,
-	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId},
+	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
