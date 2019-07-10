@@ -315,7 +315,7 @@ decl_storage! {
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
-			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
+			config.vesting.iter().filter_map(|&(ref who, begin, length, liquid)| {
 				let begin = <T::Balance as From<T::BlockNumber>>::from(begin);
 				let length = <T::Balance as From<T::BlockNumber>>::from(length);
 
@@ -325,7 +325,7 @@ decl_storage! {
 						// <= begin it should be >= balance
 						// >= begin+length it should be <= 0
 
-						let per_block = balance / length.max(primitives::traits::One::one());
+						let per_block = (balance - liquid) / length.max(primitives::traits::One::one());
 						let offset = begin * per_block + balance;
 
 						(who.clone(), VestingSchedule { offset, per_block })
@@ -366,7 +366,8 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
+		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, T::Balance)>;
+		// ^^ begin, length, amount liquid at genesis
 	}
 }
 
