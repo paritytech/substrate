@@ -190,7 +190,7 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 			external_addresses: network_state.external_addresses(),
 
 			// TODO derive `Serialize` for `libp2p::core::PeerId`
-			peer_id: network_state.peer_id().to_string(),
+			peer_id: network_state.peer_id().to_base58(),
 		};
 
 		bincode::serialize(&state).map_err(|_| ())
