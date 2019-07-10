@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::convert::TryInto;
 use primitives::{
-	generic::Digest, ApplyResult, ApplyOutcome, ApplyError, DispatchError, Error as PrimitiveError,
+	generic::Digest, ApplyResult, ApplyOutcome, ApplyError, DispatchError, PrimitiveError,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 		OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
@@ -264,12 +264,10 @@ where
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
-			if index != &expected_index {
-				return if index < &expected_index {
-					Err(ApplyError::Stale)
-				} else {
-					Err(ApplyError::Future)
-				}
+			if index < &expected_index {
+				return Err(ApplyError::Stale)
+			} else if index > &expected_index {
+				return Err(ApplyError::Future)
 			}
 			// pay any fees
 			// TODO: propagate why can't pay #2952
@@ -339,7 +337,7 @@ where
 			Err(err) => return match err.into() {
 				// An unknown account index implies that the transaction may yet become valid.
 				// TODO: avoid hardcoded error string here #2953
-				PrimitiveError::Unknown("invalid account index") =>
+				PrimitiveError::Other("invalid account index") =>
 					TransactionValidity::Unknown(INVALID_INDEX),
 				// Technically a bad signature could also imply an out-of-date account index, but
 				// that's more of an edge case.

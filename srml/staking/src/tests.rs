@@ -887,7 +887,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
-			mock::Error::system(system::Error::Unknown("account liquidity restrictions prevent withdrawal"))
+			mock::Error::system(system::Error::Other("account liquidity restrictions prevent withdrawal"))
 		);
 
 		// Give account 11 extra free balance
@@ -916,7 +916,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
-			mock::Error::system(system::Error::Unknown("account liquidity restrictions prevent withdrawal"))
+			mock::Error::system(system::Error::Other("account liquidity restrictions prevent withdrawal"))
 		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});

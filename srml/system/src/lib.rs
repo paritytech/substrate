@@ -77,7 +77,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use primitives::{
-	generic, Error as PrimitiveError, DispatchError,
+	generic, PrimitiveError, DispatchError,
 	traits::{
 		self, CheckEqual, SimpleArithmetic,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
@@ -286,7 +286,7 @@ decl_error! {
 impl From<PrimitiveError> for Error {
 	fn from(err: PrimitiveError) -> Error {
 		match err {
-			PrimitiveError::Unknown(err) => Error::Unknown(err),
+			PrimitiveError::Other(err) => Error::Other(err),
 			PrimitiveError::BadSignature => Error::BadSignature,
 			PrimitiveError::BlockFull => Error::BlockFull,
 		}
@@ -297,7 +297,7 @@ impl From<PrimitiveError> for Error {
 impl From<Error> for &'static str {
 	fn from(err: Error) -> &'static str {
 		match err {
-			Error::Unknown(val) => val,
+			Error::Other(val) => val,
 			Error::BadSignature => "bad signature in extrinsic",
 			Error::BlockFull => "block size limit is reached",
 			Error::RequireSignedOrigin => "bad origin: expected to be a signed origin",

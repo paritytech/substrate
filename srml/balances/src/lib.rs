@@ -287,7 +287,7 @@ decl_error! {
 impl From<Error> for &'static str {
 	fn from(err: Error) -> &'static str {
 		match err {
-			Error::Unknown(msg) => msg,
+			Error::Other(msg) => msg,
 		}
 	}
 }

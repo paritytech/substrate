@@ -78,7 +78,7 @@ macro_rules! impl_outer_error {
 
 		impl From<&'static str> for $name {
 			fn from(err: &'static str) -> Self {
-				$name::system($system::Error::Unknown(err))
+				$name::system($system::Error::Other(err))
 			}
 		}
 
@@ -109,7 +109,7 @@ macro_rules! impl_outer_error {
 			fn into(self) -> $crate::runtime_primitives::DispatchError {
 				match self {
 					$name::system(ref err) => match err {
-						$system::Error::Unknown(msg) =>
+						$system::Error::Other(msg) =>
 							$crate::runtime_primitives::DispatchError {
 								module: 0,
 								error: 0,
@@ -123,7 +123,7 @@ macro_rules! impl_outer_error {
 					},
 					$(
 						$name::$module(ref err) => match err {
-							$module::Error::Unknown(msg) =>
+							$module::Error::Other(msg) =>
 								$crate::runtime_primitives::DispatchError {
 									module: $crate::codec::Encode::using_encoded(&self, |s| s[0]),
 									error: 0,
@@ -178,19 +178,16 @@ macro_rules! decl_error {
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum Error {
-			Unknown(&'static str),
+			Other(&'static str),
 			$(
 				$errors
 			)*
-		}
-		impl From<Error> for () {
-			fn from(_: Error) -> () { () }
 		}
 
 		impl From<&Error> for u8 {
 			fn from(err: &Error) -> u8 {
 				match err {
-					Error::Unknown(_) => 0,
+					Error::Other(_) => 0,
 					_ => $crate::codec::Encode::using_encoded(err, |s| s[0]),
 				}
 			}
@@ -198,7 +195,7 @@ macro_rules! decl_error {
 
 		impl From<&'static str> for Error {
 			fn from(val: &'static str) -> Error {
-				Error::Unknown(val)
+				Error::Other(val)
 			}
 		}
 	}

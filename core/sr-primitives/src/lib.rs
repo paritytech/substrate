@@ -52,8 +52,8 @@ pub mod transaction_validity;
 pub use generic::{DigestItem, Digest};
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-/// Error type
-pub enum Error {
+/// Primitive Error type
+pub enum PrimitiveError {
 	/// Unknown error
 	/// This exists only to make implementation easier. Should be avoid as much as possible.
 	Other(&'static str),
@@ -71,19 +71,19 @@ pub enum Error {
 }
 
 // Exists for for backward compatibility purpose.
-impl Into<&'static str> for Error {
+impl Into<&'static str> for PrimitiveError {
 	fn into(self) -> &'static str {
 		match self {
-			Error::Unknown(val) => val,
-			Error::BadSignature => "bad signature in extrinsic",
-			Error::BlockFull => "block size limit is reached",
+			PrimitiveError::Other(val) => val,
+			PrimitiveError::BadSignature => "bad signature in extrinsic",
+			PrimitiveError::BlockFull => "block size limit is reached",
 		}
 	}
 }
 
-impl From<&'static str> for Error {
-	fn from(val: &'static str) -> Error {
-		Error::Unknown(val)
+impl From<&'static str> for PrimitiveError {
+	fn from(val: &'static str) -> PrimitiveError {
+		PrimitiveError::Other(val)
 	}
 }
 
@@ -565,14 +565,14 @@ impl From<ed25519::Signature> for AnySignature {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
- #[cfg_attr(feature = "std", derive(Debug, Serialize))]
- /// Outcome of a valid extrinsic application. Capable of being sliced.
- pub enum ApplyOutcome {
- 	/// Successful application (extrinsic reported no issue).
- 	Success,
- 	/// Failed application (extrinsic was probably a no-op other than fees).
- 	Fail(DispatchError),
- }
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+/// Outcome of a valid extrinsic application. Capable of being sliced.
+pub enum ApplyOutcome {
+	/// Successful application (extrinsic reported no issue).
+	Success,
+	/// Failed application (extrinsic was probably a no-op other than fees).
+	Fail(DispatchError),
+}
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]

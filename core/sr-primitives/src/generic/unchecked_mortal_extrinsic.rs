@@ -26,7 +26,7 @@ use crate::traits::{
 	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
 	Lookup, Checkable, Extrinsic, SaturatedConversion
 };
-use crate::Error;
+use crate::PrimitiveError;
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;
@@ -82,7 +82,7 @@ where
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
-	type Error = Error;
+	type Error = PrimitiveError;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, Self::Error> {
 		Ok(match self.signature {
@@ -100,7 +100,7 @@ where
 						signature.verify(payload, &signed)
 					}
 				}) {
-					return Err(Error::BadSignature)
+					return Err(PrimitiveError::BadSignature)
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, raw_payload.0)),
@@ -260,7 +260,7 @@ mod tests {
 	fn badly_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, vec![0u8]), Era::immortal());
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(PrimitiveError::BadSignature));
 	}
 
 	#[test]
@@ -288,14 +288,14 @@ mod tests {
 	fn too_late_mortal_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(PrimitiveError::BadSignature));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
 		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(Error::BadSignature));
+		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(PrimitiveError::BadSignature));
 	}
 
 	#[test]

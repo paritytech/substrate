@@ -22,7 +22,7 @@ use std::fmt;
 use rstd::prelude::*;
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
-use crate::Error;
+use crate::PrimitiveError;
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -87,7 +87,7 @@ where
 	Context: Lookup<Source=Address, Target=AccountId, Error=&'static str>
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
-	type Error = Error;
+	type Error = PrimitiveError;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, Self::Error> {
 		Ok(match self.signature {
@@ -95,7 +95,7 @@ where
 				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
-					return Err(Error::BadSignature)
+					return Err(PrimitiveError::BadSignature)
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
