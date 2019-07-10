@@ -82,7 +82,8 @@ impl Default for TransactionWeight {
 	}
 }
 
-/// Representation of a fee multiplier.
+/// Representation of a weight multiplier. This represents how a fee value can be computed from a
+/// weighted transaction.
 ///
 /// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
 /// in the form of the `apply_to` method.
@@ -91,7 +92,7 @@ impl Default for TransactionWeight {
 pub struct WeightMultiplier(Fixed64);
 
 impl WeightMultiplier {
-	/// Apply the inner Fixed64 as a fee multiplier to a weight value.
+	/// Apply the inner Fixed64 as a weight multiplier to a weight value.
 	///
 	/// This will perform a saturated  `weight + weight * self.0`.
 	pub fn apply_to(&self, weight: Weight) -> Weight {
@@ -144,10 +145,6 @@ impl Saturating for WeightMultiplier {
 mod tests {
 	use super::*;
 	use crate::{DIV};
-
-	fn apply(i: Weight, f: f64) -> Weight {
-		(i as f64 * f) as Weight
-	}
 
 	#[test]
 	fn multiplier_apply_to_works() {

@@ -175,9 +175,9 @@ pub trait Trait: 'static + Eq + Clone {
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
-	/// Handler for updating the fee multiplier at the end of each block.
+	/// Handler for updating the weight multiplier at the end of each block.
 	///
-	/// it receives the current block's weight as input and returns the next fee multiplier for next
+	/// it receives the current block's weight as input and returns the next weight multiplier for next
 	/// block.
 	///
 	/// Note that passing `()` will keep the value constant.
@@ -325,7 +325,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<Weight>;
-		/// The next fee multiplier. This should be updated at the end of each block based on the
+		/// The next weight multiplier. This should be updated at the end of each block based on the
 		/// saturation level (weight).
 		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
@@ -549,7 +549,7 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
-	/// Update the next fee multiplier.
+	/// Update the next weight multiplier.
 	///
 	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
 	pub fn update_weight_multiplier() {

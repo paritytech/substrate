@@ -973,7 +973,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		// fee multiplier is increased for next block.
+		// weight multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
@@ -990,7 +990,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		// fee multiplier is increased for next block.
+		// weight multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
@@ -1049,7 +1049,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		// fee multiplier is increased for next block.
+		// weight multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
@@ -1066,7 +1066,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		// fee multiplier is increased for next block.
+		// weight multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);

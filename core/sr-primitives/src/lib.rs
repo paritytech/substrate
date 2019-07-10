@@ -413,7 +413,7 @@ impl UniqueSaturatedInto<u32> for Fixed64 {
 	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
 	/// expected to be lossy.
 	fn unique_saturated_into(self) -> u32 {
-		(self.0.abs() / DIV).try_into().unwrap_or_else(|_| Bounded::max_value())
+		(self.0.abs() / DIV).try_into().unwrap_or(Bounded::max_value())
 	}
 }
 

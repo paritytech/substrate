@@ -38,7 +38,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-/// A struct that updates the fee multiplier based on the saturation level of the previous block.
+/// A struct that updates the weight multiplier based on the saturation level of the previous block.
 /// This should typically be called once per-block.
 ///
 /// This assumes that weight is a numeric value in the u32 range.

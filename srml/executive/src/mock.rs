@@ -50,6 +50,10 @@ impl_outer_dispatch! {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
+parameter_types! {
+    pub const BlockHashCount: u64 = 250;
+}
+
 impl system::Trait for Runtime {
     type Origin = Origin;
     type Index = u64;
@@ -60,6 +64,7 @@ impl system::Trait for Runtime {
     type Lookup = IdentityLookup<u64>;
     type Header = Header;
     type WeightMultiplierUpdate = WeightMultiplierUpdateHandler;
+    type BlockHashCount = BlockHashCount;
     type Event = MetaEvent;
 }
 parameter_types! {
