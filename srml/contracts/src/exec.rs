@@ -122,7 +122,7 @@ pub trait Ext {
 	/// Rent allowance of the contract
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
 
-	// Returns the current block number.
+	/// Returns the current block number.
 	fn block_number(&self) -> BlockNumberOf<Self::T>;
 }
 
