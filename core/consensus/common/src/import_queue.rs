@@ -125,8 +125,6 @@ pub trait Link<B: BlockT>: Send {
 	) {}
 	/// Justification import result.
 	fn justification_imported(&mut self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
-	/// Clear all pending justification requests.
-	fn clear_justification_requests(&mut self) {}
 	/// Request a justification for the given block.
 	fn request_justification(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
@@ -144,10 +142,6 @@ pub trait Link<B: BlockT>: Send {
 	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Remember finality proof request builder on start.
 	fn set_finality_proof_request_builder(&mut self, _request_builder: BoxFinalityProofRequestBuilder<B>) {}
-	/// Adjusts the reputation of the given peer.
-	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
-	/// Restart sync.
-	fn restart(&mut self) {}
 }
 
 /// Block import successful result.

@@ -657,9 +657,6 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
 	}
-	fn clear_justification_requests(&mut self) {
-		self.protocol.user_protocol_mut().clear_justification_requests()
-	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)
 	}
@@ -679,12 +676,6 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
-		self.protocol.user_protocol_mut().report_peer(who, reputation_change)
-	}
-	fn restart(&mut self) {
-		self.protocol.user_protocol_mut().restart()
 	}
 	fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
 		self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)

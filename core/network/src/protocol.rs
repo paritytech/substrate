@@ -1216,11 +1216,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.request_justification(&hash, number, &mut context);
 	}
 
-	/// Clears all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.sync.clear_justification_requests()
-	}
-
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
@@ -1233,13 +1228,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		self.sync.blocks_processed(&mut context, imported, count, results, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
-	}
-
-	/// Restart the sync process.
-	pub fn restart(&mut self) {
-		let peers = self.context_data.peers.clone();
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		self.sync.restart(&mut context, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
 	}
 
 	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {

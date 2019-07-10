@@ -55,13 +55,10 @@ pub struct BufferedLinkSender<B: BlockT> {
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
-	ClearJustificationRequests,
 	RequestJustification(B::Hash, NumberFor<B>),
 	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	RequestFinalityProof(B::Hash, NumberFor<B>),
 	SetFinalityProofRequestBuilder(BoxFinalityProofRequestBuilder<B>),
-	ReportPeer(Origin, i32),
-	Restart,
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -85,10 +82,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		let _ = self.tx.unbounded_send(msg);
 	}
 
-	fn clear_justification_requests(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ClearJustificationRequests);
-	}
-
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
 	}
@@ -109,14 +102,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 	fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::SetFinalityProofRequestBuilder(request_builder));
-	}
-
-	fn report_peer(&mut self, who: Origin, reputation_change: i32) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ReportPeer(who, reputation_change));
-	}
-
-	fn restart(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
 	}
 }
 
@@ -145,8 +130,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.blocks_processed(imported, count, results),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
 					link.justification_imported(who, &hash, number, success),
-				BlockImportWorkerMsg::ClearJustificationRequests =>
-					link.clear_justification_requests(),
 				BlockImportWorkerMsg::RequestJustification(hash, number) =>
 					link.request_justification(&hash, number),
 				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
@@ -155,10 +138,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.request_finality_proof(&hash, number),
 				BlockImportWorkerMsg::SetFinalityProofRequestBuilder(builder) =>
 					link.set_finality_proof_request_builder(builder),
-				BlockImportWorkerMsg::ReportPeer(who, reput) =>
-					link.report_peer(who, reput),
-				BlockImportWorkerMsg::Restart =>
-					link.restart(),
 			}
 		}
 	}

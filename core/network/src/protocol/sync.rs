@@ -654,7 +654,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash
 						);
-						self.clear_justification_requests();
+						self.extra_justifications.reset()
 					}
 
 					if aux.needs_justification {
@@ -769,11 +769,6 @@ impl<B: BlockT> ChainSync<B> {
 			protocol.client().is_descendent_of(base, block)
 		});
 		self.send_justification_requests(protocol)
-	}
-
-	/// Clears all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.extra_justifications.reset()
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without
@@ -1021,7 +1016,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Restart the sync process.
-	pub(crate) fn restart(
+	fn restart(
 		&mut self,
 		protocol: &mut dyn Context<B>,
 		mut peer_info: impl FnMut(&PeerId) -> Option<ProtocolPeerInfo<B>>
