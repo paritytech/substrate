@@ -300,9 +300,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			return Box::new(future::ok(()));
 		}
 
-		// FIXME replace the dummy empty slices with real data
-		// https://github.com/paritytech/substrate/issues/2435
-		// https://github.com/paritytech/substrate/issues/2436
 		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
 			&randomness,
 			slot_info.number,
