@@ -115,7 +115,6 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	)
 		-> CompletedRounds<Block>
 	{
-		// let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
 	}
 

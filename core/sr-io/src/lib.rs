@@ -249,28 +249,33 @@ export_api! {
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn encrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn encrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Decrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-		fn decrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn decrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Sign a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn sign(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn sign(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
 		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
 		/// Returns an error in case the key is not available or does not exist or the parameters
 		/// lengths are incorrect.
-		fn verify(key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
+		fn verify(
+			key: Option<CryptoKeyId>,
+			kind: CryptoKind,
+			msg: &[u8],
+			signature: &[u8]
+		) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;
@@ -389,7 +394,10 @@ mod imp {
 }
 
 #[cfg(feature = "std")]
-pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage, with_externalities};
+pub use self::imp::{
+	StorageOverlay, ChildrenStorageOverlay, with_storage, with_storage_and_children,
+	with_externalities
+};
 #[cfg(not(feature = "std"))]
 pub use self::imp::ext::*;
 
