@@ -274,7 +274,7 @@ impl<
 }
 
 pub struct EnsureMembers<N: U32, AccountId, Error>(
-	::rstd::marker::PhantomData<(N, AccountId, Error)>
+	rstd::marker::PhantomData<(N, AccountId, Error)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
