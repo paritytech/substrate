@@ -117,7 +117,11 @@ decl_storage! {
 
 		/// The current authorities set.
 		Authorities get(authorities) build(|config: &GenesisConfig| {
-			config.authorities.clone()
+			let authorities = config.authorities.clone();
+			if authorities.is_empty() {
+				panic!("no authorities at genesis!")
+			}
+			authorities
 		}): Vec<(AuthorityId, Weight)>;
 
 		/// The epoch randomness.
@@ -187,9 +191,13 @@ decl_module! {
 }
 
 pub fn epoch<T: Trait>() -> Epoch {
+	let authorities = Authorities::get();
+	if false && authorities.is_empty() {
+		panic!("No authorities ― network is deadlocked")
+	}
 	Epoch {
 		randomness: EpochRandomness::get(),
-		authorities: Authorities::get(),
+		authorities: authorities,
 		slot_number: SlotsPerEpoch::get().wrapping_add(EpochIndex::get()),
 	}
 }

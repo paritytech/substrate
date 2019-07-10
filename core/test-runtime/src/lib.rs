@@ -511,13 +511,16 @@ cfg_if! {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						median_required_blocks: 0,
-						slot_duration: 1,
+						slot_duration: 3,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
 						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
+				fn authorities() -> consensus_babe::Epoch {
+					let authorities = system::authorities().into_iter().map(|s|(s, 0)).collect();
+					consensus_babe::Epoch { authorities, ..srml_babe::epoch::<Runtime>() }
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

@@ -284,7 +284,14 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
-		let Epoch { ref authorities, .. } = epoch;
+		let Epoch { ref authorities, randomness, .. } = epoch;
+		if authorities.is_empty() {
+			error!(
+				target: "babe",
+				"No authorities at block {:?}",
+				chain_head.hash(),
+			);
+		}
 		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "babe", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "babe.skipping_proposal_slot";
@@ -297,7 +304,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
 		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
-			&[0u8; 0],
+			&randomness,
 			slot_info.number,
 			slot_info.number / self.slots_per_epoch,
 			epoch,
@@ -930,8 +937,6 @@ mod tests {
 		}
 	}
 
-	const SLOT_DURATION: u64 = 1;
-
 	pub struct BabeTestNet {
 		peers: Vec<Peer<(), DummySpecialization>>,
 	}
@@ -963,7 +968,6 @@ mod tests {
 			).expect("Registers babe inherent data provider");
 			trace!(target: "babe", "Provider registered");
 
-			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
 				inherent_data_providers,
