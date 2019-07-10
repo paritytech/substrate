@@ -681,7 +681,7 @@ where
 			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 
-	fn current_block(&self) -> &T::BlockNumber { &self.current_block }
+	fn current_block(&self) -> T::BlockNumber { self.current_block }
 }
 
 /// These tests exercise the executive layer.
