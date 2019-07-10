@@ -18,8 +18,12 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use srml_support::{impl_outer_origin, impl_outer_error};
+use primitives::{
+	KeyTypeId,
+	traits::IdentityLookup,
+	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId},
+};
+use srml_support::{impl_outer_origin, impl_outer_error, parameter_types};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
@@ -36,6 +40,10 @@ impl_outer_error! {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -47,6 +55,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type Error = Error;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl timestamp::Trait for Test {

@@ -254,7 +254,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root};
 use sr_primitives::weights::TransactionWeight;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -440,7 +440,7 @@ decl_module! {
 		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
-		// Implementation of a privileged call. This doesn't have an `origin` parameter because
+		// Implementation of a privileged call. The `origin` parameter is ROOT because
 		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 		// to execute it. Different runtimes have different reasons for allow privileged
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
@@ -448,7 +448,8 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		fn set_dummy(#[compact] new_value: T::Balance) {
+		fn set_dummy(origin, #[compact] new_value: T::Balance) {
+			ensure_root(origin)?;
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 		}
@@ -528,6 +529,9 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -539,6 +543,7 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type Error = Error;
+		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;

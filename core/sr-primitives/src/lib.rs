@@ -51,6 +51,9 @@ pub mod transaction_validity;
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
+/// Re-export this since it's part of the API of this crate.
+pub use substrate_primitives::crypto::{key_types, KeyTypeId};
+
 #[cfg_attr(test, derive(PartialEq, Debug))]
 /// Primitive Error type
 pub enum PrimitiveError {
@@ -59,7 +62,7 @@ pub enum PrimitiveError {
 	Other(&'static str),
 	/// Indicating an invalid signature in extrinsic.
 	BadSignature,
-	/// Full block error.
+	/// Full block error message.
 	///
 	/// This allows modules to indicate that given transaction is potentially valid
 	/// in the future, but can't be executed in the current state.

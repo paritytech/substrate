@@ -55,7 +55,8 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CENTS, DOLLARS, MILLICENTS
+		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys,
+		CENTS, DOLLARS, MILLICENTS,
 	};
 	use wabt;
 	use primitives::map;
@@ -290,11 +291,13 @@ mod tests {
 	}
 
 	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
-		SessionKeys(ring.to_owned().into(), ring.to_owned().into())
+		SessionKeys {
+			ed25519: ring.to_owned().into(),
+		}
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
+		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
 			aura: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
@@ -350,7 +353,7 @@ mod tests {
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
-		}.build_storage().unwrap().0);
+		}.build_storage().unwrap());
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}

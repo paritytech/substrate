@@ -53,7 +53,8 @@ mod module1 {
 
 			fn deposit_event<T, I>() = default;
 
-			fn one() {
+			fn one(origin) {
+				system::ensure_root(origin)?;
 				Self::deposit_event(RawEvent::AnotherVariant(3));
 			}
 		}

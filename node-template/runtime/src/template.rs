@@ -71,7 +71,7 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
-	use support::{{impl_outer_origin, impl_outer_error}, assert_ok};
+	use support::{impl_outer_origin, impl_outer_error, assert_ok, parameter_types};
 	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
@@ -87,6 +87,9 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -98,6 +101,7 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type Error = Error;
+		type BlockHashCount = BlockHashCount;
 	}
 	impl Trait for Test {
 		type Event = ();
