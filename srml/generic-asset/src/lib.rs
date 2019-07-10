@@ -154,7 +154,7 @@
 use parity_codec::{Decode, Encode, HasCompact};
 
 use primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero,
+	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
 
 use rstd::prelude::*;
@@ -168,7 +168,7 @@ use support::{
 	},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -397,7 +397,8 @@ decl_module! {
 
 		/// Can be used to create reserved tokens.
 		/// Requires Root call.
-		fn create_reserved(asset_id: T::AssetId, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
+		fn create_reserved(origin, asset_id: T::AssetId, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
+			ensure_root(origin)?;
 			Self::create_asset(Some(asset_id), None, options)
 		}
 	}
@@ -1026,6 +1027,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
+	type BlockHashCount = T::BlockHashCount;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;
@@ -1136,6 +1138,26 @@ where
 		} else {
 			(NegativeImbalance::new(value), Zero::zero())
 		}
+	}
+
+	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
+		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued|
+			issued.checked_sub(&amount).unwrap_or_else(|| {
+				amount = *issued;
+				Zero::zero()
+			})
+		);
+		PositiveImbalance::new(amount)
+	}
+
+	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
+		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued|
+			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
+				amount = Self::Balance::max_value() - *issued;
+				Self::Balance::max_value()
+			})
+		);
+		NegativeImbalance::new(amount)
 	}
 }
 

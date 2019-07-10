@@ -25,7 +25,7 @@ use primitives::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use substrate_primitives::{Blake2Hasher, H256};
-use support::{impl_outer_event, impl_outer_origin};
+use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
 use super::*;
 
@@ -38,7 +38,9 @@ impl_outer_origin! {
 // configuration traits of modules we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
-
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -49,6 +51,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl Trait for Test {
