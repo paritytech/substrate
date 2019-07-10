@@ -43,7 +43,7 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -272,8 +272,8 @@ impl From<codec::Compact<Permill>> for Permill {
 
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Perbill(u32);
 
 impl Perbill {
@@ -400,7 +400,7 @@ impl Fixed64 {
 	///
 	/// Note that this might be lossy.
 	pub fn from_rational(n: i64, d: u64) -> Self {
-		Self(n.saturating_mul(DIV) / d.max(1) as i64)
+		Self((n as i128 * DIV as i128 / (d as i128).max(1)).try_into().unwrap_or(Bounded::max_value()))
 	}
 
 	/// Raw constructor. Equal to `parts / 1_000_000_000`.
@@ -446,6 +446,26 @@ impl ops::Sub for Fixed64 {
 
 	fn sub(self, rhs: Self) -> Self::Output {
 		Self(self.0 - rhs.0)
+	}
+}
+
+impl CheckedSub for Fixed64 {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_sub(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
+	}
+}
+
+impl CheckedAdd for Fixed64 {
+	fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_add(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
 	}
 }
 

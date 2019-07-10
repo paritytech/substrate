@@ -16,8 +16,6 @@
 
 //! Test utilities
 
-#![cfg(test)]
-
 use std::{collections::HashSet, cell::RefCell};
 use primitives::Perbill;
 use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
@@ -97,7 +95,7 @@ impl system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type FeeMultiplierUpdate = ();
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 }
 parameter_types! {

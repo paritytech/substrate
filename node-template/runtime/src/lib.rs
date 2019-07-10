@@ -132,7 +132,7 @@ impl system::Trait for Runtime {
 	/// The ubiquitous event type.
 	type Event = Event;
 	/// Update fee multiplier per-block.
-	type FeeMultiplierUpdate = ();
+	type WeightMultiplierUpdate = ();
 	/// The ubiquitous origin type.
 	type Origin = Origin;
 }

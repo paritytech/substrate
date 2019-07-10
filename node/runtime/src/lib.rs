@@ -61,7 +61,7 @@ pub use staking::StakerStatus;
 /// Implementations for `Convert` and other helper structs passed into runtime modules as associated
 /// types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, FeeMultiplierUpdateHandler};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -125,7 +125,7 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	type FeeMultiplierUpdate = FeeMultiplierUpdateHandler;
+	type WeightMultiplierUpdate = WeightMultiplierUpdateHandler;
 	type Event = Event;
 }
 

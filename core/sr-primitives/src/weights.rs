@@ -33,7 +33,7 @@ pub type Weight = u32;
 /// Maximum block saturation: 4mb
 pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 /// Target block saturation: 25% of max block saturation = 1mb
-pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = 1024 * 1024;
+pub const IDEAL_TRANSACTIONS_WEIGHT: u32 = MAX_TRANSACTIONS_WEIGHT / 4;
 
 /// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
@@ -86,11 +86,11 @@ impl Default for TransactionWeight {
 ///
 /// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
 /// in the form of the `apply_to` method.
-#[cfg_attr(feature = "std", derive(Debug, Copy, Clone))]
-#[derive(Encode, Decode, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FeeMultiplier(Fixed64);
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WeightMultiplier(Fixed64);
 
-impl FeeMultiplier {
+impl WeightMultiplier {
 	/// Apply the inner Fixed64 as a fee multiplier to a weight value.
 	///
 	/// This will perform a saturated  `weight + weight * self.0`.
@@ -127,7 +127,7 @@ impl FeeMultiplier {
 	}
 }
 
-impl Saturating for FeeMultiplier {
+impl Saturating for WeightMultiplier {
 	fn saturating_add(self, rhs: Self) -> Self {
 		Self(self.0.saturating_add(rhs.0))
 	}
@@ -137,5 +137,32 @@ impl Saturating for FeeMultiplier {
 	}
 	fn saturating_sub(self, rhs: Self) -> Self {
 		Self(self.0.saturating_sub(rhs.0))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{DIV};
+
+	fn apply(i: Weight, f: f64) -> Weight {
+		(i as f64 * f) as Weight
+	}
+
+	#[test]
+	fn multiplier_apply_to_works() {
+		let test_set = vec![0, 1, 10, 1000, 1_000_000_000];
+
+		// unit (1) multiplier
+		let mut fm = WeightMultiplier::from_parts(0);
+		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), *i); });
+
+		// i.5 multiplier
+		fm = WeightMultiplier::from_parts(DIV / 2);
+		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), i * 3 / 2); });
+
+		// dual multiplier
+		fm = WeightMultiplier::from_parts(DIV);
+		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), i * 2); });
 	}
 }

@@ -76,7 +76,7 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::weights::{Weight, FeeMultiplier};
+use primitives::weights::{Weight, WeightMultiplier};
 use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One,
 	Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash, Bounded, Lookup,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, Convert,
@@ -182,7 +182,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// block.
 	///
 	/// Note that passing `()` will keep the value constant.
-	type FeeMultiplierUpdate: Convert<(Weight, FeeMultiplier), FeeMultiplier>;
+	type WeightMultiplierUpdate: Convert<(Weight, WeightMultiplier), WeightMultiplier>;
 
 	/// The block header.
 	type Header: Parameter + traits::Header<
@@ -325,7 +325,7 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<Weight>;
 		/// The next fee multiplier. This should be updated at the end of each block based on the
 		/// saturation level (weight).
-		NextFeeMultiplier: FeeMultiplier = Default::default();
+		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -547,20 +547,15 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
-	/// Gets the next fee multiplier
-	pub fn next_fee_multiplier() -> FeeMultiplier {
-		NextFeeMultiplier::get()
-	}
-
 	/// Update the next fee multiplier.
 	///
 	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
-	pub fn update_fee_multiplier() {
+	pub fn update_weight_multiplier() {
 		// update the multiplier based on block weight.
 		let current_weight = Self::all_extrinsics_weight();
-		let current_multiplier = NextFeeMultiplier::get();
-		let next_multiplier = T::FeeMultiplierUpdate::convert((current_weight, current_multiplier));
-		NextFeeMultiplier::put(next_multiplier);
+		NextWeightMultiplier::mutate(|fm| {
+			*fm = T::WeightMultiplierUpdate::convert((current_weight, *fm))
+		});
 	}
 
 	/// Start the execution of a particular block.
@@ -591,7 +586,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		Self::update_fee_multiplier();
+		Self::update_weight_multiplier();
 		AllExtrinsicsWeight::kill();
 
 		let number = <Number<T>>::take();
@@ -816,7 +811,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type FeeMultiplierUpdate = ();
+		type WeightMultiplierUpdate = ();
 		type Event = u16;
 	}
 

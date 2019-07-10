@@ -17,7 +17,7 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use node_primitives::Balance;
-use runtime_primitives::weights::{Weight, FeeMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
+use runtime_primitives::weights::{Weight, WeightMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{Convert, Saturating};
 use runtime_primitives::{DIV, Fixed64};
 use crate::Balances;
@@ -39,7 +39,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 }
 
 /// A struct that updates the fee multiplier based on the saturation level of the previous block.
-/// This should typically be called per-block.
+/// This should typically be called once per-block.
 ///
 /// This assumes that weight is a numeric value in the u32 range.
 ///
@@ -49,9 +49,9 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 ///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
-pub struct FeeMultiplierUpdateHandler;
-impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHandler {
-	fn convert(previous_state: (Weight, FeeMultiplier)) -> FeeMultiplier {
+pub struct WeightMultiplierUpdateHandler;
+impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierUpdateHandler {
+	fn convert(previous_state: (Weight, WeightMultiplier)) -> WeightMultiplier {
 		let (block_weight, multiplier) = previous_state;
 		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
 		let block_weight = block_weight as u128;
@@ -64,9 +64,10 @@ impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHand
 		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
-		let v = Fixed64::from_parts(40_000);
-		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1.
-		let v_squared_2 = Fixed64::from_parts(1);
+		let v = Fixed64::from_rational(4, 100_000);
+		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1 parts
+		// from a billionth.
+		let v_squared_2 = Fixed64::from_rational(1, 1_000_000_000);
 
 		let first_term = v.saturating_mul(diff);
 		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving
@@ -75,17 +76,17 @@ impl Convert<(Weight, FeeMultiplier), FeeMultiplier> for FeeMultiplierUpdateHand
 
 		if positive {
 			let excess = first_term.saturating_add(second_term);
-			multiplier.saturating_add(FeeMultiplier::from_fixed(excess))
+			multiplier.saturating_add(WeightMultiplier::from_fixed(excess))
 		} else {
 			// first_term > second_term
 			let negative = first_term - second_term;
-			multiplier.saturating_sub(FeeMultiplier::from_fixed(negative))
+			multiplier.saturating_sub(WeightMultiplier::from_fixed(negative))
 				// despite the fact that apply_to saturates weight (final fee cannot go below 0)
 				// it is crucially important to stop here and don't further reduce the weight fee
 				// multiplier. While at -1, it means that the network is so un-congested that all
 				// transactions are practically free. We stop here and only increase if the network
 				// became more busy.
-				.max(FeeMultiplier::from_parts(-DIV))
+				.max(WeightMultiplier::from_parts(-DIV))
 		}
 	}
 }
@@ -98,7 +99,7 @@ mod tests {
 
 	// poc reference implementation.
 	#[allow(dead_code)]
-	fn fee_multiplier_update(block_weight: Weight) -> Perbill  {
+	fn weight_multiplier_update(block_weight: Weight) -> Perbill  {
 		let block_weight = block_weight as f32;
 		let v: f32 = 0.00004;
 
@@ -115,30 +116,30 @@ mod tests {
 		Perbill::from_parts((fm * 1_000_000_000_f32) as u32)
 	}
 
-	fn fm(parts: i64) -> FeeMultiplier {
-		FeeMultiplier::from_parts(parts)
+	fn fm(parts: i64) -> WeightMultiplier {
+		WeightMultiplier::from_parts(parts)
 	}
 
 	#[test]
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((1024, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((1024, WeightMultiplier::default())),
 			fm(-9990)
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((1024 * 4, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((1024 * 4, WeightMultiplier::default())),
 			fm(-9960)
 		);
 		// ideal. Original fee.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT as u32, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT as u32, WeightMultiplier::default())),
 			fm(0)
 		);
 		// // More than ideal. Fee is increased.
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert(((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert(((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32, WeightMultiplier::default())),
 			fm(10000)
 		);
 	}
@@ -146,20 +147,20 @@ mod tests {
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, WeightMultiplier::default())),
 			fm(10000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(10000))),
+			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(10000))),
 			fm(20000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(20000))),
+			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(20000))),
 			fm(30000)
 		);
 		// ...
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(1_000_000_000))),
+			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(1_000_000_000))),
 			fm(1_000_000_000 + 10000)
 		);
 	}
@@ -167,20 +168,20 @@ mod tests {
 	#[test]
 	fn stateful_weight_mil_collapse_to_minus_one() {
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((0, FeeMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((0, WeightMultiplier::default())),
 			fm(-10000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((0, fm(-10000))),
+			WeightMultiplierUpdateHandler::convert((0, fm(-10000))),
 			fm(-20000)
 		);
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((0, fm(-20000))),
+			WeightMultiplierUpdateHandler::convert((0, fm(-20000))),
 			fm(-30000)
 		);
 		// ...
 		assert_eq!(
-			FeeMultiplierUpdateHandler::convert((0, fm(1_000_000_000 * -1))),
+			WeightMultiplierUpdateHandler::convert((0, fm(1_000_000_000 * -1))),
 			fm(-1_000_000_000)
 		);
 	}
@@ -191,18 +192,18 @@ mod tests {
 		// 4 * 1024 * 1024 in a block.
 		let kb = 1024_u32;
 		let mb = kb * kb;
-		let max_fm = FeeMultiplier::from_fixed(Fixed64::from_natural(i64::max_value()));
+		let max_fm = WeightMultiplier::from_fixed(Fixed64::from_natural(i64::max_value()));
 
 		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
 			.into_iter()
 			.for_each(|i| {
-				FeeMultiplierUpdateHandler::convert((i, FeeMultiplier::default()));
+				WeightMultiplierUpdateHandler::convert((i, WeightMultiplier::default()));
 			});
 
 		vec![10 * mb, Weight::max_value() / 2, Weight::max_value()]
 			.into_iter()
 			.for_each(|i| {
-				let fm = FeeMultiplierUpdateHandler::convert((
+				let fm = WeightMultiplierUpdateHandler::convert((
 					i,
 					max_fm
 				));

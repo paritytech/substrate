@@ -49,7 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{IDEAL_TRANSACTIONS_WEIGHT, FeeMultiplier};
+	use runtime_primitives::weights::{IDEAL_TRANSACTIONS_WEIGHT, WeightMultiplier};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -510,7 +510,6 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
-		println!("executing.");
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -923,13 +922,13 @@ mod tests {
 
 
 	#[test]
-	fn fee_multiplier_increases_on_big_block() {
+	fn weight_multiplier_increases_on_big_block() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		let mut prev_multiplier = FeeMultiplier::default();
+		let mut prev_multiplier = WeightMultiplier::default();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(System::next_fee_multiplier(), prev_multiplier);
+			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
 		});
 
 		let mut tt = new_test_ext(COMPACT_CODE, false);
@@ -975,7 +974,7 @@ mod tests {
 
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
-			let fm = System::next_fee_multiplier();
+			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
 			prev_multiplier = fm;
@@ -992,20 +991,20 @@ mod tests {
 
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
-			let fm = System::next_fee_multiplier();
+			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
 		});
 	}
 
 	#[test]
-	fn fee_multiplier_decreases_on_small_block() {
+	fn weight_multiplier_decreases_on_small_block() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		let mut prev_multiplier = FeeMultiplier::default();
+		let mut prev_multiplier = WeightMultiplier::default();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(System::next_fee_multiplier(), prev_multiplier);
+			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
 		});
 
 		let mut tt = new_test_ext(COMPACT_CODE, false);
@@ -1051,7 +1050,7 @@ mod tests {
 
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
-			let fm = System::next_fee_multiplier();
+			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
 			prev_multiplier = fm;
@@ -1068,7 +1067,7 @@ mod tests {
 
 		// fee multiplier is increased for next block.
 		runtime_io::with_externalities(&mut t, || {
-			let fm = System::next_fee_multiplier();
+			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
 		});

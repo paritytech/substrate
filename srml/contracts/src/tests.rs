@@ -103,7 +103,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type FeeMultiplierUpdate = ();
+	type WeightMultiplierUpdate = ();
 	type Event = MetaEvent;
 }
 impl balances::Trait for Test {
