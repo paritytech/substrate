@@ -146,7 +146,11 @@ construct_service_factory! {
 							telemetry_on_connect: Some(telemetry_on_connect),
 							transaction_pool: service.transaction_pool(),
 						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+						service.spawn_task(Box::new(
+							grandpa::run_grandpa_voter::<
+								_, _, _, _, _, _, _, _, grandpa_primitives::AuthorityPair
+							>(grandpa_config)?
+						));
 					},
 				}
 
@@ -165,7 +169,7 @@ construct_service_factory! {
 				{
 					let slot_duration = SlotDuration::get_or_compute(&*client)?;
 					let (block_import, link_half) =
-						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _>(
+						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _, _>(
 							client.clone(), client.clone(), select_chain, transaction_pool.clone()
 						)?;
 					let block_import = Arc::new(block_import);

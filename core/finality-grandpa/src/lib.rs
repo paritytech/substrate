@@ -422,7 +422,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P>(
 	select_chain: SC,
 	transaction_pool: Option<Arc<T>>,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>,
+		GrandpaBlockImport<B, E, Block, RA, PRA, SC, T, P>,
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
@@ -572,7 +572,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T, P>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
@@ -584,10 +584,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: SubmitReport<Client<B, E, Block, RA>, Block> + Send + Sync + 'static,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, P> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
+	P: Send + Sync + 'static + Pair,
 {
 	let GrandpaParams {
 		config,
@@ -654,6 +655,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 		consensus_changes: consensus_changes.clone(),
 		voter_set_state: set_state.clone(),
 		transaction_pool: transaction_pool.clone(),
+		_phantom: std::marker::PhantomData,
 	});
 
 	initial_environment.update_voter_set_state(|voter_set_state| {
@@ -800,6 +802,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 						consensus_changes,
 						voter_set_state: set_state,
 						transaction_pool,
+						_phantom: std::marker::PhantomData,
 					});
 
 					Ok(FutureLoop::Continue((env, voter_commands_rx)))
@@ -867,7 +870,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T, P>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X, T>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
@@ -879,10 +882,11 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: Sync + Send + 'static + SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: Sync + Send + 'static + SubmitReport<Client<B, E, Block, RA>, Block, P>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
+	P: Send + Sync + 'static + Pair,
 {
 	run_grandpa_voter(grandpa_params)
 }

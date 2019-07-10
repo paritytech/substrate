@@ -307,7 +307,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T, P> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -318,9 +318,10 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T>
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) transaction_pool: Arc<T>,
+	pub(crate) _phantom: std::marker::PhantomData<P>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T, P> Environment<B, E, Block, N, RA, SC, T, P> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -336,9 +337,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block,
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T, P>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, T>
+for Environment<B, E, Block, N, RA, SC, T, P>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -464,9 +465,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T, P>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, T>
+for Environment<B, E, Block, N, RA, SC, T, P>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -476,9 +477,10 @@ where
 	RA: 'static + Send + Sync + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
+	P: Pair,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -780,7 +782,8 @@ where
 		self.inner.runtime_api()
 			.construct_prevote_equivocation_report_call(&block_id, proof)
 			.map(|call| {
-				self.transaction_pool.submit_report_call(self.inner.deref(), call.as_slice());
+				let pair = Pair::from_string("FIXME", None).expect("FIXME");
+				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
 				info!(target: "afg", "Equivocation report has been submitted")
 			}).unwrap_or_else(|err|
 				error!(target: "afg", "Error constructing equivocation report: {}", err)
@@ -801,7 +804,8 @@ where
 		self.inner.runtime_api()
 			.construct_precommit_equivocation_report_call(&block_id, proof)
 			.map(|call| {
-				self.transaction_pool.submit_report_call(self.inner.deref(), call.as_slice());
+				let pair = Pair::from_string("FIXME", None).expect("FIXME");
+				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
 				info!(target: "afg", "Equivocation report has been submitted")
 			}).unwrap_or_else(|err|
 				error!(target: "afg", "Error constructing equivocation report: {}", err)
