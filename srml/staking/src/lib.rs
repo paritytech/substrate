@@ -1350,10 +1350,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
 		let validators = <Module<T>>::select_validators().1;
-		assert!(
-			validators.as_ref().map(|v| !v.is_empty()).unwrap_or(false),
-			"Empty validator set at genesis!",
-		);
+
 		validators
 	}
 }
