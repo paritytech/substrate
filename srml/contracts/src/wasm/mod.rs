@@ -292,7 +292,7 @@ mod tests {
 			self.rent_allowance
 		}
 
-		fn current_block(&self) -> u64 { 121 }
+		fn block_number(&self) -> u64 { 121 }
 	}
 
 	fn execute<E: Ext>(
@@ -1345,11 +1345,11 @@ mod tests {
 		);
 	}
 
-	/// calls `ext_current_block`, loads the current block number from the scratch buffer and
+	/// calls `ext_block_number`, loads the current block number from the scratch buffer and
 	/// compares it with the constant 121.
-	const CODE_CURRENT_BLOCK: &str = r#"
+	const CODE_BLOCK_NUMBER: &str = r#"
 (module
-	(import "env" "ext_current_block" (func $ext_current_block))
+	(import "env" "ext_block_number" (func $ext_block_number))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -1365,7 +1365,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the block height in the scratch buffer
-		(call $ext_current_block)
+		(call $ext_block_number)
 
 		;; assert $ext_scratch_size == 8
 		(call $assert
@@ -1398,10 +1398,10 @@ mod tests {
 "#;
 
 	#[test]
-	fn current_block() {
+	fn block_number() {
 		let mut mock_ext = MockExt::default();
 		execute(
-			CODE_CURRENT_BLOCK,
+			CODE_BLOCK_NUMBER,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,

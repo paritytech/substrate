@@ -123,7 +123,7 @@ pub trait Ext {
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
 
 	// Returns the current block number.
-	fn current_block(&self) -> BlockNumberOf<Self::T>;
+	fn block_number(&self) -> BlockNumberOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -367,7 +367,7 @@ where
 							caller: self.self_account.clone(),
 							value_transferred: value,
 							timestamp: timestamp::Module::<T>::now(),
-							current_block: <system::Module<T>>::block_number(),
+							block_number: <system::Module<T>>::block_number(),
 						},
 						input_data,
 						empty_output_buf,
@@ -438,7 +438,7 @@ where
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
 						timestamp: timestamp::Module::<T>::now(),
-						current_block: <system::Module<T>>::block_number(),
+						block_number: <system::Module<T>>::block_number(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -591,7 +591,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
-	current_block: T::BlockNumber,
+	block_number: T::BlockNumber,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -681,7 +681,7 @@ where
 			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 
-	fn current_block(&self) -> T::BlockNumber { self.current_block }
+	fn block_number(&self) -> T::BlockNumber { self.block_number }
 }
 
 /// These tests exercise the executive layer.

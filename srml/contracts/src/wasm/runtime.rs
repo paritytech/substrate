@@ -703,9 +703,9 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Stores the current block number of the current contract into the scratch buffer.
-	ext_current_block(ctx) => {
+	ext_block_number(ctx) => {
 		ctx.scratch_buf.clear();
-		ctx.ext.current_block().encode_to(&mut ctx.scratch_buf);
+		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 );
