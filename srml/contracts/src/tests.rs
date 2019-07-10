@@ -1473,3 +1473,113 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		}
 	);
 }
+
+const CODE_STORAGE_SIZE: &str = r#"
+(module
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 16 16))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 4)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 32)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 4)		;; Count of bytes to copy.
+		)
+
+		;; place a garbage value in storage, the size of which is specified by the call input.
+		(call $ext_set_storage
+			(i32.const 0)		;; Pointer to storage key
+			(i32.const 1)		;; Value is not null
+			(i32.const 0)		;; Pointer to value
+			(i32.load (i32.const 32))	;; Size of value
+		)
+
+		(call $assert
+			(i32.eq
+				(call $ext_get_storage
+					(i32.const 0)		;; Pointer to storage key
+				)
+				(i32.const 0)
+			)
+		)
+
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
+			)
+		)
+	)
+
+	(func (export "deploy"))
+
+	(data (i32.const 0) "\01")	;; Storage key (32 B)
+)
+"#;
+
+#[test]
+fn storage_max_value_limit() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_STORAGE_SIZE).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000,
+				code_hash.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Call contract with allowed storage value.
+			assert_ok!(Contract::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				Encode::encode(&self::MaxValueSize::get()),
+			));
+
+			// Call contract with too large a storage value.
+			assert_err!(
+				Contract::call(
+					Origin::signed(ALICE),
+					BOB,
+					0,
+					100_000,
+					Encode::encode(&(self::MaxValueSize::get() + 1)),
+				),
+				"during execution"
+			);
+		}
+	);
+}

@@ -310,6 +310,8 @@ parameter_types! {
 	pub const DefaultCreateBaseFee: u32 = 1000;
 	/// A resonable default value for [`Trait::MaxDepth`].
 	pub const DefaultMaxDepth: u32 = 1024;
+	/// A resonable default value for [`Trait::MaxValueSize`].
+	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A resonable default value for [`Trait::BlockGasLimit`].
 	pub const DefaultBlockGasLimit: u32 = 10_000_000;
 }
