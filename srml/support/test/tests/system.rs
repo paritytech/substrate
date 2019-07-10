@@ -27,6 +27,8 @@ srml_support::decl_event!(
 
 srml_support::decl_error! {
 	pub enum Error {
+		TestError,
+		AnotherError
 	}
 }
 

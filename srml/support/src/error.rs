@@ -168,8 +168,10 @@ macro_rules! decl_error {
 		$(#[$attr:meta])*
 		pub enum Error {
 			$(
-				$errors:tt
-			)*
+				$(#[$variant_attr:meta])*
+				$name:ident
+			),*
+			$(,)?
 		}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -180,8 +182,9 @@ macro_rules! decl_error {
 		pub enum Error {
 			Other(&'static str),
 			$(
-				$errors
-			)*
+				$(#[$variant_attr])*
+				$name
+			),*
 		}
 
 		impl From<&Error> for u8 {
