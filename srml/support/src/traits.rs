@@ -630,6 +630,15 @@ bitmask! {
 	}
 }
 
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	pub fn except(one: WithdrawReason) -> WithdrawReasons {
+		let mut mask = Self::all();
+		mask.toggle(one);
+		mask
+	}
+}
+
 /// Trait for type that can handle incremental changes to a set of account IDs.
 pub trait ChangeMembers<AccountId> {
 	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
