@@ -296,6 +296,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			return (imported, count, results);
 		}
 
+		let block_number = block.header.as_ref().map(|h| h.number().clone());
 		let block_hash = block.hash;
 		let import_result = if has_error {
 			Err(BlockImportError::Cancelled)
@@ -308,12 +309,13 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			)
 		};
 		let was_ok = import_result.is_ok();
-		results.push((import_result, block_hash));
 		if was_ok {
+			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
 			imported += 1;
 		} else {
 			has_error = true;
 		}
+		results.push((import_result, block_hash));
 	}
 
 	(imported, count, results)
