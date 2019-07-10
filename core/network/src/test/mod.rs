@@ -34,16 +34,17 @@ use client::backend::AuxStore;
 use crate::config::Roles;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
-	SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
+	BoxFinalityProofRequestBuilder,
 };
-use consensus::block_import::BlockImport;
+use consensus::block_import::{BlockImport, ImportResult};
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
+use parking_lot::Mutex;
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, ProtocolConfig};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
@@ -142,10 +143,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn as_block_import(&self) -> SharedBlockImport<Block> {
+	pub fn as_block_import(&self) -> BoxBlockImport<Block> {
 		match *self {
-			PeersClient::Full(ref client) => client.clone() as _,
-			PeersClient::Light(ref client) => client.clone() as _,
+			PeersClient::Full(ref client) => Box::new(client.clone()) as _,
+			PeersClient::Light(ref client) => Box::new(client.clone()) as _,
 		}
 	}
 
@@ -214,7 +215,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	verifier: Arc<dyn Verifier<Block>>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	block_import: Arc<dyn BlockImport<Block, Error = ConsensusError>>,
+	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	imported_blocks_stream: futures::stream::Fuse<ImportNotifications<Block>>,
 	finality_notification_stream: futures::stream::Fuse<FinalityNotifications<Block>>,
@@ -367,6 +368,33 @@ impl SpecializationFactory for DummySpecialization {
 	}
 }
 
+/// Implements `BlockImport` on an `Arc<Mutex<impl BlockImport>>`. Used internally. Necessary to overcome the way the
+/// `TestNet` trait is designed, more specifically `make_block_import` returning a `Box<BlockImport>` makes it
+/// impossible to clone the underlying object.
+struct BlockImportAdapter<T: ?Sized>(Arc<Mutex<Box<T>>>);
+
+impl<T: ?Sized> Clone for BlockImportAdapter<T> {
+	fn clone(&self) -> Self {
+		BlockImportAdapter(self.0.clone())
+	}
+}
+
+impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T> {
+	type Error = T::Error;
+
+	fn check_block(&mut self, hash: Hash, parent_hash: Hash) -> Result<ImportResult, Self::Error> {
+		self.0.lock().check_block(hash, parent_hash)
+	}
+
+	fn import_block(
+		&mut self,
+		block: ImportBlock<Block>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		self.0.lock().import_block(block, cache)
+	}
+}
+
 pub trait TestNetFactory: Sized {
 	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
@@ -384,10 +412,10 @@ pub trait TestNetFactory: Sized {
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{
@@ -422,10 +450,11 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone()));
+		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import.clone(),
+			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -462,7 +491,7 @@ pub trait TestNetFactory: Sized {
 				client: PeersClient::Full(client),
 				imported_blocks_stream,
 				finality_notification_stream,
-				block_import,
+				block_import: Box::new(block_import),
 				verifier,
 				network,
 			});
@@ -478,10 +507,11 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Light(client.clone()));
+		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
-			block_import.clone(),
+			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
 			finality_proof_request_builder,
@@ -516,7 +546,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				verifier,
-				block_import,
+				block_import: Box::new(block_import),
 				client: PeersClient::Light(client),
 				imported_blocks_stream,
 				finality_notification_stream,
@@ -615,7 +645,7 @@ impl JustificationImport<Block> for ForceFinalized {
 	type Error = ConsensusError;
 
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: H256,
 		_number: NumberFor<Block>,
 		justification: Justification,
@@ -656,13 +686,13 @@ impl TestNetFactory for JustificationTestNet {
 
 	fn make_block_import(&self, client: PeersClient)
 		-> (
-			SharedBlockImport<Block>,
-			Option<SharedJustificationImport<Block>>,
-			Option<SharedFinalityProofImport<Block>>,
-			Option<SharedFinalityProofRequestBuilder<Block>>,
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{
-		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, None, Default::default())
+		(client.as_block_import(), Some(Box::new(ForceFinalized(client))), None, None, Default::default())
 	}
 }
