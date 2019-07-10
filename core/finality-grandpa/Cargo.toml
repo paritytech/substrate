@@ -28,7 +28,7 @@ grandpa = { package = "finality-grandpa", git = "https://github.com/paritytech/f
 # grandpa = { package = "finality-grandpa", version = "0.8.1", features = ["derive-codec"] }
 
 [dev-dependencies]
-consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }
+consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 grandpa = { package = "finality-grandpa", git = "https://github.com/paritytech/finality-grandpa", branch = "marcio/answer-queries-response-methods", features = ["derive-codec", "test-helpers"] }
 # grandpa = { package = "finality-grandpa", version = "0.8.1", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }

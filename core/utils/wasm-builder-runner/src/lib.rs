@@ -30,6 +30,9 @@ use std::{env, process::{Command, self}, fs, path::{PathBuf, Path}};
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
+/// Environment variable to extend the `RUSTFLAGS` variable given to the WASM build.
+const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
+
 /// Environment variable that tells us to create a dummy WASM binary.
 ///
 /// This is useful for `cargo check` to speed-up the compilation.
@@ -91,6 +94,20 @@ impl WasmBuilderSource {
 			}
 		}
 	}
+}
+
+/// Build the currently built project as WASM binary and extend `RUSTFLAGS` with the given rustflags.
+///
+/// For more information, see [`build_current_project`].
+pub fn build_current_project_with_rustflags(
+	file_name: &str,
+	wasm_builder_source: WasmBuilderSource,
+	rustflags: &str,
+) {
+	let given_rustflags = env::var(WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default();
+	env::set_var(WASM_BUILD_RUSTFLAGS_ENV, format!("{} {}", given_rustflags, rustflags));
+
+	build_current_project(file_name, wasm_builder_source)
 }
 
 /// Build the currently built project as WASM binary.
