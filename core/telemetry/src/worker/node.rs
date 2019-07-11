@@ -195,10 +195,11 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin {
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
 					return Poll::Ready(Err(err))
 				}
-				trace!(target: "telemetry", "Successfully sent {:?} bytes message to {}",
-					item_len, my_addr);
+				trace!(
+					target: "telemetry", "Successfully sent {:?} bytes message to {}",
+					item_len, my_addr
+				);
 				self.need_flush = true;
-
 			} else if self.need_flush {
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
 					Poll::Pending => {}
