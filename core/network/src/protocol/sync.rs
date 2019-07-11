@@ -29,9 +29,9 @@
 
 use blocks::BlockCollection;
 use client::{BlockStatus, ClientInfo, error::Error as ClientError};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder}};
+use consensus::{BlockOrigin, import_queue::IncomingBlock};
 use crate::{
-	config::Roles,
+	config::{Roles, BoxFinalityProofRequestBuilder},
 	message::{self, generic::FinalityProofRequest, BlockAttributes, BlockRequest, BlockResponse, FinalityProofResponse},
 	protocol
 };
@@ -251,7 +251,12 @@ pub enum OnBlockFinalityProof<B: Block> {
 
 impl<B: Block> ChainSync<B> {
 	/// Create a new instance.
-	pub fn new(role: Roles, client: Arc<dyn crate::chain::Client<B>>, info: &ClientInfo<B>) -> Self {
+	pub fn new(
+		role: Roles,
+		client: Arc<dyn crate::chain::Client<B>>,
+		info: &ClientInfo<B>,
+		request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 
 		if role.is_full() {
@@ -270,12 +275,8 @@ impl<B: Block> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			request_builder: None
+			request_builder
 		}
-	}
-
-	pub fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
-		self.request_builder = Some(builder)
 	}
 
 	/// Returns the state of the sync of the given peer.

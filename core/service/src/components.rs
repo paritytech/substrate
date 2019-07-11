@@ -23,7 +23,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
-use network::{self, OnDemand, FinalityProofProvider};
+use network::{self, OnDemand, FinalityProofProvider, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{
@@ -356,7 +356,7 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_light_import_queue(
 		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<LightClient<Self>>
-	) -> Result<Self::LightImportQueue, error::Error> {
+	) -> Result<(Self::LightImportQueue, BoxFinalityProofRequestBuilder<Self::Block>), error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
@@ -407,12 +407,13 @@ pub trait Components: Sized + 'static {
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>;
 
-	/// instance of import queue for clients
+	/// Build the queue that imports blocks from the network, and optionally a way for the network
+	/// to build requests for proofs of finality.
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
-	) -> Result<Self::ImportQueue, error::Error>;
+	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error>;
 
 	/// Finality proof provider for serving network requests.
 	fn build_finality_proof_provider(
@@ -513,10 +514,11 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
-	) -> Result<Self::ImportQueue, error::Error> {
+	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
 		Factory::build_full_import_queue(config, client, select_chain)
+			.map(|queue| (queue, None))
 	}
 
 	fn build_select_chain(
@@ -615,8 +617,9 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		_select_chain: Option<Self::SelectChain>,
-	) -> Result<Self::ImportQueue, error::Error> {
+	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		Factory::build_light_import_queue(config, client)
+			.map(|(queue, builder)| (queue, Some(builder)))
 	}
 
 	fn build_finality_proof_provider(
