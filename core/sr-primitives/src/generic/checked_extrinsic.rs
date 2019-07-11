@@ -18,65 +18,72 @@
 //! stage.
 
 use rstd::result::Result;
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SignedExtension, DispatchError};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult, ValidateUnsigned};
 use crate::weights::{Weighable, Weight};
+use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
 /// regards to the signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CheckedExtrinsic<AccountId, Index, Call, Extra> {
+pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	/// Who this purports to be from and the number of extrinsics have come before
 	/// from the same signer, if anyone (note this is not a signature).
-	pub signed: Option<(AccountId, Index, Extra)>,
+	pub signed: Option<(AccountId, Extra)>,
 
 	/// The function that should be called.
 	pub function: Call,
 }
 
-impl<AccountId, Index, Call, Extra> traits::Applyable
+impl<AccountId, Call, Extra, Origin> traits::Applyable
 for
-	CheckedExtrinsic<AccountId, Index, Call, Extra>
+	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
-	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member,
-	Extra: SignedExtension<AccountId=AccountId, Index=Index, Call=Call>,
+	Call: Member + Dispatchable<Origin=Origin>,
+	Extra: SignedExtension<AccountId=AccountId>,
+	Origin: From<Option<AccountId>>,
 {
 	type AccountId = AccountId;
-	type Call = Call;
-	type Index = Index;
 
-	fn index(&self) -> Option<&Self::Index> {
-		self.signed.as_ref().map(|x| &x.1)
-	}
+	type Call = Call;
 
 	fn sender(&self) -> Option<&Self::AccountId> {
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		if let Some((id, _, extra)) = self.signed {
-			(self.function, Some(id))
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+		weight: crate::weights::Weight,
+	) -> TransactionValidity {
+		if let Some((ref id, ref extra)) = self.signed {
+			Extra::validate(extra, id, weight).into()
 		} else {
-			(self.function, None)
+			match Extra::validate_unsigned(weight) {
+				Ok(v) => match UnsignedValidator::validate_unsigned(&self.function) {
+					TransactionValidity::Valid(v) => Ok(TransactionValidity(v.combine_with(extra))),
+					x => x,
+				},
+				x => x.into(),
+			}
 		}
 	}
 
-	fn pre_dispatch(self,
+	fn dispatch(self,
 		weight: crate::weights::Weight,
-	) -> Result<(Self::Call, Option<Self::AccountId>), DispatchError> {
-		if let Some((id, index, extra)) = self.signed {
-			Extra::pre_dispatch(extra, &id, &index, &self.function, weight)?;
-			Ok((self.function, Some(id)))
+	) -> Result<DispatchResult, DispatchError> {
+		let maybe_who = if let Some((id, extra)) = self.signed {
+			Extra::pre_dispatch(extra, &id, weight)?;
+			Some(id)
 		} else {
-			Ok((self.function, None))
-		}
+			Extra::pre_dispatch_unsigned(weight)?;
+			None
+		};
+		Ok(self.function.dispatch(Origin::from(maybe_who)))
 	}
 }
 
-impl<AccountId, Index, Call, Extra> Weighable for CheckedExtrinsic<AccountId, Index, Call, Extra>
+impl<AccountId, Call, Extra> Weighable for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	Call: Weighable,
 {

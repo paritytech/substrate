@@ -25,25 +25,16 @@ pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
-pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
+pub use sr_primitives::{
+	weights::{TransactionWeight, Weighable, Weight}, traits::{Dispatchable, DispatchResult}
+};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
 
 /// Result of a module function call; either nothing (functions are only called for "side effects")
 /// or an error message.
-pub type Result = result::Result<(), &'static str>;
-
-/// A lazy call (module function and argument values) that can be executed via its `dispatch`
-/// method.
-pub trait Dispatchable {
-	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
-	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
-	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type Origin;
-	type Trait;
-	fn dispatch(self, origin: Self::Origin) -> Result;
-}
+pub type Result = DispatchResult;
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.

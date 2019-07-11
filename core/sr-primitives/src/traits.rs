@@ -23,7 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
-use crate::transaction_validity::TransactionValidity;
+use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
 pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -770,44 +770,106 @@ pub enum DispatchError {
 
 	/// General error to do with the transaction's proofs (e.g. signature).
 	BadProof,
+
+/*	/// General error to do with actually executing the dispatched logic.
+	User(&'static str),*/
+}
+
+impl From<DispatchError> for i8 {
+	fn from(e: DispatchError) -> i8 {
+		match e {
+			DispatchError::Payment => -64,
+			DispatchError::NoPermission => -65,
+			DispatchError::BadState => -66,
+			DispatchError::Stale => -67,
+			DispatchError::Future => -68,
+			DispatchError::BadProof => -69,
+		}
+	}
+}
+
+/// Result of a module function call; either nothing (functions are only called for "side effects")
+/// or an error message.
+pub type DispatchResult = result::Result<(), &'static str>;
+
+/// A lazy call (module function and argument values) that can be executed via its `dispatch`
+/// method.
+pub trait Dispatchable {
+	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
+	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
+	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
+	type Origin;
+	/// ...
+	type Trait;
+	/// Actually dispatch this call and result the result of it.
+	fn dispatch(self, origin: Self::Origin) -> DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
 pub trait SignedExtension:
-	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq + Ord + PartialOrd
+	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq
 {
 	type AccountId;
-	type Call;
-	type Index;
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		_weight: crate::weights::Weight,
+	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+
 	fn pre_dispatch(
 		self,
-		account: &Self::AccountId,
-		index: &Self::Index,
-		call: &Self::Call,
+		who: &Self::AccountId,
 		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError>;
+	) -> Result<(), DispatchError> { self.validate(who, weight).map(|_| ()) }
+
+	fn validate_unsigned(
+		_weight: crate::weights::Weight,
+	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+
+	fn pre_dispatch_unsigned(
+		weight: crate::weights::Weight,
+	) -> Result<(), DispatchError> { Self::validate_unsigned(weight).map(|_| ()) }
 }
 
 impl<
 	AccountId,
-	Call,
-	Index,
-	A: SignedExtension<AccountId=AccountId, Call=Call, Index=Index>,
-	B: SignedExtension<AccountId=AccountId, Call=Call, Index=Index>
+	A: SignedExtension<AccountId=AccountId>,
+	B: SignedExtension<AccountId=AccountId>,
 > SignedExtension for (A, B) {
 	type AccountId = AccountId;
-	type Call = Call;
-	type Index = Index;
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		weight: crate::weights::Weight,
+	) -> Result<ValidTransaction, DispatchError> {
+		let a = self.0.validate(who, weight)?;
+		let b = self.1.validate(who, weight)?;
+		Ok(a.combine_with(b))
+	}
 	fn pre_dispatch(
 		self,
-		account: &Self::AccountId,
-		index: &Self::Index,
-		call: &Self::Call,
+		who: &Self::AccountId,
 		weight: crate::weights::Weight,
 	) -> Result<(), DispatchError> {
-		self.0.pre_dispatch(account, index, call, weight)?;
-		self.1.pre_dispatch(account, index, call, weight)
+		self.0.pre_dispatch(who, weight)?;
+		self.1.pre_dispatch(who, weight)?;
+		Ok(())
+	}
+	fn validate_unsigned(
+		weight: crate::weights::Weight,
+	) -> Result<ValidTransaction, DispatchError> {
+		let a = A::validate_unsigned(weight)?;
+		let b = B::validate_unsigned(weight)?;
+		Ok(a.combine_with(b))
+	}
+	fn pre_dispatch_unsigned(
+		weight: crate::weights::Weight,
+	) -> Result<(), DispatchError> {
+		A::pre_dispatch_unsigned(weight)?;
+		B::pre_dispatch_unsigned(weight)?;
+		Ok(())
 	}
 }
 
@@ -820,25 +882,23 @@ impl<
 pub trait Applyable: Sized + Send + Sync {
 	/// Id of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
-	/// Index allowing to disambiguate other `Applyable`s from the same `AccountId`.
-	type Index: Member + MaybeDisplay + SimpleArithmetic;
-	/// Function call.
-	type Call: Member;
-	/// Returns a reference to the index if any.
-	fn index(&self) -> Option<&Self::Index>;
+
+	/// Type by which we can dispatch. Restricts the UnsignedValidator type.
+	type Call;
+
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
-	/// Deconstructs into function call and sender.
-	///
-	/// @deprecated - avoid using this and instead refactor into pre_dispatch.
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
+
+	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
+		weight: crate::weights::Weight
+	) -> TransactionValidity;
+
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn pre_dispatch(self,
+	fn dispatch(self,
 		weight: crate::weights::Weight
-	) -> Result<(Self::Call, Option<Self::AccountId>), DispatchError> {
-		Ok(self.deconstruct())
-	}
+	) -> Result<DispatchResult, DispatchError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

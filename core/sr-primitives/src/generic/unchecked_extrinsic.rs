@@ -21,64 +21,35 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Codec, Input, Compact};
+use crate::codec::{Decode, Encode, Input, Compact};
 use crate::traits::{
-	self, Member, SimpleArithmetic, MaybeDebug, MaybeDisplay, CurrentHeight, SignedExtension,
-	BlockNumberToHash, Lookup, Checkable, Extrinsic, SaturatedConversion, DispatchError
+	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, SignedExtension,
+	BlockNumberToHash, Lookup, Checkable, Extrinsic, SaturatedConversion
 };
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;
-/*
-/// A type with which the signed payload of a transaction may be extended.
-pub trait OSignedExtension: Codec + MaybeDebug {}
 
-impl<T: Codec + fmt::Debug> SignedExtra for T {}
-
-/// A type that names a `SignedExtension` and knows how to deal with it.
-pub trait OExtension<AccountId, Call> {
-	/// An extra data field that should go into the signed part of the payload.
-	type SignedPayload: OSignedExtension;
-
-	/// Anything that should be executed immediately before dispatch.
-	fn pre_dispatch(
-		a: &AccountId,
-		c: &Call,
-		e: Self::SignedPayload
-	) -> Result<(), DispatchError>;
-}
-
-impl<AccountId, Call> OExtension<AccountId, Call> for () {
-	type SignedPayload = ();
-
-	fn pre_dispatch(
-		_: &AccountId,
-		_: &Call,
-		_: ()
-	) -> Result<(), DispatchError> { Ok(()) }
-}
-*/
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-pub struct UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: SignedExtension
 {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature, Compact<Index>, Era, Extra)>,
+	pub signature: Option<(Address, Signature, Era, Extra)>,
 	/// The function that should be called.
 	pub function: Call,
 }
 
-impl<Address, Index, Call, Signature, Extra: SignedExtension>
-	UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra: SignedExtension>
+	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(
-		index: Index,
 		function: Call,
 		signed: Address,
 		signature: Signature,
@@ -86,7 +57,7 @@ impl<Address, Index, Call, Signature, Extra: SignedExtension>
 		extra: Extra
 	) -> Self {
 		UncheckedExtrinsic {
-			signature: Some((signed, signature, index.into(), era, extra)),
+			signature: Some((signed, signature, era, extra)),
 			function,
 		}
 	}
@@ -100,25 +71,23 @@ impl<Address, Index, Call, Signature, Extra: SignedExtension>
 	}
 }
 
-impl<Address, Index, Call, Signature, Extra: SignedExtension> Extrinsic
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, Extra, Context, Hash, BlockNumber>
+impl<Address, AccountId, Call, Signature, Extra, Context, Hash, BlockNumber>
 	Checkable<Context>
 for
-	UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+	UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Member + MaybeDisplay,
-	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Compact<Index>: Encode,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
-	Extra: SignedExtension<AccountId=AccountId, Index=Index, Call=Call>,
+	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	BlockNumber: SimpleArithmetic,
 	Hash: Encode,
@@ -126,16 +95,16 @@ where
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
-	type Checked = CheckedExtrinsic<AccountId, Index, Call, Extra>;
+	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
-			Some((signed, signature, index, era, extra)) => {
+			Some((signed, signature, era, extra)) => {
 				let current_u64 = context.current_height().saturated_into::<u64>();
 				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
 					.ok_or("transaction birth block ancient")?;
 				let signed = context.lookup(signed)?;
-				let raw_payload = (index, self.function, era, h, extra);
+				let raw_payload = (self.function, era, h, extra);
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -146,8 +115,8 @@ where
 					return Err(crate::BAD_SIGNATURE)
 				}
 				CheckedExtrinsic {
-					signed: Some((signed, (raw_payload.0).0, raw_payload.4)),
-					function: raw_payload.1,
+					signed: Some((signed, raw_payload.3)),
+					function: raw_payload.0,
 				}
 			}
 			None => CheckedExtrinsic {
@@ -158,12 +127,11 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature, Extra> Decode
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Decode
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Decode,
 	Signature: Decode,
-	Compact<Index>: Decode,
 	Call: Decode,
 	Extra: SignedExtension,
 {
@@ -189,12 +157,11 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature, Extra> Encode
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Encode
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Encode,
 	Signature: Encode,
-	Compact<Index>: Encode,
 	Call: Encode,
 	Extra: SignedExtension,
 {
@@ -216,9 +183,8 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<Address: Encode, Index, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
-	where Compact<Index>: Encode
+impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
@@ -226,16 +192,15 @@ impl<Address: Encode, Index, Signature: Encode, Call: Encode, Extra: SignedExten
 }
 
 #[cfg(feature = "std")]
-impl<Address, Index, Call, Signature, Extra> fmt::Debug
-	for UncheckedExtrinsic<Address, Index, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> fmt::Debug
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: fmt::Debug,
-	Index: fmt::Debug,
 	Call: fmt::Debug,
 	Extra: SignedExtension,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2, &x.4)), self.function)
+		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2, &x.3)), self.function)
 	}
 }
 
@@ -278,20 +243,9 @@ mod tests {
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
-		type Index = u64;
-		type Call = Vec<u8>;
-		fn pre_dispatch(
-			self,
-			_a: &Self::AccountId,
-			_i: &Self::Index,
-			_c: &Self::Call,
-			_w: crate::weights::Weight,
-		) -> Result<(), DispatchError> {
-			Ok(())
-		}
 	}
-	type Ex = UncheckedExtrinsic<u64, u64, Vec<u8>, TestSig, TestExtra>;
-	type CEx = CheckedExtrinsic<u64, u64, Vec<u8>, TestExtra>;
+	type Ex = UncheckedExtrinsic<u64, Vec<u8>, TestSig, TestExtra>;
+	type CEx = CheckedExtrinsic<u64, Vec<u8>, TestExtra>;
 
 	#[test]
 	fn unsigned_codec_should_work() {

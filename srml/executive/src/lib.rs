@@ -293,26 +293,12 @@ where
 			return Err(internal::ApplyError::FullBlock);
 		}
 
-		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-			// TODO: Place into a transaction extension.
-			// check nonce and increment
-			let expected_index = <system::Module<System>>::account_nonce(sender);
-			if index != &expected_index { return Err(
-				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
-			) }
-			<system::Module<System>>::inc_account_nonce(sender);
-
-			// TODO: Place into a transaction extension.
-			// pay any fees
-			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
-		}
-
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let (f, s) = Applyable::pre_dispatch(xt, weight)
+		let (f, s) = Applyable::dispatch(xt, weight)
 			.map_err(internal::ApplyError::from)?;
-		let r = f.dispatch(s.into());
+
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
@@ -352,6 +338,7 @@ where
 		const UNKNOWN_ERROR: i8 = -127;
 		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
+		const BAD_DISPATCH: i8 = -15;
 
 		let encoded_len = uxt.encode().len();
 
@@ -366,40 +353,7 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		// TODO: remove this block next block into the transaction extension.
-		match (xt.sender(), xt.index()) {
-			(Some(sender), Some(index)) => {
-				// pay any fees
-				if Payment::make_payment(sender, encoded_len).is_err() {
-					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
-				}
-
-				// check index
-				let expected_index = <system::Module<System>>::account_nonce(sender);
-				if index < &expected_index {
-					return TransactionValidity::Invalid(ApplyError::Stale as i8)
-				}
-
-				let index = *index;
-				let provides = vec![(sender, index).encode()];
-				let requires = if expected_index < index {
-					vec![(sender, index - One::one()).encode()]
-				} else {
-					vec![]
-				};
-
-				TransactionValidity::Valid {
-					priority: encoded_len as TransactionPriority,
-					requires,
-					provides,
-					longevity: TransactionLongevity::max_value(),
-					propagate: true,
-				}
-			},
-			(None, None) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),
-			(Some(_), None) => TransactionValidity::Invalid(INVALID_INDEX),
-			(None, Some(_)) => TransactionValidity::Invalid(MISSING_SENDER),
-		}
+		xt.validate::<UnsignedValidator>()
 	}
 
 	/// Start an offchain worker and generate extrinsics.

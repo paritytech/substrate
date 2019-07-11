@@ -19,8 +19,8 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey};
-use crate::{generic, KeyTypeId};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult};
+use crate::{generic, KeyTypeId, transaction_validity::ValidTransaction};
 use crate::weights::{Weighable, Weight};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -227,12 +227,21 @@ impl<Call> Applyable for TestXt<Call> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
 {
 	type AccountId = u64;
-	type Index = u64;
-	type Call = Call;
 	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
-	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		(self.2, self.0)
+
+	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	fn validate(&self,
+		weight: crate::weights::Weight
+	) -> Result<ValidTransaction, DispatchError> {
+		Ok(Default::default())
+	}
+
+	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
+	/// index and sender.
+	fn dispatch(self,
+		weight: crate::weights::Weight
+	) -> Result<DispatchResult, DispatchError> {
+		Ok(Ok(()))
 	}
 }
 impl<Call> Weighable for TestXt<Call> {

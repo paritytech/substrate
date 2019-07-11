@@ -76,15 +76,20 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
-	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
-	Zero,
-}};
+use primitives::{
+	generic, weights::Weight, traits::{
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
+		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
+		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+		Lookup, DispatchError
+	}, transaction_validity::{
+		ValidTransaction, TransactionPriority, TransactionLongevity
+	},
+};
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get},
+	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get}, Dispatchable
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
@@ -745,6 +750,62 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+/// Nonce check and increment to give replay protection for transactions.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckNonce<T: Trait>(T::Index);
+
+#[cfg(feature = "std")]
+impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<T: Trait> SignedExtension for CheckNonce<T> {
+	type AccountId = T::AccountId;
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		_weight: Weight,
+	) -> Result<(), DispatchError> {
+		let expected = <AccountNonce<T>>::get(who);
+		if self.0 != expected {
+			return Err(
+				if self.0 < expected { DispatchError::Stale } else { DispatchError::Future }
+			)
+		}
+		<AccountNonce<T>>::insert(who, expected + T::Index::one());
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		_weight: Weight,
+	) -> Result<ValidTransaction, DispatchError> {
+		// check index
+		let expected = <AccountNonce<T>>::get(who);
+		if self.0 < expected {
+			return Err(DispatchError::Stale)
+		}
+
+		let provides = vec![Encode::encode(&(who, self.0))];
+		let requires = if expected < self.0 {
+			vec![Encode::encode(&(who, self.0 - One::one()))]
+		} else {
+			vec![]
+		};
+
+		Ok(ValidTransaction {
+			priority: _weight as TransactionPriority,
+			requires,
+			provides,
+			longevity: TransactionLongevity::max_value(),
+			propagate: true,
+		})
 	}
 }
 
