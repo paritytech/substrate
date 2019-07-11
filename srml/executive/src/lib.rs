@@ -264,7 +264,7 @@ where
 
 		// Check the weight of the block if that extrinsic is applied.
 		let block_weight = <system::Module<System>>::all_extrinsics_weight();
-		if xt.is_block_full(block_weight, encoded_len) {
+		if <CheckedOf<Block::Extrinsic, Context> as Weighable>::is_block_full(&xt, block_weight, encoded_len) {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
