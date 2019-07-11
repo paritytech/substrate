@@ -39,8 +39,9 @@ use std::collections::BTreeMap;
 use num_traits as num;
 
 pub use grandpa_primitives::{
-	Precommit, Prevote, Equivocation, Message, Error as GrandpaError, Chain,
-	validate_commit, Commit, VoterSet, SignedPrecommit
+	Precommit as GrandpaPrecommit, Prevote as GrandpaPrevote, Equivocation,
+	Message, Error as GrandpaError, Chain, validate_commit, Commit, VoterSet,
+	SignedPrecommit,
 };
 
 /// The grandpa crypto scheme defined via the keypair type.
@@ -59,13 +60,23 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
+pub type Prevote<Block> = GrandpaPrevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+
+pub type Precommit<Block> = GrandpaPrecommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// Prevote equivocation.
-pub type PrevoteEquivocation<Hash, Number> =
-	Equivocation<AuthorityId, Prevote<Hash, Number>, AuthoritySignature>;
+pub type PrevoteEquivocation<Block> =
+	Equivocation<AuthorityId, Prevote<Block>, AuthoritySignature>;
 
 /// Precommit equivocation.
-pub type PrecommitEquivocation<Hash, Number> =
-	Equivocation<AuthorityId, Precommit<Hash, Number>, AuthoritySignature>;
+pub type PrecommitEquivocation<Block> =
+	Equivocation<AuthorityId, Precommit<Block>, AuthoritySignature>;
+
+pub type PrevoteChallenge<Block> = 
+	Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>>;
+
+pub type PrecommitChallenge<Block> = 
+	Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>>;
 
 
 /// A scheduled change of authority set.
@@ -143,33 +154,27 @@ decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
-		fn grandpa_prevote_challenge(digest: &DigestFor<Block>)
-			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>>;
+		/// Check a digest for a prevote challenge.
+		fn grandpa_prevote_challenge(digest: &DigestFor<Block>) -> Option<PrevoteChallenge<Block>>;
 
-		fn grandpa_precommit_challenge(digest: &DigestFor<Block>)
-			-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>>;
+		/// Check a digest for a precommit challenge.
+		fn grandpa_precommit_challenge(digest: &DigestFor<Block>) -> Option<PrecommitChallenge<Block>>;
 		
-		/// Construct a call to report the prevote equivocation.
+		/// Construct a call for reporting the prevote equivocation.
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
 		) -> Vec<u8>;
 		
 		/// Construct a call to report the precommit equivocation.
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
 		) -> Vec<u8>;
 
-		fn construct_report_unjustified_prevotes_call(
-			proof: Challenge<
-				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
-			>
-		) -> Vec<u8>;
+		/// Construct a call to report the rejecting set of prevotes.
+		fn construct_rejecting_prevotes_report_call(challenge: PrevoteChallenge<Block>) -> Vec<u8>;
 
-		fn construct_report_unjustified_precommits_call(
-			proof: Challenge<
-				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
-			>
-		) -> Vec<u8>;
+		/// Construct a call to report the rejecting set of precommits.
+		fn construct_rejecting_precommits_report_call(challenge: PrecommitChallenge<Block>) -> Vec<u8>;
 	}
 }
 
@@ -197,7 +202,7 @@ pub struct Challenge<H, N, Header, S, Id, Vote> {
 	pub culprits: Vec<Id>, // TODO: Optimize.
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
-	pub rejecting_set: RejectingVoteSet<Vote>,
+	pub rejecting_set: RejectingVoteSet<Vote, Header>,
 	pub previous_challenge: Option<H>,
 }
 
@@ -211,8 +216,9 @@ pub struct FinalizedBlockProof<H, N, Header, S, Id> {
 
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct RejectingVoteSet<Vote> {
+pub struct RejectingVoteSet<Vote, Header> {
 	pub votes: Vec<ChallengedVote<Vote>>,
+	pub headers: Vec<Header>,
 	pub round: u64,
 }
 

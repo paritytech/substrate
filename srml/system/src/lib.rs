@@ -156,12 +156,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
-		+ rstd::hash::Hash;
+		+ rstd::hash::Hash + num_traits::cast::AsPrimitive<usize>;
 
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
-		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Ord;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;

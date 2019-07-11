@@ -48,14 +48,14 @@ use primitives::{
 	transaction_validity::TransactionValidity
 };
 use fg_primitives::{
-	ScheduledChange, GRANDPA_ENGINE_ID,
-	GrandpaEquivocationProof, Prevote, Precommit, Message,
-	PrevoteEquivocation, PrecommitEquivocation, localized_payload, AncestryChain,
-	Chain, validate_commit, VoterSet
+	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof,
+	GrandpaPrevote as Prevote, GrandpaPrecommit as Precommit, SignedPrecommit,
+	Message, localized_payload, Equivocation,
+	AncestryChain, Chain, validate_commit, VoterSet
 };
 pub use fg_primitives::{
 	AuthorityId, AuthorityWeight, AuthoritySignature, RejectingVoteSet,
-	ChallengedVote, Challenge, CHALLENGE_SESSION_LENGTH
+	ChallengedVote, Challenge, CHALLENGE_SESSION_LENGTH, Commit
 };
 use system::{DigestOf, ensure_signed};
 use num_traits as num;
@@ -230,42 +230,230 @@ decl_storage! {
 	}
 }
 
+/// Prevote equivocation.
+pub type PrevoteEquivocation<Hash, Number> =
+	Equivocation<AuthorityId, Prevote<Hash, Number>, AuthoritySignature>;
+
+/// Precommit equivocation.
+pub type PrecommitEquivocation<Hash, Number> =
+	Equivocation<AuthorityId, Precommit<Hash, Number>, AuthoritySignature>;
+
+type PrevoteEquivocationProof<T> = 
+	GrandpaEquivocationProof<PrevoteEquivocation<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
+type PrecommitEquivocationProof<T> = 
+	GrandpaEquivocationProof<PrecommitEquivocation<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
+type PrevoteChallenge<T> =
+	Challenge<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber, <T as system::Trait>::Header, <T as Trait>::Signature, AuthorityId, Prevote<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
+type PrecommitChallenge<T> =
+	Challenge<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber, <T as system::Trait>::Header, <T as Trait>::Signature, AuthorityId, Precommit<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
 		/// Report prevote equivocation.
 		fn report_prevote_equivocation(
-			_origin,
-			_equivocation_proof: GrandpaEquivocationProof<PrevoteEquivocation<T::Hash, T::BlockNumber>>
+			origin,
+			equivocation_proof: PrevoteEquivocationProof<T>
 		) {
-			// Slash
+			let equivocation = equivocation_proof.equivocation;
+			let identity = equivocation.identity;
+
+			let first_vote = equivocation.first.0;
+			let first_signature = equivocation.first.1;
+
+			let second_vote = equivocation.second.0;
+			let second_signature = equivocation.second.1;
+			
+			if first_vote != second_vote {
+				let first_payload = localized_payload(
+					equivocation.round_number,
+					equivocation_proof.set_id,
+					&Message::Prevote(first_vote),
+				);
+
+				if !first_signature.verify(first_payload.as_slice(), &identity) {
+					return Err("Bad signature")
+				}
+
+				let second_payload = localized_payload(
+					equivocation.round_number,
+					equivocation_proof.set_id,
+					&Message::Prevote(second_vote),
+				);
+
+				if !second_signature.verify(second_payload.as_slice(), &identity) {
+					return Err("Bad signature")
+				}
+
+				// Slash identity
+			}
+
+			return Err("Votes are the same")
 		}
 
 		/// Report precommit equivocation.
 		fn report_precommit_equivocation(
-			_origin,
-			_equivocation_proof: GrandpaEquivocationProof<PrecommitEquivocation<T::Hash, T::BlockNumber>>
+			origin,
+			equivocation_proof: PrecommitEquivocationProof<T>
 		) {
-			// Slash
+			let equivocation = equivocation_proof.equivocation;
+			let identity = equivocation.identity;
+
+			let first_vote = equivocation.first.0;
+			let first_signature = equivocation.first.1;
+
+			let second_vote = equivocation.second.0;
+			let second_signature = equivocation.second.1;
+			
+			if first_vote != second_vote {
+				let first_payload = localized_payload(
+					equivocation.round_number,
+					equivocation_proof.set_id,
+					&Message::Precommit(first_vote),
+				);
+
+				if !first_signature.verify(first_payload.as_slice(), &identity) {
+					return Err("Bad signature")
+				}
+
+				let second_payload = localized_payload(
+					equivocation.round_number,
+					equivocation_proof.set_id,
+					&Message::Precommit(second_vote),
+				);
+
+				if !second_signature.verify(second_payload.as_slice(), &identity) {
+					return Err("Bad signature")
+				}
+
+				// Slash identity
+			}
+
+			return Err("Votes are the same")
+		}
+
+		/// Answer a previous challenge by providing a set of prevotes.
+		fn report_prevotes_answer(origin, answer: PrevoteChallenge<T>) {
+			ensure_signed(origin)?;
+
+			// Check that target block is the same as previous challenge.
+			let previous_challenge = get_challenge(answer.precommit_challenge);
+
+			// Check that prevotes set has supermajority for B.
+			// TODO: probably is better to use another struct for `answer`.
+			// TODO: check signatures.
+			{
+				let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
+				let votes = challenge.rejecting_set.votes;
+				let commit = Commit {
+					target_hash: previous_challenge.finalized_block.0,
+					target_number: previous_challenge.finalized_block.1,
+					precommits: votes.into_iter().map(|challenged_vote| {
+						SignedPrecommit {
+							precommit: Precommit {
+								target_hash: challenged_vote.vote.target_hash,
+								target_number: challenged_vote.vote.target_number,
+							},
+							signature: challenged_vote.signature, // TODO: It doesn't matter
+							id: challenged_vote.authority,
+						}
+					}).collect(),
+				};
+
+				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
+				let voters = <Module<T>>::grandpa_authorities();
+				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
+
+				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+					if let Some(ghost) = validation_result.ghost() {
+						// TODO: I think this should check that ghost is ancestor of B.
+						if *ghost != challenge.finalized_block {
+							return Err("Invalid proof of finalized block")
+						}
+					}
+				}
+			}
+
+			let culprits = previous_challenge.culprits;
 		}
 
 		/// Report unjustified precommit votes.
-		fn report_unjustified_prevotes(
-			origin,
-			challenge: Challenge<
-				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
-			>
-		) {
-			// Slash?
+		fn report_rejecting_prevotes(origin, challenge: PrevoteChallenge<T>) {
+			ensure_signed(origin)?;
+
+			// Check that block proof contains supermajority of precommits for B.
+			// TODO: Check signatures.
+			{
+				let headers: &[T::Header] = challenge.finalized_block_proof.headers.as_slice();
+				let commit = challenge.finalized_block_proof.commit.clone();
+				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
+				let voters = <Module<T>>::grandpa_authorities();
+				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
+
+				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+					if let Some(ghost) = validation_result.ghost() {
+						// TODO: I think this should check that ghost is ancestor of B.
+						if *ghost != challenge.finalized_block {
+							return Err("Invalid proof of finalized block")
+						}
+					}
+				}
+			}
+
+			// Check that rejecting vote doesn't have supermajority for B.
+			// TODO: check signatures.
+			{
+				let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
+				let votes = challenge.rejecting_set.votes;
+				let commit = Commit {
+					target_hash: challenge.finalized_block.0,
+					target_number: challenge.finalized_block.1,
+					precommits: votes.into_iter().map(|challenged_vote| {
+						SignedPrecommit {
+							precommit: Precommit {
+								target_hash: challenged_vote.vote.target_hash,
+								target_number: challenged_vote.vote.target_number,
+							},
+							signature: challenged_vote.signature, // TODO: It doesn't matter
+							id: challenged_vote.authority,
+						}
+					}).collect(),
+				};
+				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
+				let voters = <Module<T>>::grandpa_authorities();
+				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
+
+				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+					if let Some(ghost) = validation_result.ghost() {
+						// TODO: I think this should check that ghost is ancestor of B.
+						if *ghost != challenge.finalized_block {
+							return Err("Invalid proof of finalized block")
+						}
+					}
+				}
+			}
+
+			// let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
+
+			// // Check all votes are for round_s and that are incompatible with B
+			// for ChallengedVote { vote, authority, signature } in challenged_votes {
+			// 	let message = Message::Prevote(vote.clone());
+			// 	let payload = localized_payload(round, set_id, &message);
+
+			// 	if !signature.verify(payload.as_slice(),&authority) {
+			// 		return TransactionValidity::Invalid(0)
+			// 	}
+			// }
+			
+			// if there is a reference to a previous challenge check that is correct.
+
 		}
 
 		/// Report unjustified precommit votes.
-		fn report_unjustified_precommits(
+		fn report_rejecting_precommits(
 			origin,
-			challenge: Challenge<
-				T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
-			>
+			challenge: PrecommitChallenge<T>
 		) {
 			ensure_signed(origin)?;
 			// TODO: Check that is a *new* challenge?
@@ -484,186 +672,3 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 	}
 }
 
-impl<T> ValidateUnsigned for Module<T> 
-where
-	T: Trait,
-	<<T as Trait>::Signature as Verify>::Signer:
-		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-	T::Hash: Ord,
-	T::BlockNumber: num::cast::AsPrimitive<usize>,
-{
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		match call {
-			Call::report_prevote_equivocation(proof) =>
-				handle_prevote_equivocation_proof::<T>(proof),
-			Call::report_precommit_equivocation(proof) =>
-				handle_precommit_equivocation_proof::<T>(proof),
-			Call::report_unjustified_prevotes(proof) =>
-				handle_unjustified_prevotes::<T>(proof),
-			Call::report_unjustified_precommits(proof) =>
-				handle_unjustified_precommits::<T>(proof),
-			_ => TransactionValidity::Invalid(0),
-		}
-	}
-}
-
-fn handle_prevote_equivocation_proof<T: Trait>(
-	proof: &GrandpaEquivocationProof<PrevoteEquivocation<T::Hash, T::BlockNumber>>
-) -> TransactionValidity
-where
-	T: Trait,
-	<<T as Trait>::Signature as Verify>::Signer:
-		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-{
-	let GrandpaEquivocationProof { set_id, equivocation } = proof;
-	
-	if equivocation.round_number != equivocation.round_number {
-		return TransactionValidity::Invalid(0)
-	}
-
-	let round = equivocation.round_number;
-
-	let first_signature = &equivocation.first.1;
-	let first_message = Message::Prevote(equivocation.first.0.clone());
-	let first_payload = localized_payload(round, set_id.clone(), &first_message);
-
-	let second_signature = &equivocation.second.1;
-	let second_message = Message::Prevote(equivocation.second.0.clone());
-	let second_payload = localized_payload(round, *set_id, &second_message);
-
-	let valid_signature1 = first_signature.verify(
-		first_payload.as_slice(),
-		&equivocation.identity
-	);
-	let valid_signature2 = second_signature.verify(
-		second_payload.as_slice(),
-		&equivocation.identity
-	);
-
-	if valid_signature1 && valid_signature2 && first_message != second_message {
-		return TransactionValidity::Valid {
-			priority: 10,
-			requires: vec![],
-			provides: vec![],
-			longevity: 18446744073709551615,
-			propagate: true,
-		}
-	}
-	TransactionValidity::Invalid(0)
-}
-
-fn handle_precommit_equivocation_proof<T>(
-	proof: &GrandpaEquivocationProof<PrecommitEquivocation<T::Hash, T::BlockNumber>>
-) -> TransactionValidity
-where
-	T: Trait,
-	<<T as Trait>::Signature as Verify>::Signer:
-		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-{
-	let GrandpaEquivocationProof { set_id, equivocation } = proof;
-	
-	if equivocation.round_number != equivocation.round_number {
-		return TransactionValidity::Invalid(0)
-	}
-
-	let round = equivocation.round_number;
-
-	let first_signature = &equivocation.first.1;
-	let first_message = Message::Precommit(equivocation.first.0.clone());
-	let first_payload = localized_payload(round, set_id.clone(), &first_message);
-
-	let second_signature = &equivocation.second.1;
-	let second_message = Message::Precommit(equivocation.second.0.clone());
-	let second_payload = localized_payload(round, *set_id, &second_message);
-
-	let valid_signature1 = first_signature.verify(
-		first_payload.as_slice(),
-		&equivocation.identity
-	);
-	let valid_signature2 = second_signature.verify(
-		second_payload.as_slice(),
-		&equivocation.identity
-	);
-
-	if valid_signature1 && valid_signature2 && first_message != second_message {
-		return TransactionValidity::Valid {
-			priority: 10,
-			requires: vec![],
-			provides: vec![],
-			longevity: 18446744073709551615,
-			propagate: true,
-		}
-	}
-	TransactionValidity::Invalid(0)
-}
-
-fn handle_unjustified_prevotes<T: Trait>(
-	proof: &Challenge<
-		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>
-	>
-) -> TransactionValidity
-where
-	T: Trait,
-	<T::Signature as Verify>::Signer:
-		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-	T::Hash: Ord,
-	T::BlockNumber: num::cast::AsPrimitive<usize>,
-{
-	// FIXME: How to check that is a new proof?
-
-	let votes_round = 0;
-	let block_round = 0;
-
-	if block_round > votes_round {
-		return TransactionValidity::Invalid(0)
-	}
-
-	let headers: &[T::Header] = proof.finalized_block_proof.headers.as_slice();
-	let commit = proof.finalized_block_proof.commit.clone();
-	let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-	let voters = <Module<T>>::grandpa_authorities();
-	let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
-
-	// Check that block proof contains supermajority of precommits for B
-	if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
-		if let Some(ghost) = validation_result.ghost() {
-			if *ghost != proof.finalized_block {
-				return TransactionValidity::Invalid(0)
-			}
-			// FIX: Maybe check equivocations == 0 and other fields of validation_result.
-		}
-	}
-
-	// let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
-
-	// // Check all votes are for round_s and that are incompatible with B
-	// for ChallengedVote { vote, authority, signature } in challenged_votes {
-	// 	let message = Message::Prevote(vote.clone());
-	// 	let payload = localized_payload(round, set_id, &message);
-
-	// 	if !signature.verify(payload.as_slice(),&authority) {
-	// 		return TransactionValidity::Invalid(0)
-	// 	}
-	// }
-	
-	// if there is a reference to a previous challenge check that is correct.
-
-	TransactionValidity::Invalid(0)
-}
-
-fn handle_unjustified_precommits<T: Trait>(
-	proof: &Challenge<
-		T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>
-	>
-) -> TransactionValidity
-where
-	T: Trait,
-	<<T as Trait>::Signature as Verify>::Signer:
-		Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-	T::Hash: Ord,
-	T::BlockNumber: num::cast::AsPrimitive<usize>,
-{
-	TransactionValidity::Invalid(0)
-}

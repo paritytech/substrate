@@ -33,7 +33,7 @@ use node_primitives::{
 use grandpa::fg_primitives::{
 	self, ScheduledChange, GrandpaEquivocationProof, AuthoritySignature,
 	AuthorityId, PrevoteEquivocation, PrecommitEquivocation, Challenge,
-	Prevote, Precommit
+	Prevote, Precommit, PrevoteChallenge, PrecommitChallenge
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -521,51 +521,46 @@ impl_runtime_apis! {
 		}
 
 		fn grandpa_prevote_challenge(digest: &DigestFor<Block>) 
-		-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>> {
+		-> Option<PrevoteChallenge<Block>> {
 			Grandpa::grandpa_prevote_challenge(digest)
 		}
 
 		fn grandpa_precommit_challenge(digest: &DigestFor<Block>) 
-		-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>> {
+		-> Option<PrecommitChallenge<Block>> {
 			Grandpa::grandpa_precommit_challenge(digest)
 		}
 
-
 		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
+			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
 		) -> Vec<u8> {
 			let report_call = Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
 		}
+
 		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>
+			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
 		) -> Vec<u8> {
 			let report_call = Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
 		}
 
-		fn construct_report_unjustified_prevotes_call(
-			proof: Challenge<
-				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
-			>
+		fn construct_rejecting_prevotes_report_call(
+			proof: PrevoteChallenge<Block>
 		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_unjustified_prevotes(proof));
+			let report_call = Call::Grandpa(GrandpaCall::report_rejecting_prevotes(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
 		}
 
-		fn construct_report_unjustified_precommits_call(
-			proof: Challenge<
-				<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
-			>
+		fn construct_rejecting_precommits_report_call(
+			proof: PrecommitChallenge<Block>
 		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_unjustified_precommits(proof));
+			let report_call = Call::Grandpa(GrandpaCall::report_rejecting_precommits(proof));
 			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
 			extrinsic.encode()
 		}
-
 	}
 
 	impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature> for Runtime {
