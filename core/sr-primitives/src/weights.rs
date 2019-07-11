@@ -59,8 +59,7 @@ pub enum TransactionWeight {
 	/// Basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
 	///
-	/// The priority of this transaction will be proportional to its computed weight, w.r.t. to the
-	/// total available weight.
+	/// The priority of this transaction will be proportional to its computed weight.
 	Basic(Weight, Weight),
 	/// Operational transaction. These are typically root transactions for operational updates,
 	/// runtime code changes or consensus reports through inherents. These transactions are still
