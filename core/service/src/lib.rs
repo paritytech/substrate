@@ -36,6 +36,7 @@ use parking_lot::Mutex;
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
+use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::NetworkState;
 use log::{info, warn, debug, error};
@@ -446,6 +447,8 @@ impl<Components: components::Components> Service<Components> {
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
+				.map(|ev| Ok::<_, ()>(ev))
+				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let tel::TelemetryEvent::Connected = event;
