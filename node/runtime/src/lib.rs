@@ -40,9 +40,7 @@ use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };
 use version::RuntimeVersion;
-use council::{motions as council_motions, VoteIndex};
-#[cfg(feature = "std")]
-use council::seats as council_seats;
+use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
@@ -71,8 +69,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 108,
-	impl_version: 108,
+	spec_version: 110,
+	impl_version: 110,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -267,12 +265,20 @@ impl democracy::Trait for Runtime {
 	type VotingPeriod = VotingPeriod;
 	type EmergencyVotingPeriod = EmergencyVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
-	type ExternalOrigin = council_motions::EnsureProportionAtLeast<_1, _2, AccountId, &'static str>;
-	type ExternalMajorityOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId, &'static str>;
-	type EmergencyOrigin = council_motions::EnsureProportionAtLeast<_1, _1, AccountId, &'static str>;
-	type CancellationOrigin = council_motions::EnsureProportionAtLeast<_2, _3, AccountId, &'static str>;
-	type VetoOrigin = council_motions::EnsureMember<AccountId, &'static str>;
+	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilInstance>;
+	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type ExternalPushOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalInstance>;
+	type EmergencyOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilInstance>;
+	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type VetoOrigin = collective::EnsureMember<AccountId, CouncilInstance>;
 	type CooloffPeriod = CooloffPeriod;
+}
+
+type CouncilInstance = collective::Instance1;
+impl collective::Trait<CouncilInstance> for Runtime {
+	type Origin = Origin;
+	type Proposal = Call;
+	type Event = Event;
 }
 
 parameter_types! {
@@ -283,28 +289,30 @@ parameter_types! {
 	pub const CarryCount: u32 = 6;
 	// one additional vote should go by before an inactive voter can be reaped.
 	pub const InactiveGracePeriod: VoteIndex = 1;
-	pub const CouncilVotingPeriod: BlockNumber = 2 * DAYS;
+	pub const ElectionsVotingPeriod: BlockNumber = 2 * DAYS;
 	pub const DecayRatio: u32 = 0;
 }
 
-impl council::Trait for Runtime {
+impl elections::Trait for Runtime {
 	type Event = Event;
+	type Currency = Balances;
 	type BadPresentation = ();
 	type BadReaper = ();
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
-	type OnMembersChanged = CouncilMotions;
+	type ChangeMembers = Council;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
-	type CouncilVotingPeriod = CouncilVotingPeriod;
+	type VotingPeriod = ElectionsVotingPeriod;
 	type DecayRatio = DecayRatio;
 }
 
-impl council::motions::Trait for Runtime {
+type TechnicalInstance = collective::Instance2;
+impl collective::Trait<TechnicalInstance> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
@@ -319,8 +327,8 @@ parameter_types! {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = council_motions::EnsureMembers<_4, AccountId, &'static str>;
-	type RejectOrigin = council_motions::EnsureMembers<_2, AccountId, &'static str>;
+	type ApproveOrigin = collective::EnsureMembers<_4, AccountId, CouncilInstance>;
+	type RejectOrigin = collective::EnsureMembers<_2, AccountId, CouncilInstance>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
@@ -400,17 +408,17 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
 		Balances: balances::{default, Error},
-		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Staking: staking::{default, OfflineWorker},
+		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
-		Council: council::{Module, Call, Storage, Event<T>},
-		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin<T>},
-		CouncilSeats: council_seats::{Config<T>},
+		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		TechnicalCommittee: collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		Elections: elections::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
