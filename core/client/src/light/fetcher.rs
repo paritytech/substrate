@@ -484,7 +484,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 
 #[cfg(test)]
 pub mod tests {
-	use futures::future::{ok, err, FutureResult};
+	use futures::future::Ready;
 	use parking_lot::Mutex;
 	use parity_codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
@@ -508,19 +508,19 @@ pub mod tests {
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
-	fn not_implemented_in_tests<T, E>() -> FutureResult<T, E>
+	fn not_implemented_in_tests<T, E>() -> Ready<Result<T, E>>
 	where
 		E: std::convert::From<&'static str>,
 	{
-		err("Not implemented on test node".into())
+		futures::future::ready(Err("Not implemented on test node".into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {
-		type RemoteHeaderResult = FutureResult<Header, ClientError>;
-		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
-		type RemoteCallResult = FutureResult<Vec<u8>, ClientError>;
-		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
-		type RemoteBodyResult = FutureResult<Vec<Extrinsic>, ClientError>;
+		type RemoteHeaderResult = Ready<Result<Header, ClientError>>;
+		type RemoteReadResult = Ready<Result<Option<Vec<u8>>, ClientError>>;
+		type RemoteCallResult = Ready<Result<Vec<u8>, ClientError>>;
+		type RemoteChangesResult = Ready<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
+		type RemoteBodyResult = Ready<Result<Vec<Extrinsic>, ClientError>>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
 			not_implemented_in_tests()
@@ -535,7 +535,7 @@ pub mod tests {
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
-			ok((*self.lock()).clone())
+			futures::future::ready(Ok((*self.lock()).clone()))
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
