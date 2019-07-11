@@ -1,0 +1,32 @@
+[package]
+name = "srml-rolling-window"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0", optional = true }
+parity-codec = { version = "4.1.1", default-features = false }
+srml-support = { path = "../support", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+balances = { package = "srml-balances", path = "../balances", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+
+[dev-dependencies]
+balances = { package = "srml-balances", path = "../balances" }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+session = { package = "srml-session", path = "../session", default-features = false }
+srml-staking = { package = "srml-staking", path = "../staking" }
+substrate-primitives = { path = "../../core/primitives" }
+timestamp = { package = "srml-timestamp", path = "../timestamp" }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"parity-codec/std",
+	"sr-primitives/std",
+	"srml-support/std",
+	"system/std",
+	"balances/std",
+]
