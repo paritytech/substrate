@@ -191,7 +191,8 @@ impl<T: tokio_io::AsyncWrite> futures01::Sink for StreamSink<T> {
 	type SinkItem = BytesMut;
 	type SinkError = io::Error;
 
-	fn start_send(&mut self, item: Self::SinkItem) -> Result<futures01::AsyncSink<Self::SinkItem>, io::Error> {
+	fn start_send(&mut self, item: Self::SinkItem)
+		-> Result<futures01::AsyncSink<Self::SinkItem>, io::Error> {
 		match self.0.write(&item[..]) {
 			Ok(n) if n == item.len() => Ok(futures01::AsyncSink::Ready),
 			Ok(_) => {
@@ -199,7 +200,8 @@ impl<T: tokio_io::AsyncWrite> futures01::Sink for StreamSink<T> {
 					"Detected some internal buffering happening in the telemetry");
 				Err(io::Error::new(io::ErrorKind::Other, "Internal buffering detected"))
 			},
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(futures01::AsyncSink::NotReady(item)),
+			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock =>
+				Ok(futures01::AsyncSink::NotReady(item)),
 			Err(err) => Err(err),
 		}
 	}

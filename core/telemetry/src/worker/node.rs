@@ -86,7 +86,8 @@ impl<TTrans: Transport> Node<TTrans> {
 }
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
-where TTrans: Clone + Unpin, TTrans::Dial: Unpin, TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin, TSinkErr: fmt::Debug {
+where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
+	TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin, TSinkErr: fmt::Debug {
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
@@ -111,16 +112,17 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin, TTrans::Output: Sink<BytesMut,
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) => match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
-					Poll::Ready(Ok(v)) => match v {}
-					Poll::Pending => break NodeSocket::Connected(conn),
-					Poll::Ready(Err(err)) => {
-						debug!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
-						let timeout = gen_rand_reconnect_delay();
-						self.socket = NodeSocket::WaitingReconnect(timeout);
-						return Poll::Ready(NodeEvent::Disconnected(err))
+				NodeSocket::Connected(mut conn) => 
+					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
+						Poll::Ready(Ok(v)) => match v {}
+						Poll::Pending => break NodeSocket::Connected(conn),
+						Poll::Ready(Err(err)) => {
+							debug!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
+							let timeout = gen_rand_reconnect_delay();
+							self.socket = NodeSocket::WaitingReconnect(timeout);
+							return Poll::Ready(NodeEvent::Disconnected(err))
+						}
 					}
-				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
 						debug!(target: "telemetry", "Connected to {}", self.addr);
@@ -146,11 +148,12 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin, TTrans::Output: Sink<BytesMut,
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
 				}
-				NodeSocket::WaitingReconnect(mut s) => if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
-					socket = NodeSocket::ReconnectNow;
-				} else {
-					break NodeSocket::WaitingReconnect(s)
-				}
+				NodeSocket::WaitingReconnect(mut s) =>
+					if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
+						socket = NodeSocket::ReconnectNow;
+					} else {
+						break NodeSocket::WaitingReconnect(s)
+					}
 				NodeSocket::Poisoned => {
 					error!(target: "telemetry", "Poisoned connection with {}", self.addr);
 					break NodeSocket::Poisoned
