@@ -27,12 +27,12 @@ use primitives::{generic::DigestItem, ConsensusEngineId};
 use primitives::traits::{SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use parity_codec::Encode;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch};
-pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, SlotNumber};
+pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -143,7 +143,7 @@ decl_storage! {
 		EpochIndex get(epoch_index): u64;
 
 		/// The number of slots per epoch
-		SlotsPerEpoch get(slots_per_epoch) build(slots_per_epoch);
+		SlotsPerEpoch get(slots_per_epoch) build(slots_per_epoch): SlotNumber;
 
 		/// Set to `true` when this code discovers that an epoch change is
 		/// needed. Set to `false` by the actual change.
