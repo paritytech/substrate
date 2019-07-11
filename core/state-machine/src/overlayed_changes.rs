@@ -239,7 +239,7 @@ impl<V> History<V> {
 						self.0[0] = tv;
 						self.0.truncate(1);
 					}
-					let tx = self.0[ix].1;
+					let tx = self.0[0].1;
 					return Some((&mut self.0[0].0, tx))
 				},
 				TransactionState::Dropped => { let _ = self.0.pop(); },
@@ -254,8 +254,8 @@ impl<V> History<V> {
 	}
 
 	fn set(&mut self, history: &[TransactionState], state: usize, val: V) {
-    // TODO EMCH : this sis not optimal : can end get_mut as soon as ix < state
-    // needs a variant for get_mut.
+    	// TODO EMCH : this is not optimal : can end get_mut as soon as ix < state
+    	// needs a variant for get_mut.
 		match self.get_mut(history) {
 			Some((v, ix)) => {
 				if ix == state {
