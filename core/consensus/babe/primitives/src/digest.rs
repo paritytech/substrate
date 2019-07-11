@@ -16,7 +16,8 @@
 
 //! Private implementation details of BABE digests.
 
-use primitives::sr25519::Signature;
+#[cfg(feature = "std")]
+use substrate_primitives::sr25519::Signature;
 use super::{BABE_ENGINE_ID, SlotNumber, Epoch};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -72,13 +73,12 @@ impl Encode for BabePreDigest {
 #[cfg(feature = "std")]
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, epoch, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
+		let RawBabePreDigest { randomness, randomness_proof, index, slot_num } = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
 		let _: [u8; super::VRF_OUTPUT_LENGTH] = output;
 		let _: [u8; super::VRF_PROOF_LENGTH] = proof;
 		Some(BabePreDigest {
-			epoch,
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
 			index,
