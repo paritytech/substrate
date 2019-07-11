@@ -282,11 +282,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		};
 		let Epoch { ref authorities, randomness, .. } = epoch;
 		if authorities.is_empty() {
-			error!(
-				target: "babe",
-				"No authorities at block {:?}",
-				chain_head.hash(),
-			);
+			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
 		}
 		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "babe", "Skipping proposal slot. Waiting for the network.");
@@ -428,16 +424,13 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<(Option<Epoch>, BabeP
 	let (mut pre_digest, mut epoch): (Option<_>, Option<_>) = (None, None);
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}", log);
-		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+		let check_log = |query, existing, target| match (query, existing) {
 			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
 			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
-		}
-		match (log.as_babe_epoch(), epoch.is_some()) {
-			(Some(_), true) => Err(babe_err!("Multiple BABE epoch headers, rejecting!"))?,
-			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
-			(s, false) => epoch = s,
-		}
+			(s, false) => *target = s,
+		};
+		check_log(log.as_babe_pre_digest(), pre_digest.is_some(), &mut pre_digest);
+		check_log(log.as_babe_epoch(), epoch.is_some(), &mut epoch);
 	}
 	Ok((epoch, pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))?))
 }
