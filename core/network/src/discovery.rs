@@ -14,6 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Discovery mechanisms of Substrate.
+//!
+//! The `DiscoveryBehaviour` struct implements the `NetworkBehaviour` trait of libp2p and is
+//! responsible for discovering other nodes that are part of the network.
+//!
+//! Substrate uses the following mechanisms in order to discover nodes that are part of the network:
+//!
+//! - Bootstrap nodes. These are hard-coded node identities and addresses passed in the constructor
+//! of the `DiscoveryBehaviour`. You can also call `add_known_address` later to add an entry.
+//!
+//! - mDNS. As of the writing of this documentation, mDNS is handled somewhere else. It is planned
+//! to be moved here.
+//!
+//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
+//! order for nodes to propagate to us their view of the network. This is performed automatically
+//! by the `DiscoveryBehaviour`.
+//!
+//! Additionally, the `DiscoveryBehaviour` is also capable of storing and loading value in the
+//! network-wide DHT.
+//!
+//! ## Usage
+//!
+//! The `DiscoveryBehaviour` generates events of type `DiscoveryOut`, most notably
+//! `DiscoveryOut::Discovered` that is generated whenever we discover a node.
+//! Only the identity of the node is returned. The node's addresses are stored within the
+//! `DiscoveryBehaviour` and can be queried through the `NetworkBehaviour` trait.
+//!
+//! **Important**: In order for the discovery mechanism to work properly, there needs to be an
+//! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
+//! of a node's address, you must call `add_self_reported_address`.
+//!
+
 use futures::prelude::*;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
@@ -88,17 +120,25 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	}
 
 	/// Call this method when a node reports an address for itself.
+	///
+	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
+	/// not properly work.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
 		self.kademlia.add_address(peer_id, addr);
 	}
 
-	/// Get a record from the DHT.
+	/// Start fetching a record from the DHT.
+	///
+	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: &Multihash) {
 		self.kademlia.get_value(key, NonZeroU8::new(10)
 								.expect("Casting 10 to NonZeroU8 should succeed; qed"));
 	}
 
-	/// Put a record into the DHT.
+	/// Start putting a record into the DHT. Other nodes can later fetch that value with
+	/// `get_value`.
+	///
+	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
 	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
 		self.kademlia.put_value(key, value);
 	}
