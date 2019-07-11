@@ -574,12 +574,14 @@ fn check_vesting_status() {
 			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
 			assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
 			let user1_vesting_schedule = VestingSchedule {
-				offset: 128 * 10,
+				locked: 128 * 10,
 				per_block: 128,
+				starting_block: 0,
 			};
 			let user2_vesting_schedule = VestingSchedule {
-				offset: 256 * 30,
+				locked: 256 * 20,
 				per_block: 256,
+				starting_block: 10,
 			};
 			assert_eq!(Balances::vesting(&1), Some(user1_vesting_schedule)); // Account 1 has a vesting schedule
 			assert_eq!(Balances::vesting(&2), Some(user2_vesting_schedule)); // Account 2 has a vesting schedule
