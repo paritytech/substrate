@@ -116,13 +116,7 @@ decl_storage! {
 		LastTimestamp get(last): T::Moment;
 
 		/// The current authorities set.
-		Authorities get(authorities) build(|config: &GenesisConfig| {
-			let authorities = config.authorities.clone();
-			if authorities.is_empty() {
-				panic!("no authorities at genesis!")
-			}
-			authorities
-		}): Vec<(AuthorityId, Weight)>;
+		Authorities get(authorities) build(authorities): Vec<(AuthorityId, Weight)>;
 
 		/// The epoch randomness.
 		///
@@ -142,7 +136,6 @@ decl_storage! {
 		/// The data for the next epoch
 		NextEpoch get(next_epoch) build(|config: &GenesisConfig| Epoch {
 			slots_per_epoch: config.slots_per_epoch,
-			randomness: [0; 32],
 			authorities: config.authorities.clone(),
 		}): Epoch;
 
@@ -187,12 +180,7 @@ decl_module! {
 }
 
 pub fn epoch<T: Trait>() -> Epoch {
-	let authorities = Authorities::get();
-	Epoch {
-		randomness: EpochRandomness::get(),
-		authorities: authorities,
-		slot_number: SlotsPerEpoch::get().wrapping_add(EpochIndex::get()),
-	}
+	Epoch { randomness: EpochRandomness::get(), authorities: Authorities::get() }
 }
 
 impl<T: Trait> RandomnessBeacon for Module<T> {
@@ -273,11 +261,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		let next_authorities = validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
-		let Epoch {
-			slot_number,
-			authorities,
-			randomness,
-		} = NextEpoch::get();
+		let Epoch { authorities, randomness } = NextEpoch::get();
 		EpochRandomness::put(randomness);
 		Authorities::put(authorities);
 		let mut s = [0; 72];
@@ -285,13 +269,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
 		s[40..].copy_from_slice(&rho);
 		let randomness = runtime_io::blake2_256(&s);
-		Self::change_authorities(Epoch {
-			randomness,
-			authorities: next_authorities,
-			slot_number: slot_number
-				.checked_add(Self::slots_per_epoch())
-				.expect("slot numbers will not overflow in our lifetime; qed"),
-		})
+		Self::change_authorities(Epoch { randomness, authorities: next_authorities })
 	}
 
 	fn on_disabled(i: usize) {

@@ -280,7 +280,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
-		let Epoch { ref authorities, randomness, .. } = epoch;
+		let Epoch { ref authorities, randomness } = epoch;
 		if authorities.is_empty() {
 			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
 		}
@@ -621,7 +621,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let Epoch { authorities, randomness, .. } =
+		let Epoch { authorities, randomness } =
 			authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
@@ -704,10 +704,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	}
 }
 
-fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
-	Epoch,
-	ConsensusError,
-> where
+fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
@@ -1077,7 +1074,6 @@ mod tests {
 		let epoch = Epoch {
 			authorities: vec![(pair.public(), 0)],
 			randomness: [0; 32],
-			slot_number: 1,
 		};
 		loop {
 			match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {

@@ -60,8 +60,6 @@ pub type Weight = u64;
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
-	/// The slot number this epoch will start at
-	pub slot_number: SlotNumber,
 	/// The authorities and their weights
 	pub authorities: Vec<(AuthorityId, Weight)>,
 	/// Randomness for this epoch
@@ -142,6 +140,6 @@ decl_runtime_apis! {
 		fn startup_data() -> BabeConfiguration;
 
 		/// Get the current epoch data for Babe.
-		fn authorities() -> Epoch;
+		fn epoch() -> Epoch;
 	}
 }

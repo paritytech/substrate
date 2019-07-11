@@ -517,7 +517,7 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> consensus_babe::Epoch {
+				fn epoch() -> consensus_babe::Epoch {
 					let authorities = system::authorities().into_iter().map(|s|(s, 0)).collect();
 					consensus_babe::Epoch { authorities, ..srml_babe::epoch::<Runtime>() }
 				}
@@ -666,7 +666,7 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
-				fn authorities() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
+				fn epoch() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
