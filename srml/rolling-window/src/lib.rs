@@ -33,7 +33,7 @@ type Window = u32;
 pub trait Trait: system::Trait {}
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait> as RollingWindow {
 		/// Misbehavior reports
 		MisconductReports get(kind): map Kind => Vec<(u32, T::Hash)>;
 
@@ -49,12 +49,12 @@ decl_storage! {
 }
 
 decl_module! {
-	/// Simple declaration of the `Module` type. Lets the macro know what its working on.
+	/// Rolling Window module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {
-	/// On startup make sure no misconducts are reported
+	/// On startup initialize all kinds
 	pub fn on_initialize<K: Into<u32> + Copy>(kinds: &[(K, u32)]) {
 		NumberOfKinds::put(kinds.len() as u32);
 
@@ -102,6 +102,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// Return number of misbehaviors in the current window which
 	/// may include duplicated misbehaviour from a validator
+	///
+	// TODO(niklasad1): it would probably be useful to report the number of duplicates
+	// in each round too. Because, a couple of algorithms ignores concurrent misconducts
+	// in the same session/era.
 	pub fn report_misbehavior<K: Into<u32>>(kind: K, footprint: T::Hash) -> u64 {
 		let session = SessionIndex::get();
 		let kind: u32 = kind.into();
