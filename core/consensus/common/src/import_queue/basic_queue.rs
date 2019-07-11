@@ -285,7 +285,8 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
 		if !keep_going() {
-			return (imported, count, results);
+			// Setting `has_error` to true cancels the rest of the import.
+			has_error = true;
 		}
 
 		let block_number = block.header.as_ref().map(|h| h.number().clone());
