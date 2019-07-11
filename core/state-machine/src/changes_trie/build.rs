@@ -197,7 +197,6 @@ mod test {
 			changes:OverlayedChangeSet {
 				history: vec![TransactionState::Committed, TransactionState::Pending],
 				state: 1,
-				size: History(vec![(3,0), (5, 0)]),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History(vec![

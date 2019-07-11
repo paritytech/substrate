@@ -85,11 +85,6 @@ pub struct OverlayedChangeSet {
 	pub(crate) history: Vec<TransactionState>,
   /// Current state in history.
 	pub(crate) state: usize,
-	/// Size of change set, indexed at different history.
-	/// TODO EMCH probably not needed overhead. It is only to skip processing
-	/// when empty: remove and change size method to is empty with no guaranties (just
-	/// touched on first insert aka top and bottom empty as before)?
-	pub(crate) size: History<usize>,
 	/// Top level storage changes.
 	pub(crate) top: HashMap<Vec<u8>, History<OverlayedValue>>,
 	/// Child storage changes.
@@ -101,7 +96,6 @@ impl Default for OverlayedChangeSet {
 		OverlayedChangeSet {
 			history: vec![TransactionState::Pending],
 			state: 0,
-			size: History(vec![(0,0)]),
 			top: Default::default(),
 			children: Default::default(),
 		}
@@ -114,7 +108,6 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 
     let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, v)| (k, History(vec![(v, 0)]))).collect();
-		result.size = History(vec![(result.top.len(), 0)]);
     result
 	}
 }
@@ -314,44 +307,15 @@ impl History<OverlayedValue> {
 impl OverlayedChangeSet {
 	/// Whether the change set is empty.
 	pub fn is_empty(&self) -> bool {
-		self.size.get(self.history.as_slice()).map(|v| *v == 0).unwrap_or(true)
+		self.top.is_empty() && self.children.is_empty()
 	}
 
 	/// Clear the change set.
 	pub fn clear(&mut self) {
 		self.history = vec![TransactionState::Pending];
 		self.state = 0;
-		self.size.0.clear();
-    self.size.push(0,0);
 		self.top.clear();
 		self.children.clear();
-	}
-
-	fn increase_size(&mut self, nb: usize) {
-		let init = if let Some((s, c_ix)) = self.size.get_mut(self.history.as_slice()) {
-    		if self.state == c_ix {
-				*s += nb;
-        		return;
-      		} else {
-				*s
-			}
-		} else { 0 };
-		self.size.push(init + nb, self.state);
-	}
-
-	fn decrease_size(&mut self, nb: usize) {
-		let init = if let Some((s, c_ix)) = self.size.get_mut(self.history.as_slice()) {
-			if self.state == c_ix {
-				*s -= nb;
-				return;
-			} else {
-				*s
-			}
-		} else {
-			debug_assert!(false, "decrease size on non initialize size is a bug");
-      		nb
-		};
-		self.size.push(init - nb, self.state);
 	}
 
 	/// Discard prospective changes to state.
@@ -502,7 +466,6 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
 		entry.set_ext(self.changes.history.as_slice(), self.changes.state, val, extrinsic_index);
-		self.changes.increase_size(1);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -513,7 +476,6 @@ impl OverlayedChanges {
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
 		entry.set_ext(self.changes.history.as_slice(), self.changes.state, val, extrinsic_index);
-		self.changes.increase_size(1);
 	}
 
 	/// Clear child storage of given storage key.
@@ -600,7 +562,6 @@ impl OverlayedChanges {
     let mut changes = OverlayedChangeSet::default();
 		changes.top = committed.into_iter().map(|(k, v)|
 			(k, History(vec![(OverlayedValue { value: v, extrinsics: None }, 0)]))).collect();
-		changes.size = History(vec![(changes.top.len(), 0)]);
 		changes.commit_prospective();
 		let mut result = OverlayedChanges { changes, changes_trie_config: None };
 		prospective.into_iter().for_each(|(k, v)| result.set_storage(k, v));
