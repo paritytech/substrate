@@ -17,7 +17,8 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use rstd::result::Result;
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SignedExtension, DispatchError};
 use crate::weights::{Weighable, Weight};
 
 /// Definition of something that the external world might want to say; its
@@ -25,23 +26,27 @@ use crate::weights::{Weighable, Weight};
 /// regards to the signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CheckedExtrinsic<AccountId, Index, Call> {
+pub struct CheckedExtrinsic<AccountId, Index, Call, Extra> {
 	/// Who this purports to be from and the number of extrinsics have come before
 	/// from the same signer, if anyone (note this is not a signature).
-	pub signed: Option<(AccountId, Index)>,
+	pub signed: Option<(AccountId, Index, Extra)>,
+
 	/// The function that should be called.
 	pub function: Call,
 }
 
-impl<AccountId, Index, Call> traits::Applyable for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call, Extra> traits::Applyable
+for
+	CheckedExtrinsic<AccountId, Index, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
 	Call: Member,
+	Extra: SignedExtension<AccountId=AccountId, Index=Index, Call=Call>,
 {
-	type Index = Index;
 	type AccountId = AccountId;
 	type Call = Call;
+	type Index = Index;
 
 	fn index(&self) -> Option<&Self::Index> {
 		self.signed.as_ref().map(|x| &x.1)
@@ -52,11 +57,26 @@ where
 	}
 
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		(self.function, self.signed.map(|x| x.0))
+		if let Some((id, _, extra)) = self.signed {
+			(self.function, Some(id))
+		} else {
+			(self.function, None)
+		}
+	}
+
+	fn pre_dispatch(self,
+		weight: crate::weights::Weight,
+	) -> Result<(Self::Call, Option<Self::AccountId>), DispatchError> {
+		if let Some((id, index, extra)) = self.signed {
+			Extra::pre_dispatch(extra, &id, &index, &self.function, weight)?;
+			Ok((self.function, Some(id)))
+		} else {
+			Ok((self.function, None))
+		}
 	}
 }
 
-impl<AccountId, Index, Call> Weighable for CheckedExtrinsic<AccountId, Index, Call>
+impl<AccountId, Index, Call, Extra> Weighable for CheckedExtrinsic<AccountId, Index, Call, Extra>
 where
 	Call: Weighable,
 {

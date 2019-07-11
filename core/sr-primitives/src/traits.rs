@@ -749,6 +749,68 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
+/// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
+/// cannot be more concrete because it's designed to work reasonably well over a broad range of
+/// possible transaction types.
+pub enum DispatchError {
+	/// General error to do with the inability to pay some fees (e.g. account balance too low).
+	Payment,
+
+	/// General error to do with the permissions of the sender.
+	NoPermission,
+
+	/// General error to do with the state of the system in general.
+	BadState,
+
+	/// General error to do with the transaction being outdated (e.g. nonce too low).
+	Stale,
+
+	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
+	Future,
+
+	/// General error to do with the transaction's proofs (e.g. signature).
+	BadProof,
+}
+
+/// Means by which a transaction may be extended. This type embodies both the data and the logic
+/// that should be additionally associated with the transaction. It should be plain old data.
+pub trait SignedExtension:
+	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq + Ord + PartialOrd
+{
+	type AccountId;
+	type Call;
+	type Index;
+	fn pre_dispatch(
+		self,
+		account: &Self::AccountId,
+		index: &Self::Index,
+		call: &Self::Call,
+		weight: crate::weights::Weight,
+	) -> Result<(), DispatchError>;
+}
+
+impl<
+	AccountId,
+	Call,
+	Index,
+	A: SignedExtension<AccountId=AccountId, Call=Call, Index=Index>,
+	B: SignedExtension<AccountId=AccountId, Call=Call, Index=Index>
+> SignedExtension for (A, B) {
+	type AccountId = AccountId;
+	type Call = Call;
+	type Index = Index;
+	fn pre_dispatch(
+		self,
+		account: &Self::AccountId,
+		index: &Self::Index,
+		call: &Self::Call,
+		weight: crate::weights::Weight,
+	) -> Result<(), DispatchError> {
+		self.0.pre_dispatch(account, index, call, weight)?;
+		self.1.pre_dispatch(account, index, call, weight)
+	}
+}
+
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
 /// enact a piece of extrinsic information by marshalling and dispatching to a named function
 /// call.
@@ -767,7 +829,16 @@ pub trait Applyable: Sized + Send + Sync {
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
 	/// Deconstructs into function call and sender.
+	///
+	/// @deprecated - avoid using this and instead refactor into pre_dispatch.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
+	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
+	/// index and sender.
+	fn pre_dispatch(self,
+		weight: crate::weights::Weight
+	) -> Result<(Self::Call, Option<Self::AccountId>), DispatchError> {
+		Ok(self.deconstruct())
+	}
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

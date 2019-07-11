@@ -79,8 +79,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::{generic::Digest, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, NumberFor, Block as BlockT, OffchainWorker,
-	ValidateUnsigned,
+	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -90,6 +89,8 @@ use primitives::transaction_validity::{TransactionValidity, TransactionPriority,
 use primitives::weights::Weighable;
 
 mod internal {
+	use primitives::traits::DispatchError;
+
 	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 
 	pub enum ApplyError {
@@ -103,6 +104,19 @@ mod internal {
 	pub enum ApplyOutcome {
 		Success,
 		Fail(&'static str),
+	}
+
+	impl From<DispatchError> for ApplyError {
+		fn from(d: DispatchError) -> Self {
+			match d {
+				DispatchError::Payment => ApplyError::CantPay,
+				DispatchError::NoPermission => ApplyError::CantPay,
+				DispatchError::BadState => ApplyError::CantPay,
+				DispatchError::Stale => ApplyError::Stale,
+				DispatchError::Future => ApplyError::Future,
+				DispatchError::BadProof => ApplyError::BadSignature(""),
+			}
+		}
 	}
 }
 
@@ -264,36 +278,40 @@ where
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
+		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
+		// executed to prevent it from leaking in storage since at this point, it will either
+		// execute or panic (and revert storage changes).
+		if let Some(encoded) = to_note {
+			<system::Module<System>>::note_extrinsic(encoded);
+		}
+
 		// Check the weight of the block if that extrinsic is applied.
 		let weight = xt.weight(encoded_len);
+
+		// TODO: Consider placing into a transaction extension.
 		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-			// check index
+			// TODO: Place into a transaction extension.
+			// check nonce and increment
 			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index != &expected_index { return Err(
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
+			<system::Module<System>>::inc_account_nonce(sender);
+
+			// TODO: Place into a transaction extension.
 			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
-
-			// AUDIT: Under no circumstances may this function panic from here onwards.
-			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
-			// a linker error unless the compiler can prove it cannot be called).
-			// increment nonce in storage
-			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
-		// Make sure to `note_extrinsic` only after we know it's going to be executed
-		// to prevent it from leaking in storage.
-		if let Some(encoded) = to_note {
-			<system::Module<System>>::note_extrinsic(encoded);
-		}
+		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let (f, s) = xt.deconstruct();
+		let (f, s) = Applyable::pre_dispatch(xt, weight)
+			.map_err(internal::ApplyError::from)?;
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
@@ -348,6 +366,7 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
+		// TODO: remove this block next block into the transaction extension.
 		match (xt.sender(), xt.index()) {
 			(Some(sender), Some(index)) => {
 				// pay any fees
