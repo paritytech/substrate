@@ -65,9 +65,9 @@ struct StorageDefinition {
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
+	pub where_clause: Option<syn::WhereClause>,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: ext::Opt<AddExtraGenesis>,
-	pub extra_genesis_skip_phantom_data_field: ext::Opt<ExtraGenesisSkipPhantomDataField>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -80,12 +80,6 @@ struct SpecificHiddenCrate {
 struct AddExtraGenesis {
 	pub extragenesis_keyword: keyword::add_extra_genesis,
 	pub content: ext::Braces<AddExtraGenesisContent>,
-}
-
-#[derive(Parse, ToTokens, Debug)]
-struct ExtraGenesisSkipPhantomDataField {
-	pub genesis_phantom_keyword: keyword::extra_genesis_skip_phantom_data_field,
-	pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -214,7 +208,13 @@ enum HasherKind {
 
 impl From<&SetHasher> for HasherKind {
 	fn from(set_hasher: &SetHasher) -> Self {
-		match set_hasher.inner.content {
+		(&set_hasher.inner.content).into()
+	}
+}
+
+impl From<&Hasher> for HasherKind {
+	fn from(hasher: &Hasher) -> Self {
+		match hasher {
 			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
 			Hasher::Twox256(_) => HasherKind::Twox256,
@@ -223,6 +223,7 @@ impl From<&SetHasher> for HasherKind {
 		}
 	}
 }
+
 impl HasherKind {
 	fn into_storage_hasher_struct(&self) -> TokenStream2 {
 		match self {

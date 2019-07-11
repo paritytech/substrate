@@ -330,12 +330,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, assert_ok};
+	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -343,18 +341,20 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
+		type BlockHashCount = BlockHashCount;
 	}
 	impl Trait for Test {
 		type Moment = u64;
@@ -364,12 +364,12 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -379,12 +379,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -394,12 +394,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
 			minimum_period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
-		with_externalities(&mut TestExternalities::new(t), || {
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

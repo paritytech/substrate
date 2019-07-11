@@ -14,17 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Private mplementation details of BABE digests.
-use primitives::sr25519::{Public, Signature};
-use babe_primitives::BABE_ENGINE_ID;
-use runtime_primitives::generic::DigestItem;
+//! Private implementation details of BABE digests.
+
+use primitives::sr25519::Signature;
+use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber};
+use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
-use parity_codec::{Decode, Encode, Input};
-use log::info;
-use schnorrkel::{
-	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
-	PUBLIC_KEY_LENGTH,
-};
+use parity_codec::{Decode, Encode, Codec, Input};
+use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}};
 
 /// A BABE pre-digest.  It includes:
 ///
@@ -36,26 +33,26 @@ use schnorrkel::{
 pub struct BabePreDigest {
 	pub(super) vrf_output: VRFOutput,
 	pub(super) proof: VRFProof,
-	pub(super) author: Public,
-	pub(super) slot_num: u64,
+	pub(super) index: babe_primitives::AuthorityIndex,
+	pub(super) slot_num: SlotNumber,
 }
 
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
-type TmpDecode = (
+type RawBabePreDigest = (
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
-	[u8; PUBLIC_KEY_LENGTH],
+	u64,
 	u64,
 );
 
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
-		let tmp: TmpDecode = (
+		let tmp: RawBabePreDigest = (
 			*self.vrf_output.as_bytes(),
 			self.proof.to_bytes(),
-			self.author.0,
+			self.index,
 			self.slot_num,
 		);
 		parity_codec::Encode::encode(&tmp)
@@ -64,11 +61,15 @@ impl Encode for BabePreDigest {
 
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, public_key, slot_num): TmpDecode = Decode::decode(i)?;
+		let (output, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
+
+		// Verify (at compile time) that the sizes in babe_primitives are correct
+		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;
+		let _: [u8; babe_primitives::VRF_PROOF_LENGTH] = proof;
 		Some(BabePreDigest {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			author: Public(public_key),
+			index,
 			slot_num,
 		})
 	}
@@ -89,26 +90,15 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<Signature>;
 }
 
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
+impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
+	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
-		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => {
-				let decoded = Decode::decode(&mut &seal[..]);
-				if decoded.is_none() {
-					info!(target: "babe", "Failed to decode {:?}", seal)
-				}
-				decoded
-			}
-			_ => {
-				info!(target: "babe", "Invalid consensus: {:?}!", self);
-				None
-			}
-		}
+		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
 	fn babe_seal(signature: Signature) -> Self {
@@ -116,34 +106,6 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
 	}
 
 	fn as_babe_seal(&self) -> Option<Signature> {
-		match self {
-			DigestItem::Seal(BABE_ENGINE_ID, signature) => Decode::decode(&mut &signature[..]),
-			_ => None,
-		}
-	}
-}
-
-impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
-{
-	fn babe_pre_digest(digest: BabePreDigest) -> Self {
-		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
-	}
-
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
-		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
-		}
-	}
-
-	fn babe_seal(signature: Signature) -> Self {
-		DigestItem::Seal(BABE_ENGINE_ID, signature)
-	}
-
-	fn as_babe_seal(&self) -> Option<Signature> {
-		match self {
-			DigestItem::Seal(BABE_ENGINE_ID, signature) => Some(signature.clone()),
-			_ => None,
-		}
+		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 }

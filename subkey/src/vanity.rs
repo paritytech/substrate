@@ -16,6 +16,7 @@
 
 use rand::{rngs::OsRng, RngCore};
 use super::Crypto;
+use substrate_primitives::Pair;
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
@@ -26,21 +27,20 @@ fn good_waypoint(done: u64) -> u64 {
 	}
 }
 
-fn next_seed(mut seed: [u8; 32]) -> [u8; 32] {
-	for i in 0..32 {
+fn next_seed(seed: &mut [u8]) {
+	for i in 0..seed.len() {
 		match seed[i] {
 			255 => { seed[i] = 0; }
 			_ => { seed[i] += 1; break; }
 		}
 	}
-	return seed;
 }
 
 /// A structure used to carry both Pair and seed.
 /// This should usually NOT been used. If unsure, use Pair.
 pub(super) struct KeyPair<C: Crypto> {
 	pub pair: C::Pair,
-	pub seed: C::Seed,
+	pub seed: <C::Pair as Pair>::Seed,
 	pub score: usize,
 }
 
@@ -57,7 +57,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
-pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<KeyPair<C>, &str> {
+pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> {
 	if desired.is_empty() {
 		return Err("Pattern must not be empty");
 	}
@@ -66,18 +66,17 @@ pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<Ke
 
 	let top = 45 + (desired.len() * 48);
 	let mut best = 0;
-	let mut seed = [0u8; 32];
+	let mut seed = <C::Pair as Pair>::Seed::default();
 	let mut done = 0;
 
-	OsRng::new().unwrap().fill_bytes(&mut seed[..]);
-
 	loop {
-		// reset to a new random seed at beginning and regularly thereafter
 		if done % 100000 == 0 {
-			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
+			OsRng::new().unwrap().fill_bytes(seed.as_mut());
+		} else {
+			next_seed(seed.as_mut());
 		}
 
-		let p = C::pair_from_seed(&seed);
+		let p = C::Pair::from_seed(&seed);
 		let ss58 = C::ss58_from_pair(&p);
 		let score = calculate_score(&desired, &ss58);
 		if score > best || desired.len() < 2 {
@@ -92,7 +91,6 @@ pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<Ke
 				return Ok(keypair);
 			}
 		}
-		seed = next_seed(seed);
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {

@@ -20,6 +20,7 @@ use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as Heade
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::well_known_cache_keys;
 
 use crate::import_queue::Verifier;
@@ -154,8 +155,6 @@ impl<Block: BlockT> ImportBlock<Block> {
 
 	/// Get a handle to full header (with post-digests applied).
 	pub fn post_header(&self) -> Cow<Block::Header> {
-		use runtime_primitives::traits::Digest;
-
 		if self.post_digests.is_empty() {
 			Cow::Borrowed(&self.header)
 		} else {
@@ -177,7 +176,7 @@ pub trait BlockImport<B: BlockT> {
 
 	/// Check block preconditions.
 	fn check_block(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
@@ -186,22 +185,45 @@ pub trait BlockImport<B: BlockT> {
 	///
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
-		&self,
+		&mut self,
 		block: ImportBlock<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
+}
+
+impl<B: BlockT, T, E: ::std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
+where for<'r> &'r T: BlockImport<B, Error = E>
+{
+	type Error = E;
+
+	fn check_block(
+		&mut self,
+		hash: B::Hash,
+		parent_hash: B::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		(&**self).check_block(hash, parent_hash)
+	}
+
+	fn import_block(
+		&mut self,
+		block: ImportBlock<B>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		(&**self).import_block(block, cache)
+	}
 }
 
 /// Justification import trait
 pub trait JustificationImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
-	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	/// Called by the import queue when it is started. Returns a list of justifications to request
+	/// from the network.
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justification: Justification,
@@ -212,12 +234,13 @@ pub trait JustificationImport<B: BlockT> {
 pub trait FinalityProofImport<B: BlockT> {
 	type Error: std::error::Error + Send + 'static;
 
-	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &dyn crate::import_queue::Link<B>) { }
+	/// Called by the import queue when it is started. Returns a list of finality proofs to request
+	/// from the network.
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
@@ -228,5 +251,5 @@ pub trait FinalityProofImport<B: BlockT> {
 /// Finality proof request builder.
 pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
 	/// Build data blob, associated with the request.
-	fn build_request_data(&self, hash: &B::Hash) -> Vec<u8>;
+	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
 }

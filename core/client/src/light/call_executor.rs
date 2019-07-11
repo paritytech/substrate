@@ -170,7 +170,11 @@ where
 		_m: ExecutionManager<FF>,
 		_native_call: Option<NC>,
 		_side_effects_handler: Option<&mut O>,
-	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+	) -> ClientResult<(
+		NativeOrEncoded<R>,
+		(S::Transaction, <Blake2Hasher as Hasher>::Out),
+		Option<MemoryDB<Blake2Hasher>>,
+	)> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
@@ -343,7 +347,11 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<FF>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+	) -> ClientResult<(
+		NativeOrEncoded<R>,
+		(S::Transaction, <Blake2Hasher as Hasher>::Out),
+		Option<MemoryDB<Blake2Hasher>>,
+	)> {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
@@ -473,7 +481,7 @@ pub fn check_execution_proof<Header, E, H>(
 #[cfg(test)]
 mod tests {
 	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
+	use test_client::{self, runtime::Header, ClientExt, TestClient};
 	use executor::NativeExecutionDispatch;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
@@ -482,13 +490,6 @@ mod tests {
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
-		type TestClient = test_client::client::Client<
-			test_client::Backend,
-			test_client::Executor,
-			Block,
-			RuntimeApi
-		>;
-
 		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_root = remote_client.state_at(&remote_block_id)
@@ -559,7 +560,25 @@ mod tests {
 		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
 		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));
 		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
-		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new()).unwrap(), vec![1]);
-		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new()).unwrap(), vec![2]);
+		assert_eq!(
+			remote_or_local.call(
+				&BlockId::Number(0),
+				"test_method",
+				&[],
+				ExecutionStrategy::NativeElseWasm,
+				NeverOffchainExt::new(),
+			).unwrap(),
+			vec![1],
+		);
+		assert_eq!(
+			remote_or_local.call(
+				&BlockId::Number(1),
+				"test_method",
+				&[],
+				ExecutionStrategy::NativeElseWasm,
+				NeverOffchainExt::new(),
+			).unwrap(),
+			vec![2],
+		);
 	}
 }

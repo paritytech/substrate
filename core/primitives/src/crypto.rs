@@ -19,11 +19,16 @@
 // end::description[]
 
 #[cfg(feature = "std")]
+use rand::{RngCore, rngs::OsRng};
+#[cfg(feature = "std")]
 use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
+#[cfg(feature = "std")]
+use std::hash::Hash;
+use zeroize::Zeroize;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -59,6 +64,43 @@ pub trait UncheckedInto<T> {
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	fn unchecked_into(self) -> T {
 		T::unchecked_from(self)
+	}
+}
+
+/// A store for sensitive data.
+///
+/// Calls `Zeroize::zeroize` upon `Drop`.
+#[derive(Clone)]
+pub struct Protected<T: Zeroize>(T);
+
+impl<T: Zeroize> AsRef<T> for Protected<T> {
+	fn as_ref(&self) -> &T {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Zeroize> std::fmt::Debug for Protected<T> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "<protected>")
+	}
+}
+
+impl<T: Zeroize> From<T> for Protected<T> {
+	fn from(t: T) -> Self {
+		Protected(t)
+	}
+}
+
+impl<T: Zeroize> Zeroize for Protected<T> {
+	fn zeroize(&mut self) {
+		self.0.zeroize()
+	}
+}
+
+impl<T: Zeroize> Drop for Protected<T> {
+	fn drop(&mut self) {
+		self.zeroize()
 	}
 }
 
@@ -284,21 +326,37 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 }
 
+/// Trait suitable for typical cryptographic PKI key public type.
+pub trait Public: TypedKey + PartialEq + Eq {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self;
+
+	/// Return a `Vec<u8>` filled with raw data.
+	#[cfg(feature = "std")]
+	fn to_raw_vec(&self) -> Vec<u8>;
+
+	/// Return a slice filled with raw data.
+	fn as_slice(&self) -> &[u8];
+}
+
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: Sized + 'static {
-	/// TThe type which is used to encode a public key.
-	type Public;
+pub trait Pair: TypedKey + Sized + 'static {
+	/// The type which is used to encode a public key.
+	type Public: Public + Hash;
 
 	/// The type used to (minimally) encode the data required to securely create
 	/// a new key pair.
-	type Seed;
+	type Seed: Default + AsRef<[u8]> + AsMut<[u8]> + Clone;
 
 	/// The type used to represent a signature. Can be created from a key pair and a message
 	/// and verified with the message and a public key.
-	type Signature;
+	type Signature: AsRef<[u8]>;
 
 	/// Error returned from the `derive` function.
 	type DeriveError;
@@ -307,7 +365,12 @@ pub trait Pair: Sized + 'static {
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
-	fn generate() -> Self;
+	fn generate() -> (Self, Self::Seed) {
+		let mut csprng: OsRng = OsRng::new().expect("OS random generator works; qed");
+		let mut seed = Self::Seed::default();
+		csprng.fill_bytes(seed.as_mut());
+		(Self::from_seed(&seed), seed)
+	}
 
 	/// Generate new secure (random) key pair and provide the recovery phrase.
 	///
@@ -315,10 +378,10 @@ pub trait Pair: Sized + 'static {
 	///
 	/// This is generally slower than `generate()`, so prefer that unless you need to persist
 	/// the key from the current session.
-	fn generate_with_phrase(password: Option<&str>) -> (Self, String);
+	fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed);
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError>;
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Self, Self::DeriveError>;
@@ -327,7 +390,7 @@ pub trait Pair: Sized + 'static {
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
-	fn from_seed(seed: Self::Seed) -> Self;
+	fn from_seed(seed: &Self::Seed) -> Self;
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
 	/// it will return `None`.
@@ -405,6 +468,31 @@ pub trait Pair: Sized + 'static {
 			path,
 		)
 	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8>;
+}
+
+/// An identifier for a type of cryptographic key.
+///
+/// 0-1024 are reserved.
+pub type KeyTypeId = u32;
+
+/// Constant key types.
+pub mod key_types {
+	use super::KeyTypeId;
+
+	/// ED25519 public key.
+	pub const ED25519: KeyTypeId = 10;
+
+	/// SR25519 public key.
+	pub const SR25519: KeyTypeId = 20;
+}
+
+/// A trait for something that has a key type ID.
+pub trait TypedKey {
+	/// The type ID of this key.
+	const KEY_TYPE: KeyTypeId;
 }
 
 #[cfg(test)]
@@ -422,31 +510,80 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
+	#[derive(PartialEq, Eq, Hash)]
+	struct TestPublic;
+	impl Public for TestPublic {
+		fn from_slice(_bytes: &[u8]) -> Self {
+			Self
+		}
+		fn as_slice(&self) -> &[u8] {
+			&[]
+		}
+		fn to_raw_vec(&self) -> Vec<u8> {
+			vec![]
+		}
+	}
+	impl TypedKey for TestPublic {
+		const KEY_TYPE: u32 = 4242;
+	}
 	impl Pair for TestPair {
-		type Public = ();
-		type Seed = ();
-		type Signature = ();
+		type Public = TestPublic;
+		type Seed = [u8; 0];
+		type Signature = [u8; 0];
 		type DeriveError = ();
 
-		fn generate() -> Self { TestPair::Generated }
-		fn generate_with_phrase(_password: Option<&str>) -> (Self, String) { (TestPair::GeneratedWithPhrase, "".into()) }
-		fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError> {
-			Ok(TestPair::GeneratedFromPhrase{ phrase: phrase.to_owned(), password: password.map(Into::into) })
+		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, []) }
+		fn generate_with_phrase(_password: Option<&str>) -> (Self, String, <Self as Pair>::Seed) {
+			(TestPair::GeneratedWithPhrase, "".into(), [])
 		}
-		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Result<Self, Self::DeriveError> {
+		fn from_phrase(phrase: &str, password: Option<&str>)
+			-> Result<(Self, <Self as Pair>::Seed), SecretStringError>
+		{
+			Ok((TestPair::GeneratedFromPhrase {
+				phrase: phrase.to_owned(),
+				password: password.map(Into::into)
+			}, []))
+		}
+		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter)
+			-> Result<Self, Self::DeriveError>
+		{
 			Err(())
 		}
-		fn from_seed(_seed: <TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
-		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(_sig: &Self::Signature, _message: M, _pubkey: P) -> bool { true }
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_sig: &[u8], _message: M, _pubkey: P) -> bool { true }
-		fn public(&self) -> Self::Public { () }
-		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError> {
-			Ok(TestPair::Standard { phrase: phrase.to_owned(), password: password.map(ToOwned::to_owned), path: path.collect() })
+		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
+		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
+		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+			_sig: &Self::Signature,
+			_message: M,
+			_pubkey: P
+		) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+			_sig: &[u8],
+			_message: M,
+			_pubkey: P
+		) -> bool { true }
+		fn public(&self) -> Self::Public { TestPublic }
+		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
+			phrase: &str,
+			password: Option<&str>,
+			path: I
+		) -> Result<Self, SecretStringError> {
+			Ok(TestPair::Standard {
+				phrase: phrase.to_owned(),
+				password: password.map(ToOwned::to_owned),
+				path: path.collect()
+			})
 		}
-		fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError> {
+		fn from_seed_slice(seed: &[u8])
+			-> Result<Self, SecretStringError>
+		{
 			Ok(TestPair::Seed(seed.to_owned()))
 		}
+		fn to_raw_vec(&self) -> Vec<u8> {
+			vec![]
+		}
+	}
+	impl TypedKey for TestPair {
+		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]

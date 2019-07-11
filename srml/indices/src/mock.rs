@@ -20,10 +20,9 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use primitives::BuildStorage;
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::testing::Header;
 use substrate_primitives::{H256, Blake2Hasher};
-use srml_support::impl_outer_origin;
+use srml_support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
@@ -65,18 +64,20 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
+	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;
@@ -92,7 +93,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		for i in 1..5 { h.insert(i); }
 	}
 
-	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 	t.extend(GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
 	}.build_storage().unwrap().0);

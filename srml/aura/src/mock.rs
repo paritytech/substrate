@@ -18,11 +18,15 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
-use srml_support::impl_outer_origin;
+use primitives::{
+	KeyTypeId,
+	traits::IdentityLookup,
+	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId},
+};
+use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use crate::{Trait, Module};
+use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -32,10 +36,8 @@ impl_outer_origin!{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 
-impl consensus::Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
 }
 
 impl system::Trait for Test {
@@ -44,12 +46,11 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
+	type BlockHashCount = BlockHashCount;
 }
 
 impl timestamp::Trait for Test {
@@ -59,16 +60,16 @@ impl timestamp::Trait for Test {
 
 impl Trait for Test {
 	type HandleReport = ();
+	type AuthorityId = UintAuthorityId;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().0);
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 	t.extend(timestamp::GenesisConfig::<Test>{
 		minimum_period: 1,
+	}.build_storage().unwrap().0);
+	t.extend(GenesisConfig::<Test>{
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

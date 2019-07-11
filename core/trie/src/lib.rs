@@ -36,6 +36,8 @@ pub use node_codec::NodeCodec;
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::{KeyFunction, prefixed_key};
+/// Various re-exports from the `hash-db` crate.
+pub use hash_db::HashDB as HashDBT;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -379,7 +381,9 @@ mod tests {
 		let mut empty = TrieDBMut::<Blake2Hasher>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = trie_root::<Blake2Hasher, _, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().iter().cloned().collect();
+		let root2: Vec<u8> = trie_root::<Blake2Hasher, _, Vec<u8>, Vec<u8>>(
+			std::iter::empty(),
+		).as_ref().iter().cloned().collect();
 
 		assert_eq!(root1, root2);
 	}
@@ -455,7 +459,10 @@ mod tests {
 
 	#[test]
 	fn single_long_leaf_is_equivalent() {
-		let input: Vec<(&[u8], &[u8])> = vec![(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]), (&[0xba][..], &[0x11][..])];
+		let input: Vec<(&[u8], &[u8])> = vec![
+			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
+			(&[0xba][..], &[0x11][..]),
+		];
 		check_equivalent(&input);
 		check_iteration(&input);
 	}

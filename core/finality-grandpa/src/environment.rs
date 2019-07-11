@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use log::{debug, warn, info};
 use parity_codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio::timer::Delay;
+use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
@@ -50,10 +50,17 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
+use fg_primitives::{AuthorityId, AuthoritySignature};
 
-use ed25519::Public as AuthorityId;
+type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
 
-/// Data about a completed round.
+/// Data about a completed round. The set of votes that is stored must be
+/// minimal, i.e. at most one equivocation is stored per voter.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
 	/// The round number.
@@ -176,6 +183,16 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.clone(),
 			VoterSetState::Paused { completed_rounds } =>
 				completed_rounds.clone(),
+		}
+	}
+
+	/// Returns the last completed round.
+	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
+		match self {
+			VoterSetState::Live { completed_rounds, .. } =>
+				completed_rounds.last().clone(),
+			VoterSetState::Paused { completed_rounds } =>
+				completed_rounds.last().clone(),
 		}
 	}
 }
@@ -637,7 +654,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: Vec<SignedMessage<Block>>,
+		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -650,6 +667,9 @@ where
 
 		self.update_voter_set_state(|voter_set_state| {
 			let mut completed_rounds = voter_set_state.completed_rounds();
+
+			// TODO: Future integration will store the prevote and precommit index. See #2611.
+			let votes = historical_votes.seen().clone();
 
 			// NOTE: the Environment assumes that rounds are *always* completed in-order.
 			if !completed_rounds.push(CompletedRound {

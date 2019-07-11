@@ -232,7 +232,13 @@ pub mod ext {
 		/// - `u32::max_value()` if the value does not exists.
 		///
 		/// - Otherwise, the number of bytes written for value.
-		fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+		fn ext_get_storage_into(
+			key_data: *const u8,
+			key_len: u32,
+			value_data: *mut u8,
+			value_len: u32,
+			value_offset: u32
+		) -> u32;
 		/// Gets the trie root of the storage.
 		fn ext_storage_root(result: *mut u8);
 		/// Get the change trie root of the current storage overlay at a block with given parent.
@@ -241,26 +247,44 @@ pub mod ext {
 		///
 		/// - `1` if the change trie root was found.
 		/// - `0` if the change trie root was not found.
-		fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32;
+		fn ext_storage_changes_root(
+			parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32;
 
 		/// A child storage function.
 		///
 		/// See [`ext_set_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+		fn ext_set_child_storage(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32,
+			value_data: *const u8,
+			value_len: u32
+		);
 		/// A child storage function.
 		///
 		/// See [`ext_clear_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
+		fn ext_clear_child_storage(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32
+		);
 		/// A child storage function.
 		///
 		/// See [`ext_exists_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
+		fn ext_exists_child_storage(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32
+		) -> u32;
 		/// A child storage function.
 		///
 		/// See [`ext_kill_storage`] for details.
@@ -300,13 +324,22 @@ pub mod ext {
 		/// # Returns
 		///
 		/// - The pointer to the result vector and `written_out` contains its length.
-		fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
+		fn ext_child_storage_root(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			written_out: *mut u32
+		) -> *mut u8;
 
 		/// The current relay chain identifier.
 		fn ext_chain_id() -> u64;
 
 		/// Calculate a blake2_256 merkle trie root.
-		fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+		fn ext_blake2_256_enumerated_trie_root(
+			values_data: *const u8,
+			lens_data: *const u32,
+			lens_len: u32,
+			result: *mut u8
+		);
 		/// BLAKE2_128 hash
 		fn ext_blake2_128(data: *const u8, len: u32, out: *mut u8);
 		/// BLAKE2_256 hash
@@ -320,11 +353,25 @@ pub mod ext {
 		/// Keccak256 hash
 		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 		/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		fn ext_ed25519_verify(
+			msg_data: *const u8,
+			msg_len: u32,
+			sig_data: *const u8,
+			pubkey_data: *const u8
+		) -> u32;
 		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		fn ext_sr25519_verify(
+			msg_data: *const u8,
+			msg_len: u32,
+			sig_data: *const u8,
+			pubkey_data: *const u8
+		) -> u32;
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
-		fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
+		fn ext_secp256k1_ecdsa_recover(
+			msg_data: *const u8,
+			sig_data: *const u8,
+			pubkey_data: *mut u8
+		) -> u32;
 
 		//================================
 		// Offchain-worker Context
@@ -348,18 +395,24 @@ pub mod ext {
 
 		/// Encrypt a piece of data using given crypto key.
 		///
-		/// If `key` is `0`, it will attempt to use current authority key.
+		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
 		/// - `0` in case the key is invalid, `msg_len` is set to `u32::max_value`
 		/// - Otherwise, pointer to the encrypted message in memory,
 		///	`msg_len` contains the length of the message.
-		fn ext_encrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8;
+		fn ext_encrypt(
+			key: u32,
+			kind: u32,
+			data: *const u8,
+			data_len: u32,
+			msg_len: *mut u32
+		) -> *mut u8;
 
 		/// Decrypt a piece of data using given crypto key.
 		///
-		/// If `key `is `0`, it will attempt to use current authority key.
+		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
@@ -367,11 +420,17 @@ pub mod ext {
 		/// `msg_len` is set to `u32::max_value`
 		/// - Otherwise, pointer to the decrypted message in memory,
 		///	`msg_len` contains the length of the message.
-		fn ext_decrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8;
+		fn ext_decrypt(
+			key: u32,
+			kind: u32,
+			data: *const u8,
+			data_len: u32,
+			msg_len: *mut u32
+		) -> *mut u8;
 
 		/// Sign a piece of data using given crypto key.
 		///
-		/// If `key` is `0`, it will attempt to use current authority key.
+		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
@@ -379,11 +438,17 @@ pub mod ext {
 		/// `sig_data_len` is set to `u32::max_value`
 		/// - Otherwise, pointer to the signature in memory,
 		///	`sig_data_len` contains the length of the signature.
-		fn ext_sign(key: u32, data: *const u8, data_len: u32, sig_data_len: *mut u32) -> *mut u8;
+		fn ext_sign(
+			key: u32,
+			kind: u32,
+			data: *const u8,
+			data_len: u32,
+			sig_data_len: *mut u32
+		) -> *mut u8;
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
-		/// If `key` is `0`, it will attempt to use current authority key.
+		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		/// - `0` in case the signature is correct
@@ -391,6 +456,7 @@ pub mod ext {
 		/// - `u32::max_value` if the key is invalid.
 		fn ext_verify(
 			key: u32,
+			kind: u32,
 			msg: *const u8,
 			msg_len: u32,
 			signature: *const u8,
@@ -412,17 +478,22 @@ pub mod ext {
 		fn ext_random_seed(data: *mut u8);
 
 		/// Write a value to local storage.
-		fn ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32);
+		fn ext_local_storage_set(kind: u32, key: *const u8, key_len: u32, value: *const u8, value_len: u32);
 
 		/// Write a value to local storage in atomic fashion.
+		///
+		/// # Returns
+		/// - `0` in case the value has been set
+		/// - `1` if the `old_value` didn't match
 		fn ext_local_storage_compare_and_set(
+			kind: u32,
 			key: *const u8,
 			key_len: u32,
 			old_value: *const u8,
 			old_value_len: u32,
 			new_value: *const u8,
 			new_value_len: u32
-		);
+		) -> u32;
 
 		/// Read a value from local storage.
 		///
@@ -431,7 +502,7 @@ pub mod ext {
 		///
 		/// - 0 if the value has not been found, the `value_len` is set to `u32::max_value`.
 		/// - Otherwise, pointer to the value in memory. `value_len` contains the length of the value.
-		fn ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
+		fn ext_local_storage_get(kind: u32, key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
 		/// Initiaties a http request.
 		///
@@ -818,7 +889,7 @@ impl OffchainApi for () {
 	}
 
 	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
-		let crypto = crypto as u8 as u32;
+		let crypto = crypto.into();
 		let ret = unsafe {
 			ext_new_crypto_key.get()(crypto)
 		};
@@ -830,41 +901,63 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+	fn encrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_encrypt.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_encrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
-	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+	fn decrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_decrypt.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_decrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
-	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+	fn sign(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_sign.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_sign.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
-	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+	fn verify(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		msg: &[u8],
+		signature: &[u8],
+	) -> Result<bool, ()> {
+		let key = key.map(Into::into).unwrap_or(0);
+		let kind = kind.into();
 		let val = unsafe {
 			ext_verify.get()(
 				key,
+				kind,
 				msg.as_ptr(),
 				msg.len() as u32,
 				signature.as_ptr(),
@@ -885,7 +978,7 @@ impl OffchainApi for () {
 		})
 	}
 
-	fn sleep_until(deadline: Timestamp) {
+	fn sleep_until(deadline: offchain::Timestamp) {
 		unsafe {
 			ext_sleep_until.get()(deadline.unix_millis())
 		}
@@ -899,9 +992,10 @@ impl OffchainApi for () {
 		result
 	}
 
-	fn local_storage_set(key: &[u8], value: &[u8]) {
+	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		unsafe {
 			ext_local_storage_set.get()(
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				value.as_ptr(),
@@ -910,23 +1004,25 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(kind: offchain::StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
 		unsafe {
 			ext_local_storage_compare_and_set.get()(
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				old_value.as_ptr(),
 				old_value.len() as u32,
 				new_value.as_ptr(),
 				new_value.len() as u32,
-			)
+			) == 0
 		}
 	}
 
-	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(kind: offchain::StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let mut len = 0u32;
 		unsafe {
 			let ptr = ext_local_storage_get.get()(
+				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
 				&mut len,
@@ -964,7 +1060,7 @@ impl OffchainApi for () {
 
 		let result = unsafe {
 			ext_http_request_add_header.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				name.as_ptr(),
 				name.len() as u32,
 				value.as_ptr(),
@@ -986,7 +1082,7 @@ impl OffchainApi for () {
 	) -> Result<(), offchain::HttpError> {
 		let res = unsafe {
 			ext_http_request_write_body.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				chunk.as_ptr(),
 				chunk.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
@@ -1029,7 +1125,7 @@ impl OffchainApi for () {
 		let mut len = 0u32;
 		let raw_result = unsafe {
 			let ptr = ext_http_response_headers.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				&mut len,
 			);
 
@@ -1046,7 +1142,7 @@ impl OffchainApi for () {
 	) -> Result<usize, offchain::HttpError> {
 		let res = unsafe {
 			ext_http_response_read_body.get()(
-				request_id.0 as u32,
+				request_id.into(),
 				buffer.as_mut_ptr(),
 				buffer.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),

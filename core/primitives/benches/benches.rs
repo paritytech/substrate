@@ -71,7 +71,7 @@ fn bench_ed25519(c: &mut Criterion) {
 		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
-		let key = substrate_primitives::ed25519::Pair::generate();
+		let key = substrate_primitives::ed25519::Pair::generate().0;
 		b.iter(|| key.sign(&msg))
 	}, vec![32, 1024, 1024 * 1024]);
 
@@ -79,7 +79,7 @@ fn bench_ed25519(c: &mut Criterion) {
 		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
-		let key = substrate_primitives::ed25519::Pair::generate();
+		let key = substrate_primitives::ed25519::Pair::generate().0;
 		let sig = key.sign(&msg);
 		let public = key.public();
 		b.iter(|| substrate_primitives::ed25519::Pair::verify(&sig, &msg, &public))

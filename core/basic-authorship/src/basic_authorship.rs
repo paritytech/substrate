@@ -31,7 +31,7 @@ use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	AuthorityIdFor, DigestFor,
+	DigestFor,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
@@ -134,7 +134,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 	fn init(
 		&self,
 		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
-		_: &[AuthorityIdFor<<C as AuthoringApi>::Block>],
 	) -> Result<Self::Proposer, error::Error> {
 		let parent_hash = parent_header.hash();
 
@@ -320,7 +319,6 @@ mod tests {
 
 		let mut proposer = proposer_factory.init(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			&[]
 		).unwrap();
 
 		// when

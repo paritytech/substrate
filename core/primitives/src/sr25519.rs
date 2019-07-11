@@ -22,8 +22,6 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use rand::rngs::OsRng;
-#[cfg(feature = "std")]
 use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
@@ -33,13 +31,14 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
 use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::{hash::{H256, H512}, crypto::UncheckedFrom};
+use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "std")]
-use schnorrkel::keys::MINI_SECRET_KEY_LENGTH;
+use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
 #[cfg(feature = "std")]
@@ -52,6 +51,17 @@ pub struct Public(pub [u8; 32]);
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
 #[cfg(feature = "std")]
 pub struct Pair(Keypair);
+
+#[cfg(feature = "std")]
+impl Clone for Pair {
+	fn clone(&self) -> Self {
+		Pair(schnorrkel::Keypair {
+			public: self.0.public.clone(),
+			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
+				.expect("key is always the correct size; qed")
+		})
+	}
+}
 
 impl AsRef<Public> for Public {
 	fn as_ref(&self) -> &Public {
@@ -284,16 +294,6 @@ impl Public {
 		Public(data)
 	}
 
-	/// A new instance from the given slice that should be 32 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		Public(r)
-	}
-
 	/// A new instance from an H256.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -302,20 +302,32 @@ impl Public {
 		Public(x.into())
 	}
 
+	/// Return a slice filled with raw data.
+	pub fn as_array_ref(&self) -> &[u8; 32] {
+		self.as_ref()
+	}
+}
+
+impl TraitPublic for Public {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 32];
+		r.copy_from_slice(data);
+		Public(r)
+	}
+
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	pub fn into_raw_vec(self) -> Vec<u8> {
+	fn to_raw_vec(&self) -> Vec<u8> {
 		self.0.to_vec()
 	}
 
 	/// Return a slice filled with raw data.
-	pub fn as_slice(&self) -> &[u8] {
+	fn as_slice(&self) -> &[u8] {
 		&self.0
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
-		self.as_ref()
 	}
 }
 
@@ -367,6 +379,7 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
 }
 
+/// The raw secret seed, which can be used to recreate the `Pair`.
 #[cfg(feature = "std")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
@@ -377,23 +390,14 @@ impl TraitPair for Pair {
 	type Signature = Signature;
 	type DeriveError = Infallible;
 
-	/// Generate new secure (random) key pair.
-	fn generate() -> Pair {
-		let mut csprng: OsRng = OsRng::new().expect("os random generator works; qed");
-		let key_pair: Keypair = Keypair::generate(&mut csprng);
-		Pair(key_pair)
-	}
-
 	/// Make a new key pair from raw secret seed material.
 	///
 	/// This is generated using schnorrkel's Mini-Secret-Keys.
 	///
 	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
-	fn from_seed(seed: Seed) -> Pair {
-		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(&seed[..])
-			.expect("32 bytes can always build a key; qed");
-		let kp = mini_key.expand_to_keypair();
-		Pair(kp)
+	fn from_seed(seed: &Seed) -> Pair {
+		Self::from_seed_slice(&seed[..])
+			.expect("32 bytes can always build a key; qed")
 	}
 
 	/// Get the public key.
@@ -408,34 +412,49 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase(), from_phrase()
 	fn from_seed_slice(seed: &[u8]) -> Result<Pair, SecretStringError> {
-		if seed.len() != MINI_SECRET_KEY_LENGTH {
-			Err(SecretStringError::InvalidSeedLength)
-		} else {
-			Ok(Pair(
-				MiniSecretKey::from_bytes(seed)
-					.map_err(|_| SecretStringError::InvalidSeed)?
-					.expand_to_keypair()
-			))
+		match seed.len() {
+			MINI_SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					MiniSecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.expand_to_keypair()
+				))
+			}
+			SECRET_KEY_LENGTH => {
+				Ok(Pair(
+					SecretKey::from_bytes(seed)
+						.map_err(|_| SecretStringError::InvalidSeed)?
+						.to_keypair()
+				))
+			}
+			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
+		phrase: &str,
+		password: Option<&str>,
+		path: I
+	) -> Result<Pair, SecretStringError> {
+		Self::from_phrase(phrase, password)?.0
 			.derive(path)
 			.map_err(|_| SecretStringError::InvalidPath)
 	}
 
-	fn generate_with_phrase(password: Option<&str>) -> (Pair, String) {
+	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
+		let (pair, seed) = Self::from_phrase(phrase, password)
+			.expect("All phrases generated by Mnemonic are valid; qed");
 		(
-			Self::from_phrase(phrase, password).expect("All phrases generated by Mnemonic are valid; qed"),
+			pair,
 			phrase.to_owned(),
+			seed,
 		)
 	}
 
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Pair, SecretStringError> {
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		Mnemonic::from_phrase(phrase, Language::English)
 			.map_err(|_| SecretStringError::InvalidPhrase)
 			.map(|m| Self::from_entropy(m.entropy(), password))
@@ -482,6 +501,11 @@ impl TraitPair for Pair {
 			Err(_) => false,
 		}
 	}
+
+	/// Return a vec filled with raw data.
+	fn to_raw_vec(&self) -> Vec<u8> {
+		self.0.secret.to_bytes().to_vec()
+	}
 }
 
 #[cfg(feature = "std")]
@@ -490,12 +514,26 @@ impl Pair {
 	///
 	/// This uses a key derivation function to convert the entropy into a seed, then returns
 	/// the pair generated from it.
-	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> Pair {
+	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> (Pair, Seed) {
 		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
 			.expect("32 bytes can always build a key; qed");
+
 		let kp = mini_key.expand_to_keypair();
-		Pair(kp)
+		(Pair(kp), mini_key.to_bytes())
 	}
+}
+
+impl TypedKey for Public {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+}
+
+impl TypedKey for Signature {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+}
+
+#[cfg(feature = "std")]
+impl TypedKey for Pair {
+	const KEY_TYPE: KeyTypeId = key_types::SR25519;
 }
 
 #[cfg(test)]
@@ -538,7 +576,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_should_work() {
-		let pair: Pair = Pair::from_seed(hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
@@ -550,7 +588,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_should_work() {
-		let pair: Pair = Pair::from_seed(hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
@@ -562,7 +600,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_public_should_work() {
-		let pair: Pair = Pair::from_seed(hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
@@ -573,7 +611,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_public_should_fail() {
-		let pair: Pair = Pair::from_seed(hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::hard(1));
@@ -582,7 +620,7 @@ mod test {
 
 	#[test]
 	fn sr_test_vector_should_work() {
-		let pair: Pair = Pair::from_seed(hex!(
+		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let public = pair.public();
@@ -599,7 +637,7 @@ mod test {
 
 	#[test]
 	fn generated_pair_should_work() {
-		let pair = Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
@@ -609,7 +647,7 @@ mod test {
 	#[test]
 	fn seeded_pair_should_work() {
 
-		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
 			public,
@@ -624,7 +662,7 @@ mod test {
 
 	#[test]
 	fn ss58check_roundtrip_works() {
-		let pair = Pair::generate();
+		let (pair, _) = Pair::generate();
 		let public = pair.public();
 		let s = public.to_ss58check();
 		println!("Correct: {}", s);
@@ -637,9 +675,13 @@ mod test {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
 		//
 		// This is to make sure that the wasm library is compatible.
-		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
+		let pk = Pair::from_seed(
+			&hex!("0000000000000000000000000000000000000000000000000000000000000000")
+		);
 		let public = pk.public();
-		let js_signature = Signature::from_raw(hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"));
+		let js_signature = Signature::from_raw(
+			hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00")
+		);
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }

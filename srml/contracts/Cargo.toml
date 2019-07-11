@@ -1,0 +1,48 @@
+[package]
+name = "srml-contracts"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0", optional = true, features = ["derive"] }
+pwasm-utils = { version = "0.6.1", default-features = false }
+parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+parity-wasm = { version = "0.31", default-features = false }
+wasmi-validation = { version = "0.1", default-features = false }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
+runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+sandbox = { package = "sr-sandbox", path = "../../core/sr-sandbox", default-features = false }
+srml-support = { path = "../support", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
+
+[dev-dependencies]
+wabt = "~0.7.4"
+assert_matches = "1.1"
+hex-literal = "0.2.0"
+balances = { package = "srml-balances", path = "../balances" }
+hex = "0.3"
+
+[features]
+default = ["std"]
+core = [
+	"wasmi-validation/core",
+]
+std = [
+	"serde",
+	"parity-codec/std",
+	"substrate-primitives/std",
+	"runtime-primitives/std",
+	"runtime-io/std",
+	"rstd/std",
+	"sandbox/std",
+	"srml-support/std",
+	"system/std",
+	"timestamp/std",
+	"parity-wasm/std",
+	"pwasm-utils/std",
+	"wasmi-validation/std",
+]

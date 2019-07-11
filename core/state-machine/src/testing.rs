@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap};
 use std::iter::FromIterator;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
@@ -32,6 +32,8 @@ use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
+type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
+
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	overlay: OverlayedChanges,
@@ -41,28 +43,46 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
-	/// Create a new instance of `TestExternalities`
-	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_code(&[], inner)
+	/// Create a new instance of `TestExternalities` with storage.
+	pub fn new(storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_children((storage, Default::default()))
 	}
 
-	/// Create a new instance of `TestExternalities`
-	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+	/// Create a new instance of `TestExternalities` with storage and children.
+	pub fn new_with_children(storage: StorageTuple) -> Self {
+		Self::new_with_code_with_children(&[], storage)
+	}
+
+	/// Create a new instance of `TestExternalities` with code and storage.
+	pub fn new_with_code(code: &[u8], storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_code_with_children(code, (storage, Default::default()))
+	}
+
+	/// Create a new instance of `TestExternalities` with code, storage and children.
+	pub fn new_with_code_with_children(code: &[u8], mut storage: StorageTuple) -> Self {
 		let mut overlay = OverlayedChanges::default();
+
+		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
+		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
 
 		super::set_changes_trie_config(
 			&mut overlay,
-			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
+			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
-		inner.insert(CODE.to_vec(), code.to_vec());
+		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		storage.0.insert(CODE.to_vec(), code.to_vec());
+
+		let backend: HashMap<_, _> = storage.1.into_iter()
+			.map(|(keyspace, map)| (Some(keyspace), map))
+			.chain(Some((None, storage.0)).into_iter())
+			.collect();
 
 		TestExternalities {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: inner.into(),
+			backend: backend.into(),
 			offchain: None,
 		}
 	}
@@ -70,17 +90,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(vec![(None, k, Some(v))]);
-	}
-
-	/// Iter to all pairs in key order
-	pub fn iter_pairs_in_order(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
-		self.backend.pairs().iter()
-			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.collect::<BTreeMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 	}
 
 	/// Set offchain externaltiies.
@@ -92,9 +101,26 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
 		&mut self.changes_trie_storage
 	}
+
+	/// Return a new backend with all pending value.
+	pub fn commit_all(&self) -> InMemory<H> {
+		let top = self.overlay.committed.top.clone().into_iter()
+			.chain(self.overlay.prospective.top.clone().into_iter())
+			.map(|(k, v)| (None, k, v.value));
+
+		let children = self.overlay.committed.children.clone().into_iter()
+			.chain(self.overlay.prospective.children.clone().into_iter())
+			.flat_map(|(keyspace, map)| {
+				map.1.into_iter()
+					.map(|(k, v)| (Some(keyspace.clone()), k, v))
+					.collect::<Vec<_>>()
+			});
+
+		self.backend.update(top.chain(children).collect())
+	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> ::std::fmt::Debug for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
@@ -104,15 +130,13 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
-		self.iter_pairs_in_order().eq(other.iter_pairs_in_order())
+		self.commit_all().eq(&other.commit_all())
 	}
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, N> {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
-		let mut t = Self::new(Default::default());
-		t.backend = t.backend.update(iter.into_iter().map(|(k, v)| (None, k, Some(v))).collect());
-		t
+		Self::new(iter.into_iter().collect())
 	}
 }
 
@@ -120,15 +144,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<TestExternalities<H, N>> for HashMap<Vec<u8>, Vec<u8>> {
-	fn from(tex: TestExternalities<H, N>) -> Self {
-		tex.iter_pairs_in_order().collect()
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<HashMap<Vec<u8>, Vec<u8>>> for TestExternalities<H, N> {
+	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::from_iter(hashmap)
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H, N> {
-	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::from_iter(hashmap)
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
+	fn from(storage: StorageTuple) -> Self {
+		Self::new_with_children(storage)
 	}
 }
 

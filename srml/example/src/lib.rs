@@ -16,7 +16,7 @@
 
 //! # Example Module
 //!
-//! <!-- Original author of paragraph: @gavofyork --> 
+//! <!-- Original author of paragraph: @gavofyork -->
 //! The Example: A simple example of a runtime module demonstrating
 //! concepts, APIs and structures common to most runtime modules.
 //!
@@ -27,27 +27,30 @@
 //! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
 //! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
-//!		<li>Documentation comments (i.e. <code>/// comment</code>) - should accompany module functions and be
-//!         restricted to the module interface, not the internals of the module implementation. Only state inputs,
-//!         outputs, and a brief description that mentions whether calling it requires root, but without repeating
-//!         the source code details. Capitalise the first word of each documentation comment and end it with a full
-//!         stop. See <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank">Generic example of annotating source code with documentation comments</a></li>
-//! 	<li>Self-documenting code - Try to refactor code to be self-documenting.</li>
-//!		<li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!		<li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
+//!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
+//!         accompany module functions and be restricted to the module interface,
+//!         not the internals of the module implementation. Only state inputs,
+//!         outputs, and a brief description that mentions whether calling it
+//!         requires root, but without repeating the source code details.
+//!         Capitalise the first word of each documentation comment and end it with
+//!         a full stop. See
+//!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
+//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
 //!         <code>u64</code>)</li>
-//!		<li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
-//!		<li>Extended tutorials - should be moved to external files and refer to.</li>
-//!		<!-- Original author of paragraph: @AmarRSingh -->
-//!		<li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
-//!		<li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
+//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
+//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!     <!-- Original author of paragraph: @AmarRSingh -->
+//!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
+//!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
 //! </ul>
 //!
 //! ### Documentation Template:<br>
 //!
-//! Copy and paste this template from srml/example/src/lib.rs into file srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs of
-//! your own custom module and complete it.
+//! Copy and paste this template from srml/example/src/lib.rs into file
+//! `srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
 //! <details><p><pre>
 //! // Add heading with custom module name
 //!
@@ -64,7 +67,7 @@
 //!
 //! \## Overview
 //!
-//! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 --> 
+//! <!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 -->
 //! // Short description of module purpose.
 //! // Links to Traits that should be implemented.
 //! // What this module is for.
@@ -196,7 +199,8 @@
 //!
 //! \## Usage
 //!
-//! // Insert 2-3 examples of usage and code snippets that show how to use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
+//! // Insert 2-3 examples of usage and code snippets that show how to
+//! // use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
 //!
 //! \### Prerequisites
 //!
@@ -205,7 +209,7 @@
 //!
 //! \```rust
 //! use <INSERT_CUSTOM_MODULE_NAME>;
-//! 
+//!
 //! pub trait Trait: <INSERT_CUSTOM_MODULE_NAME>::Trait { }
 //! \```
 //!
@@ -250,7 +254,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
-use system::ensure_signed;
+use system::{ensure_signed, ensure_root};
+use sr_primitives::weights::TransactionWeight;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -323,8 +328,10 @@ decl_event!(
 // - Public calls that are signed by an external account.
 // - Root calls that are allowed to be made only by the governance system.
 // - Unsigned calls that can be of two kinds:
-//   * "Inherent extrinsics" that are opinions generally held by the block authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the network, and are validated by the runtime.
+//   * "Inherent extrinsics" that are opinions generally held by the block
+//     authors that build child blocks.
+//   * Unsigned Transactions that are of intrinsic recognisable utility to the
+//     network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
@@ -388,6 +395,20 @@ decl_module! {
 		// no progress.
 		//
 		// If you don't respect these rules, it is likely that your chain will be attackable.
+		//
+		// Each transaction can optionally indicate a weight. The weight is passed in as a
+		// custom attribute and the value can be anything that implements the `Weighable`
+		// trait. Most often using substrate's default `TransactionWeight` is enough for you.
+		//
+		// A basic weight is a tuple of `(base_weight, byte_weight)`. Upon including each transaction
+		// in a block, the final weight is calculated as `base_weight + byte_weight * tx_size`.
+		// If this value, added to the weight of all included transactions, exceeds `MAX_TRANSACTION_WEIGHT`,
+		// the transaction is not included. If no weight attribute is provided, the `::default()`
+		// implementation of `TransactionWeight` is used.
+		//
+		// The example below showcases a transaction which is relatively costly, but less dependent on
+		// the input, hence `byte_weight` is configured smaller.
+		#[weight = TransactionWeight::Basic(100_000, 10)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
@@ -419,7 +440,7 @@ decl_module! {
 		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
-		// Implementation of a privileged call. This doesn't have an `origin` parameter because
+		// Implementation of a privileged call. The `origin` parameter is ROOT because
 		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 		// to execute it. Different runtimes have different reasons for allow privileged
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
@@ -427,7 +448,8 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		fn set_dummy(#[compact] new_value: T::Balance) {
+		fn set_dummy(origin, #[compact] new_value: T::Balance) {
+			ensure_root(origin)?;
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 		}
@@ -483,14 +505,13 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, assert_ok};
+	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
-		testing::{Digest, DigestItem, Header}
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
 	};
 
 	impl_outer_origin! {
@@ -502,18 +523,27 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type Digest = Digest;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Log = DigestItem;
+		type BlockHashCount = BlockHashCount;
+	}
+	parameter_types! {
+		pub const ExistentialDeposit: u64 = 0;
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -523,6 +553,11 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -532,7 +567,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		// We use default for brevity, but you can configure as desired if needed.
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{

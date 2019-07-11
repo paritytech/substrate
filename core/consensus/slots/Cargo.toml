@@ -6,7 +6,7 @@ description = "Generic slots-based utilities for consensus"
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-codec", version = "3.2" }
+codec = { package = "parity-codec", version = "4.1.1" }
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
@@ -18,4 +18,4 @@ parking_lot = "0.8.0"
 log = "0.4"
 
 [dev-dependencies]
-test_client = { package = "substrate-test-client", path = "../../test-client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }

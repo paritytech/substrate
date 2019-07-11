@@ -23,29 +23,43 @@ use consensus_common::Error;
 use futures::prelude::*;
 use futures::try_ready;
 use inherents::{InherentData, InherentDataProviders};
-use log::warn;
-use std::marker::PhantomData;
+
 use std::time::{Duration, Instant};
 use tokio_timer::Delay;
 
 /// Returns current duration since unix epoch.
-pub fn duration_now() -> Option<Duration> {
+pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
-
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH)
-		.map_err(|e| {
-			warn!(
-				"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-				now, e
-			);
-		})
-		.ok()
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
+		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
+		now,
+		e,
+	))
 }
 
-/// Get the slot for now.
-pub fn slot_now(slot_duration: u64) -> Option<u64> {
-	duration_now().map(|s| s.as_secs() / slot_duration)
+
+/// A `Duration` with a sign (before or after).  Immutable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SignedDuration {
+	offset: Duration,
+	is_positive: bool,
+}
+
+impl SignedDuration {
+	/// Construct a `SignedDuration`
+	pub fn new(offset: Duration, is_positive: bool) -> Self {
+		Self { offset, is_positive }
+	}
+
+	/// Get the slot for now.  Panics if `slot_duration` is 0.
+	pub fn slot_now(&self, slot_duration: u64) -> u64 {
+		(if self.is_positive {
+			duration_now() + self.offset
+		} else {
+			duration_now() - self.offset
+		}.as_secs()) / slot_duration
+	}
 }
 
 /// Returns the duration until the next slot, based on current duration since
@@ -87,18 +101,22 @@ pub struct Slots<SC> {
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
-	_marker: PhantomData<SC>,
+	timestamp_extractor: SC,
 }
 
 impl<SC> Slots<SC> {
 	/// Create a new `Slots` stream.
-	pub fn new(slot_duration: u64, inherent_data_providers: InherentDataProviders) -> Self {
+	pub fn new(
+		slot_duration: u64,
+		inherent_data_providers: InherentDataProviders,
+		timestamp_extractor: SC,
+	) -> Self {
 		Slots {
 			last_slot: 0,
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
-			_marker: PhantomData,
+			timestamp_extractor,
 		}
 	}
 }
@@ -108,53 +126,49 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Option<SlotInfo>, Self::Error> {
-		let slot_duration = self.slot_duration;
-		self.inner_delay = match self.inner_delay.take() {
-			None => {
-				// schedule wait.
-				let wait_until = match duration_now() {
-					None => return Ok(Async::Ready(None)),
-					Some(now) => Instant::now() + time_until_next(now, slot_duration),
-				};
+		loop {
+			let slot_duration = self.slot_duration;
+			self.inner_delay = match self.inner_delay.take() {
+				None => {
+					// schedule wait.
+					let wait_until = Instant::now() + time_until_next(duration_now(), slot_duration);
+					Some(Delay::new(wait_until))
+				}
+				Some(d) => Some(d),
+			};
 
-				Some(Delay::new(wait_until))
+			if let Some(ref mut inner_delay) = self.inner_delay {
+				try_ready!(inner_delay
+					.poll()
+					.map_err(Error::FaultyTimer));
 			}
-			Some(d) => Some(d),
-		};
 
-		if let Some(ref mut inner_delay) = self.inner_delay {
-			try_ready!(inner_delay
-				.poll()
-				.map_err(Error::FaultyTimer));
-		}
+			// timeout has fired.
 
-		// timeout has fired.
+			let inherent_data = self
+				.inherent_data_providers
+				.create_inherent_data()
+				.map_err(|s| consensus_common::Error::InherentData(s.into_owned()))?;
+			let (timestamp, slot_num, offset) = self
+				.timestamp_extractor
+				.extract_timestamp_and_slot(&inherent_data)?;
+			// reschedule delay for next slot.
+			let ends_at = Instant::now() + offset +
+				time_until_next(Duration::from_secs(timestamp), slot_duration);
+			self.inner_delay = Some(Delay::new(ends_at));
 
-		let inherent_data = self
-			.inherent_data_providers
-			.create_inherent_data()
-			.map_err(|s| consensus_common::Error::InherentData(s.into_owned()))?;
-		let (timestamp, slot_num) = SC::extract_timestamp_and_slot(&inherent_data)?;
+			// never yield the same slot twice.
+			if slot_num > self.last_slot {
+				self.last_slot = slot_num;
 
-		// reschedule delay for next slot.
-		let ends_at =
-			Instant::now() + time_until_next(Duration::from_secs(timestamp), slot_duration);
-		self.inner_delay = Some(Delay::new(ends_at));
-
-		// never yield the same slot twice.
-		if slot_num > self.last_slot {
-			self.last_slot = slot_num;
-
-			Ok(Async::Ready(Some(SlotInfo {
-				number: slot_num,
-				duration: self.slot_duration,
-				timestamp,
-				ends_at,
-				inherent_data,
-			})))
-		} else {
-			// re-poll until we get a new slot.
-			self.poll()
+				break Ok(Async::Ready(Some(SlotInfo {
+					number: slot_num,
+					duration: self.slot_duration,
+					timestamp,
+					ends_at,
+					inherent_data,
+				})))
+			}
 		}
 	}
 }

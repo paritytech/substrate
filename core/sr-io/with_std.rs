@@ -216,9 +216,12 @@ impl CryptoApi for () {
 	}
 
 	fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8).map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v).map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
 		res.copy_from_slice(&pubkey.serialize()[1..65]);
 		Ok(res)
@@ -272,27 +275,44 @@ impl OffchainApi for () {
 		}, "new_crypto_key can be called only in the offchain worker context")
 	}
 
-	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn encrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.encrypt(key, data)
+			ext.encrypt(key, kind, data)
 		}, "encrypt can be called only in the offchain worker context")
 	}
 
-	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn decrypt(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.decrypt(key, data)
+			ext.decrypt(key, kind, data)
 		}, "decrypt can be called only in the offchain worker context")
 	}
 
-	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn sign(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.sign(key, data)
+			ext.sign(key, kind, data)
 		}, "sign can be called only in the offchain worker context")
 	}
 
-	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+	fn verify(
+		key: Option<offchain::CryptoKeyId>,
+		kind: offchain::CryptoKind,
+		msg: &[u8],
+		signature: &[u8],
+	) -> Result<bool, ()> {
 		with_offchain(|ext| {
-			ext.verify(key, msg, signature)
+			ext.verify(key, kind, msg, signature)
 		}, "verify can be called only in the offchain worker context")
 	}
 
@@ -302,7 +322,7 @@ impl OffchainApi for () {
 		}, "timestamp can be called only in the offchain worker context")
 	}
 
-	fn sleep_until(deadline: Timestamp) {
+	fn sleep_until(deadline: offchain::Timestamp) {
 		with_offchain(|ext| {
 			ext.sleep_until(deadline)
 		}, "sleep_until can be called only in the offchain worker context")
@@ -314,21 +334,26 @@ impl OffchainApi for () {
 		}, "random_seed can be called only in the offchain worker context")
 	}
 
-	fn local_storage_set(key: &[u8], value: &[u8]) {
+	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		with_offchain(|ext| {
-			ext.local_storage_set(key, value)
+			ext.local_storage_set(kind, key, value)
 		}, "local_storage_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(
+		kind: offchain::StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		with_offchain(|ext| {
-			ext.local_storage_compare_and_set(key, old_value, new_value)
+			ext.local_storage_compare_and_set(kind, key, old_value, new_value)
 		}, "local_storage_compare_and_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(kind: offchain::StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		with_offchain(|ext| {
-			ext.local_storage_get(key)
+			ext.local_storage_get(kind, key)
 		}, "local_storage_get can be called only in the offchain worker context")
 	}
 
@@ -410,9 +435,32 @@ pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
 	let mut alt_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	let mut ext: BasicExternalities = alt_storage.into();
+	let mut ext = BasicExternalities::new(alt_storage);
 	let r = ext::using(&mut ext, f);
-	*storage = ext.into();
+	*storage = ext.into_storages().0;
+	r
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage` and `children_storage`.
+/// Forwards the value that the closure returns.
+pub fn with_storage_and_children<R, F: FnOnce() -> R>(
+	storage: &mut StorageOverlay,
+	children_storage: &mut ChildrenStorageOverlay,
+	f: F
+) -> R {
+	let mut alt_storage = Default::default();
+	let mut alt_children_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	rstd::mem::swap(&mut alt_children_storage, children_storage);
+
+	let mut ext = BasicExternalities::new_with_children(alt_storage, alt_children_storage);
+	let r = ext::using(&mut ext, f);
+
+	let storage_tuple = ext.into_storages();
+	*storage = storage_tuple.0;
+	*children_storage = storage_tuple.1;
+
 	r
 }
 

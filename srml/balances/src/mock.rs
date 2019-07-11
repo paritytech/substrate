@@ -18,32 +18,67 @@
 
 #![cfg(test)]
 
-use primitives::BuildStorage;
-use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
+use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::impl_outer_origin;
+use srml_support::{impl_outer_origin, parameter_types, traits::Get};
+use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
 
+thread_local! {
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
+	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(0);
+}
+
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
+}
+
+pub struct TransferFee;
+impl Get<u64> for TransferFee {
+	fn get() -> u64 { TRANSFER_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct CreationFee;
+impl Get<u64> for CreationFee {
+	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct TransactionBaseFee;
+impl Get<u64> for TransactionBaseFee {
+	fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct TransactionByteFee;
+impl Get<u64> for TransactionByteFee {
+	fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Log = DigestItem;
+	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {
 	type Balance = u64;
@@ -53,6 +88,11 @@ impl Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 
 pub struct ExtBuilder {
@@ -107,19 +147,22 @@ impl ExtBuilder {
 		self.vesting = vesting;
 		self
 	}
+	pub fn set_associated_consts(&self) {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
+		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
+		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
+		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		self.set_associated_consts();
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
-			transaction_base_fee: self.transaction_base_fee,
-			transaction_byte_fee: self.transaction_byte_fee,
 			balances: if self.monied {
 				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
 			} else {
 				vec![]
 			},
-			existential_deposit: self.existential_deposit,
-			transfer_fee: self.transfer_fee,
-			creation_fee: self.creation_fee,
 			vesting: if self.vesting && self.monied {
 				vec![(1, 0, 10), (2, 10, 20)]
 			} else {

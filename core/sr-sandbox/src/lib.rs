@@ -96,7 +96,7 @@ impl Memory {
 	///
 	/// The memory allocated with initial number of pages specified by `initial`.
 	/// Minimal possible value for `initial` is 0 and maximum possible is `65536`.
-	/// (Since maximum addressible memory is 2<sup>32</sup> = 4GiB = 65536 * 64KiB).
+	/// (Since maximum addressable memory is 2<sup>32</sup> = 4GiB = 65536 * 64KiB).
 	///
 	/// It is possible to limit maximum number of pages this memory instance can have by specifying
 	/// `maximum`. If not specified, this memory instance would be able to allocate up to 4GiB.
@@ -168,7 +168,6 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 /// This instance can be used for invoking exported functions.
 pub struct Instance<T> {
 	inner: imp::Instance<T>,
-
 }
 
 impl<T> Instance<T> {

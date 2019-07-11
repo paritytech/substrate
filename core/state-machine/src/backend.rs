@@ -51,6 +51,11 @@ pub trait Backend<H: Hasher> {
 	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// Get child keyed storage value hash or None if there is nothing associated.
+	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		self.child_storage(storage_key, key).map(|v| v.map(|v| H::hash(&v)))
+	}
+
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())

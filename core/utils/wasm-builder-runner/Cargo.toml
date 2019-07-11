@@ -1,0 +1,11 @@
+[package]
+name = "substrate-wasm-builder-runner"
+version = "1.0.2"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Runner for substrate-wasm-builder"
+edition = "2018"
+readme = "README.md"
+repository = "https://github.com/paritytech/substrate"
+license = "GPL-3.0"
+
+[dependencies]

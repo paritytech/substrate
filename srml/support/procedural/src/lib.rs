@@ -55,7 +55,8 @@ use proc_macro::TokenStream;
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
-///   /!\ Be careful with each key in the map that is inserted in the trie `$hash(module_name ++ " " ++ storage_name ++ encoding(key))`.
+///   /!\ Be careful with each key in the map that is inserted in the trie
+///   `$hash(module_name ++ " " ++ storage_name ++ encoding(key))`.
 ///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
@@ -97,7 +98,7 @@ use proc_macro::TokenStream;
 ///
 /// Storage items are accessible in multiple ways:
 ///
-/// * The structure: `Foo::<T>`
+/// * The structure: `Foo` or `Foo::<T>` depending if the value type is generic or not.
 /// * The `Store` trait structure: `<Module<T> as Store>::Foo`
 /// * The getter on the module that calls get on the structure: `Module::<T>::foo()`
 ///
@@ -135,9 +136,36 @@ use proc_macro::TokenStream;
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
 ///
-/// Then the genesis config is generated with two generic parameters (i.e. `GenesisConfig<T, I>`)
-/// and storage items are accessible using two generic parameters, e.g.:
-/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`.
+/// Accessing the structure no requires the instance as generic parameter:
+/// * `Foo::<I>` if the value type is not generic
+/// * `Foo::<T, I>` if the value type is generic
+///
+/// ## Where clause
+///
+/// This macro supports a where clause which will be replicated to all generated types.
+///
+/// ```nocompile
+/// trait Store for Module<T: Trait> as Example where T::AccountId: std::fmt::Display {}
+/// ```
+///
+/// ## Limitations
+///
+/// # Instancing and generic `GenesisConfig`
+///
+/// If your module supports instancing and you see an error like `parameter `I` is never used` for
+/// your `decl_storage!`, you are hitting a limitation of the current implementation. You probably
+/// try to use an associated type of a non-instantiable trait. To solve this, add the following to
+/// your macro call:
+///
+/// ```nocompile
+/// add_extra_genesis {
+/// 	config(phantom): std::marker::PhantomData<I>,
+/// }
+/// ...
+///
+/// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
+/// `Default::default()`.
+///
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

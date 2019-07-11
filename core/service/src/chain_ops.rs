@@ -17,11 +17,11 @@
 //! Chain utilities.
 
 use std::{self, io::{Read, Write}};
-use futures::Future;
+use futures::prelude::*;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
+use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header};
 use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
@@ -99,40 +99,38 @@ pub fn export_blocks<F, E, W>(
 }
 
 struct WaitLink {
-	wait_send: std::sync::mpsc::Sender<()>,
+	imported_blocks: u64,
 }
 
 impl WaitLink {
-	fn new(wait_send: std::sync::mpsc::Sender<()>) -> WaitLink {
+	fn new() -> WaitLink {
 		WaitLink {
-			wait_send,
+			imported_blocks: 0,
 		}
 	}
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
-		self.wait_send.send(())
-			.expect("Unable to notify main process; if the main process panicked then this thread would already be dead as well. qed.");
+	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		self.imported_blocks += processed_blocks.len() as u64;
+		if has_error {
+			warn!("There was an error importing {} blocks", processed_blocks.len());
+		}
 	}
 }
 
-/// Import blocks from a binary stream.
+/// Returns a future that import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
 	mut config: FactoryFullConfiguration<F>,
 	exit: E,
 	mut input: R
-) -> error::Result<()>
+) -> error::Result<impl Future<Item = (), Error = ()>>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
 	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
-
-	let (wait_send, wait_recv) = std::sync::mpsc::channel();
-	let wait_link = WaitLink::new(wait_send);
-	queue.start(Box::new(wait_link))?;
+	let mut queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -174,21 +172,33 @@ pub fn import_blocks<F, E, R>(
 		}
 
 		block_count = b;
-		if b % 1000 == 0 {
-			info!("#{}", b);
+		if b % 1000 == 0 && b != 0 {
+			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
-	let mut blocks_imported = 0;
-	while blocks_imported < count {
-		wait_recv.recv()
-			.expect("Importing thread has panicked. Then the main process will die before this can be reached. qed.");
-		blocks_imported += 1;
-	}
+	let mut link = WaitLink::new();
+	Ok(futures::future::poll_fn(move || {
+		if exit_recv.try_recv().is_ok() {
+			return Ok(Async::Ready(()));
+		}
 
-	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
-
-	Ok(())
+		let blocks_before = link.imported_blocks;
+		queue.poll_actions(&mut link);
+		if link.imported_blocks / 1000 != blocks_before / 1000 {
+			info!(
+				"#{} blocks were imported (#{} left)",
+				link.imported_blocks,
+				count - link.imported_blocks
+			);
+		}
+		if link.imported_blocks >= count {
+			info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	}))
 }
 
 /// Revert the chain.
