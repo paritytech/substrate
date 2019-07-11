@@ -17,7 +17,6 @@ sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
-node-executor = { path = "../executor" }
+node-testing = { path = "../testing" }
 node-runtime = { path = "../runtime" }
-substrate-primitives = { path = "../../core/primitives" }
-test-client = { package = "substrate-test-client", path = "../../core/test-client" }
+env_logger = "0.6"

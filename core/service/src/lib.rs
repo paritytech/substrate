@@ -617,7 +617,7 @@ fn build_network_future<
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	mut rpc_rx: mpsc::UnboundedReceiver<rpc::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
@@ -645,16 +645,16 @@ fn build_network_future<
 		// Poll the RPC requests and answer them.
 		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
 			match request {
-				rpc::apis::system::Request::Health(sender) => {
-					let _ = sender.send(rpc::apis::system::Health {
+				rpc::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::system::Health {
 						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
-				rpc::apis::system::Request::Peers(sender) => {
+				rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::apis::system::PeerInfo {
+						rpc::system::PeerInfo {
 							peer_id: peer_id.to_base58(),
 							roles: format!("{:?}", p.roles),
 							protocol_version: p.protocol_version,
@@ -663,7 +663,7 @@ fn build_network_future<
 						}
 					).collect());
 				}
-				rpc::apis::system::Request::NetworkState(sender) => {
+				rpc::system::Request::NetworkState(sender) => {
 					let _ = sender.send(network.network_state());
 				}
 			};

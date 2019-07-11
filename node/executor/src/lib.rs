@@ -35,31 +35,27 @@ native_executor_instance!(
 
 #[cfg(test)]
 mod tests {
-	use runtime_io;
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::{AuthorityKeyring, AccountKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
-		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
+		twox_128, blake2_256, Blake2Hasher, NeverNativeValue,
 		NativeOrEncoded
 	};
-	use node_primitives::{Hash, BlockNumber, AccountId};
+	use node_primitives::{Hash, BlockNumber};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
-	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, contracts, indices, staking, system, timestamp};
+	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys,
-		CENTS, DOLLARS, MILLICENTS,
+		System, Event, CENTS, DOLLARS, MILLICENTS,
 	};
 	use wabt;
 	use primitives::map;
+	use node_testing::keyring::*;
 
 	/// The wasm runtime code.
 	///
@@ -82,53 +78,8 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
-	fn alice() -> AccountId {
-		AccountKeyring::Alice.into()
-	}
-
-	fn bob() -> AccountId {
-		AccountKeyring::Bob.into()
-	}
-
-	fn charlie() -> AccountId {
-		AccountKeyring::Charlie.into()
-	}
-
-	fn dave() -> AccountId {
-		AccountKeyring::Dave.into()
-	}
-
-	fn eve() -> AccountId {
-		AccountKeyring::Eve.into()
-	}
-
-	fn ferdie() -> AccountId {
-		AccountKeyring::Ferdie.into()
-	}
-
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-		match xt.signed {
-			Some((signed, index)) => {
-				let era = Era::mortal(256, 0);
-				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let key = AccountKeyring::from_public(&signed).unwrap();
-				let signature = payload.using_encoded(|b| {
-					if b.len() > 256 {
-						key.sign(&runtime_io::blake2_256(b))
-					} else {
-						key.sign(b)
-					}
-				}).into();
-				UncheckedExtrinsic {
-					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
-					function: payload.1,
-				}
-			}
-			None => UncheckedExtrinsic {
-				signature: None,
-				function: xt.function,
-			},
-		}
+		node_testing::keyring::sign(xt, GENESIS_HASH)
 	}
 
 	fn xt() -> UncheckedExtrinsic {
@@ -290,72 +241,11 @@ mod tests {
 		});
 	}
 
-	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
-		SessionKeys {
-			ed25519: ring.to_owned().into(),
-		}
-	}
-
-	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			aura: Some(Default::default()),
-			system: Some(SystemConfig {
-				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
-					digest_interval: 2,
-					digest_levels: 2,
-				}) } else { None },
-				..Default::default()
-			}),
-			indices: Some(IndicesConfig {
-				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
-			}),
-			balances: Some(BalancesConfig {
-				balances: vec![
-					(alice(), 111 * DOLLARS),
-					(bob(), 100 * DOLLARS),
-					(charlie(), 100_000_000 * DOLLARS),
-					(dave(), 111 * DOLLARS),
-					(eve(), 101 * DOLLARS),
-					(ferdie(), 100 * DOLLARS),
-				],
-				vesting: vec![],
-			}),
-			session: Some(SessionConfig {
-				keys: vec![
-					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
-					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
-					(charlie(), to_session_keys(&AuthorityKeyring::Charlie)),
-				]
-			}),
-			staking: Some(StakingConfig {
-				current_era: 0,
-				stakers: vec![
-					(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
-					(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
-					(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
-				],
-				validator_count: 3,
-				minimum_validator_count: 0,
-				offline_slash: Perbill::zero(),
-				session_reward: Perbill::zero(),
-				current_session_reward: 0,
-				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), charlie()],
-			}),
-			democracy: Some(Default::default()),
-			collective_Instance1: Some(Default::default()),
-			collective_Instance2: Some(Default::default()),
-			elections: Some(Default::default()),
-			timestamp: Some(Default::default()),
-			contracts: Some(ContractsConfig {
-				current_schedule: Default::default(),
-				gas_price: 1 * MILLICENTS,
-			}),
-			sudo: Some(Default::default()),
-			grandpa: Some(GrandpaConfig {
-				authorities: vec![],
-			}),
-		}.build_storage().unwrap());
+	pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
+		let mut ext = TestExternalities::new_with_code_with_children(
+			code,
+			node_testing::genesis::config(support_changes_trie).build_storage().unwrap()
+		);
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}
@@ -909,12 +799,9 @@ mod tests {
 
 	#[test]
 	fn should_import_block_with_test_client() {
-		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+		use node_testing::client::{ClientExt, TestClientBuilderExt, TestClientBuilder, consensus::BlockOrigin};
 
-		let client = TestClientBuilder::default()
-			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
-			.0;
-
+		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
 		let block_data = block1.0;
 		let block = Block::decode(&mut &block_data[..]).unwrap();

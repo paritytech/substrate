@@ -102,30 +102,26 @@ where
 mod tests {
 	use super::*;
 
-	use node_executor::{NativeExecutor, Executor};
-	use node_runtime::{RuntimeApi, UncheckedExtrinsic, Call, TimestampCall};
+	use node_runtime::{CheckedExtrinsic, Call, TimestampCall};
 	use parity_codec::Decode;
-	use sr_primitives::generic::Era;
-	use substrate_primitives::crypto::Public;
-	use test_client::{ClientExt, TestClientBuilder};
+	use node_testing::{
+		client::{ClientExt, TestClientBuilder, TestClientBuilderExt},
+		keyring::{self, alice},
+	};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
-		let executor: NativeExecutor<Executor> = NativeExecutor::new(None);
-		let client = Arc::new(
-			TestClientBuilder::default().build_with_native_executor::<Block, RuntimeApi, _>(executor).0
-		);
+		let _ = env_logger::try_init();
+		let client = Arc::new(TestClientBuilder::new().build());
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 
-		let account = keyring::AccountKeyring::Alice;
-		let sender = AccountId::from_slice(&account.to_raw_public());
 		let new_transaction = |index| {
-			let call = Call::Timestamp(TimestampCall::set(5));
-			let era = Era::Immortal;
-			let raw_payload = (index, call.clone(), era, client.genesis_hash()).encode();
-			let signature = account.sign(&raw_payload);
-			let xt = UncheckedExtrinsic::new_signed(index, call, sender.clone().into(), signature.into(), era);
+			let ex = CheckedExtrinsic {
+				signed: Some((alice().into(), index)),
+				function: Call::Timestamp(TimestampCall::set(5)),
+			};
+			let xt = keyring::sign(ex, client.genesis_hash().into());
 			// Convert to OpaqueExtrinsic
 			let encoded = xt.encode();
 			node_primitives::UncheckedExtrinsic::decode(&mut &*encoded).unwrap()
@@ -139,7 +135,7 @@ mod tests {
 		let accounts = Accounts::new(client, pool);
 
 		// when
-		let nonce = accounts.nonce(sender);
+		let nonce = accounts.nonce(alice().into());
 
 		// then
 		assert_eq!(nonce.unwrap(), 2);
