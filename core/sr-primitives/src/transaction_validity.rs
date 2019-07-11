@@ -18,7 +18,6 @@
 
 use rstd::prelude::*;
 use crate::codec::{Encode, Decode};
-use crate::transaction_validity::TransactionValidity::Valid;
 use crate::traits::DispatchError;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -99,6 +98,9 @@ impl Default for ValidTransaction {
 }
 
 impl ValidTransaction {
+	/// Combine two instances into one, as a best effort. This will take the superset of each of the
+	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
+	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
 		ValidTransaction {
 			priority: self.priority + other.priority,

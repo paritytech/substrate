@@ -89,7 +89,7 @@ use primitives::{
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get}, Dispatchable
+	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get}
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};

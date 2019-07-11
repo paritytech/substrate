@@ -19,12 +19,16 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult};
-use crate::{generic, KeyTypeId, transaction_validity::ValidTransaction};
+use crate::traits::{
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult,
+	ValidateUnsigned
+};
+use crate::{generic, KeyTypeId};
 use crate::weights::{Weighable, Weight};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
+use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -199,7 +203,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
+pub struct TestXt<Call>(pub Option<u64>, u64, pub Call);
 
 impl<Call> Serialize for TestXt<Call> where TestXt<Call>: Encode
 {
@@ -227,19 +231,20 @@ impl<Call> Applyable for TestXt<Call> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
 {
 	type AccountId = u64;
+	type Call = Call;
 	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate(&self,
-		weight: crate::weights::Weight
-	) -> Result<ValidTransaction, DispatchError> {
-		Ok(Default::default())
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+		_weight: crate::weights::Weight
+	) -> TransactionValidity {
+		TransactionValidity::Valid(Default::default())
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		weight: crate::weights::Weight
+		_weight: crate::weights::Weight
 	) -> Result<DispatchResult, DispatchError> {
 		Ok(Ok(()))
 	}

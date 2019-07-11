@@ -154,15 +154,15 @@ use rstd::{cmp, result, mem};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 	Imbalance, SignedImbalance, ReservableCurrency
 };
 use srml_support::{dispatch::Result, traits::Get};
-use primitives::traits::{
+use primitives::{transaction_validity::TransactionPriority, traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating, Bounded
-};
+	MaybeSerializeDebug, Saturating, Bounded, SignedExtension
+}};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -1133,10 +1133,10 @@ where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct TakeFees<T: Trait>(T::Balance);
+pub struct TakeFees<T: Trait<I>, I: Instance>(T::Balance);
 
 #[cfg(feature = "std")]
-impl<T: Trait> rstd::fmt::Debug for TakeFees<T> {
+impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
@@ -1144,11 +1144,11 @@ impl<T: Trait> rstd::fmt::Debug for TakeFees<T> {
 
 // TODO: wire this and CheckNonce in to the runtime.
 
-use primitives::traits::DispatchError;
+use primitives::traits::{DispatchError, SaturatedConversion};
 use primitives::transaction_validity::ValidTransaction;
 use primitives::weights::Weight;
 
-impl<T: Trait> SignedExtension for TakeFees<T> {
+impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
 
 	fn validate(
@@ -1158,22 +1158,19 @@ impl<T: Trait> SignedExtension for TakeFees<T> {
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
 		let fee_x = T::Balance::from(weight as u32);
 		// should be weight_to_fee(weight)
-		let transaction_fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
-		let imbalance = Self::withdraw(
-			transactor,
-			transaction_fee,
+		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
+		let fee = fee + self.0.clone();
+		let imbalance = <Module<T, I>>::withdraw(
+			who,
+			fee.clone(),
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive
 		).map_err(|_| DispatchError::Payment)?;
 		T::TransactionPayment::on_unbalanced(imbalance);
 
-		Ok(ValidTransaction {
-			priority: _weight as TransactionPriority + self.0.clone() as TransactionPriority,   // TODO: overflow??
-			requires: vec![],
-			provides: vec![],
-			longevity: TransactionLongevity::max_value(),
-			propagate: true,
-		})
+		let mut r = ValidTransaction::default();
+		r.priority = fee.saturated_into::<TransactionPriority>();
+		Ok(r)
 	}
 }
 

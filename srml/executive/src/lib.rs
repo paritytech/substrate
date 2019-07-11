@@ -85,7 +85,7 @@ use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use primitives::transaction_validity::TransactionValidity;
 use primitives::weights::Weighable;
 
 mod internal {
@@ -144,7 +144,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -164,7 +164,7 @@ impl<
 > Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -296,7 +296,7 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let (f, s) = Applyable::dispatch(xt, weight)
+		let r = Applyable::dispatch(xt, weight)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -336,9 +336,7 @@ where
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		// Note errors > 0 are from ApplyError
 		const UNKNOWN_ERROR: i8 = -127;
-		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
-		const BAD_DISPATCH: i8 = -15;
 
 		let encoded_len = uxt.encode().len();
 
@@ -353,7 +351,9 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		xt.validate::<UnsignedValidator>()
+		let weight = xt.weight(encoded_len);†
+
+		xt.validate::<UnsignedValidator>(weight)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

@@ -91,19 +91,6 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
-/// Simple trait designed for hooking into a transaction payment.
-///
-/// It operates over a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make transaction payment from `who` for an extrinsic of encoded length
-	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
 /// within it.
 pub trait FindAuthor<Author> {

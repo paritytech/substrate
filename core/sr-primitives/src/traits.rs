@@ -810,24 +810,31 @@ pub trait Dispatchable {
 pub trait SignedExtension:
 	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq
 {
+	/// The type which encodes the sender identity.
 	type AccountId;
 
+	/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
-		who: &Self::AccountId,
+		_who: &Self::AccountId,
 		_weight: crate::weights::Weight,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
+	/// Do any pre-flight stuff for a signed transaction.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
 		weight: crate::weights::Weight,
 	) -> Result<(), DispatchError> { self.validate(who, weight).map(|_| ()) }
 
+	/// Validate an unsigned transaction for the transaction queue. Normally the default
+	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
+	/// validating unsigned transactions.
 	fn validate_unsigned(
 		_weight: crate::weights::Weight,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
+	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
 		weight: crate::weights::Weight,
 	) -> Result<(), DispatchError> { Self::validate_unsigned(weight).map(|_| ()) }

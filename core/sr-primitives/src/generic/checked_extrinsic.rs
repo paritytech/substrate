@@ -18,9 +18,12 @@
 //! stage.
 
 use rstd::result::Result;
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult, ValidateUnsigned};
+use crate::traits::{
+	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
+	ValidateUnsigned
+};
 use crate::weights::{Weighable, Weight};
-use crate::transaction_validity::{ValidTransaction, TransactionValidity};
+use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -60,8 +63,9 @@ where
 			Extra::validate(extra, id, weight).into()
 		} else {
 			match Extra::validate_unsigned(weight) {
-				Ok(v) => match UnsignedValidator::validate_unsigned(&self.function) {
-					TransactionValidity::Valid(v) => Ok(TransactionValidity(v.combine_with(extra))),
+				Ok(extra) => match U::validate_unsigned(&self.function) {
+					TransactionValidity::Valid(v) =>
+						TransactionValidity::Valid(v.combine_with(extra)),
 					x => x,
 				},
 				x => x.into(),

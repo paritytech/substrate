@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input, Compact};
+use crate::codec::{Decode, Encode, Input};
 use crate::traits::{
 	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, SignedExtension,
 	BlockNumberToHash, Lookup, Checkable, Extrinsic, SaturatedConversion
