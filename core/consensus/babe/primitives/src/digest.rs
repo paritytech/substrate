@@ -19,10 +19,10 @@
 #[cfg(feature = "std")]
 use substrate_primitives::sr25519::Signature;
 #[cfg(feature = "std")]
-use super::BABE_ENGINE_ID;
+use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
-use super::{SlotNumber, Epoch};
+use super::SlotNumber;
 #[cfg(feature = "std")]
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -35,7 +35,7 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 
 /// A BABE pre-digest
 #[cfg(feature = "std")]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct BabePreDigest {
 	/// VRF output
 	pub vrf_output: VRFOutput,
@@ -51,7 +51,7 @@ pub struct BabePreDigest {
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 /// A raw version of `BabePreDigest`, usable on `no_std`.
-#[derive(Copy, Clone, Encode, Decode, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub struct RawBabePreDigest {
 	/// Slot number
