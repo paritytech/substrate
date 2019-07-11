@@ -140,15 +140,17 @@ decl_storage! {
 		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
 
 		/// The data for the next epoch
-		NextEpoch get(next_epoch): Epoch;
+		NextEpoch get(next_epoch) build(|config: &GenesisConfig| Epoch {
+			slots_per_epoch: config.slots_per_epoch,
+			randomness: [0; 32],
+			authorities: config.authorities.clone(),
+		}): Epoch;
 
 		/// The current epoch
 		EpochIndex get(epoch_index): u64;
 
 		/// The number of slots per epoch
-		SlotsPerEpoch get(slots_per_epoch) build(|config: &GenesisConfig| {
-			config.slots_per_epoch
-		}): u64;
+		SlotsPerEpoch get(slots_per_epoch) build(slots_per_epoch);
 
 		/// Set to `true` when this code discovers that an epoch change is
 		/// needed. Set to `false` by the actual change.
@@ -170,19 +172,13 @@ decl_module! {
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
 				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					<(u64, [u8; VRF_OUTPUT_LENGTH])>::decode(&mut data)
+					RawBabePreDigest::decode(&mut data)
 				} else {
 					None
 				}) {
-				let slot_index = i.0
-					.checked_add(1)
-					.expect("slot numbers will never reach 2^64 in our lifetimes; qed");
-				let epoch_change_slot = slot_index
-					.checked_add(Self::slots_per_epoch())
-					.expect("slot numbers will never reach 2^64 in our lifetimes; qed");
-				if epoch_change_slot == slot_index {
-					// New epoch
-					LastSlotInEpoch::put(true)
+				let slots_per_epoch = Self::slots_per_epoch();
+				if slots_per_epoch > 0 {
+					LastSlotInEpoch::put(i.slot_number % slots_per_epoch == slots_per_epoch - 1)
 				}
 				return Self::deposit_vrf_output(&i.1)
 			}
@@ -192,9 +188,6 @@ decl_module! {
 
 pub fn epoch<T: Trait>() -> Epoch {
 	let authorities = Authorities::get();
-	if false && authorities.is_empty() {
-		panic!("No authorities ― network is deadlocked")
-	}
 	Epoch {
 		randomness: EpochRandomness::get(),
 		authorities: authorities,
@@ -217,13 +210,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let (_, _, _, i): (
-					u64,
-					[u8; VRF_OUTPUT_LENGTH],
-					[u8; VRF_PROOF_LENGTH],
-					u64,
-				) = Decode::decode(&mut data)?;
-				return Some(i)
+				return RawBabePreDigest::decode(&mut data)?.index;
 			}
 		}
 		return None

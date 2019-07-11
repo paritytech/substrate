@@ -17,50 +17,38 @@
 //! Private implementation details of BABE digests.
 
 use primitives::sr25519::Signature;
-use super::{BABE_ENGINE_ID, SlotNumber, Epoch};
+use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber, Epoch};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
-#[cfg(feature = "std")]
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};
-#[cfg(feature = "std")]
 use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}};
 
-/// A BABE pre-digest
-#[cfg(feature = "std")]
+/// A BABE pre-digest.  It includes:
+///
+/// * The public key of the author.
+/// * The VRF proof.
+/// * The VRF output.
+/// * The slot number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
-	/// The epoch index
-	pub epoch: u64,
-	/// The VRF output
-	pub vrf_output: VRFOutput,
-	/// The VRF proof
-	pub proof: VRFProof,
-	/// The authority index
-	pub index: super::AuthorityIndex,
-	/// The slot number
-	pub slot_num: SlotNumber,
+	pub(super) vrf_output: VRFOutput,
+	pub(super) epoch: u64,
+	pub(super) proof: VRFProof,
+	pub(super) index: babe_primitives::AuthorityIndex,
+	pub(super) slot_num: SlotNumber,
 }
 
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
-/// A raw version of `BabePreDigest`, usable on `no_std`.
-#[derive(Copy, Clone, Encode, Decode, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
-pub struct RawBabePreDigest {
-	/// Slot number
-	pub slot_number: SlotNumber,
-	/// Authority index
-	pub index: super::AuthorityIndex,
-	/// Epoch number
-	pub epoch: u64,
-	/// VRF output
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	/// VRF proof
-	pub randomness_proof: [u8; VRF_PROOF_LENGTH],
-};
+type RawBabePreDigest = (
+	[u8; VRF_OUTPUT_LENGTH],
+	u64,
+	[u8; VRF_PROOF_LENGTH],
+	babe_primitives::AuthorityIndex,
+	SlotNumber,
+);
 
-#[cfg(feature = "std")]
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp: RawBabePreDigest = (
@@ -74,14 +62,13 @@ impl Encode for BabePreDigest {
 	}
 }
 
-#[cfg(feature = "std")]
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
 		let (output, epoch, proof, index, slot_num): RawBabePreDigest = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
-		let _: [u8; super::VRF_OUTPUT_LENGTH] = output;
-		let _: [u8; super::VRF_PROOF_LENGTH] = proof;
+		let _: [u8; babe_primitives::VRF_OUTPUT_LENGTH] = output;
+		let _: [u8; babe_primitives::VRF_PROOF_LENGTH] = proof;
 		Some(BabePreDigest {
 			epoch,
 			proof: VRFProof::from_bytes(&proof).ok()?,
@@ -93,7 +80,6 @@ impl Decode for BabePreDigest {
 }
 
 /// A digest item which is usable with BABE consensus.
-#[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
 	fn babe_pre_digest(seal: BabePreDigest) -> Self;
@@ -111,7 +97,6 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_epoch(&self) -> Option<Epoch>;
 }
 
-#[cfg(feature = "std")]
 impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
 {

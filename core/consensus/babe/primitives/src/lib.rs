@@ -15,14 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-#![deny(warnings, unsafe_code, missing_docs)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variable, unused_import)]
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod digest;
 
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
+
+#[cfg(feature = "std")]
+pub use digest::{BabePreDigest, CompatibleDigestItem};
+pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
