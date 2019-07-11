@@ -81,7 +81,7 @@ use primitives::{generic::Digest, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
-use srml_support::{Dispatchable, traits::MakePayment};
+use srml_support::Dispatchable;
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
@@ -130,18 +130,17 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
+pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
+	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
 );
 
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
+> ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
@@ -150,7 +149,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
 
@@ -158,10 +157,9 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId>,
 	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
+> Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
@@ -351,7 +349,7 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let weight = xt.weight(encoded_len);†
+		let weight = xt.weight(encoded_len);
 
 		xt.validate::<UnsignedValidator>(weight)
 	}
