@@ -8,7 +8,9 @@ edition = "2018"
 [dependencies]
 bytes = "0.4"
 parking_lot = "0.8.0"
-futures = "0.1"
+futures01 = { package = "futures", version = "0.1" }
+futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
+futures-timer = "0.2.1"
 libp2p = { version = "0.10.0", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4"
 rand = "0.6"
@@ -17,8 +19,4 @@ slog = { version = "^2", features = ["nested-values"] }
 slog-json = { version = "^2", features = ["nested-values"] }
 slog-scope = "^4"
 tokio-io = "0.1"
-tokio-timer = "0.2"
 void = "1.0"
-
-[dev-dependencies]
-tokio = "0.1"
