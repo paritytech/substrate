@@ -111,31 +111,37 @@ fn lock_value_extension_should_work() {
 
 #[test]
 fn lock_reasons_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).transaction_fees(0, 1).build(), || {
-		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
-		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 1),
-			"account liquidity restrictions prevent withdrawal"
-		);
-		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(1)
+			.monied(true).transaction_fees(0, 1)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
+			assert_noop!(
+				<Balances as Currency<_>>::transfer(&1, &2, 1),
+				"account liquidity restrictions prevent withdrawal"
+			);
+			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
+			assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
 
-		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
-		assert_noop!(
-			<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-			"account liquidity restrictions prevent withdrawal"
-		);
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+			assert_noop!(
+				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
+				"account liquidity restrictions prevent withdrawal"
+			);
+			assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
 
-		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
-		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_noop!(
-			<Balances as MakePayment<_>>::make_payment(&1, 1),
-			"account liquidity restrictions prevent withdrawal"
-		);
-	});
+			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
+			assert_noop!(
+				<Balances as MakePayment<_>>::make_payment(&1, 1),
+				"account liquidity restrictions prevent withdrawal"
+			);
+		}
+	);
 }
 
 #[test]
@@ -204,8 +210,9 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			.monied(true)
 			.build(),
 		|| {
+
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
-			// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
+			// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 5, 9),
 				"value too low to create account"
@@ -235,16 +242,19 @@ fn reserved_balance_should_prevent_reclaim_count() {
 			assert_eq!(Balances::is_dead_account(&2), false);
 			assert_eq!(System::account_nonce(&2), 1);
 
-			assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69)); // account 4 tries to take index 1 for account 5.
+			// account 4 tries to take index 1 for account 5.
+			assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69));
 			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 			assert_eq!(Balances::is_dead_account(&5), false);
 
 			assert!(Balances::slash(&2, 256 * 18 + 2).1.is_zero()); // account 2 gets slashed
-			assert_eq!(Balances::total_balance(&2), 0); // "reserve" account reduced to 255 (below ED) so account deleted
+			// "reserve" account reduced to 255 (below ED) so account deleted
+			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
 			assert_eq!(Balances::is_dead_account(&2), true);
 
-			assert_ok!(Balances::transfer(Some(4).into(), 6, 256 * 1 + 0x69)); // account 4 tries to take index 1 again for account 6.
+			// account 4 tries to take index 1 again for account 6.
+			assert_ok!(Balances::transfer(Some(4).into(), 6, 256 * 1 + 0x69));
 			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
 			assert_eq!(Balances::is_dead_account(&6), false);
 		},
@@ -294,7 +304,8 @@ fn dust_account_removal_should_work2() {
 			System::inc_account_nonce(&2);
 			assert_eq!(System::account_nonce(&2), 1);
 			assert_eq!(Balances::total_balance(&2), 2000);
-			assert_ok!(Balances::transfer(Some(2).into(), 5, 1851)); // index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
+			// index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
+			assert_ok!(Balances::transfer(Some(2).into(), 5, 1851));
 			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(Balances::total_balance(&5), 1851);
 			assert_eq!(System::account_nonce(&2), 0);
@@ -604,9 +615,12 @@ fn check_vesting_status() {
 			System::set_block_number(10);
 			assert_eq!(System::block_number(), 10);
 
-			assert_eq!(Balances::vesting_balance(&1), 0); // Account 1 has fully vested by block 10
-			assert_eq!(Balances::vesting_balance(&2), user2_free_balance); // Account 2 has started vesting by block 10
-			assert_eq!(Balances::vesting_balance(&12), user12_free_balance - 256 * 5); // Account 2 has started vesting by block 10
+			// Account 1 has fully vested by block 10
+			assert_eq!(Balances::vesting_balance(&1), 0); 
+			// Account 2 has started vesting by block 10
+			assert_eq!(Balances::vesting_balance(&2), user2_free_balance);
+			// Account 12 has started vesting by block 10
+			assert_eq!(Balances::vesting_balance(&12), user12_free_balance - 256 * 5);
 
 			System::set_block_number(30);
 			assert_eq!(System::block_number(), 30);
