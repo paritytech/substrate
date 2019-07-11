@@ -30,14 +30,14 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
-	/// The VRF output
+	/// VRF output
 	pub vrf_output: VRFOutput,
-	/// The VRF proof
-	pub proof: VRFProof,
-	/// The authority index
-	pub index: super::AuthorityIndex,
-	/// The slot number
-	pub slot_num: SlotNumber,
+	/// VRF proof
+	pub vrf_proof: VRFProof,
+	/// Authority index
+	pub authority_index: super::AuthorityIndex,
+	/// Slot number
+	pub slot_number: SlotNumber,
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -50,21 +50,21 @@ pub struct RawBabePreDigest {
 	/// Slot number
 	pub slot_number: SlotNumber,
 	/// Authority index
-	pub index: super::AuthorityIndex,
+	pub authority_index: super::AuthorityIndex,
 	/// VRF output
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub vrf_output: [u8; VRF_OUTPUT_LENGTH],
 	/// VRF proof
-	pub randomness_proof: [u8; VRF_PROOF_LENGTH],
+	pub vrf_proof: [u8; VRF_PROOF_LENGTH],
 }
 
 #[cfg(feature = "std")]
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp =  RawBabePreDigest {
-			randomness: *self.vrf_output.as_bytes(),
-			randomness_proof: self.proof.to_bytes(),
-			index: self.index,
-			slot_number: self.slot_num,
+			vrf_output: *self.vrf_output.as_bytes(),
+			vrf_proof: self.vrf_proof.to_bytes(),
+			authority_index: self.authority_index,
+			slot_number: self.slot_number,
 		};
 		parity_codec::Encode::encode(&tmp)
 	}
@@ -73,16 +73,16 @@ impl Encode for BabePreDigest {
 #[cfg(feature = "std")]
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let RawBabePreDigest { randomness, randomness_proof, index, slot_num } = Decode::decode(i)?;
+		let RawBabePreDigest { vrf_output, vrf_proof, authority_index, slot_number } = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
 		let _: [u8; super::VRF_OUTPUT_LENGTH] = output;
-		let _: [u8; super::VRF_PROOF_LENGTH] = proof;
+		let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
 		Some(BabePreDigest {
-			proof: VRFProof::from_bytes(&proof).ok()?,
+			vrf_proof: VRFProof::from_bytes(&vrf_proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			index,
-			slot_num,
+			authority_index,
+			slot_number,
 		})
 	}
 }

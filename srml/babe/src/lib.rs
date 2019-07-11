@@ -98,8 +98,8 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data: &mut InherentData,
 	) -> result::Result<(), RuntimeString> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_num = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
+		let slot_number = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
@@ -198,7 +198,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return RawBabePreDigest::decode(&mut data)?.index;
+				return RawBabePreDigest::decode(&mut data)?.authority_index;
 			}
 		}
 		return None

@@ -262,7 +262,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let block_import = self.block_import.clone();
 		let ref env = self.env;
 
-		let (timestamp, slot_num, slot_duration) =
+		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
 		let epoch = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
@@ -292,7 +292,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			return Box::new(future::ok(()));
 		}
 
-		let proposal_work = if let Some(((inout, proof, _batchable_proof), index)) = claim_slot(
+		let proposal_work = if let Some(((inout, vrf_proof, _batchable_proof), authority_index)) = claim_slot(
 			&randomness,
 			slot_info.number,
 			slot_info.number / self.slots_per_epoch,
@@ -302,30 +302,30 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
-				slot_num,
+				slot_number,
 				timestamp,
 			);
 			telemetry!(CONSENSUS_DEBUG; "babe.starting_authorship";
-				"slot_num" => slot_num, "timestamp" => timestamp
+				"slot_number" => slot_number, "timestamp" => timestamp
 			);
 
 			// we are the slot author. make a block and sign it.
 			let proposer = match env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
-					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
+					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_number, e);
 					telemetry!(CONSENSUS_WARN; "babe.unable_authoring_block";
-						"slot" => slot_num, "err" => ?e
+						"slot" => slot_number, "err" => ?e
 					);
 					return Box::new(future::ok(()))
 				}
 			};
 
 			let inherent_digest = BabePreDigest {
-				proof,
+				vrf_proof,
 				vrf_output: inout.to_output(),
-				index: index as u64,
-				slot_num,
+				authority_index: authority_index as u64,
+				slot_number,
 			};
 
 			// deadline our production to approx. the end of the slot
@@ -350,14 +350,14 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
-			if slot_after_building != slot_num {
+			if slot_after_building != slot_number {
 				info!(
 					target: "babe",
 					"Discarding proposal for slot {}; block production took too long",
-					slot_num
+					slot_number
 				);
 				telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
-					"slot" => slot_num
+					"slot" => slot_number
 				);
 				return
 			}
@@ -468,25 +468,25 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 
 	let (_epoch, pre_digest) = find_pre_digest::<B>(&header)?;
 
-	let BabePreDigest { slot_num, index, ref proof, ref vrf_output, epoch: _ } = pre_digest;
+	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output, epoch: _ } = pre_digest;
 
-	if slot_num > slot_now {
+	if slot_number > slot_now {
 		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot_num))
-	} else if index > authorities.len() as u64 {
+		Ok(CheckedHeader::Deferred(header, slot_number))
+	} else if authority_index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
-		let (pre_hash, author): (_, &sr25519::Public) = (header.hash(), &authorities[index as usize]);
+		let (pre_hash, author): (_, &sr25519::Public) = (header.hash(), &authorities[authority_index as usize]);
 
 		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					&randomness,
-					slot_num,
-					slot_num / slots_per_epoch,
+					slot_number,
+					slot_number / slots_per_epoch,
 				);
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-					p.vrf_verify(transcript, vrf_output, proof)
+					p.vrf_verify(transcript, vrf_output, vrf_proof)
 				}).map_err(|s| {
 					babe_err!("VRF verification failed: {:?}", s)
 				})?
@@ -500,14 +500,14 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
-				slot_num,
+				slot_number,
 				&header,
 				author,
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
-					slot_num,
+					slot_number,
 					equivocation_proof.fst_header().hash(),
 					equivocation_proof.snd_header().hash(),
 				);
@@ -561,7 +561,7 @@ impl<C> BabeVerifier<C> {
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
-	slot_num: u64,
+	slot_number: u64,
 	slot_now: u64,
 	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
 ) {
@@ -570,7 +570,7 @@ fn median_algorithm(
 		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
 				let offset: u128 = u128::from(slot_duration)
 					.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
-					.and_then(|x| x.checked_mul(u128::from(slot_num).saturating_sub(u128::from(sl))))
+					.and_then(|x| x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl))))
 					.expect("we cannot have timespans long enough for this to overflow; qed");
 				const NANOS_PER_SEC: u32 = 1_000_000_000;
 				let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
@@ -639,14 +639,14 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 		)?;
 		match checked_header {
 			CheckedHeader::Checked((_randomness, pre_header), (pre_digest, seal)) => {
-				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_pre_digest()
+				let BabePreDigest { slot_number, .. } = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(slot_num);
+					inherent_data.babe_replace_inherent_data(slot_number);
 					let block = B::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(
@@ -685,7 +685,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 				median_algorithm(
 					self.config.0.median_required_blocks,
 					self.config.get(),
-					slot_num,
+					slot_number,
 					slot_now,
 					&mut *self.time_source.0.lock(),
 				);
@@ -775,7 +775,7 @@ fn claim_slot(
 	threshold: u64,
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
-	let index = authorities.iter().position(|s| &s.0 == public)?;
+	let authority_index = authorities.iter().position(|s| &s.0 == public)?;
 	let transcript = make_transcript(randomness, slot_number, epoch);
 
 	// Compute the threshold we will use.
@@ -786,7 +786,7 @@ fn claim_slot(
 
 	get_keypair(key)
 		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
-		.map(|s|(s, index))
+		.map(|s|(s, authority_index))
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
