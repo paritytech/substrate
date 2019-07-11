@@ -83,11 +83,11 @@ impl Decode for BabePreDigest {
 		let RawBabePreDigest { vrf_output, vrf_proof, authority_index, slot_number } = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
-		let _: [u8; super::VRF_OUTPUT_LENGTH] = output;
+		let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
 		let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
 		Some(BabePreDigest {
 			vrf_proof: VRFProof::from_bytes(&vrf_proof).ok()?,
-			vrf_output: VRFOutput::from_bytes(&output).ok()?,
+			vrf_output: VRFOutput::from_bytes(&vrf_output).ok()?,
 			authority_index,
 			slot_number,
 		})
