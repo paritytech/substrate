@@ -142,7 +142,7 @@ pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// A transport-agnostic handler of the RPC queries.
-pub type RpcHandler = rpc_servers::RpcHandler<rpc::metadata::Metadata>;
+pub type RpcHandler = rpc_servers::RpcHandler<rpc::Metadata>;
 
 /// Something that can start the RPC service.
 pub trait StartRpc<C: Components> {
@@ -152,7 +152,7 @@ pub trait StartRpc<C: Components> {
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-		rpc_extensions: impl rpc::IoHandlerExtension<rpc::metadata::Metadata>,
+		rpc_extensions: impl rpc::RpcExtension<rpc::Metadata>,
 	) -> RpcHandler;
 }
 
@@ -166,7 +166,7 @@ impl<C: Components> StartRpc<C> for C where
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-		rpc_extensions: impl rpc::IoHandlerExtension<rpc::metadata::Metadata>,
+		rpc_extensions: impl rpc::RpcExtension<rpc::Metadata>,
 	) -> RpcHandler {
 		use rpc::{chain, state, author, system};
 		let subscriptions = rpc::Subscriptions::new(task_executor.clone());
@@ -302,7 +302,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Other configuration for service members.
 	type Configuration: Default;
 	/// RPC initialisation.
-	type RpcExtensions: rpc::IoHandlerExtension<rpc::metadata::Metadata>;
+	type RpcExtensions: rpc::RpcExtension<rpc::Metadata>;
 	/// Extended full service type.
 	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
@@ -375,10 +375,16 @@ pub trait ServiceFactory: 'static + Sized {
 		}
 	}
 
-	/// Create custom RPC method handlers.
-	fn build_rpc_extension<C: Components>(
-		client: Arc<ComponentClient<C>>,
-		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+	/// Create custom RPC method handlers for full node.
+	fn build_full_rpc_extensions(
+		client: Arc<FullClient<Self>>,
+		transaction_pool: Arc<TransactionPool<Self::FullTransactionPoolApi>>,
+	) -> Self::RpcExtensions;
+
+	/// Create custom RPC method handlers for light node.
+	fn build_light_rpc_extensions(
+		client: Arc<LightClient<Self>>,
+		transaction_pool: Arc<TransactionPool<Self::LightTransactionPoolApi>>,
 	) -> Self::RpcExtensions;
 }
 
@@ -395,7 +401,7 @@ pub trait Components: Sized + 'static {
 	/// The type that can start all runtime-dependent services.
 	type RuntimeServices: ServiceTrait<Self>;
 	/// The type that can extend the RPC methods.
-	type RpcExtensions: rpc::IoHandlerExtension<rpc::metadata::Metadata>;
+	type RpcExtensions: rpc::RpcExtension<rpc::Metadata>;
 	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
@@ -442,7 +448,7 @@ pub trait Components: Sized + 'static {
 	) -> Result<Option<Self::SelectChain>, error::Error>;
 
 	/// Build RPC extensions
-	fn build_rpc_extension(
+	fn build_rpc_extensions(
 		client: Arc<ComponentClient<Self>>,
 		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
 	) -> Self::RpcExtensions;
@@ -555,11 +561,11 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		Factory::build_finality_proof_provider(client)
 	}
 
-	fn build_rpc_extension(
+	fn build_rpc_extensions(
 		client: Arc<ComponentClient<Self>>,
 		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
 	) -> Self::RpcExtensions {
-		Factory::build_rpc_extension::<Self>(client, transaction_pool)
+		Factory::build_full_rpc_extensions(client, transaction_pool)
 	}
 }
 
@@ -663,11 +669,11 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		Ok(None)
 	}
 
-	fn build_rpc_extension(
+	fn build_rpc_extensions(
 		client: Arc<ComponentClient<Self>>,
 		transaction_pool: Arc<TransactionPool<Self::TransactionPoolApi>>,
 	) -> Self::RpcExtensions {
-		Factory::build_rpc_extension::<Self>(client, transaction_pool)
+		Factory::build_light_rpc_extensions(client, transaction_pool)
 	}
 }
 

@@ -2203,9 +2203,11 @@ dependencies = [
  "exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-executor 2.0.0",
  "node-primitives 2.0.0",
+ "node-rpc 2.0.0",
  "node-runtime 2.0.0",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2229,6 +2231,7 @@ dependencies = [
  "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc 2.0.0",
  "substrate-service 2.0.0",
  "substrate-service-test 2.0.0",
  "substrate-telemetry 2.0.0",
@@ -2275,8 +2278,24 @@ dependencies = [
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+ "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-serializer 2.0.0",
+]
+
+[[package]]
+name = "node-rpc"
+version = "2.0.0"
+dependencies = [
+ "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-derive 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "node-primitives 2.0.0",
+ "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-transaction-pool 2.0.0",
 ]
 
 [[package]]

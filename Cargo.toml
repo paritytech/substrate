@@ -86,8 +86,9 @@ members = [
 	"node/cli",
 	"node/executor",
 	"node/primitives",
-	"node/runtime",
+	"node/rpc",
 	"node/rpc-client",
+	"node/runtime",
 	"node-template",
 	"subkey",
 	"test-utils/chain-spec-builder",
@@ -102,3 +103,11 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }
+jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }
+jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }
+jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }
+jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc", branch = "td-todelegate" }

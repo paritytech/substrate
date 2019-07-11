@@ -498,4 +498,10 @@ impl_runtime_apis! {
 			Aura::authorities()
 		}
 	}
+
+	impl node_primitives::AccountNonceApi<Block> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(account)
+		}
+	}
 }

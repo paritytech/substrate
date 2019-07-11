@@ -27,10 +27,9 @@ use futures::sync::{mpsc, oneshot};
 use jsonrpc_derive::rpc;
 use network;
 use runtime_primitives::traits::{self, Header as HeaderT};
-
 use self::error::Result;
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 pub use self::gen_client::Client as SystemClient;
 
 /// Substrate system RPC API

@@ -210,9 +210,16 @@ construct_service_factory! {
 			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _))
 		}},
 
-		RpcExtensions = () {
+		RpcExtensions = jsonrpc_core::IoHandler<substrate_rpc::Metadata>
+		{ |client, pool| {
+			use node_rpc::accounts::{Accounts, AccountsApi};
 
-		},
+			let mut io = jsonrpc_core::IoHandler::default();
+			io.extend_with(
+				AccountsApi::to_delegate(Accounts::new(client, pool))
+			);
+			io
+		}},
 	}
 }
 

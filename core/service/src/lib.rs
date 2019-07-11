@@ -457,7 +457,7 @@ impl<Components: components::Components> Service<Components> {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
-				Components::build_rpc_extension(client.clone(), transaction_pool.clone()),
+				Components::build_rpc_extensions(client.clone(), transaction_pool.clone()),
 			)
 		};
 		let rpc_handlers = gen_handler();
@@ -772,7 +772,7 @@ fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> components::RpcHandler>(
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
 /// the HTTP or WebSockets server).
 pub struct RpcSession {
-	metadata: rpc::metadata::Metadata,
+	metadata: rpc::Metadata,
 }
 
 impl RpcSession {
@@ -979,6 +979,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
 /// 			}},
+/// 		RpcExtensions = () {},
 /// 	}
 /// }
 /// ```
@@ -1006,7 +1007,7 @@ macro_rules! construct_service_factory {
 				{ $( $select_chain_init:tt )* },
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 			RpcExtensions = $rpc_extensions_ty:ty
-				{ $( $rpc_extensions:tt )? },
+				{ $( $rpc_extensions:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -1095,13 +1096,18 @@ macro_rules! construct_service_factory {
 				})
 			}
 
-			fn build_rpc_extension<C: $crate::Components>(
-				client: Arc<$crate::ComponentClient<C>>,
-				transaction_pool: Arc<$crate::TransactionPool<C::TransactionPoolApi>>,
+			fn build_full_rpc_extensions(
+				client: Arc<$crate::FullClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>,
 			) -> Self::RpcExtensions {
-				$(
-					( $rpc_extensions ) (client, transaction_pool)
-				)?
+				( $( $rpc_extensions )* ) (client, transaction_pool)
+			}
+
+			fn build_light_rpc_extensions(
+				client: Arc<$crate::LightClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::LightTransactionPoolApi>>,
+			) -> Self::RpcExtensions {
+				( $( $rpc_extensions )* ) (client, transaction_pool)
 			}
 		}
 	}

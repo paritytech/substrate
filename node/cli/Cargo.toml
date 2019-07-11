@@ -18,6 +18,7 @@ client = { package = "substrate-client", path = "../../core/client" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 node-runtime = { path = "../runtime" }
+node-rpc = { path = "../rpc" }
 node-primitives = { path = "../primitives" }
 hex-literal = "0.2"
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
@@ -40,6 +41,9 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 rand = "0.6"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
+substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
+jsonrpc-core = "12.0.0"
+
 
 [dev-dependencies]
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
