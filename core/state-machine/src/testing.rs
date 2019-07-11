@@ -76,8 +76,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn iter_pairs_in_order(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.changes.top_iter().map(|(k, v)| (k.clone(), v.cloned())))
 			.collect::<BTreeMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -202,8 +201,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn storage_root(&mut self) -> H::Out {
 		// compute and memoize
-		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.clone(), v.cloned()));
 
 		self.backend.storage_root(delta).0
 	}
@@ -212,13 +210,8 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		let storage_key = storage_key.as_ref();
 
 		let (root, _, _) = {
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter()));
-
+			let delta = self.overlay.changes.child_iter(storage_key)
+				.map(|(k, v)| (k.clone(), v.cloned()));
 			self.backend.child_storage_root(storage_key, delta)
 		};
 		self.overlay.set_storage(storage_key.into(), Some(root.clone()));

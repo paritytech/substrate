@@ -71,7 +71,7 @@ fn prepare_extrinsics_input<B, H, Number>(
 		Number: BlockNumber,
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, val) in changes.prospective.top.iter().chain(changes.committed.top.iter()) {
+	for (key, val) in changes.changes.top_iter_ext() {
 		let extrinsics = match val.extrinsics {
 			Some(ref extrinsics) => extrinsics,
 			None => continue,
@@ -146,7 +146,7 @@ mod test {
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
 	use crate::changes_trie::storage::InMemoryStorage;
-	use crate::overlayed_changes::OverlayedValue;
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, History, TransactionState};
 	use super::*;
 
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {
@@ -193,31 +193,43 @@ mod test {
 			(14, Vec::new()), (15, Vec::new()),
 		]);
 		let changes = OverlayedChanges {
-			prospective: vec![
-				(vec![100], OverlayedValue {
-					value: Some(vec![200]),
-					extrinsics: Some(vec![0, 2].into_iter().collect())
-				}),
-				(vec![103], OverlayedValue {
-					value: None,
-					extrinsics: Some(vec![0, 1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-			committed: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: None,
-				}),
-				(vec![100], OverlayedValue {
-					value: Some(vec![202]),
-					extrinsics: Some(vec![3].into_iter().collect())
-				}),
-				(vec![101], OverlayedValue {
-					value: Some(vec![203]),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
+			changes:OverlayedChangeSet {
+				history: vec![TransactionState::Committed, TransactionState::Pending],
+				state: 1,
+				size: History(vec![(3,0), (5, 0)]),
+				children: Default::default(),
+				top: vec![
+					(EXTRINSIC_INDEX.to_vec(), History(vec![
+						(OverlayedValue {
+							value: Some(3u32.encode()),
+							extrinsics: None,
+						}, 0),
+					])),
+					(vec![100], History(vec![
+						(OverlayedValue {
+							value: Some(vec![202]),
+							extrinsics: Some(vec![3].into_iter().collect())
+						}, 0),
+						(OverlayedValue {
+							value: Some(vec![200]),
+							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
+						}, 1),
+					])),
+					(vec![101], History(vec![
+						(OverlayedValue {
+						value: Some(vec![203]),
+						extrinsics: Some(vec![1].into_iter().collect())
+						}, 0),
+					])),
+					(vec![103], History(vec![
+						(OverlayedValue {
+						value: None,
+						extrinsics: Some(vec![0, 1].into_iter().collect())
+						}, 1),
+					])),
+				].into_iter().collect(),
+			},
 		};
 
 		(backend, storage, changes)
@@ -293,10 +305,12 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
-		changes.prospective.top.insert(vec![110], OverlayedValue {
-			value: None,
-			extrinsics: Some(vec![1].into_iter().collect())
-		});
+		changes.changes.top.insert(vec![110], History(vec![
+			(OverlayedValue {
+				value: None,
+				extrinsics: Some(vec![1].into_iter().collect()),
+			}, 1),
+		]));
 
 		let config = changes.changes_trie_config.as_ref().unwrap();
 		let changes_trie_nodes = prepare_input(
