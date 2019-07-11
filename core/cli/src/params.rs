@@ -285,7 +285,7 @@ pub struct ExecutionStrategies {
 
 	/// The execution strategy that should be used by all execution contexts.
 	#[structopt(
-		long = "execution-all",
+		long = "execution",
 		value_name = "STRATEGY",
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
@@ -299,7 +299,7 @@ pub struct ExecutionStrategies {
 			]"
 		)
 	)]
-	pub execution_all: Option<ExecutionStrategy>,
+	pub execution: Option<ExecutionStrategy>,
 }
 
 /// The `run` command used to run a node.

@@ -424,7 +424,7 @@ where
 		};
 
 	let exec = cli.execution_strategies;
-	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution_all.unwrap_or(strat).into();
+	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
 		syncing: exec_all_or(exec.execution_syncing),
 		importing: exec_all_or(exec.execution_import_block),
