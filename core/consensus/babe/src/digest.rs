@@ -58,7 +58,7 @@ pub struct RawBabePreDigest {
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// VRF proof
 	pub randomness_proof: [u8; VRF_PROOF_LENGTH],
-};
+}
 
 #[cfg(feature = "std")]
 impl Encode for BabePreDigest {
