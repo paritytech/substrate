@@ -9,8 +9,15 @@ jsonrpc-core = "12.0.0"
 jsonrpc-core-client = "12.0.0"
 jsonrpc-derive = "12.0.0"
 jsonrpc-pubsub = "12.0.0"
-node-primitives = { package = "node-primitives", path = "../primitives" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+node-primitives = { path = "../primitives" }
 parity-codec = "4.1.1"
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 serde = { version = "1.0", features = ["derive"] }
+sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+
+[dev-dependencies]
+node-executor = { path = "../executor" }
+node-runtime = { path = "../runtime" }
+substrate-primitives = { path = "../../core/primitives" }
+test-client = { package = "substrate-test-client", path = "../../core/test-client" }

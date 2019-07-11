@@ -24,7 +24,7 @@ use node_primitives::{
 	AccountId, Index, AccountNonceApi, Block, BlockId, BlockNumber
 };
 use parity_codec::Encode;
-use runtime_primitives::traits;
+use sr_primitives::traits;
 use transaction_pool::txpool::{self, Pool};
 
 pub use self::gen_client::Client as AccountsClient;
@@ -50,6 +50,7 @@ pub struct Accounts<P: txpool::ChainApi, C> {
 }
 
 impl<P: txpool::ChainApi, C> Accounts<P, C> {
+	/// Create new `Accounts` given client and transaction pool.
 	pub fn new(client: Arc<C>, pool: Arc<Pool<P>>) -> Self {
 		Accounts {
 			client,
@@ -97,3 +98,50 @@ where
 	}
 }
 
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use node_executor::{NativeExecutor, Executor};
+	use node_runtime::{RuntimeApi, UncheckedExtrinsic, Call, TimestampCall};
+	use parity_codec::Decode;
+	use sr_primitives::generic::Era;
+	use substrate_primitives::crypto::Public;
+	use test_client::{ClientExt, TestClientBuilder};
+
+	#[test]
+	fn should_return_next_nonce_for_some_account() {
+		// given
+		let executor: NativeExecutor<Executor> = NativeExecutor::new(None);
+		let client = Arc::new(
+			TestClientBuilder::default().build_with_native_executor::<Block, RuntimeApi, _>(executor).0
+		);
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
+
+		let account = keyring::AccountKeyring::Alice;
+		let sender = AccountId::from_slice(&account.to_raw_public());
+		let new_transaction = |index| {
+			let call = Call::Timestamp(TimestampCall::set(5));
+			let era = Era::Immortal;
+			let raw_payload = (index, call.clone(), era, client.genesis_hash()).encode();
+			let signature = account.sign(&raw_payload);
+			let xt = UncheckedExtrinsic::new_signed(index, call, sender.clone().into(), signature.into(), era);
+			// Convert to OpaqueExtrinsic
+			let encoded = xt.encode();
+			node_primitives::UncheckedExtrinsic::decode(&mut &*encoded).unwrap()
+		};
+		// Populate the pool
+		let ext0 = new_transaction(0);
+		pool.submit_one(&BlockId::number(0), ext0).unwrap();
+		let ext1 = new_transaction(1);
+		pool.submit_one(&BlockId::number(0), ext1).unwrap();
+
+		let accounts = Accounts::new(client, pool);
+
+		// when
+		let nonce = accounts.nonce(sender);
+
+		// then
+		assert_eq!(nonce.unwrap(), 2);
+	}
+}
