@@ -92,9 +92,10 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 
 		let check_pending = Interval::new(now + CHECK_PENDING_INTERVAL, CHECK_PENDING_INTERVAL);
 		UntilImported {
-			import_notifications: (Box::new(
-				import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat()
-			) as Box<dyn Stream<Item = _, Error = _> + Send>).fuse(),
+			import_notifications: {
+				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
+				Box::new(stream) as Box<dyn Stream<Item = _, Error = _> + Send>
+			}.fuse(),
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
