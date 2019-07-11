@@ -278,7 +278,7 @@ use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get
+		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, DoSlash
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};

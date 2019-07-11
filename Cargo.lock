@@ -3808,6 +3808,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-rolling-window"
+version = "2.0.0"
+dependencies = [
+ "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "srml-balances 2.0.0",
+ "srml-session 2.0.0",
+ "srml-staking 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "srml-timestamp 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "srml-session"
 version = "2.0.0"
 dependencies = [
@@ -4243,6 +4260,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-version 2.0.0",
  "srml-babe 2.0.0",
+ "srml-rolling-window 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "substrate-client 2.0.0",

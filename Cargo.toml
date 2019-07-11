@@ -82,6 +82,7 @@ members = [
 	"srml/staking",
 	"srml/sudo",
 	"srml/system",
+	"srml/rolling-window",
 	"srml/timestamp",
 	"srml/treasury",
 	"node/cli",

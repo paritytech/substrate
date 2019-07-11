@@ -630,25 +630,6 @@ bitmask! {
 	}
 }
 
-/// A generic trait for reporting slashing violations.
-pub trait ReportSlash<Identification, Hash> {
-    fn slash(identfication: Identification, footprint: Hash);
-}
-
-/// A generic trait for enacting slashes.
-pub trait DoSlash<Identification, Severity> {
-    fn do_slash(identification: Identification, severity: Severity);
-}
-
-/// temp, obviosly not a trait
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
-pub enum MisbehaviorKind {
-	/// ..
-	Equivocation = 0,
-	/// ..
-	InvalidBlock = 1,
-}
-
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	pub fn except(one: WithdrawReason) -> WithdrawReasons {
@@ -667,4 +648,23 @@ pub trait ChangeMembers<AccountId> {
 
 impl<T> ChangeMembers<T> for () {
 	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
+}
+
+/// A generic trait for reporting slashing violations.
+pub trait ReportSlash<Identification, Hash> {
+    fn slash(identfication: Identification, footprint: Hash);
+}
+
+/// A generic trait for enacting slashes.
+pub trait DoSlash<Identification, Severity> {
+    fn do_slash(identification: Identification, severity: Severity);
+}
+
+/// temp, obviosly not a trait
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
+pub enum MisbehaviorKind {
+	/// ..
+	Equivocation = 0,
+	/// ..
+	InvalidBlock = 1,
 }

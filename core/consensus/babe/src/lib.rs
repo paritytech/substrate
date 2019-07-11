@@ -513,8 +513,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 				// This will report a misconduct and slash
 				{
 					let _e = slash::EquivocationProof::new(
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.fst_header().hash(),
+						equivocation_proof.fst_header().clone(),
+						equivocation_proof.snd_header().clone(),
 						Default::default(),
 						0,
 					);
