@@ -19,7 +19,7 @@
 use super::*;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
-use network::config::{ProtocolConfig, Roles};
+use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::ed25519::{Keyring as AuthorityKeyring};
@@ -30,9 +30,7 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
-	BoxFinalityProofRequestBuilder,
-};
+use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;

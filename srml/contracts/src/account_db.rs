@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Auxilliaries to help with managing partial changes to accounts state.
+//! Auxiliaries to help with managing partial changes to accounts state.
 
 use super::{
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
