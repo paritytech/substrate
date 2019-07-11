@@ -53,7 +53,6 @@ impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp: RawBabePreDigest = (
 			*self.vrf_output.as_bytes(),
-			self.epoch,
 			self.proof.to_bytes(),
 			self.index,
 			self.slot_num,

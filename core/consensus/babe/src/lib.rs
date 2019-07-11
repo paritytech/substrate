@@ -326,7 +326,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				vrf_output: inout.to_output(),
 				index: index as u64,
 				slot_num,
-				epoch: slot_info.epoch,
 			};
 
 			// deadline our production to approx. the end of the slot

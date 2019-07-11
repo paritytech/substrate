@@ -29,8 +29,6 @@ use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabePreDigest {
-	/// The epoch index
-	pub epoch: u64,
 	/// The VRF output
 	pub vrf_output: VRFOutput,
 	/// The VRF proof
@@ -52,8 +50,6 @@ pub struct RawBabePreDigest {
 	pub slot_number: SlotNumber,
 	/// Authority index
 	pub index: super::AuthorityIndex,
-	/// Epoch number
-	pub epoch: u64,
 	/// VRF output
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// VRF proof
@@ -63,13 +59,12 @@ pub struct RawBabePreDigest {
 #[cfg(feature = "std")]
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
-		let tmp: RawBabePreDigest = (
-			*self.vrf_output.as_bytes(),
-			self.epoch,
-			self.proof.to_bytes(),
-			self.index,
-			self.slot_num,
-		);
+		let tmp =  RawBabePreDigest {
+			randomness: *self.vrf_output.as_bytes(),
+			randomness_proof: self.proof.to_bytes(),
+			index: self.index,
+			slot_number: self.slot_num,
+		};
 		parity_codec::Encode::encode(&tmp)
 	}
 }
