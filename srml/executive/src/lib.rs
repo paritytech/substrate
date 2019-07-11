@@ -398,7 +398,7 @@ mod tests {
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::Currency;
+	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
 	use hex_literal::hex;
 
@@ -435,7 +435,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 10;
 		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Runtime {
@@ -498,21 +498,24 @@ mod tests {
 				Digest::default(),
 			));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42 - 10);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		balances::GenesisConfig::<Runtime>::default().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
+		t.extend(balances::GenesisConfig::<Runtime> {
+			balances: vec![(1, 111)],
+			vesting: vec![],
+		}.build_storage().unwrap().0);
 		t.into()
 	}
 
 	#[test]
 	fn block_import_works() {
 		#[cfg(not(feature = "legacy-trie"))]
-		let state_root = hex!("c566707325fc89ca9df9d22b0d1b8ad79cc785911f6c5aaf13f356563ea7f0b5").into();
+		let state_root = hex!("61e41e3e79d1bae499fdfafadb866bec932bad484b9a72797c0b3c7251305e77").into();
 		#[cfg(feature = "legacy-trie")]
 		let state_root = hex!("d75c79776d69123b65e819977b70e102482e05fd7538c1dcae1249a248ba64e4").into();
 		with_externalities(&mut new_test_ext(), || {
@@ -648,5 +651,42 @@ mod tests {
 			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
 			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail));
 		});
+	}
+
+	#[test]
+	fn can_pay_for_tx_fee_on_full_lock() {
+		let id: LockIdentifier = *b"0       ";
+		let execute_with_lock = |lock: WithdrawReasons| {
+			let mut t = new_test_ext();
+			with_externalities(&mut t, || {
+				<balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
+					id,
+					&1,
+					110,
+					10,
+					lock,
+				);
+				let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 10));
+				Executive::initialize_block(&Header::new(
+					1,
+					H256::default(),
+					H256::default(),
+					[69u8; 32].into(),
+					Digest::default(),
+				));
+
+				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
+					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail);
+					// but tx fee has been deducted. the transaction failed on transfer, not on fee.
+					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10);
+				} else {
+					assert_eq!(Executive::apply_extrinsic(xt), Err(ApplyError::CantPay));
+					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
+				}
+			});
+		};
+
+		execute_with_lock(WithdrawReasons::all());
+		execute_with_lock(WithdrawReasons::except(WithdrawReason::TransactionPayment));
 	}
 }

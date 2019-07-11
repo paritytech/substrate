@@ -69,8 +69,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 109,
-	impl_version: 109,
+	spec_version: 110,
+	impl_version: 110,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -406,7 +406,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
