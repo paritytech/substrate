@@ -21,7 +21,7 @@ use std::{
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
 use crate::error::Error;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
 use runtime_primitives::{

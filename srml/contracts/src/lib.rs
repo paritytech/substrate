@@ -68,7 +68,8 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
 //! used to create and call contracts.
 //!
-//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language that enables writing
+//! * [`ink`](https://github.com/paritytech/ink) is 
+//! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 //!
 //! ## Related Modules
@@ -158,7 +159,7 @@ impl<T: Trait> ContractInfo<T> {
 		}
 	}
 
-	/// If contract is tombstone then return some alive info
+	/// If contract is tombstone then return some tombstone info
 	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
 		if let ContractInfo::Tombstone(tombstone) = self {
 			Some(tombstone)
@@ -313,7 +314,7 @@ pub trait Trait: timestamp::Trait {
 	/// by the Executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
 
-	/// trieid id generator
+	/// trie id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
@@ -321,7 +322,7 @@ pub trait Trait: timestamp::Trait {
 
 	/// Number of block delay an extrinsic claim surcharge has.
 	///
-	/// When claim surchage is called by an extrinsic the rent is checked
+	/// When claim surcharge is called by an extrinsic the rent is checked
 	/// for current_block - delay
 	type SignedClaimHandicap: Get<Self::BlockNumber>;
 
@@ -421,7 +422,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		/// Number of block delay an extrinsic claim surcharge has.
 		///
-		/// When claim surchage is called by an extrinsic the rent is checked
+		/// When claim surcharge is called by an extrinsic the rent is checked
 		/// for current_block - delay
 		const SignedClaimHandicap: T::BlockNumber = T::SignedClaimHandicap::get();
 

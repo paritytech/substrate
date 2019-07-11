@@ -28,7 +28,6 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::BoxFinalityProofRequestBuilder;
 use message::{
 	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -41,7 +40,7 @@ use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, Context as SyncContext, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::Roles;
+use crate::config::{BoxFinalityProofRequestBuilder, Roles};
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -390,11 +389,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		specialization: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
+		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: peerset::PeersetConfig,
 	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
 		let info = chain.info();
-		let sync = ChainSync::new(config.roles, &info);
+		let sync = ChainSync::new(config.roles, &info, finality_proof_request_builder);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
@@ -1249,10 +1249,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Notify about successful import of the given block.
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.sync.block_imported(hash, number)
-	}
-
-	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
-		self.sync.set_finality_proof_request_builder(request_builder)
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without

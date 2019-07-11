@@ -69,7 +69,7 @@ pub trait Ext {
 	/// Instantiate a contract from the given code.
 	///
 	/// The newly created account will be associated with `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account (also known as endowment).
+	/// transferred from this to the newly created account (also known as endowment).
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
@@ -78,7 +78,7 @@ pub trait Ext {
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
-	/// Call (possibly transfering some amount of funds) into the specified account.
+	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
 		&mut self,
 		to: &AccountIdOf<Self::T>,
@@ -102,7 +102,7 @@ pub trait Ext {
 	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the value transfered along with this call or as endowment.
+	/// Returns the value transferred along with this call or as endowment.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a reference to the timestamp of the current block
@@ -304,7 +304,7 @@ where
 		}
 	}
 
-	/// Make a call to the specified address, optionally transfering some funds.
+	/// Make a call to the specified address, optionally transferring some funds.
 	pub fn call(
 		&mut self,
 		dest: T::AccountId,
@@ -504,7 +504,7 @@ enum TransferCause {
 ///
 /// This function also handles charging the fee. The fee depends
 /// on whether the transfer happening because of contract instantiation
-/// (transfering endowment) or because of a transfer via `call`. This
+/// (transferring endowment) or because of a transfer via `call`. This
 /// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
