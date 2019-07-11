@@ -27,10 +27,11 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::{Verifier, BoxFinalityProofRequestBuilder}, well_known_cache_keys,
+	import_queue::Verifier, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
-	Error as ConsensusError, FinalityProofRequestBuilder,
+	Error as ConsensusError,
 };
+use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
