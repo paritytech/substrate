@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-#![deny(warnings)]
-#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+//#![deny(warnings)]
+//#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod digest;

@@ -18,11 +18,18 @@
 
 #[cfg(feature = "std")]
 use substrate_primitives::sr25519::Signature;
-use super::{BABE_ENGINE_ID, SlotNumber, Epoch};
+#[cfg(feature = "std")]
+use super::BABE_ENGINE_ID;
+#[cfg(not(feature = "std"))]
+use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
+use super::{SlotNumber, Epoch};
+#[cfg(feature = "std")]
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
-use parity_codec::{Decode, Encode, Codec, Input};
+use parity_codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use parity_codec::{Codec, Input};
 #[cfg(feature = "std")]
 use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}};
 
