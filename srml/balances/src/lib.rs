@@ -280,9 +280,9 @@ decl_event!(
 pub struct VestingSchedule<Balance, BlockNumber> {
 	/// Locked amount at genesis.
 	pub locked: Balance,
-	/// Amount that gets unlocked every block from genesis.
+	/// Amount that gets unlocked every block after `starting_block`.
 	pub per_block: Balance,
-	/// Starting block for vesting.
+	/// Starting block for unlocking(vesting).
 	pub starting_block: BlockNumber,
 }
 
