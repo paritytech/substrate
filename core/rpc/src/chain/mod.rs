@@ -23,6 +23,7 @@ pub mod number;
 mod tests;
 
 use std::sync::Arc;
+use futures03::{future, StreamExt as _, TryStreamExt as _};
 
 use client::{self, Client, BlockchainEvents};
 use crate::rpc::Result as RpcResult;
@@ -203,8 +204,9 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 			subscriber,
 			|| self.block_hash(None.into()),
 			|| self.client.import_notification_stream()
-				.filter(|notification| notification.is_new_best)
-				.map(|notification| notification.header),
+				.filter(|notification| future::ready(notification.is_new_best))
+				.map(|notification| Ok::<_, ()>(notification.header))
+				.compat(),
 		)
 	}
 
@@ -217,7 +219,8 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 			subscriber,
 			|| Ok(Some(self.client.info().chain.finalized_hash)),
 			|| self.client.finality_notification_stream()
-				.map(|notification| notification.header),
+				.map(|notification| Ok::<_, ()>(notification.header))
+				.compat(),
 		)
 	}
 

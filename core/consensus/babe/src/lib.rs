@@ -878,6 +878,7 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 	use futures::{Async, stream::Stream as _};
+	use futures03::{StreamExt as _, TryStreamExt as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -1005,6 +1006,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);
