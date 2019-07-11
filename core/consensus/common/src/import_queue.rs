@@ -30,7 +30,7 @@ use runtime_primitives::{Justification, traits::{Block as BlockT, Header as _, N
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, JustificationImport, ImportResult,
-	FinalityProofImport, FinalityProofRequestBuilder,
+	FinalityProofImport,
 };
 
 pub use basic_queue::BasicQueue;
@@ -46,9 +46,6 @@ pub type BoxJustificationImport<B> = Box<dyn JustificationImport<B, Error=Consen
 
 /// Shared finality proof import struct used by the queue.
 pub type BoxFinalityProofImport<B> = Box<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
-
-/// Shared finality proof request builder struct used by the queue.
-pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = libp2p::PeerId;
@@ -139,8 +136,6 @@ pub trait Link<B: BlockT>: Send {
 	) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
-	/// Remember finality proof request builder on start.
-	fn set_finality_proof_request_builder(&mut self, _request_builder: BoxFinalityProofRequestBuilder<B>) {}
 	/// Adjusts the reputation of the given peer.
 	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
