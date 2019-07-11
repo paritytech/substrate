@@ -701,6 +701,13 @@ define_env!(Env, <E: Ext>,
 		}
 		Ok(())
 	},
+
+	// Stores the current block number of the current contract into the scratch buffer.
+	ext_block_number(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
 );
 
 /// Finds duplicates in a given vector.
