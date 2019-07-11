@@ -389,7 +389,7 @@ fn check_header<C, B: Block, P: Pair>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
+) -> Result<CheckedHeader<B::Header, B::Header, (u64, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: client::backend::AuxStore,

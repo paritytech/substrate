@@ -454,7 +454,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	randomness: [u8; 32],
 	threshold: u64,
 	slots_per_epoch: u64,
-) -> Result<CheckedHeader<([u8; 32], B::Header), (DigestItemFor<B>, DigestItemFor<B>)>, String>
+) -> Result<CheckedHeader<B::Header, ([u8; 32], B::Header), (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
@@ -473,7 +473,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(([0; 32], header), slot_num))
+		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else if index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
