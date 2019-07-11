@@ -26,6 +26,7 @@ pub use srml_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
+pub use sr_primitives::transaction_validity::TransactionPriority;
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1126,6 +1127,22 @@ macro_rules! decl_module {
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
+			fn priority(&self, _len: usize) -> $crate::dispatch::TransactionPriority {
+				match self {
+					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::priority(&$weight, _len), )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				}
+			}
+			fn is_block_full(&self, _block_weight: $crate::dispatch::Weight, _len: usize) -> bool {
+				match self {
+					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::is_block_full(
+						&$weight,
+						_block_weight,
+						_len,
+					), )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				}
+			}
 		}
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
@@ -1273,6 +1290,17 @@ macro_rules! impl_outer_dispatch {
 			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
 				match self {
 					$( $call_type::$camelcase(call) => call.weight(len), )*
+				}
+			}
+			fn priority(&self, len: usize) -> $crate::dispatch::TransactionPriority {
+				match self {
+					$( $call_type::$camelcase(call) => call.priority(len), )*
+				}
+			}
+			fn is_block_full(&self, block_weight: $crate::dispatch::Weight, len: usize) -> bool {
+				match self {
+
+					$( $call_type::$camelcase(call) => call.is_block_full(block_weight, len), )*
 				}
 			}
 		}
@@ -1613,8 +1641,8 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = TransactionWeight::Max]
-			fn weighted(_origin) { unreachable!() }
+			#[weight = TransactionWeight::Operational(0, 1)]
+			fn security_tx(_origin) { unreachable!() }
 		}
 	}
 
@@ -1680,7 +1708,8 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					name: DecodeDifferent::Encode("weighted"),
+
+					name: DecodeDifferent::Encode("security_tx"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -1754,10 +1783,15 @@ mod tests {
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
-		// max weight. not dependent on input.
-		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 3 * 1024 * 1024);
+		// Operational tx.
+		assert_eq!(Call::<TraitImpl>::security_tx().weight(100), 0);
+		assert_eq!(Call::<TraitImpl>::security_tx().priority(100), u64::max_value());
+		// one simply does not return false of the transaction type is operational!.
+		assert_eq!(Call::<TraitImpl>::security_tx().is_block_full(u32::max_value(), usize::max_value()), false);
+
 		// default weight.
 		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
+
 		// custom basic
 		assert_eq!(Call::<TraitImpl>::aux_3().weight(5), 10 + 100 * 5 );
 	}

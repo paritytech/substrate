@@ -86,12 +86,10 @@ use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use primitives::transaction_validity::{TransactionValidity, TransactionLongevity};
 use primitives::weights::Weighable;
 
 mod internal {
-	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
-
 	pub enum ApplyError {
 		BadSignature(&'static str),
 		Stale,
@@ -265,8 +263,8 @@ where
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the weight of the block if that extrinsic is applied.
-		let weight = xt.weight(encoded_len);
-		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
+		let block_weight = <system::Module<System>>::all_extrinsics_weight();
+		if xt.is_block_full(block_weight, encoded_len) {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
@@ -277,6 +275,7 @@ where
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 			// pay any fees
+			// TODO TODO: use weight to deduct the fee once #2854 is merged.
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
@@ -370,7 +369,7 @@ where
 				};
 
 				TransactionValidity::Valid {
-					priority: encoded_len as TransactionPriority,
+					priority: xt.priority(encoded_len),
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),
@@ -397,6 +396,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
+	use primitives::weights::MAX_TRANSACTIONS_WEIGHT;
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
 	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
@@ -586,7 +586,7 @@ mod tests {
 			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
 			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
 			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
+			let len = if should_fail { (MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
 				Executive::initialize_block(&Header::new(
 					1,

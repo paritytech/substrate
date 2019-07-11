@@ -24,9 +24,14 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
 
+use crate::transaction_validity::TransactionPriority;
+
 /// The final type that each `#[weight = $x:expr]`'s
 /// expression must evaluate to.
 pub type Weight = u32;
+
+/// The maximum possible weight of a block.
+pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 
 /// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
 /// its dispatchable functions. Is implemented by default in the `decl_module!`.
@@ -37,6 +42,13 @@ pub trait Weighable {
 	/// Return the weight of this call.
 	/// The `len` argument is the encoded length of the transaction/call.
 	fn weight(&self, len: usize) -> Weight;
+
+	/// Return the priority of this transaction.
+	fn priority(&self, len: usize) -> TransactionPriority;
+
+	/// Determine, given the current transaction weight and sum of weights in the current block, if
+	/// the block is now full or not.
+	fn is_block_full(&self, block_weight: Weight, len: usize) -> bool;
 }
 
 /// Default type used as the weight representative in a `#[weight = x]` attribute.
@@ -46,22 +58,36 @@ pub trait Weighable {
 pub enum TransactionWeight {
 	/// Basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
+	///
+	/// The priority of this transaction will be proportional to its computed weight, w.r.t. to the
+	/// total available weight.
 	Basic(Weight, Weight),
-	/// Maximum fee. This implies that this transaction _might_ get included but
-	/// no more transaction can be added. This can be done by setting the
-	/// implementation to _maximum block weight_.
-	Max,
-	/// Free. The transaction does not increase the total weight
-	/// (i.e. is not included in weight calculation).
-	Free,
+	/// Operational transaction. These are typically root transactions for operational updates,
+	/// runtime code changes or consensus reports through inherents. These transactions are still
+	/// subject to the same (base, byte) fee but will have maximum priority and will not affect
+	/// block fullness at all.
+	Operational(Weight, Weight),
 }
 
 impl Weighable for TransactionWeight {
 	fn weight(&self, len: usize) -> Weight {
 		match self {
 			TransactionWeight::Basic(base, byte) => base + byte * len as Weight,
-			TransactionWeight::Max => 3 * 1024 * 1024,
-			TransactionWeight::Free => 0,
+			TransactionWeight::Operational(_, _) => 0,
+		}
+	}
+
+	fn priority(&self, len: usize) -> TransactionPriority {
+		match self {
+			TransactionWeight::Basic(_, _) => self.weight(len) as TransactionPriority,
+			TransactionWeight::Operational(_, _) => TransactionPriority::max_value(),
+		}
+	}
+
+	fn is_block_full(&self, block_weight: Weight, len: usize) -> bool {
+		match self {
+			TransactionWeight::Basic(_, _) => self.weight(len) + block_weight > MAX_TRANSACTIONS_WEIGHT,
+			TransactionWeight::Operational(_, _) => false
 		}
 	}
 }

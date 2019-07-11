@@ -21,7 +21,8 @@ use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey};
 use crate::{generic, KeyTypeId};
-use crate::weights::{Weighable, Weight};
+use crate::weights::{Weighable, Weight, MAX_TRANSACTIONS_WEIGHT};
+use crate::transaction_validity::TransactionPriority;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -237,7 +238,13 @@ impl<Call> Applyable for TestXt<Call> where
 }
 impl<Call> Weighable for TestXt<Call> {
 	fn weight(&self, len: usize) -> Weight {
-		// for testing: weight == size.
 		len as Weight
+	}
+	fn priority(&self, len: usize) -> TransactionPriority {
+		len as TransactionPriority
+	}
+	fn is_block_full(&self, current_weight: Weight, len: usize)
+	 -> bool {
+		current_weight + self.weight(len) > MAX_TRANSACTIONS_WEIGHT
 	}
 }

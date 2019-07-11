@@ -19,6 +19,7 @@
 
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use crate::weights::{Weighable, Weight};
+use crate::transaction_validity::TransactionPriority;
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -62,5 +63,11 @@ where
 {
 	fn weight(&self, len: usize) -> Weight {
 		self.function.weight(len)
+	}
+	fn priority(&self, len: usize) -> TransactionPriority {
+		self.function.priority(len)
+	}
+	fn is_block_full(&self, block_weight: Weight, len: usize) -> bool {
+		self.function.is_block_full(block_weight, len)
 	}
 }
