@@ -53,7 +53,7 @@ pub type Weight = u64;
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
-	/// The slot number this block will start at
+	/// The slot number this epoch will start at
 	pub slot_number: SlotNumber,
 	/// The authorities and their weights
 	pub authorities: Vec<(AuthorityId, Weight)>,
