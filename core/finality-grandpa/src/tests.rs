@@ -21,6 +21,7 @@ use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, Peer
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::ed25519::{Keyring as AuthorityKeyring};
 use client::{
@@ -385,6 +386,7 @@ fn run_to_completion_with<F>(
 		wait_for.push(
 			Box::new(
 				client.finality_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(move |n| {
 						let mut highest_finalized = highest_finalized.write();
 						if *n.header.number() > *highest_finalized {
@@ -495,6 +497,7 @@ fn finalize_3_voters_1_full_observer() {
 		};
 		finality_notifications.push(
 			client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
@@ -585,6 +588,7 @@ fn transition_3_voters_twice_1_full_observer() {
 
 		// wait for blocks to be finalized before generating new ones
 		let block_production = client.finality_notification_stream()
+			.map(|v| Ok::<_, ()>(v)).compat()
 			.take_while(|n| Ok(n.header.number() < &30))
 			.for_each(move |n| {
 				match n.header.number() {
@@ -652,6 +656,7 @@ fn transition_3_voters_twice_1_full_observer() {
 
 		finality_notifications.push(
 			client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.take_while(|n| Ok(n.header.number() < &30))
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
@@ -1275,6 +1280,7 @@ fn finalize_3_voters_1_light_observer() {
 	let link = net.lock().peer(3).data.lock().take().expect("link initialized on startup; qed");
 
 	let finality_notifications = net.lock().peer(3).client().finality_notification_stream()
+		.map(|v| Ok::<_, ()>(v)).compat()
 		.take_while(|n| Ok(n.header.number() < &20))
 		.collect();
 
@@ -1436,6 +1442,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 		finality_notifications.push(
 			client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.take_while(|n| Ok(n.header.number() < &50))
 				.for_each(move |_| Ok(()))
 		);
@@ -1471,6 +1478,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			let set_state = link.persistent_data.set_state.clone();
 
 			let wait = client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.take_while(|n| Ok(n.header.number() < &50))
 				.collect()
 				.map(|_| set_state);
