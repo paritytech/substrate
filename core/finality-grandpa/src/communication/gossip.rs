@@ -128,8 +128,8 @@ enum Consider {
 /// used both to tally incoming votes we receive and outgoing votes we sent out.
 #[derive(Debug, Default)]
 pub(crate) struct VoteTally {
-	pre_commits: usize,
-	pre_votes: usize,
+	precommits: usize,
+	prevotes: usize,
 	primary_proposals: usize,
 }
 
@@ -400,7 +400,7 @@ impl Misbehavior {
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
 			OutOfScopeMessage => cost::OUT_OF_SCOPE_MESSAGE,
-			WillfulRedundant => cost::WILLFULREDUNDANT,
+			WillfulRedundant => cost::WILLFUL_REDUNDANT,
 		}
 	}
 }
@@ -626,7 +626,7 @@ impl<Block: BlockT> Inner<Block> {
 				// We don't know about this round,
 				// let the local-view handle it and likely treat it as past or future.
 				return self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
-					.unwrap_or(Consider::RejectOutOfScope)
+					.unwrap_or(Consider::RejectOutOfScope);
 			}
 		};
 		let mut per_peer_tally = peer_tally_for_round.entry((msg.id.clone(), who.clone())).or_insert(Default::default());
@@ -644,13 +644,13 @@ impl<Block: BlockT> Inner<Block> {
 				}
 			},
 			Prevote(_prevote) => {
-				if per_peer_tally.pre_votes < 3 {
-					per_peer_tally.pre_votes += 1;
+				if per_peer_tally.prevotes < 3 {
+					per_peer_tally.prevotes += 1;
 				}
 			},
 			Precommit(_precommit) => {
-				if per_peer_tally.pre_commits < 3 {
-					per_peer_tally.pre_commits += 1;
+				if per_peer_tally.precommits < 3 {
+					per_peer_tally.precommits += 1;
 				}
 			},
 		}
@@ -661,8 +661,8 @@ impl<Block: BlockT> Inner<Block> {
 		// We report peers who send us a third or more of message of any kind,
 		// when we've already exchanged two messages of any kind for that voter to that peer.
 		let should_report = (outgoing_tally.primary_proposals + per_peer_tally.primary_proposals) > 2 ||
-				(outgoing_tally.pre_votes + per_peer_tally.pre_votes) > 2 ||
-				(outgoing_tally.pre_commits + per_peer_tally.pre_commits) > 2;
+			(outgoing_tally.prevotes + per_peer_tally.prevotes) > 2 ||
+			(outgoing_tally.precommits + per_peer_tally.precommits) > 2;
 
 		// When a peer sends us a redundant message, and should have known better,
 		// ignore the message and report the peer.
@@ -1211,7 +1211,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						},
 					}
 
-					let (primary_proposals_to_peer, pre_votes_to_peer, pre_commits_to_peer) = {
+					let (primary_proposals_to_peer, prevotes_to_peer, precommits_to_peer) = {
 						// If we haven't noted this round yet, the message is not allowed.
 						let tally_for_round = match inner.outgoing_msg_tally.get_mut(&(round, set_id)) {
 							Some(tally_for_round) => tally_for_round,
@@ -1220,10 +1220,10 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						let tally = tally_for_round
 							.entry((msg.message.id.clone(), who.clone()))
 							.or_insert(Default::default());
-						(tally.primary_proposals, tally.pre_votes, tally.pre_commits)
+						(tally.primary_proposals, tally.prevotes, tally.precommits)
 					};
 
-					let (primary_proposals_from_peer, pre_votes_from_peer, pre_commits_from_peer) = {
+					let (primary_proposals_from_peer, prevotes_from_peer, precommits_from_peer) = {
 						// If we haven't noted this round yet, the message is not allowed.
 						let peer_tally_for_round = match inner.incoming_msg_tally.get_mut(&(round, set_id)) {
 							Some(tally_for_round) =>  tally_for_round,
@@ -1234,15 +1234,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						let per_peer_tally = peer_tally_for_round
 							.entry((msg.message.id.clone(), who.clone()))
 							.or_insert(Default::default());
-						(per_peer_tally.primary_proposals, per_peer_tally.pre_votes, per_peer_tally.pre_commits)
+						(per_peer_tally.primary_proposals, per_peer_tally.prevotes, per_peer_tally.precommits)
 					};
 
 					// Check that what we've sent, plus what we've received from a given peer,
 					// doesn't add up to more than two messages of a any kind
 					// for a given voter/peer combo.
 					if (primary_proposals_to_peer + primary_proposals_from_peer) > 2 ||
-						(pre_votes_to_peer + pre_votes_from_peer) > 2 ||
-						(pre_commits_to_peer + pre_commits_from_peer) > 2 {
+						(prevotes_to_peer + prevotes_from_peer) > 2 ||
+						(precommits_to_peer + precommits_from_peer) > 2 {
 							return false
 					}
 
@@ -1263,13 +1263,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 							}
 						},
 						Prevote(_prevote) => {
-							if tally.pre_votes < 2 {
-								tally.pre_votes += 1;
+							if tally.prevotes < 2 {
+								tally.prevotes += 1;
 							}
 						},
 						Precommit(_precommit) => {
-							if tally.pre_commits < 2 {
-								tally.pre_commits += 1;
+							if tally.precommits < 2 {
+								tally.precommits += 1;
 							}
 						},
 					}
