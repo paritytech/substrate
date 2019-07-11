@@ -28,7 +28,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
-use consensus::import_queue::{BoxFinalityProofRequestBuilder, BlockImportResult, BlockImportError};
+use consensus::import_queue::{BlockImportResult, BlockImportError};
 use message::{
 	BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -41,7 +41,7 @@ use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, Context as SyncContext, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::Roles;
+use crate::config::{BoxFinalityProofRequestBuilder, Roles};
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -390,11 +390,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		specialization: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
+		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: peerset::PeersetConfig,
 	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
 		let info = chain.info();
-		let sync = ChainSync::new(config.roles, &info);
+		let sync = ChainSync::new(config.roles, &info, finality_proof_request_builder);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
@@ -1036,6 +1037,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return;
 			}
 		};
+
+		// don't announce genesis block since it will be ignored
+		if header.number().is_zero() {
+			return;
+		}
+
 		let hash = header.hash();
 
 		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
@@ -1228,10 +1235,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		self.sync.blocks_processed(&mut context, imported, count, results, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
-	}
-
-	pub fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
-		self.sync.set_finality_proof_request_builder(request_builder)
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without

@@ -65,7 +65,7 @@ use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand};
+pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 #[doc(hidden)]
 pub use futures::future::Executor;
 
@@ -205,11 +205,12 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-		let import_queue = Box::new(Components::build_import_queue(
+		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
-		)?);
+		)?;
+		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
@@ -248,6 +249,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
+			finality_proof_request_builder,
 			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			import_queue,
@@ -913,7 +915,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-/// # use network::construct_simple_protocol;
+/// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 /// # use client::{self, LongestChain};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
 /// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
@@ -967,9 +969,12 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None, None)) },
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None, None)) },
+/// 			{ |_, client| {
+/// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
+/// 				Ok((BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None), fprb))
+/// 			}},
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 /// 				#[allow(deprecated)]
@@ -1065,7 +1070,7 @@ macro_rules! construct_service_factory {
 			fn build_light_import_queue(
 				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<Self::LightImportQueue, $crate::Error> {
+			) -> Result<(Self::LightImportQueue, $crate::BoxFinalityProofRequestBuilder<$block>), $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 

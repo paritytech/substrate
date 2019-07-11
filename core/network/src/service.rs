@@ -28,7 +28,7 @@
 use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use consensus::import_queue::{ImportQueue, Link, BoxFinalityProofRequestBuilder};
+use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
@@ -170,6 +170,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.specialization,
 			params.transaction_pool,
 			params.finality_proof_provider,
+			params.finality_proof_request_builder,
 			params.protocol_id,
 			peerset_config,
 		)?;
@@ -676,8 +677,5 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
-		self.protocol.user_protocol_mut().set_finality_proof_request_builder(builder)
 	}
 }

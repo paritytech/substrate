@@ -38,7 +38,7 @@ use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
-use consensus::import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder, BlockImportError, BlockImportResult};
+use consensus::import_queue::{IncomingBlock, BlockImportError, BlockImportResult};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
 use extra_requests::ExtraRequests;
@@ -48,7 +48,7 @@ use runtime_primitives::traits::{
 };
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
-use crate::config::Roles;
+use crate::config::{Roles, BoxFinalityProofRequestBuilder};
 use std::collections::HashSet;
 
 mod blocks;
@@ -205,7 +205,11 @@ pub struct Status<B: BlockT> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance. Pass the initial known state of the chain.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
+	pub(crate) fn new(
+		role: Roles,
+		info: &ClientInfo<B>,
+		request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+	) -> Self {
 		let mut required_block_attributes =
 			message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 
@@ -224,7 +228,7 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			request_builder: None,
+			request_builder,
 		}
 	}
 
@@ -803,10 +807,6 @@ impl<B: BlockT> ChainSync<B> {
 		self.extra_finality_proofs.try_finalize_root(request_block, finalization_result, true);
 	}
 
-	pub fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
-		self.request_builder = Some(builder)
-	}
-
 	/// Notify about finalization of the given block.
 	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut dyn Context<B>) {
 		let r = self.extra_finality_proofs.on_block_finalized(hash, number, |base, block| {
@@ -880,7 +880,7 @@ impl<B: BlockT> ChainSync<B> {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number.is_zero() {
-			warn!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
+			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return false;
 		}
 		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()

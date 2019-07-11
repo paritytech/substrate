@@ -34,7 +34,7 @@
 
 use futures::{prelude::*, sync::mpsc};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::import_queue::{Origin, Link, BoxFinalityProofRequestBuilder, BlockImportResult, BlockImportError};
+use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -67,7 +67,6 @@ enum BlockImportWorkerMsg<B: BlockT> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	RequestFinalityProof(B::Hash, NumberFor<B>),
-	SetFinalityProofRequestBuilder(BoxFinalityProofRequestBuilder<B>),
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -108,10 +107,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
 	}
-
-	fn set_finality_proof_request_builder(&mut self, request_builder: BoxFinalityProofRequestBuilder<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::SetFinalityProofRequestBuilder(request_builder));
-	}
 }
 
 /// See [`buffered_link`].
@@ -145,8 +140,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.finality_proof_imported(who, block, result),
 				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
 					link.request_finality_proof(&hash, number),
-				BlockImportWorkerMsg::SetFinalityProofRequestBuilder(builder) =>
-					link.set_finality_proof_request_builder(builder),
 			}
 		}
 	}

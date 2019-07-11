@@ -139,7 +139,7 @@ impl Trait for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
-	type SelectInitialValidators = crate::ConfigValidators;
+	type SelectInitialValidators = ();
 }
 
 #[cfg(feature = "historical")]
