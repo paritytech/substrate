@@ -33,7 +33,6 @@ pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
-	BoxFinalityProofRequestBuilder,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
@@ -832,7 +831,6 @@ pub fn import_queue<B, C, E>(
 	block_import: BoxBlockImport<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
@@ -857,7 +855,6 @@ pub fn import_queue<B, C, E>(
 		block_import,
 		justification_import,
 		finality_proof_import,
-		finality_proof_request_builder,
 	), timestamp_core))
 }
 
