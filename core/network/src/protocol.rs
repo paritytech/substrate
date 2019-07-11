@@ -1234,7 +1234,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	) {
 		let peers = self.context_data.peers.clone();
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		self.sync.blocks_processed(&mut context, imported, count, results, |peer_id| peers.get(peer_id).map(|i| i.info.clone()));
+		self.sync.blocks_processed(
+			&mut context,
+			imported,
+			count,
+			results,
+			|peer_id| peers.get(peer_id).map(|i| i.info.clone())
+		);
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without
