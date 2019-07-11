@@ -61,14 +61,14 @@ impl session::SessionHandler<AccountId> for TestSessionHandler {
 		SESSION.with(|d| {
 			let mut d = d.borrow_mut();
 			let value = d.0[validator_index];
-			println!("on_disabled {} -> {}", validator_index, value);
 			d.1.insert(value);
 		})
 	}
 }
 
 pub fn is_disabled(validator: AccountId) -> bool {
-	SESSION.with(|d| d.borrow().1.contains(&validator))
+	let stash = Staking::ledger(&validator).unwrap().stash;
+	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
 pub struct ExistentialDeposit;
@@ -85,6 +85,9 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -95,6 +98,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
 	pub const TransferFee: u64 = 0;
@@ -103,7 +107,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
-	type Balance = u64;
+	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
@@ -121,13 +125,21 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 impl session::Trait for Test {
-	type OnSessionEnding = Staking;
+	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = crate::StashOf<Test>;
 	type SelectInitialValidators = Staking;
 }
+
+impl session::historical::Trait for Test {
+	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
+}
+
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -145,6 +157,7 @@ impl Trait for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
 }
 
 pub struct ExtBuilder {
@@ -216,7 +229,7 @@ impl ExtBuilder {
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		let validators = (0..num_validators)
-			.map(|x| ((x + 1) * 10) as u64)
+			.map(|x| ((x + 1) * 10 + 1) as u64)
 			.collect::<Vec<_>>();
 
 		let _ = balances::GenesisConfig::<Test>{
@@ -360,10 +373,15 @@ pub fn start_session(session_index: session::SessionIndex) {
 		System::set_block_number((i + 1).into());
 		Session::on_initialize(System::block_number());
 	}
+
 	assert_eq!(Session::current_index(), session_index);
 }
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
 	assert_eq!(Staking::current_era(), era_index);
+}
+
+pub fn validator_controllers() -> Vec<AccountId> {
+	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
 }

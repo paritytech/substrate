@@ -28,6 +28,7 @@ use regex::Regex;
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use std::hash::Hash;
+use zeroize::Zeroize;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -63,6 +64,43 @@ pub trait UncheckedInto<T> {
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	fn unchecked_into(self) -> T {
 		T::unchecked_from(self)
+	}
+}
+
+/// A store for sensitive data.
+///
+/// Calls `Zeroize::zeroize` upon `Drop`.
+#[derive(Clone)]
+pub struct Protected<T: Zeroize>(T);
+
+impl<T: Zeroize> AsRef<T> for Protected<T> {
+	fn as_ref(&self) -> &T {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Zeroize> std::fmt::Debug for Protected<T> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "<protected>")
+	}
+}
+
+impl<T: Zeroize> From<T> for Protected<T> {
+	fn from(t: T) -> Self {
+		Protected(t)
+	}
+}
+
+impl<T: Zeroize> Zeroize for Protected<T> {
+	fn zeroize(&mut self) {
+		self.0.zeroize()
+	}
+}
+
+impl<T: Zeroize> Drop for Protected<T> {
+	fn drop(&mut self) {
+		self.zeroize()
 	}
 }
 
@@ -289,7 +327,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: PartialEq + Eq {
+pub trait Public: TypedKey + PartialEq + Eq {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -308,9 +346,8 @@ pub trait Public: PartialEq + Eq {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: Sized + 'static
-{
-	/// TThe type which is used to encode a public key.
+pub trait Pair: TypedKey + Sized + 'static {
+	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
 	/// The type used to (minimally) encode the data required to securely create
@@ -319,7 +356,7 @@ pub trait Pair: Sized + 'static
 
 	/// The type used to represent a signature. Can be created from a key pair and a message
 	/// and verified with the message and a public key.
-	type Signature;
+	type Signature: AsRef<[u8]>;
 
 	/// Error returned from the `derive` function.
 	type DeriveError;
@@ -476,7 +513,7 @@ mod tests {
 	#[derive(PartialEq, Eq, Hash)]
 	struct TestPublic;
 	impl Public for TestPublic {
-		fn from_slice(bytes: &[u8]) -> Self {
+		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
 		}
 		fn as_slice(&self) -> &[u8] {
@@ -486,10 +523,13 @@ mod tests {
 			vec![]
 		}
 	}
+	impl TypedKey for TestPublic {
+		const KEY_TYPE: u32 = 4242;
+	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 0];
-		type Signature = ();
+		type Signature = [u8; 0];
 		type DeriveError = ();
 
 		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, []) }
@@ -510,7 +550,7 @@ mod tests {
 			Err(())
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
-		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
+		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
 		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
 			_sig: &Self::Signature,
 			_message: M,
@@ -541,6 +581,9 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
+	}
+	impl TypedKey for TestPair {
+		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]
