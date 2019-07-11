@@ -38,7 +38,7 @@ use inherents::InherentData;
 use timestamp;
 use finality_tracker;
 
-// TODO get via api: <timestamp::Module<T>>::minimum_period(). See #2587.
+// TODO get via api: <T as timestamp::Trait>::MinimumPeriod::get(). See #2587.
 const MINIMUM_PERIOD: u64 = 99;
 
 pub struct FactoryState<N> {

@@ -21,8 +21,8 @@ use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
 	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig, CouncilConfig,
 	AuraConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
-	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
-	MILLICENTS, SECS_PER_BLOCK,
+	SystemConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
+	MILLICENTS,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -143,9 +143,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			presentation_duration: 1 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
@@ -281,9 +278,6 @@ pub fn testnet_genesis(
 			term_duration: 1000000,
 			desired_seats: desired_seats,
 		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 2,                    // 2*2=4 second block time.
-		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
 				enable_println, // this should only be enabled on development chains
@@ -342,23 +336,15 @@ pub(crate) mod tests {
 	use service_test;
 	use crate::service::Factory;
 
-	fn local_testnet_genesis_instant() -> GenesisConfig {
-		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
-	}
-
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
-		let mut genesis = testnet_genesis(
+		testnet_genesis(
 			vec![
 				get_authority_keys_from_seed("Alice"),
 			],
 			get_account_id_from_seed("Alice"),
 			None,
 			false,
-		);
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
+		)
 	}
 
 	/// Local testnet config (single validator - Alice)
@@ -377,7 +363,7 @@ pub(crate) mod tests {
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
+		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis, vec![], None, None, None, None)
 	}
 
 	#[test]
