@@ -27,7 +27,7 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{self, ClientInfo, BlockchainEvents, ImportNotifications, FinalityNotifications};
+use client::{self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications, FinalityNotification};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
@@ -40,6 +40,7 @@ use consensus::block_import::{BlockImport, ImportResult};
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
@@ -216,8 +217,8 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
-	imported_blocks_stream: futures::stream::Fuse<ImportNotifications<Block>>,
-	finality_notification_stream: futures::stream::Fuse<FinalityNotifications<Block>>,
+	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
+	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
@@ -482,8 +483,10 @@ pub trait TestNetFactory: Sized {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
-			let imported_blocks_stream = client.import_notification_stream().fuse();
-			let finality_notification_stream = client.finality_notification_stream().fuse();
+			let imported_blocks_stream = Box::new(client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
+			let finality_notification_stream = Box::new(client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 
 			peers.push(Peer {
 				data,
@@ -539,8 +542,10 @@ pub trait TestNetFactory: Sized {
 				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
-			let imported_blocks_stream = client.import_notification_stream().fuse();
-			let finality_notification_stream = client.finality_notification_stream().fuse();
+			let imported_blocks_stream = Box::new(client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
+			let finality_notification_stream = Box::new(client.finality_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat().fuse());
 
 			peers.push(Peer {
 				data,

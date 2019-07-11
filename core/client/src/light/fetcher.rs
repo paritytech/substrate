@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
-use futures::IntoFuture;
+use std::future::Future;
 
 use hash_db::{HashDB, Hasher};
 use parity_codec::{Decode, Encode};
@@ -141,15 +141,15 @@ pub struct RemoteBodyRequest<Header: HeaderT> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: IntoFuture<Item = Block::Header, Error = ClientError>;
+	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>>;
 	/// Remote storage read future.
-	type RemoteReadResult: IntoFuture<Item = Option<Vec<u8>>, Error = ClientError>;
+	type RemoteReadResult: Future<Output = Result<Option<Vec<u8>>, ClientError>>;
 	/// Remote call result future.
-	type RemoteCallResult: IntoFuture<Item = Vec<u8>, Error = ClientError>;
+	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>>;
 	/// Remote changes result future.
-	type RemoteChangesResult: IntoFuture<Item = Vec<(NumberFor<Block>, u32)>, Error = ClientError>;
+	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
 	/// Remote block body result future.
-	type RemoteBodyResult: IntoFuture<Item = Vec<Block::Extrinsic>, Error = ClientError>;
+	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>>;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;

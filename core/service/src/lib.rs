@@ -30,6 +30,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use futures::sync::mpsc;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
@@ -294,6 +295,7 @@ impl<Components: components::Components> Service<Components> {
 			let to_spawn_tx_ = to_spawn_tx.clone();
 
 			let events = client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
 
@@ -623,8 +625,10 @@ fn build_network_future<
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
-	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
+	let mut imported_blocks_stream = client.import_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
 
 	futures::future::poll_fn(move || {
 		// We poll `imported_blocks_stream`.
