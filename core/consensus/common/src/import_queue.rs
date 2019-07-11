@@ -106,8 +106,8 @@ pub trait ImportQueue<B: BlockT>: Send {
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
-	/// it is as if this method always returned `Ok(Async::NotReady)`.
-	fn poll_actions(&mut self, link: &mut dyn Link<B>);
+	/// it is as if this method always returned `Poll::Pending`.
+	fn poll_actions(&mut self, cx: &mut futures::task::Context, link: &mut dyn Link<B>);
 }
 
 /// Hooks that the verification queue can use to influence the synchronization

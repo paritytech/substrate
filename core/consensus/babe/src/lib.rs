@@ -40,7 +40,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
@@ -78,8 +78,8 @@ use client::{
 	backend::AuxStore,
 };
 use slots::{CheckedHeader, check_equivocation};
-use futures::{Future, IntoFuture, future};
-use tokio_timer::Timeout;
+use futures::{prelude::*, future};
+use futures_timer::Delay;
 use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
@@ -182,7 +182,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	force_authoring,
 	time_source,
 }: BabeParams<C, E, I, SO, SC>) -> Result<
-	impl Future<Item=(), Error=()>,
+	impl futures01::Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
 	B: BlockT<Header=H>,
@@ -190,7 +190,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
-	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	H: Header<Hash=B::Hash>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -214,7 +214,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		time_source,
-	))
+	).map(|()| Ok::<(), ()>(())).compat())
 }
 
 struct BabeWorker<C, E, I, SO> {
@@ -233,7 +233,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
-	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
@@ -242,7 +242,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
-	type OnSlot = Box<dyn Future<Item=(), Error=consensus_common::Error> + Send>;
+	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(
 		&self,
@@ -269,7 +269,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				telemetry!(CONSENSUS_WARN; "babe.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(), "err" => ?e
 				);
-				return Box::new(future::ok(()));
+				return Box::pin(future::ready(Ok(())));
 			}
 		};
 
@@ -278,7 +278,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			telemetry!(CONSENSUS_DEBUG; "babe.skipping_proposal_slot";
 				"authorities_len" => authorities.len()
 			);
-			return Box::new(future::ok(()));
+			return Box::pin(future::ready(Ok(())));
 		}
 
 		// FIXME replace the dummy empty slices with real data
@@ -310,7 +310,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					telemetry!(CONSENSUS_WARN; "babe.unable_authoring_block";
 						"slot" => slot_num, "err" => ?e
 					);
-					return Box::new(future::ok(()))
+					return Box::pin(future::ready(Ok(())))
 				}
 			};
 
@@ -323,7 +323,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 
 			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			Timeout::new(
+			futures::future::select(
 				proposer.propose(
 					slot_info.inherent_data,
 					generic::Digest {
@@ -332,14 +332,20 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 						],
 					},
 					remaining_duration,
-				).into_future(),
-				remaining_duration,
-			)
+				).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into()),
+				Delay::new(remaining_duration)
+					.map_err(|err| consensus_common::Error::FaultyTimer(err).into())
+			).map(|v| match v {
+				futures::future::Either::Left((v, _)) => v,
+				futures::future::Either::Right((Ok(_), _)) =>
+					Err(consensus_common::Error::ClientImport("Timeout in the BaBe proposer".into())),
+				futures::future::Either::Right((Err(err), _)) => Err(err),
+			})
 		} else {
-			return Box::new(future::ok(()));
+			return Box::pin(future::ready(Ok(())));
 		};
 
-		Box::new(proposal_work.map(move |b| {
+		Box::pin(proposal_work.map_ok(move |b| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
@@ -403,9 +409,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					"hash" => ?parent_hash, "err" => ?e
 				);
 			}
-		}).map_err(|e| {
-			warn!("Client import failed: {:?}", e);
-			consensus_common::Error::ClientImport(format!("{:?}", e)).into()
 		}))
 	}
 }
@@ -877,8 +880,8 @@ mod tests {
 	use super::generic::DigestItem;
 	use client::BlockchainEvents;
 	use test_client;
-	use futures::{Async, stream::Stream as _};
-	use futures03::{StreamExt as _, TryStreamExt as _};
+	use futures01::{Async, stream::Stream as _};
+	use futures::{StreamExt as _, TryStreamExt as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -909,10 +912,11 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type Create = Result<TestBlock, Error>;
+		type Create = future::Ready<Result<TestBlock, Error>>;
 
-		fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
-			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
+		fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
+			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
+			future::ready(r)
 		}
 	}
 
@@ -1006,9 +1010,8 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
-					.map(|v| Ok::<_, ()>(v)).compat()
-					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
-					.for_each(move |_| Ok(()))
+					.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+					.for_each(move |_| future::ready(()))
 			);
 
 			let config = Config::get_or_compute(&*client)
@@ -1038,13 +1041,13 @@ mod tests {
 		}
 		debug!(target: "babe", "checkpoint 5");
 
-		// wait for all finalized on each.
-		let wait_for = ::futures::future::join_all(import_notifications)
-			.map(drop)
-			.map_err(drop);
+		runtime.spawn(futures01::future::poll_fn(move || {
+			net.lock().poll();
+			Ok::<_, ()>(futures01::Async::NotReady::<()>)
+		}));
 
-		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+		runtime.block_on(future::join_all(import_notifications)
+			.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 	}
 
 	#[test]
