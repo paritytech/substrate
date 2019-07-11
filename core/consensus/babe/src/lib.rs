@@ -371,14 +371,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			// let pre_digest = find_pre_digest::<B>(&header);
-			// if let Err(e) = pre_digest {
-			// 	warn!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
-			// 	return
-			// } else {
-			// 	trace!(target: "babe", "Got correct number of seals.  Good!")
-			// };
-
 			let header_num = header.number().clone();
 			let parent_hash = header.parent_hash().clone();
 
