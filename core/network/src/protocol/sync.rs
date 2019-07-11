@@ -37,7 +37,7 @@ use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, BoxFinalityProofRequestBuilder}};
+use consensus::{BlockOrigin, import_queue::IncomingBlock};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
 use extra_requests::ExtraRequests;
@@ -47,7 +47,7 @@ use runtime_primitives::traits::{
 };
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
-use crate::config::Roles;
+use crate::config::{Roles, BoxFinalityProofRequestBuilder};
 use std::collections::HashSet;
 
 mod blocks;
@@ -196,7 +196,11 @@ pub struct Status<B: BlockT> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance. Pass the initial known state of the chain.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
+	pub(crate) fn new(
+		role: Roles,
+		info: &ClientInfo<B>,
+		request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+	) -> Self {
 		let mut required_block_attributes =
 			message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 
@@ -215,7 +219,7 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			request_builder: None,
+			request_builder,
 		}
 	}
 
@@ -713,10 +717,6 @@ impl<B: BlockT> ChainSync<B> {
 		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
 	) {
 		self.extra_finality_proofs.try_finalize_root(request_block, finalization_result, true);
-	}
-
-	pub fn set_finality_proof_request_builder(&mut self, builder: BoxFinalityProofRequestBuilder<B>) {
-		self.request_builder = Some(builder)
 	}
 
 	/// Log that a block has been successfully imported

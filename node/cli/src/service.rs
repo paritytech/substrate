@@ -171,7 +171,6 @@ construct_service_factory! {
 					Box::new(block_import),
 					Some(Box::new(justification_import)),
 					None,
-					None,
 					client,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
@@ -194,10 +193,9 @@ construct_service_factory! {
 					Box::new(block_import),
 					None,
 					Some(Box::new(finality_proof_import)),
-					Some(finality_proof_request_builder),
 					client,
 					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+				).map(|q| (q, finality_proof_request_builder)).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {

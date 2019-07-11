@@ -22,7 +22,7 @@ use crate::error::Error as ConsensusError;
 use crate::block_import::{BlockImport, BlockOrigin};
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
-	BoxFinalityProofRequestBuilder, BoxJustificationImport, ImportQueue, Link, Origin,
+	BoxJustificationImport, ImportQueue, Link, Origin,
 	IncomingBlock, import_single_block,
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
@@ -43,8 +43,6 @@ pub struct BasicQueue<B: BlockT> {
 	sender: mpsc::UnboundedSender<ToWorkerMsg<B>>,
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
-	/// Sent through the link as soon as possible.
-	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	/// Since we have to be in a tokio context in order to spawn background tasks, we first store
 	/// the task to spawn here, then extract it as soon as we are in a tokio context.
 	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
@@ -66,7 +64,6 @@ impl<B: BlockT> BasicQueue<B> {
 		block_import: BoxBlockImport<B>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
 		let (future, worker_sender) = BlockImportWorker::new(
@@ -80,7 +77,6 @@ impl<B: BlockT> BasicQueue<B> {
 		Self {
 			sender: worker_sender,
 			result_port,
-			finality_proof_request_builder,
 			future_to_spawn: Some(Box::new(future)),
 			manual_poll: None,
 		}
@@ -128,10 +124,6 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 				Ok(Async::NotReady) => {}
 				_ => self.manual_poll = None,
 			}
-		}
-
-		if let Some(fprb) = self.finality_proof_request_builder.take() {
-			link.set_finality_proof_request_builder(fprb);
 		}
 
 		self.result_port.poll_actions(link);
