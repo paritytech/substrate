@@ -60,7 +60,7 @@ use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::VecDeque, num::NonZeroUsize, time::Duration};
+use std::{cmp, collections::VecDeque, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
@@ -158,8 +158,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: &Multihash) {
-		self.kademlia.get_record(key, Quorum::N(
-			NonZeroUsize::new(10).expect("10 > 0; qed")));
+		self.kademlia.get_record(key, Quorum::One)
 	}
 
 	/// Start putting a record into the DHT. Other nodes can later fetch that value with
