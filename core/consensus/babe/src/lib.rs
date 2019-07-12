@@ -420,16 +420,18 @@ macro_rules! babe_err {
 fn find_pre_digest<B: Block>(header: &B::Header) -> Result<(Option<Epoch>, BabePreDigest), String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
+	fn check_log<T>(query: Option<T>, target: &mut Option<T>) -> Result<(), String> {
+		match (query, target.is_some()) {
+			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
+			(None, _) => Ok(trace!(target: "babe", "Ignoring digest not meant for us")),
+			(s, false) => Ok(*target = s),
+		}
+	}
 	let (mut pre_digest, mut epoch): (Option<_>, Option<_>) = (None, None);
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}", log);
-		let check_log = |query, existing, target| match (query, existing) {
-			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
-			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
-			(s, false) => *target = s,
-		};
-		check_log(log.as_babe_pre_digest(), pre_digest.is_some(), &mut pre_digest);
-		check_log(log.as_babe_epoch(), epoch.is_some(), &mut epoch);
+		check_log(log.as_babe_pre_digest(), &mut pre_digest)?;
+		check_log(log.as_babe_epoch(), &mut epoch)?
 	}
 	Ok((epoch, pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))?))
 }
@@ -468,7 +470,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 
 	let (_epoch, pre_digest) = find_pre_digest::<B>(&header)?;
 
-	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output, epoch: _ } = pre_digest;
+	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output } = pre_digest;
 
 	if slot_number > slot_now {
 		header.digest_mut().push(seal);
@@ -714,7 +716,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusErro
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
-				BabeApi::authorities(&*client.runtime_api(), at).ok()
+				BabeApi::epoch(&*client.runtime_api(), at).ok()
 			} else {
 				None
 			}

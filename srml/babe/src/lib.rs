@@ -137,7 +137,7 @@ decl_storage! {
 
 		/// The data for the next epoch
 		NextEpoch get(next_epoch) build(|config: &GenesisConfig| Epoch {
-			slots_per_epoch: config.slots_per_epoch,
+			randomness: [0; 32],
 			authorities: config.authorities.clone(),
 		}): Epoch;
 
@@ -177,7 +177,7 @@ decl_module! {
 				if slots_per_epoch > 0 {
 					LastSlotInEpoch::put(i.slot_number % slots_per_epoch == slots_per_epoch - 1)
 				}
-				return Self::deposit_vrf_output(&i.1)
+				return Self::deposit_vrf_output(&i.vrf_output)
 			}
 		}
 	}
@@ -202,7 +202,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return RawBabePreDigest::decode(&mut data)?.authority_index;
+				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
 			}
 		}
 		return None
