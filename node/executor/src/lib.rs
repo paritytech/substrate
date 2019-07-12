@@ -804,7 +804,7 @@ mod tests {
 		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
 		let block_data = block1.0;
-		let block = Block::decode(&mut &block_data[..]).unwrap();
+		let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
