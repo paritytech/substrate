@@ -38,6 +38,12 @@ pub enum Error {
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format")]
 	BadFormat,
+	/// Unknown key type.
+	#[display(fmt="Invalid key type id")]
+	UnknownKeyType,
+	/// Invalid key.
+	#[display(fmt="Invalid key seed")]
+	BadSeed,
 }
 
 impl std::error::Error for Error {

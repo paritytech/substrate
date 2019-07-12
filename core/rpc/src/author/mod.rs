@@ -29,9 +29,11 @@ use crate::rpc::futures::{Sink, Stream, Future};
 use crate::subscriptions::Subscriptions;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use keystore::Store;
 use log::warn;
 use parity_codec::{Encode, Decode};
-use primitives::{Bytes, Blake2Hasher, H256};
+use primitives::{Bytes, Blake2Hasher, H256, ed25519, sr25519};
+use primitives::crypto::{KeyTypeId, Pair, key_types};
 use runtime_primitives::{generic, traits};
 use self::error::Result;
 use transaction_pool::{
@@ -72,6 +74,10 @@ pub trait AuthorApi<Hash, BlockHash> {
 	/// Unsubscribe from extrinsic watching.
 	#[pubsub(subscription = "author_extrinsicUpdate", unsubscribe, name = "author_unwatchExtrinsic")]
 	fn unwatch_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+	/// Add session key.
+	#[rpc(name = "author_addKey")]
+	fn add_key(&self, ty: KeyTypeId, key: Vec<u8>) -> Result<()>;
 }
 
 /// Authoring API
@@ -82,6 +88,8 @@ pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	pool: Arc<Pool<P>>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
+	/// Keystore
+	keystore: Option<Arc<Store>>,
 }
 
 impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
@@ -90,11 +98,13 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 		pool: Arc<Pool<P>>,
 		subscriptions: Subscriptions,
+		keystore: Option<Arc<Store>>,
 	) -> Self {
 		Author {
 			client,
 			pool,
 			subscriptions,
+			keystore,
 		}
 	}
 }
@@ -175,5 +185,24 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn unwatch_extrinsic(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn add_key(&self, key_type_id: KeyTypeId, key: Vec<u8>) -> Result<()> {
+		if let Some(keystore) = &self.keystore {
+			match key_type_id {
+				key_types::ED25519 => {
+					let pair = ed25519::Pair::from_seed_slice(&key[..])
+						.map_err(|_| error::Error::BadSeed)?;
+					keystore.add_key(&pair);
+				}
+				key_types::SR25519 => {
+					let pair = sr25519::Pair::from_seed_slice(&key[..])
+						.map_err(|_| error::Error::BadSeed)?;
+					keystore.add_key(&pair);
+				}
+				_ => Err(error::Error::UnknownKeyType)?
+			}
+		}
+		Ok(())
 	}
 }

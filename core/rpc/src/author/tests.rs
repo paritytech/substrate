@@ -23,7 +23,8 @@ use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
-use primitives::{H256, blake2_256, hexdisplay::HexDisplay};
+use keystore::Store;
+use primitives::{H256, blake2_256, hexdisplay::HexDisplay, crypto::key_types};
 use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
 use tokio::runtime;
 
@@ -45,6 +46,7 @@ fn submit_transaction_should_not_cause_error() {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: None,
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -66,6 +68,7 @@ fn submit_rich_transaction_should_not_cause_error() {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: None,
 	};
 	let xt = uxt(AccountKeyring::Alice, 0).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -89,6 +92,7 @@ fn should_watch_extrinsic() {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: None,
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
@@ -129,6 +133,7 @@ fn should_return_pending_extrinsics() {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: None,
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
@@ -147,6 +152,7 @@ fn should_remove_extrinsics() {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: None,
 	};
 	let ex1 = uxt(AccountKeyring::Alice, 0);
 	p.submit_extrinsic(ex1.encode().into()).unwrap();
@@ -164,4 +170,28 @@ fn should_remove_extrinsics() {
 	]).unwrap();
 
  	assert_eq!(removed.len(), 3);
+}
+
+#[test]
+fn should_set_key() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let store = Arc::new(Store::new());
+	let ed25519_store = store.create_local_store::<ed25519::Pair>();
+	let sr25519_store = store.create_local_store::<sr25519::Pair>();
+	let p = Author {
+		client,
+		pool: pool.clone(),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: Some(store),
+	};
+	let ed_key = ed25519::Pair::from_seed(&[0; 32]);
+	let sr_key = sr25519::Pair::from_seed(&[1; 32]);
+	p.add_key(key_types::ED25519, ed_key.to_raw_vec()).unwrap();
+	p.add_key(key_types::SR25519, sr_key.to_raw_vec()).unwrap();
+	let ed_key2 = ed25519_store.get_key(&ed_key.public()).unwrap();
+	let sr_key2 = sr25519_store.get_key(&sr_key.public()).unwrap();
+	assert_eq!(ed_key.to_raw_vec(), ed_key2.to_raw_vec());
+	assert_eq!(sr_key.to_raw_vec(), sr_key2.to_raw_vec());
 }
