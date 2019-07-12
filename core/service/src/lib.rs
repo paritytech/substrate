@@ -37,11 +37,11 @@ use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use keystore::Store as Keystore;
+use keystore::{LocalStore, Store};
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, ed25519, crypto};
+use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
@@ -85,7 +85,6 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: ComponentAuthorityKeyProvider<Components>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -172,40 +171,7 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
-			match Keystore::open(keystore_path.clone()) {
-				Ok(ks) => Some(ks),
-				Err(err) => {
-					error!("Failed to initialize keystore: {}", err);
-					None
-				}
-			}
-		} else {
-			None
-		};
-
-		// Keep the public key for telemetry
-		let public_key: String;
-
-		// This is meant to be for testing only
-		// FIXME #1063 remove this
-		if let Some(keystore) = keystore.as_mut() {
-			for seed in &config.keys {
-				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
-			}
-
-			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
-				Some(public_key) => public_key.to_string(),
-				None => {
-					let key: ed25519::Pair = keystore.generate(&config.password.as_ref())?;
-					let public_key = key.public();
-					info!("Generated a new keypair: {:?}", public_key);
-					public_key.to_string()
-				}
-			}
-		} else {
-			public_key = format!("<disabled-keystore>");
-		}
+		let keystore = Store::new();
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -268,11 +234,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let keystore_authority_key = AuthorityKeyProvider {
 			_marker: PhantomData,
-			roles: config.roles,
-			password: config.password.clone(),
-			keystore: keystore.map(Arc::new),
 		};
-
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -280,8 +242,8 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					keystore_authority_key.clone(),
-					config.password.clone(),
+					keystore_authority_key,
+					config.offchain_worker_password.clone(),
 				)))
 			},
 			(true, None) => {
@@ -420,6 +382,7 @@ impl<Components: components::Components> Service<Components> {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
+				Some(keystore.clone()),
 			)
 		};
 		let rpc_handlers = gen_handler();
@@ -440,12 +403,13 @@ impl<Components: components::Components> Service<Components> {
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
+			let aura = config.aura.clone();
+			let grandpa_voter = config.grandpa_voter.clone();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
@@ -463,9 +427,9 @@ impl<Components: components::Components> Service<Components> {
 						"implementation" => impl_name.clone(),
 						"version" => version.clone(),
 						"config" => "",
+						"aura" => aura,
+						"grandpa_voter" => grandpa_voter,
 						"chain" => chain_name.clone(),
-						"pubkey" => &public_key,
-						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
 
@@ -490,7 +454,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore: keystore_authority_key,
+			keystore,
 			config,
 			exit,
 			rpc_handlers,
@@ -499,20 +463,6 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
-	}
-
-	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
-		use offchain::AuthorityKeyProvider;
-
-		self.keystore.authority_key(&BlockId::Number(Zero::zero()))
-	}
-
-	/// give the authority key, if we are an authority and have a key
-	pub fn fg_authority_key(&self) -> Option<ComponentFinalityPair<Components>> {
-		use offchain::AuthorityKeyProvider;
-
-		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -545,6 +495,11 @@ impl<Components: components::Components> Service<Components> {
 		-> impl Future<Item = Option<String>, Error = ()>
 	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
+	}
+
+	/// Get store.
+	pub fn store(&self) -> &Store {
+		&self.keystore
 	}
 
 	/// Get shared client instance.
@@ -923,49 +878,11 @@ where
 	type FinalityPair = FinalityPair;
 
 	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
-		if self.roles != Roles::AUTHORITY {
-			return None
-		}
-
-		let keystore = match self.keystore {
-			Some(ref keystore) => keystore,
-			None => return None
-		};
-
-		let loaded_key = keystore
-			.contents()
-			.map(|keys| keys.get(0)
-				 .map(|k| keystore.load(k, self.password.as_ref()))
-			);
-
-		if let Ok(Some(Ok(key))) = loaded_key {
-			Some(key)
-		} else {
-			None
-		}
+		None
 	}
 
 	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
-		if self.roles != Roles::AUTHORITY {
-			return None
-		}
-
-		let keystore = match self.keystore {
-			Some(ref keystore) => keystore,
-			None => return None
-		};
-
-		let loaded_key = keystore
-			.contents()
-			.map(|keys| keys.get(0)
-				 .map(|k| keystore.load(k, self.password.as_ref()))
-			);
-
-		if let Ok(Some(Ok(key))) = loaded_key {
-			Some(key)
-		} else {
-			None
-		}
+		None
 	}
 }
 

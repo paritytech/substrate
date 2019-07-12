@@ -23,6 +23,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
+use keystore::Store;
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -159,6 +160,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		keystore: Option<Store>,
 	) -> rpc::RpcHandler;
 }
 
@@ -172,11 +174,12 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		keystore: Option<Store>,
 	) -> rpc::RpcHandler {
 		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
 		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions);
+		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions, keystore);
 		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
 		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 			state,

@@ -40,12 +40,14 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
+	/// AURA enabled.
+	pub aura: bool,
+	/// GRANDPA voter enabled.
+	pub grandpa_voter: bool,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: transaction_pool::txpool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
-	/// Path to key files.
-	pub keystore_path: Option<PathBuf>,
 	/// Path to the database.
 	pub database_path: PathBuf,
 	/// Cache Size for internal database in MiB
@@ -56,8 +58,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub state_cache_child_ratio: Option<usize>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
-	/// Additional key seeds.
-	pub keys: Vec<String>,
+	/// Key seed for authority keys.
+	pub key: Option<String>,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
@@ -83,15 +85,10 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
 	pub offchain_worker: bool,
+	/// Password for offchain worker.
+	pub offchain_worker_password: Protected<String>,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
-	/// Disable GRANDPA when running in validator mode
-	pub disable_grandpa: bool,
-	/// Run GRANDPA voter even when no additional key seed is specified. This can for example be of interest when
-	/// running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
-	pub grandpa_voter: bool,
-	/// Node keystore's password
-	pub password: Protected<String>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -104,14 +101,15 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			chain_spec,
 			name: Default::default(),
 			roles: Roles::FULL,
+			aura: false,
+			grandpa_voter: false,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: Default::default(),
 			database_path: Default::default(),
 			database_cache_size: Default::default(),
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
-			keys: Default::default(),
+			key: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategies: Default::default(),
@@ -123,10 +121,8 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			telemetry_external_transport: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
+			offchain_worker_password: "".to_string().into(),
 			force_authoring: false,
-			disable_grandpa: false,
-			grandpa_voter: false,
-			password: "".to_string().into(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 
