@@ -127,6 +127,23 @@ where
 	}
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone, T, P> Clone for
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC, T, P>
+{
+	fn clone(&self) -> Self {
+		GrandpaBlockImport {
+			inner: self.inner.clone(),
+			select_chain: self.select_chain.clone(),
+			authority_set: self.authority_set.clone(),
+			send_voter_commands: self.send_voter_commands.clone(),
+			consensus_changes: self.consensus_changes.clone(),
+			api: self.api.clone(),
+			transaction_pool: self.transaction_pool.clone(),
+			_phantom: self._phantom.clone(),
+		}
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA, SC, T, P> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
@@ -140,7 +157,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> JustificationImport<Bloc
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
 		let chain_info = self.inner.info().chain;
 
@@ -170,7 +187,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> JustificationImport<Bloc
 	}
 
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		justification: Justification,
@@ -574,7 +591,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
+	fn import_block(&mut self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();
@@ -596,7 +613,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
 		let enacts_consensus_change = !new_cache.is_empty();
-		let import_result = self.inner.import_block(block, new_cache);
+		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
 			match import_result {
@@ -690,7 +707,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> BlockImport<Block>
 	}
 
 	fn check_block(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
@@ -738,7 +755,7 @@ where
 	/// If `enacts_change` is set to true, then finalizing this block *must*
 	/// enact an authority set change, the function will panic otherwise.
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		justification: Justification,

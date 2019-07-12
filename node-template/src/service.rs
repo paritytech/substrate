@@ -17,7 +17,7 @@ use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
-use network::construct_simple_protocol;
+use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 use substrate_executor::native_executor_instance;
 use substrate_service::construct_service_factory;
 
@@ -105,8 +105,7 @@ construct_service_factory! {
 				| {
 					import_queue::<_, _, Pair, TransactionPool<Self::FullTransactionPoolApi>>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
+						Box::new(client.clone()),
 						None,
 						None,
 						client,
@@ -119,16 +118,16 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
 					import_queue::<_, _, Pair, TransactionPool<Self::LightTransactionPoolApi>>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
+						Box::new(client.clone()),
 						None,
 						None,
 						client,
 						None,
 						config.custom.inherent_data_providers.clone(),
-					).map_err(Into::into)
+					).map(|q| (q, fprb)).map_err(Into::into)
 				}
 			},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>

@@ -17,7 +17,7 @@ substrate-telemetry = { path = "../../telemetry" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../accountable-safety/primitives" }
+consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../accountable-safety/primitives", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 futures = "0.1.26"
@@ -29,6 +29,7 @@ rand = "0.6.5"
 merlin = "1.0.3"
 
 [dev-dependencies]
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}

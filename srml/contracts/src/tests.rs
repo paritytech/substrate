@@ -94,6 +94,9 @@ impl Get<u64> for BlockGasLimit {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -104,6 +107,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
+	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
 	pub const BalancesTransactionBaseFee: u64 = 0;
@@ -123,9 +127,13 @@ impl balances::Trait for Test {
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
 }
+parameter_types! {
+	pub const MinimumPeriod: u64 = 1;
+}
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -256,26 +264,16 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(
-			balances::GenesisConfig::<Test> {
-				balances: vec![],
-				vesting: vec![],
-			}
-			.build_storage()
-			.unwrap()
-			.0,
-		);
-		t.extend(
-			GenesisConfig::<Test> {
-				current_schedule: Default::default(),
-				gas_price: self.gas_price,
-			}
-			.build_storage()
-			.unwrap()
-			.0,
-		);
-		runtime_io::TestExternalities::new(t)
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		balances::GenesisConfig::<Test> {
+			balances: vec![],
+			vesting: vec![],
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		GenesisConfig::<Test> {
+			current_schedule: Default::default(),
+			gas_price: self.gas_price,
+		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		runtime_io::TestExternalities::new_with_children(t)
 	}
 }
 

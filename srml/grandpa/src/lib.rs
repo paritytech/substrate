@@ -30,8 +30,6 @@
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
-#[cfg(feature = "std")]
-use serde::Serialize;
 use rstd::prelude::*;
 use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use parity_codec::{self as codec, Encode, Decode, Codec};
@@ -51,7 +49,7 @@ use primitives::{
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrevote, GrandpaPrecommit,
 	SignedPrecommit, VoterSet, GrandpaMessage, localized_payload, AncestryChain,
-	Chain, validate_commit,
+	Chain, validate_commit, ConsensusLog,
 };
 pub use fg_primitives::{
 	AuthorityId, AuthorityWeight, AuthoritySignature, CHALLENGE_SESSION_LENGTH,
@@ -64,48 +62,6 @@ use core::iter::FromIterator;
 
 mod mock;
 mod tests;
-
-/// Consensus log type of this module.
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum Signal<H, N, Header> {
-	/// Authorities set change has been signaled. Contains the new set of authorities
-	/// and the delay in blocks _to finalize_ before applying.
-	AuthoritiesChange(ScheduledChange<N>),
-	/// A forced authorities set change. Contains in this order: the median last
-	/// finalized block when the change was signaled, the delay in blocks _to import_
-	/// before applying and the new set of authorities.
-	ForcedAuthoritiesChange(N, ScheduledChange<N>),
-
-	Challenge(safety::Challenge<H, N, Header>),
-}
-
-impl<H, N, Header> Signal<H, N, Header> {
-	/// Try to cast the log entry as a contained signal.
-	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
-		match self {
-			Signal::AuthoritiesChange(change) => Some(change),
-			Signal::ForcedAuthoritiesChange(_, _) => None,
-			_ => None,
-		}
-	}
-
-	/// Try to cast the log entry as a contained forced signal.
-	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
-		match self {
-			Signal::ForcedAuthoritiesChange(median, change) => Some((median, change)),
-			Signal::AuthoritiesChange(_) => None,
-			_ => None,
-		}
-	}
-
-	pub fn try_into_challenge(self) -> Option<safety::Challenge<H, N, Header>> {
-		match self {
-			Signal::Challenge(challenge) => Some(challenge),
-			_ => None,
-		}
-	}
-}
 
 pub trait Trait: system::Trait {
 	/// The event type of this module.
@@ -201,55 +157,15 @@ type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
 type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
 type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
 
-type Equivocation<T> = safety::GrandpaEquivocation<Header<T>, Number<T>>;
+type Equivocation<T> = safety::GrandpaEquivocation<Hash<T>, Number<T>>;
 type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// Report prevote equivocation.
-		fn report_prevote_equivocation(
-			origin,
-			equivocation: Equivocation<T>
-		) {
-			let identity = equivocation.identity;
-
-			let first_vote = equivocation.first.0;
-			let first_signature = equivocation.first.1;
-
-			let second_vote = equivocation.second.0;
-			let second_signature = equivocation.second.1;
-			
-			if first_vote != second_vote {
-				let first_payload = localized_payload(
-					equivocation.round_number,
-					equivocation.set_id,
-					&first_vote,
-				);
-
-				if !first_signature.verify(first_payload.as_slice(), &identity) {
-					return Err("Bad signature")
-				}
-
-				let second_payload = localized_payload(
-					equivocation.round_number,
-					equivocation.set_id,
-					&second_vote,
-				);
-
-				if !second_signature.verify(second_payload.as_slice(), &identity) {
-					return Err("Bad signature")
-				}
-
-				// Slash identity
-			}
-
-			return Err("Votes are the same")
-		}
-
-		/// Report precommit equivocation.
-		fn report_precommit_equivocation(
+		/// Report equivocation.
+		fn report_equivocation(
 			origin,
 			equivocation: Equivocation<T>
 		) {
@@ -470,7 +386,7 @@ decl_module! {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {
-						Self::deposit_log(Signal::ForcedAuthoritiesChange(
+						Self::deposit_log(ConsensusLog::ForcedChange(
 							median,
 							ScheduledChange{
 								delay: pending_change.delay,
@@ -478,7 +394,7 @@ decl_module! {
 							}
 						))
 					} else {
-						Self::deposit_log(Signal::AuthoritiesChange(
+						Self::deposit_log(ConsensusLog::ScheduledChange(
 							ScheduledChange{
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
@@ -555,20 +471,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Signal<T::Hash, T::BlockNumber, T::Header>) {
+	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(
-		digest: &DigestOf<T>
-	) -> Option<Signal<T::Hash, T::BlockNumber, T::Header>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<
-			Signal<T::Hash, T::BlockNumber, T::Header>
-		>(id))
+		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>)
@@ -585,7 +497,8 @@ impl<T: Trait> Module<T> {
 
 	pub fn grandpa_challenge(digest: &DigestOf<T>) -> Option<Challenge<T>>
 	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
+		// Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
+		None
 	}
 }
 
@@ -609,8 +522,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+	fn on_disabled(i: usize) {
+		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}
 }
 

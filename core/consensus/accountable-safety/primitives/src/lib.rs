@@ -18,8 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
+use parity_codec::{Encode, Decode};
 use grandpa_primitives::{Message, Commit};
 use substrate_primitives::ed25519::{
 	Public as AuthorityId, Signature as AuthoritySignature

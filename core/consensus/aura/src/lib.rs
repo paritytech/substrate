@@ -36,8 +36,8 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
 };
 use consensus_common::import_queue::{
-	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport,
-	SharedFinalityProofImport, SharedFinalityProofRequestBuilder,
+	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport,
+	BoxFinalityProofImport,
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -56,6 +56,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{Future, IntoFuture, future};
+use parking_lot::Mutex;
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
@@ -129,7 +130,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	local_key: Arc<P>,
 	client: Arc<C>,
 	select_chain: SC,
-	block_import: Arc<I>,
+	block_import: I,
 	env: Arc<E>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
@@ -152,7 +153,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 {
 	let worker = AuraWorker {
 		client: client.clone(),
-		block_import,
+		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		local_key,
 		sync_oracle: sync_oracle.clone(),
@@ -174,7 +175,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 
 struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
-	block_import: Arc<I>,
+	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
@@ -335,7 +336,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				"hash_previously" => ?header_hash
 			);
 
-			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "aura", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
@@ -564,14 +565,19 @@ impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
-				// `Consensus` is the Aura-specific authorities change log.
+				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
-					.convert_first(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
+					.logs()
+					.iter()
+					.filter_map(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
 						OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)
 					))
-					.map(|ConsensusLog::AuthoritiesChange(a)|
-						vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
-					);
+					.find_map(|l| match l {
+						ConsensusLog::AuthoritiesChange(a) => Some(
+							vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
+						),
+						_ => None,
+					});
 
 				let import_block = ImportBlock {
 					origin,
@@ -670,10 +676,9 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, P, T>(
 	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	transaction_pool: Option<Arc<T>>,
 	inherent_data_providers: InherentDataProviders,
@@ -703,7 +708,6 @@ pub fn import_queue<B, C, P, T>(
 		block_import,
 		justification_import,
 		finality_proof_import,
-		finality_proof_request_builder,
 	))
 }
 
@@ -711,6 +715,7 @@ pub fn import_queue<B, C, P, T>(
 mod tests {
 	use super::*;
 	use futures::{Async, stream::Stream as _};
+	use futures03::{StreamExt as _, TryStreamExt as _};
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{
@@ -852,6 +857,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);

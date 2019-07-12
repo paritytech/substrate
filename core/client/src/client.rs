@@ -21,7 +21,7 @@ use std::{
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
 use crate::error::Error;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
 use runtime_primitives::{
@@ -1437,7 +1437,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
+impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1447,7 +1447,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `ImportBlock` then `finalized` *must* be true.
 	fn import_block(
-		&self,
+		&mut self,
 		import_block: ImportBlock<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -1458,7 +1458,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 
 	/// Check block preconditions.
 	fn check_block(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
@@ -1479,6 +1479,30 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		}
 
 		Ok(ImportResult::imported())
+	}
+}
+
+impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = ConsensusError;
+
+	fn import_block(
+		&mut self,
+		import_block: ImportBlock<Block>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		(&*self).import_block(import_block, new_cache)
+	}
+
+	fn check_block(
+		&mut self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		(&*self).check_block(hash, parent_hash)
 	}
 }
 

@@ -35,7 +35,7 @@ use grandpa::{
 	voter, voter_set::VoterSet, AccountableSafety,
 };
 use grandpa_primitives::Equivocation;
-use fg_primitives::{GrandpaEquivocationProof, GrandpaApi};
+use fg_primitives::{GrandpaEquivocation, GrandpaApi};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash, ProvideRuntimeApi
@@ -774,7 +774,7 @@ where
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocationProof {
+		let proof = GrandpaEquivocation {
 			set_id: self.set_id,
 			equivocation,
 		};
@@ -796,7 +796,7 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocationProof {
+		let proof = GrandpaEquivocation {
 			set_id: self.set_id,
 			equivocation,
 		};

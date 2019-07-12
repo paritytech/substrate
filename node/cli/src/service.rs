@@ -50,7 +50,7 @@ construct_simple_protocol! {
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	pub grandpa_import_setup: Option<(grandpa::BlockImportForService<F>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
 
@@ -100,7 +100,7 @@ construct_service_factory! {
 						Arc::new(aura_key),
 						client,
 						select_chain,
-						block_import.clone(),
+						block_import,
 						proposer,
 						service.network(),
 						service.config.custom.inherent_data_providers.clone(),
@@ -125,7 +125,7 @@ construct_service_factory! {
 				};
 
 				match config.local_key {
-					None => {
+					None if !service.config.grandpa_voter => {
 						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
@@ -133,7 +133,8 @@ construct_service_factory! {
 							service.on_exit(),
 						)?));
 					},
-					Some(_) => {
+					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
+					_ => {
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
@@ -172,16 +173,14 @@ construct_service_factory! {
 						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _, _>(
 							client.clone(), client.clone(), select_chain, transaction_pool.clone()
 						)?;
-					let block_import = Arc::new(block_import);
 					let justification_import = block_import.clone();
 
 					config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 					import_queue::<_, _, AuraPair, TransactionPool<Self::FullTransactionPoolApi>>(
 						slot_duration,
-						block_import,
-						Some(justification_import),
-						None,
+						Box::new(block_import),
+						Some(Box::new(justification_import)),
 						None,
 						client,
 						transaction_pool,
@@ -199,20 +198,18 @@ construct_service_factory! {
 				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
 					client.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
-				let block_import = Arc::new(block_import);
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
 				import_queue::<_, _, AuraPair, TransactionPool<Self::FullTransactionPoolApi>>(
 					SlotDuration::get_or_compute(&*client)?,
-					block_import,
+					Box::new(block_import),
 					None,
-					Some(finality_proof_import),
-					Some(finality_proof_request_builder),
+					Some(Box::new(finality_proof_import)),
 					client,
 					None,
 					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+				).map(|q| (q, finality_proof_request_builder)).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {

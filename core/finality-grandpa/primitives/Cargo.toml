@@ -26,5 +26,5 @@ std = [
 	"rstd/std",
 	"grandpa-primitives/std",
 	"serde",
-	"consensus_accountable_safety_primitives/std"
+	"consensus_accountable_safety_primitives/std",
 ]

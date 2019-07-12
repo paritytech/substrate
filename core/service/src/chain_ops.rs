@@ -130,11 +130,11 @@ pub fn import_blocks<F, E, R>(
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
 	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let mut queue = components::FullComponents::<F>::build_import_queue(
+	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
 		&mut config,
 		client.clone(),
 		None,
-		select_chain,
+		select_chain
 	)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();

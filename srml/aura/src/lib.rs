@@ -54,7 +54,7 @@ use rstd::{result, prelude::*};
 use parity_codec::Encode;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
-use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
+use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
 use primitives::{
 	traits::{
 		SaturatedConversion, Saturating, Zero, One, Member, Verify,
@@ -264,8 +264,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+	fn on_disabled(i: usize) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::<T::AuthorityId>::OnDisabled(i as u64).encode(),
+		);
+
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
@@ -302,7 +307,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
+		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {

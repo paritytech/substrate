@@ -30,11 +30,18 @@ pub use digest::{CompatibleDigestItem, find_pre_digest};
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
+/// The index of an authority.
+pub type AuthorityIndex = u64;
+
 /// An consensus log item for Aura.
 #[derive(Decode, Encode)]
 pub enum ConsensusLog<AuthorityId: Codec> {
 	/// The authorities have changed.
+	#[codec(index = "1")]
 	AuthoritiesChange(Vec<AuthorityId>),
+	/// Disable the authority with given index.
+	#[codec(index = "2")]
+	OnDisabled(AuthorityIndex),
 }
 
 decl_runtime_apis! {

@@ -23,11 +23,12 @@ use primitives::{
 	testing::{Header, Block, UintAuthorityId, TestXt}
 };
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event};
+use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
 use crate::{
-	AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Signal, Call
+	AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Signal, Call,
+	ConsensusLog,
 };
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
@@ -35,10 +36,8 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<Signal<u64, u64, Header, AuthoritySignature, AuthorityId>> for DigestItem<H256> {
-	fn from(log: Signal<u64, u64, Header, AuthoritySignature, AuthorityId>) -> DigestItem<H256> {
-		DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
-	}
+pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
+	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -48,6 +47,9 @@ impl Trait for Test {
 	type Event = TestEvent;
 	type Signature = AuthoritySignature;
 	type Block = Block<TestXt<Call<Test>>>;
+}
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -59,6 +61,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
+	type BlockHashCount = BlockHashCount;
 }
 
 mod grandpa {

@@ -37,7 +37,7 @@ use log::{debug, trace, warn, info, error};
 use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
-use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
+use consensus::{BlockOrigin, import_queue::IncomingBlock};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
 use extra_requests::ExtraRequests;
@@ -47,7 +47,7 @@ use runtime_primitives::traits::{
 };
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
-use crate::config::Roles;
+use crate::config::{Roles, BoxFinalityProofRequestBuilder};
 use std::collections::HashSet;
 
 mod blocks;
@@ -171,7 +171,7 @@ pub struct ChainSync<B: BlockT> {
 	queue_blocks: HashSet<B::Hash>,
 	/// The best block number that we are currently importing
 	best_importing_number: NumberFor<B>,
-	request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 }
 
 /// Reported sync state.
@@ -196,7 +196,11 @@ pub struct Status<B: BlockT> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance. Pass the initial known state of the chain.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
+	pub(crate) fn new(
+		role: Roles,
+		info: &ClientInfo<B>,
+		request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+	) -> Self {
 		let mut required_block_attributes =
 			message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 
@@ -215,7 +219,7 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			request_builder: None,
+			request_builder,
 		}
 	}
 
@@ -662,7 +666,7 @@ impl<B: BlockT> ChainSync<B> {
 			protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
 				id: 0,
 				block: request.0,
-				request: self.request_builder.as_ref()
+				request: self.request_builder.as_mut()
 					.map(|builder| builder.build_request_data(&request.0))
 					.unwrap_or_default()
 			})
@@ -713,10 +717,6 @@ impl<B: BlockT> ChainSync<B> {
 		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
 	) {
 		self.extra_finality_proofs.try_finalize_root(request_block, finalization_result, true);
-	}
-
-	pub fn set_finality_proof_request_builder(&mut self, builder: SharedFinalityProofRequestBuilder<B>) {
-		self.request_builder = Some(builder)
 	}
 
 	/// Log that a block has been successfully imported
@@ -797,7 +797,7 @@ impl<B: BlockT> ChainSync<B> {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number.is_zero() {
-			warn!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
+			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return false;
 		}
 		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()

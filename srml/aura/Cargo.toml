@@ -17,7 +17,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
-consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../core/consensus/accountable-safety/primitives" }
+consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../core/consensus/accountable-safety/primitives", default-features = false }
 
 [dev-dependencies]
 lazy_static = "1.0"
@@ -38,4 +38,5 @@ std = [
 	"staking/std",
 	"inherents/std",
 	"substrate-consensus-aura-primitives/std",
+	"consensus_accountable_safety_primitives/std"
 ]
