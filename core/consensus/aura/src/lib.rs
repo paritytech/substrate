@@ -51,6 +51,7 @@ use runtime_primitives::traits::{Block as BlockT, Header, DigestItemFor, Provide
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
+use keystore::LocalStore;
 
 use futures::{Future, IntoFuture, future};
 use parking_lot::Mutex;
@@ -131,7 +132,7 @@ impl SlotCompatible for AuraSlotCompatible {
 /// Start the aura worker. The returned future should be run in a tokio runtime.
 pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	slot_duration: SlotDuration,
-	local_key: Arc<P>,
+	session_store: Arc<LocalStore<P>>,
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: I,
@@ -146,7 +147,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	P: Pair + Send + Sync + 'static,
+	P: Pair + Clone + Send + Sync + 'static,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
 	H: Header<Hash=B::Hash>,
@@ -159,7 +160,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
-		local_key,
+		session_store,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
@@ -177,16 +178,18 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	))
 }
 
-struct AuraWorker<C, E, I, P, SO> {
+struct AuraWorker<C, E, I, SS, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
-	local_key: Arc<P>,
+	session_store: SS,
 	sync_oracle: SO,
 	force_authoring: bool,
 }
 
-impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+impl<H, B, C, E, I, P, Error, SO> SlotWorker<B>
+	for AuraWorker<C, E, I, Arc<LocalStore<P>>, SO>
+where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -195,7 +198,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
-	P: Pair + Send + Sync + 'static,
+	P: Pair + Clone + Send + Sync + 'static,
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
@@ -208,8 +211,6 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
-		let pair = self.local_key.clone();
-		let public_key = self.local_key.public();
 		let client = self.client.clone();
 		let block_import = self.block_import.clone();
 		let env = self.env.clone();
@@ -240,9 +241,12 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			return Box::new(future::ok(()));
 		}
 		let maybe_author = slot_author::<P>(slot_num, &authorities);
-		let proposal_work = match maybe_author {
+		let maybe_pair = maybe_author
+			.map(|author| self.session_store.get_key(author))
+			.unwrap_or(None);
+		let (proposal_work, pair) = match maybe_pair {
 			None => return Box::new(future::ok(())),
-			Some(author) => if author == &public_key {
+			Some(pair) => {
 				debug!(
 					target: "aura", "Starting authorship at slot {}; timestamp = {}",
 					slot_num,
@@ -267,7 +271,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				let remaining_duration = slot_info.remaining_duration();
 				// deadline our production to approx. the end of the
 				// slot
-				Timeout::new(
+				let timeout = Timeout::new(
 					proposer.propose(
 						slot_info.inherent_data,
 						generic::Digest {
@@ -278,9 +282,8 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 						remaining_duration,
 					).into_future(),
 					remaining_duration,
-				)
-			} else {
-				return Box::new(future::ok(()));
+				);
+				(timeout, pair)
 			}
 		};
 
@@ -852,9 +855,12 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
+			let store = keystore::Store::new();
+			let session_store = store.create_local_store::<sr25519::Pair>();
+			store.set_key::<sr25519::Pair>(&key.clone().into());
 			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
-				Arc::new(key.clone().into()),
+				session_store,
 				client.clone(),
 				select_chain,
 				client,
