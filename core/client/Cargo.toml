@@ -10,7 +10,7 @@ fnv = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 parking_lot = { version = "0.8.0", optional = true }
 hex = { package = "hex-literal", version = "0.1", optional = true }
-futures = { version = "0.1.17", optional = true }
+futures-preview = { version = "0.3.0-alpha.17", optional = true }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common", optional = true }
 executor = { package = "substrate-executor", path = "../executor", optional = true }
 state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }
@@ -47,7 +47,7 @@ std = [
 	"fnv",
 	"log",
 	"hex",
-	"futures",
+	"futures-preview",
 	"executor",
 	"state-machine",
 	"keyring",

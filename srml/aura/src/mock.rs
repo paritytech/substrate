@@ -37,6 +37,7 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MinimumPeriod: u64 = 1;
 }
 
 impl system::Trait for Test {
@@ -55,6 +56,7 @@ impl system::Trait for Test {
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
+	type MinimumPeriod = MinimumPeriod;
 }
 
 impl Trait for Test {
@@ -64,9 +66,6 @@ impl Trait for Test {
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-	t.extend(timestamp::GenesisConfig::<Test>{
-		minimum_period: 1,
-	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);

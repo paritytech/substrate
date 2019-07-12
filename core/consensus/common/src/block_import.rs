@@ -247,9 +247,3 @@ pub trait FinalityProofImport<B: BlockT> {
 		verifier: &dyn Verifier<B>,
 	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
 }
-
-/// Finality proof request builder.
-pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
-	/// Build data blob, associated with the request.
-	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
-}
