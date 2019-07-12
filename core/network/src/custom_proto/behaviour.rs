@@ -19,7 +19,7 @@ use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOu
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
@@ -27,7 +27,6 @@ use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::clock::Clock;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
 ///
@@ -82,9 +81,6 @@ pub struct CustomProto<TMessage, TSubstream> {
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
-
-	/// `Clock` instance that uses the current execution context's source of time.
-	clock: Clock,
 }
 
 /// State of a peer we're connected to.
@@ -105,7 +101,9 @@ enum PeerState {
 	/// The peerset requested that we connect to this peer. We are not connected to this node.
 	PendingRequest {
 		/// When to actually start dialing.
-		timer: tokio_timer::Delay,
+		timer: Compat<futures_timer::Delay>,
+		/// When the `timer` will trigger.
+		timer_deadline: Instant,
 	},
 
 	/// The peerset requested that we connect to this peer. We are currently dialing this peer.
@@ -135,7 +133,9 @@ enum PeerState {
 		/// state mismatch.
 		open: bool,
 		/// When to enable this remote.
-		timer: tokio_timer::Delay,
+		timer: Compat<futures_timer::Delay>,
+		/// When the `timer` will trigger.
+		timer_deadline: Instant,
 	},
 
 	/// We are connected to this peer and the peerset has accepted it. The handler is in the
@@ -240,7 +240,6 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			next_incoming_index: peerset::IncomingIndex(0),
 			events: SmallVec::new(),
 			marker: PhantomData,
-			clock: Clock::new(),
 		}
 	}
 
@@ -277,13 +276,13 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			st @ PeerState::Banned { .. } => *entry.into_mut() = st,
 
 			// DisabledPendingEnable => Disabled.
-			PeerState::DisabledPendingEnable { open, connected_point, timer } => {
+			PeerState::DisabledPendingEnable { open, connected_point, timer_deadline, .. } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
 				let banned_until = Some(if let Some(ban) = ban {
-					cmp::max(timer.deadline(), self.clock.now() + ban)
+					cmp::max(timer_deadline, Instant::now() + ban)
 				} else {
-					timer.deadline()
+					timer_deadline
 				});
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until }
 			},
@@ -297,8 +296,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let clock = &self.clock;
-				let banned_until = ban.map(|dur| clock.now() + dur);
+				let banned_until = ban.map(|dur| Instant::now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until }
 			},
 
@@ -319,8 +317,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let clock = &self.clock;
-				let banned_until = ban.map(|dur| clock.now() + dur);
+				let banned_until = ban.map(|dur| Instant::now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until }
 			},
 
@@ -385,11 +382,12 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		};
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { ref until } if *until > self.clock.now() => {
+			PeerState::Banned { ref until } if *until > Instant::now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: tokio_timer::Delay::new(until.clone()),
+					timer: futures_timer::Delay::new_at(until.clone()).compat(),
+					timer_deadline: until.clone(),
 				};
 			},
 
@@ -401,13 +399,14 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			},
 
 			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
-				if *banned > self.clock.now() => {
+				if *banned > Instant::now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
 					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: tokio_timer::Delay::new(banned.clone()),
+					timer: futures_timer::Delay::new_at(banned.clone()).compat(),
+					timer_deadline: banned.clone(),
 				};
 			},
 
@@ -477,13 +476,13 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				*entry.into_mut() = st;
 			},
 
-			PeerState::DisabledPendingEnable { open, connected_point, timer } => {
+			PeerState::DisabledPendingEnable { open, connected_point, timer_deadline, .. } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Interrupting pending \
 					enable", entry.key());
 				*entry.into_mut() = PeerState::Disabled {
 					open,
 					connected_point,
-					banned_until: Some(timer.deadline()),
+					banned_until: Some(timer_deadline),
 				};
 			},
 
@@ -508,9 +507,9 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Was not yet connected", entry.key());
 				entry.remove();
 			},
-			PeerState::PendingRequest { timer } => {
+			PeerState::PendingRequest { timer_deadline, .. } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Was not yet connected", entry.key());
-				*entry.into_mut() = PeerState::Banned { until: timer.deadline() }
+				*entry.into_mut() = PeerState::Banned { until: timer_deadline }
 			},
 
 			PeerState::Poisoned =>
@@ -721,12 +720,12 @@ where
 				}
 			}
 
-			Some(PeerState::DisabledPendingEnable { open, timer, .. }) => {
+			Some(PeerState::DisabledPendingEnable { open, timer_deadline, .. }) => {
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was disabled \
 					(through {:?}) but pending enable", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
-				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer.deadline() });
+				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
@@ -790,7 +789,7 @@ where
 				PeerState::Requested | PeerState::PendingRequest { .. } => {
 					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 					*entry.into_mut() = PeerState::Banned {
-						until: self.clock.now() + Duration::from_secs(5)
+						until: Instant::now() + Duration::from_secs(5)
 					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 					self.peerset.dropped(peer_id.clone())
@@ -860,9 +859,14 @@ where
 						debug_assert!(open);
 						*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until };
 					},
-					PeerState::DisabledPendingEnable { open, connected_point, timer } => {
+					PeerState::DisabledPendingEnable { open, connected_point, timer, timer_deadline } => {
 						debug_assert!(open);
-						*entry.into_mut() = PeerState::DisabledPendingEnable { open: false, connected_point, timer };
+						*entry.into_mut() = PeerState::DisabledPendingEnable {
+							open: false,
+							connected_point,
+							timer,
+							timer_deadline
+						};
 					},
 					_ => error!(target: "sub-libp2p", "State mismatch in the custom protos handler"),
 				}
@@ -973,9 +977,9 @@ where
 
 		for (peer_id, peer_state) in self.peers.iter_mut() {
 			match mem::replace(peer_state, PeerState::Poisoned) {
-				PeerState::PendingRequest { mut timer } => {
+				PeerState::PendingRequest { mut timer, timer_deadline } => {
 					if let Ok(Async::NotReady) = timer.poll() {
-						*peer_state = PeerState::PendingRequest { timer };
+						*peer_state = PeerState::PendingRequest { timer, timer_deadline };
 						continue;
 					}
 
@@ -984,9 +988,14 @@ where
 					*peer_state = PeerState::Requested;
 				}
 
-				PeerState::DisabledPendingEnable { mut timer, connected_point, open } => {
+				PeerState::DisabledPendingEnable { mut timer, connected_point, open, timer_deadline } => {
 					if let Ok(Async::NotReady) = timer.poll() {
-						*peer_state = PeerState::DisabledPendingEnable { timer, connected_point, open };
+						*peer_state = PeerState::DisabledPendingEnable {
+							timer,
+							connected_point,
+							open,
+							timer_deadline
+						};
 						continue;
 					}
 
