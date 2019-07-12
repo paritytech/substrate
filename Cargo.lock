@@ -2278,6 +2278,7 @@ dependencies = [
  "jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
  "jsonrpc-derive 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
  "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
  "node-testing 2.0.0",
@@ -2285,6 +2286,7 @@ dependencies = [
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-keyring 2.0.0",
+ "substrate-primitives 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]
 

@@ -25,6 +25,7 @@ use node_primitives::{
 };
 use parity_codec::Encode;
 use sr_primitives::traits;
+use substrate_primitives::hexdisplay::HexDisplay;
 use transaction_pool::txpool::{self, Pool};
 
 pub use self::gen_client::Client as AccountsClient;
@@ -77,6 +78,7 @@ where
 			data: Some(format!("{:?}", e).into()),
 		})?;
 
+		log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 		// Now we need to query the transaction pool
 		// and find transactions originating from the same sender.
 		//
@@ -86,11 +88,18 @@ where
 		let mut current_nonce = nonce;
 		let mut current_tag = (account.clone(), nonce).encode();
 		for tx in self.pool.ready() {
+			log::debug!(
+				target: "rpc",
+				"Current nonce to {:?}, checking {} vs {:?}",
+				current_nonce,
+				HexDisplay::from(&current_tag),
+				tx.provides.iter().map(|x| format!("{}", HexDisplay::from(x))).collect::<Vec<_>>(),
+			);
 			// since transactions in `ready()` need to be ordered by nonce
 			// it's fine to continue with current iterator.
 			if tx.provides.get(0) == Some(&current_tag) {
 				current_nonce += 1;
-				current_tag = (account.clone(), nonce).encode();
+				current_tag = (account.clone(), current_nonce).encode();
 			}
 		}
 
