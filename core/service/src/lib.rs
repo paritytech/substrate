@@ -30,11 +30,13 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use futures::sync::mpsc;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
+use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::NetworkState;
 use log::{info, warn, debug, error};
@@ -294,6 +296,7 @@ impl<Components: components::Components> Service<Components> {
 			let to_spawn_tx_ = to_spawn_tx.clone();
 
 			let events = client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
 
@@ -444,6 +447,8 @@ impl<Components: components::Components> Service<Components> {
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
+				.map(|ev| Ok::<_, ()>(ev))
+				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let tel::TelemetryEvent::Connected = event;
@@ -623,8 +628,10 @@ fn build_network_future<
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
-	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
+	let mut imported_blocks_stream = client.import_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
 
 	futures::future::poll_fn(move || {
 		// We poll `imported_blocks_stream`.
