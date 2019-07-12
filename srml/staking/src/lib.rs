@@ -1385,9 +1385,12 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 /// StakingSlasher
 pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
 
+impl<T: Trait> DoSlash<Perbill, (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> for StakingSlasher<T> {
+	fn do_slash(severity: Perbill, (who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)) {
+		T::Currency::slash(&who, severity * exposure.own);
 
-impl<T: Trait, Severity> DoSlash<Severity, (T::AccountId, Exposure<T::AccountId, u64>)> for StakingSlasher<T> {
-	fn do_slash(severity: Severity, (who, exposure): (T::AccountId, Exposure<T::AccountId, u64>)) {
-		// implement
+		for nominator in exposure.others {
+			T::Currency::slash(&who, severity * nominator.value);
+		}
 	}
 }

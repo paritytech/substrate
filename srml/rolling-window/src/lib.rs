@@ -52,7 +52,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
 		/// Misbehavior reports
 		///
-		/// It maps each kind into a hash and the session number when it occurred
+		/// It maps each kind into a hash and session number when it occurred
 		MisconductReports get(kind): linked_map T::Kind => Vec<(Session, T::Hash)>;
 
 		/// Rolling window length for different kinds
