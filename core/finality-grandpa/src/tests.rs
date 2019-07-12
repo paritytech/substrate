@@ -24,6 +24,7 @@ use parking_lot::Mutex;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::ed25519::{Keyring as AuthorityKeyring};
+use keystore::{Store, LocalStore};
 use client::{
 	error::Result,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
@@ -38,7 +39,7 @@ use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthorityPair};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -342,7 +343,16 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
+fn session_store_from_keys(keys: Vec<AuthorityPair>) -> LocalStore<AuthorityPair> {
+	let store = Store::new();
+	let session_store = store.create_local_store();
+	for key in keys {
+		store.set_key(&key);
+	}
+	session_store
+}
+
+fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
 		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
@@ -405,9 +415,9 @@ fn run_to_completion_with<F>(
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key: Some(Arc::new(key.clone().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
+			session_store: session_store_from_keys(vec![key.clone().into()]),
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
@@ -482,10 +492,10 @@ fn finalize_3_voters_1_full_observer() {
 
 	let all_peers = peers.iter()
 		.cloned()
-		.map(|key| Some(Arc::new(key.into())))
-		.chain(::std::iter::once(None));
+		.map(|key| vec![key.into()])
+		.chain(vec![]);
 
-	for (peer_id, local_key) in all_peers.enumerate() {
+	for (peer_id, keys) in all_peers.enumerate() {
 		let (client, net_service, link) = {
 			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
@@ -506,9 +516,9 @@ fn finalize_3_voters_1_full_observer() {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
+			session_store: session_store_from_keys(keys),
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
@@ -640,10 +650,10 @@ fn transition_3_voters_twice_1_full_observer() {
 		.cloned()
 		.collect::<HashSet<_>>() // deduplicate
 		.into_iter()
-		.map(|key| Some(Arc::new(key.into())))
+		.map(|key| vec![key.into()])
 		.enumerate();
 
-	for (peer_id, local_key) in all_peers {
+	for (peer_id, keys) in all_peers {
 		let (client, net_service, link) = {
 			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
@@ -674,9 +684,9 @@ fn transition_3_voters_twice_1_full_observer() {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
+			session_store: session_store_from_keys(keys),
 			link: link,
 			network: net_service,
 			inherent_data_providers: InherentDataProviders::new(),
@@ -1089,9 +1099,9 @@ fn voter_persists_its_votes() {
 				config: Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
-					local_key: Some(Arc::new(peers[0].clone().into())),
 					name: Some(format!("peer#{}", 0)),
 				},
+				session_store: session_store_from_keys(vec![peers[0].clone().into()]),
 				link: link,
 				network: net.lock().peers[0].network_service().clone(),
 				inherent_data_providers: InherentDataProviders::new(),
@@ -1141,7 +1151,6 @@ fn voter_persists_its_votes() {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			local_key: Some(Arc::new(peers[1].clone().into())),
 			name: Some(format!("peer#{}", 1)),
 		};
 
@@ -1164,7 +1173,7 @@ fn voter_persists_its_votes() {
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::from_iter(voters)),
-			Some(config.local_key.unwrap()),
+			Some(Arc::new(peers[1].clone().into())),
 			HasVoted::No,
 		);
 
@@ -1290,7 +1299,6 @@ fn finalize_3_voters_1_light_observer() {
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
-					local_key: None,
 					name: Some("observer".to_string()),
 				},
 				link,
@@ -1411,14 +1419,14 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
 
-	let voter = |local_key, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Item=(), Error=()> + Send> {
+	let voter = |keys, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Item=(), Error=()> + Send> {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
+			session_store: session_store_from_keys(keys),
 			link: link,
 			network: net.lock().peer(peer_id).network_service().clone(),
 			inherent_data_providers: InherentDataProviders::new(),
@@ -1447,7 +1455,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				.for_each(move |_| Ok(()))
 		);
 
-		let voter = voter(Some(Arc::new((*key).into())), peer_id, link, net.clone());
+		let voter = voter(vec![(*key).into()], peer_id, link, net.clone());
 
 		runtime.spawn(voter);
 	}
@@ -1483,7 +1491,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				.collect()
 				.map(|_| set_state);
 
-			let voter = voter(None, peer_id, link, net);
+			let voter = voter(vec![], peer_id, link, net);
 
 			runtime.spawn(voter).unwrap();
 

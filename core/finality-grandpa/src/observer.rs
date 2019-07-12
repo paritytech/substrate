@@ -185,7 +185,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 		// start global communication stream for the current set
 		let (global_in, _) = global_communication(
-			None,
+			false,
 			set_id,
 			&voters,
 			&client,

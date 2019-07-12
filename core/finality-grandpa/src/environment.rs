@@ -310,6 +310,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
+	pub(crate) local_key: Option<fg_primitives::AuthorityPair>,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
@@ -498,14 +499,13 @@ where
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let local_key = self.config.local_key.as_ref()
-			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+		let local_id = self.local_key.as_ref().map(|pair| pair.public().clone());
 
 		let (incoming, outgoing) = self.network.round_communication(
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			local_key.cloned(),
+			self.local_key.clone().map(Arc::new),
 			self.voter_set_state.has_voted(),
 		);
 
@@ -521,7 +521,7 @@ where
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
-			voter_id: self.config.local_key.as_ref().map(|pair| pair.public().clone()),
+			voter_id: local_id,
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,
@@ -530,9 +530,7 @@ where
 	}
 
 	fn proposed(&self, _round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = self.local_key.as_ref().map(|pair| pair.public().clone());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -569,9 +567,7 @@ where
 	}
 
 	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = self.local_key.as_ref().map(|pair| pair.public().clone());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -611,9 +607,7 @@ where
 	}
 
 	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = self.local_key.as_ref().map(|pair| pair.public().clone());
 
 		let local_id = match local_id {
 			Some(id) => id,

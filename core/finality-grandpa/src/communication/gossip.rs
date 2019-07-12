@@ -1239,7 +1239,6 @@ mod tests {
 		crate::Config {
 			gossip_duration: Duration::from_millis(10),
 			justification_period: 256,
-			local_key: None,
 			name: None,
 		}
 	}

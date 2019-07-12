@@ -63,9 +63,10 @@ use runtime_primitives::traits::{
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
+use keystore::LocalStore;
 use runtime_primitives::generic::BlockId;
 use consensus_common::SelectChain;
-use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
+use substrate_primitives::{ed25519, H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -198,8 +199,6 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
-	/// The local signing key.
-	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 }
@@ -396,7 +395,7 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<ed25519::Pair>>,
+	is_voter: bool,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
@@ -417,11 +416,6 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-
-	let is_voter = local_key
-		.map(|pair| voters.contains_key(&pair.public().into()))
-		.unwrap_or(false);
-
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
 		communication::SetId(set_id),
@@ -475,6 +469,8 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
+	/// The session store.
+	pub session_store: Arc<LocalStore<fg_primitives::AuthorityPair>>,
 	/// A link to the block import worker.
 	pub link: LinkHalf<B, E, Block, RA, SC>,
 	/// The Network instance.
@@ -505,6 +501,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 {
 	let GrandpaParams {
 		config,
+		session_store,
 		link,
 		network,
 		inherent_data_providers,
@@ -556,9 +553,14 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	};
 
 	let voters = authority_set.current_authorities();
+	let local_key = session_store
+		.get_keys(|public| voters.contains_key(public))
+		.into_iter()
+		.next();
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
 		config: config.clone(),
+		local_key,
 		select_chain: select_chain.clone(),
 		voters: Arc::new(voters),
 		network: network.clone(),
@@ -571,21 +573,16 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	initial_environment.update_voter_set_state(|voter_set_state| {
 		match voter_set_state {
 			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
-				let local_id = config.local_key.clone().map(|pair| pair.public());
-				let has_voted = match local_id {
-					Some(local_id) => if *id == local_id {
-						// keep the previous votes
-						return Ok(None);
-					} else {
-						HasVoted::No
-					},
-					_ => HasVoted::No,
-				};
+				let has_voted = session_store.get_key(id).is_some();
+				if has_voted {
+					// keep the previous votes
+					return Ok(None);
+				}
 
 				// NOTE: only updated on disk when the voter first
 				// proposes/prevotes/precommits or completes a round.
 				Ok(Some(VoterSetState::Live {
-					current_round: has_voted,
+					current_round: HasVoted::No,
 					completed_rounds: completed_rounds.clone(),
 				}))
 			},
@@ -610,8 +607,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					chain_info.chain.finalized_number,
 				);
 
+				let is_voter = session_store
+					.get_keys(|public| env.voters.contains_key(public))
+					.len() > 0;
+
 				let global_comms = global_communication(
-					config.local_key.as_ref(),
+					is_voter,
 					env.set_id,
 					&env.voters,
 					&client,
@@ -642,6 +643,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		let client = client.clone();
 		let config = config.clone();
+		let session_store = session_store.clone();
 		let network = network.clone();
 		let select_chain = select_chain.clone();
 		let authority_set = authority_set.clone();
@@ -683,12 +685,17 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
-
+					let voters: VoterSet<_> = new.authorities.into_iter().collect();
+					let local_key = session_store
+						.get_keys(|public| voters.contains_key(public))
+						.into_iter()
+						.next();
 					let env = Arc::new(Environment {
 						inner: client,
 						select_chain,
 						config,
-						voters: Arc::new(new.authorities.into_iter().collect()),
+						local_key,
+						voters: Arc::new(voters),
 						set_id: new.set_id,
 						network,
 						authority_set,
