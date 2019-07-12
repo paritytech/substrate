@@ -342,6 +342,7 @@ impl srml_timestamp::Trait for Runtime {
 	/// A timestamp: seconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = ();
 }
 
 /// Adds one to the given input and returns the final result.
