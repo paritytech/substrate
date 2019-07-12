@@ -667,8 +667,20 @@ pub trait DoSlash<Identification, Severity> {
 #[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Misbehavior {
-	/// ..
-	Equivocation = 0,
-	/// ..
-	InvalidBlock = 1,
+	/// Validator is not online
+	Unresponsiveness,
+	/// Unjustified vote
+	GrandpaUnjustifiedVote,
+	/// Rejecting set of votes
+	GranpaRejectSetVotes,
+	/// Equivocation
+	GrandpaEquivocation,
+	/// Invalid Vote
+	GrandpaInvalidVote,
+	/// Equivocation
+	BabeEquivocation,
+	/// Invalid block
+	BabeInvalidBlock,
+	/// Parachain Invalid validity statement
+	ParachainInvalidValidityStatement,
 }

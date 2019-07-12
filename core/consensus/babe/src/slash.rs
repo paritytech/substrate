@@ -17,9 +17,7 @@ pub trait Trait: srml_system::Trait {
     /// Type of slashing
 	///
 	/// FullId - is the full identification of the entity to slash
-	/// which should in most cases be (AccountId, Exposure)
-	///
-	///
+	/// which may be (AccountId, Exposure)
 	type EquivocationSlash: ReportSlash<Self::Hash, FullId<Self, sr25519::Public>>;
 }
 
@@ -82,7 +80,7 @@ pub struct MyMisconduct<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
 // preferable with some linkage to the `misbehavior kind` ideally
 impl<T, DoSlash> MyMisconduct<T, DoSlash> {
 	fn kind() -> Misbehavior {
-		Misbehavior::Equivocation
+		Misbehavior::BabeEquivocation
 	}
 
 	fn base_severity() -> Perbill {
@@ -100,8 +98,12 @@ where
 		let base_seve = Self::base_severity();
 		RollingWindow::<T>::report_misbehavior(kind, footprint);
 
-		// use `RollingWindow::get_misbehaved_uniq` if you want the number of unique misconduct in each session
-		let num_violations = RollingWindow::<T>::get_misbehaved(kind);
+		let num_violations = match RollingWindow::<T>::get_misbehaved_unique(kind) {
+			// if non-registered kind was registered (probably a bug)
+			// don't slash in that case...
+			None => return,
+			Some(v) => v,
+		};
 
 		// number of validators
 		let n = 50;
