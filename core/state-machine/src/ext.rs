@@ -276,10 +276,10 @@ where
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 					.into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
 
 		// compute and memoize
@@ -304,10 +304,10 @@ where
 
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter()));
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;
 
@@ -326,12 +326,20 @@ where
 			self.overlay,
 			parent_hash,
 		)?;
-		let root_and_tx = root_and_tx.map(|(root, changes)| {
+		let root_and_tx = root_and_tx.map(|(root, top_changes, children_changes)| {
 			let mut calculated_root = Default::default();
 			let mut mdb = MemoryDB::default();
+			for (_storage_root, child_changes) in children_changes {
+				let mut calculated_root = Default::default(); // calculated previously (see PR for optim)
+				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
+				for (key, value) in child_changes {
+					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
+				}
+			}
+
 			{
 				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
-				for (key, value) in changes {
+				for (key, value) in top_changes {
 					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
 				}
 			}

@@ -24,7 +24,7 @@ use crate::backend::Backend;
 use crate::overlayed_changes::OverlayedChanges;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::build_iterator::digest_build_iterator;
-use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
+use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex};
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 
 /// Prepare input pairs for building a changes trie of given block.
@@ -39,24 +39,36 @@ pub fn prepare_input<'a, B, S, H, Number>(
 	config: &'a Configuration,
 	changes: &OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
-) -> Result<Option<Vec<InputPair<Number>>>, String>
+) -> Result<Option<(
+		Vec<InputPair<Number>>,
+		Vec<(ChildIndex<Number>, Vec<InputPair<Number>>)>,
+	)>, String>
 	where
 		B: Backend<H>,
 		S: Storage<H, Number>,
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let mut input = Vec::new();
-	input.extend(prepare_extrinsics_input(
+	let mut top = Vec::new();
+	let mut children = Vec::new();
+	let prepared = prepare_extrinsics_input(
 		backend,
 		parent.number.clone() + 1.into(),
-		changes)?);
-	input.extend(prepare_digest_input::<_, H, Number>(
+		changes)?;
+	top.extend(prepared.0);
+	// Note iterator use is odd, but there is an optimization pr for it.
+	children.extend(prepared.1.map(|(k,i)| (k, i.collect())));
+	let prepared = prepare_digest_input::<_, H, Number>(
 		parent,
 		config,
-		storage)?);
-
-	Ok(Some(input))
+		storage)?;
+	top.extend(prepared.0);
+	children.extend(prepared.1.map(|(k,i)| (k, i.collect())));
+	
+	Ok(Some((
+		top,
+		children,
+	)))
 }
 
 /// Prepare ExtrinsicIndex input pairs.
@@ -64,7 +76,10 @@ fn prepare_extrinsics_input<B, H, Number>(
 	backend: &B,
 	block: Number,
 	changes: &OverlayedChanges,
-) -> Result<impl Iterator<Item=InputPair<Number>>, String>
+) -> Result<(
+		impl Iterator<Item=InputPair<Number>>,
+		impl Iterator<Item=(ChildIndex<Number>, impl Iterator<Item=InputPair<Number>>)>,
+	), String>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -89,11 +104,52 @@ fn prepare_extrinsics_input<B, H, Number>(
 			.extend(extrinsics.iter().cloned());
 	}
 
-	Ok(extrinsic_map.into_iter()
-		.map(move |(key, extrinsics)| InputPair::ExtrinsicIndex(ExtrinsicIndex {
-			block: block.clone(),
-			key,
-		}, extrinsics.iter().cloned().collect())))
+	let mut children_extrinsic_map = BTreeMap::<Vec<u8>, BTreeMap<Vec<u8>, BTreeSet<u32>>>::new();
+	for (storage_key, _) in changes.prospective.children.iter()
+		.chain(changes.committed.children.iter()) {
+		children_extrinsic_map.insert(storage_key.clone(), Default::default());
+	}
+	for (storage_key, extrinsic_map) in children_extrinsic_map.iter_mut() {
+		let prospective = changes.prospective.children.get(storage_key);
+		let committed = changes.committed.children.get(storage_key);
+		for (key, val) in prospective.iter().flat_map(|m| m.iter())
+			.chain(committed.iter().flat_map(|m| m.iter())) {
+			let extrinsics = match val.extrinsics {
+				Some(ref extrinsics) => extrinsics,
+				None => continue,
+			};
+
+			// ignore values that have null value at the end of operation AND are not in storage
+			// at the beginning of operation
+			if !changes.storage(key).map(|v| v.is_some()).unwrap_or_default() {
+				if !backend.exists_storage(key).map_err(|e| format!("{}", e))? {
+					continue;
+				}
+			}
+
+			extrinsic_map.entry(key.clone()).or_default()
+				.extend(extrinsics.iter().cloned());
+		}
+	}
+
+
+	let block1 = block.clone();
+	let block2 = block.clone();
+	Ok((
+		extrinsic_map.into_iter()
+			.map(move |(key, extrinsics)| InputPair::ExtrinsicIndex(ExtrinsicIndex {
+				block: block1.clone(),
+				key,
+			}, extrinsics.iter().cloned().collect())),
+		children_extrinsic_map.into_iter().map(move |(storage_key, extrinsic_map)| {
+			let block3 = block2.clone();
+			(ChildIndex { block: block2.clone(), storage_key }, extrinsic_map.into_iter()
+				.map(move |(key, extrinsics)| InputPair::ExtrinsicIndex(ExtrinsicIndex {
+					block: block3.clone(),
+					key,
+				}, extrinsics.iter().cloned().collect())))
+		})
+	))
 }
 
 /// Prepare DigestIndex input pairs.
@@ -101,7 +157,10 @@ fn prepare_digest_input<'a, S, H, Number>(
 	parent: &'a AnchorBlockId<H::Out, Number>,
 	config: &Configuration,
 	storage: &'a S
-) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
+) -> Result<(
+		impl Iterator<Item=InputPair<Number>> + 'a,
+		impl Iterator<Item=(ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a)> + 'a,
+	), String>
 	where
 		S: Storage<H, Number>,
 		H: Hasher,
@@ -109,34 +168,82 @@ fn prepare_digest_input<'a, S, H, Number>(
 		Number: BlockNumber,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<Number>>::new();
+	let mut children_digest_map = BTreeMap::new();
 	for digest_build_block in digest_build_iterator(config, parent.number.clone() + One::one()) {
+		let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block.clone());
+		let digest_prefix = DigestIndex::key_neutral_prefix(digest_build_block.clone());
 		let trie_root = storage.root(parent, digest_build_block.clone())?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
-		let trie_storage = TrieBackendEssence::<_, H>::new(
-			crate::changes_trie::TrieBackendStorageAdapter(storage),
-			trie_root,
-		);
+		let children_roots = {
+			let trie_storage = TrieBackendEssence::<_, H>::new(
+				crate::changes_trie::TrieBackendStorageAdapter(storage),
+				trie_root,
+			);
 
-		let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block.clone());
-		trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-			if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-				digest_map.entry(trie_key.key).or_default()
-					.insert(digest_build_block.clone());
+			let child_prefix = ChildIndex::key_neutral_prefix(digest_build_block.clone());
+			let mut children_roots = BTreeMap::<Vec<u8>, _>::new();
+			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
+				if let Some(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+					let mut trie_root = <H as Hasher>::Out::default();
+					trie_root.as_mut().copy_from_slice(value);
+					children_roots.insert(trie_key.storage_key, trie_root);
+				}
 			});
 
-		let digest_prefix = DigestIndex::key_neutral_prefix(digest_build_block.clone());
-		trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-			if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-				digest_map.entry(trie_key.key).or_default()
-					.insert(digest_build_block.clone());
-			});
+
+			trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
+				if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+					digest_map.entry(trie_key.key).or_default()
+						.insert(digest_build_block.clone());
+				});
+
+			trie_storage.for_keys_with_prefix(&digest_prefix, |key|
+				if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+					digest_map.entry(trie_key.key).or_default()
+						.insert(digest_build_block.clone());
+				});
+			children_roots
+		};
+		for (storage_key, trie_root) in children_roots.into_iter() {
+			let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<Number>>::new();
+			let trie_storage = TrieBackendEssence::<_, H>::new(
+				crate::changes_trie::TrieBackendStorageAdapter(storage),
+				trie_root,
+			);
+
+			trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
+				if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+					digest_map.entry(trie_key.key).or_default()
+						.insert(digest_build_block.clone());
+				});
+
+			trie_storage.for_keys_with_prefix(&digest_prefix, |key|
+				if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+					digest_map.entry(trie_key.key).or_default()
+						.insert(digest_build_block.clone());
+				});
+ 
+			let child_index = ChildIndex::<Number> {
+				block: parent.number.clone() + One::one(),
+				storage_key,
+			};
+			children_digest_map.insert(child_index, digest_map);
+		}
 	}
 
-	Ok(digest_map.into_iter()
-		.map(move |(key, set)| InputPair::DigestIndex(DigestIndex {
-			block: parent.number.clone() + One::one(),
-			key
-		}, set.into_iter().collect())))
+	Ok((
+		digest_map.into_iter()
+			.map(move |(key, set)| InputPair::DigestIndex(DigestIndex {
+				block: parent.number.clone() + One::one(),
+				key
+			}, set.into_iter().collect())),
+		children_digest_map.into_iter().map(move |(storage_key, digest_map)|
+			(storage_key, digest_map.into_iter()
+				.map(move |(key, set)| InputPair::DigestIndex(DigestIndex {
+					block: parent.number.clone() + One::one(),
+					key
+				}, set.into_iter().collect()))))
+	))
 }
 
 #[cfg(test)]

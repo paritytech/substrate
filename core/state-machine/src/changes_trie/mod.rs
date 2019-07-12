@@ -32,8 +32,6 @@
 //! the last N*digest_level-1 blocks (except for genesis block), mapping these keys
 //! to the set of lower-level digest blocks.
 //!
-//! Changes trie only contains the top level storage changes. Sub-level changes
-//! are propagated through its storage root on the top level storage.
 
 mod build;
 mod build_iterator;
@@ -134,7 +132,7 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H, Number>, H: Ha
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
 	parent_hash: H::Out,
-) -> Result<Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>, ()>
+) -> Result<Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>, Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>)>, ()>
 	where
 		H::Out: Ord + 'static,
 {
@@ -151,12 +149,21 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H, Number>, H: Ha
 		.expect("storage is not allowed to fail within runtime");
 	match input_pairs {
 		Some(input_pairs) => {
-			let transaction = input_pairs.into_iter()
+			let mut top_transaction = input_pairs.0.into_iter()
 				.map(Into::into)
 				.collect::<Vec<_>>();
-			let root = trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
+			let children_transaction = input_pairs.1.into_iter().map(|(storage_key, child_pairs)| {
+				let child_pairs = child_pairs.into_iter().map(Into::into).collect::<Vec<_>>();
+				let root = trie_root::<H, _, _, _>(child_pairs.iter().map(|(k, v)| (&*k, &*v)));
+				let encoded_storage_key = storage_key.encode();
+				let root_pair = input::InputPair::ChildIndex(storage_key, root.as_ref().to_vec());
+				top_transaction.push(root_pair.into());
+				(encoded_storage_key, child_pairs)
+			}).collect();
 
-			Ok(Some((root, transaction)))
+			let root = trie_root::<H, _, _, _>(top_transaction.iter().map(|(k, v)| (&*k, &*v)));
+
+			Ok(Some((root, top_transaction, children_transaction)))
 		},
 		None => Ok(None),
 	}

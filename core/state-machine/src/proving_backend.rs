@@ -158,6 +158,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.for_keys_with_prefix(prefix, f)
 	}
 
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.backend.for_key_values_with_prefix(prefix, f)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.backend.pairs()
 	}
@@ -307,7 +311,7 @@ mod tests {
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
-      in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
+			in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),

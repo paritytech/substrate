@@ -143,6 +143,39 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
 	}
+
+	/// Execute given closure for all key and values starting with prefix.
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+		let mut read_overlay = S::Overlay::default();
+		let eph = Ephemeral {
+			storage: &self.storage,
+			overlay: &mut read_overlay,
+		};
+
+		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, &self.root)?;
+			let mut iter = trie.iter()?;
+
+			iter.seek(prefix)?;
+
+			for x in iter {
+				let (key, value) = x?;
+
+				if !key.starts_with(prefix) {
+					break;
+				}
+
+				f(&key, &value);
+			}
+
+			Ok(())
+		};
+
+		if let Err(e) = iter() {
+			debug!(target: "trie", "Error while iterating by prefix: {}", e);
+		}
+	}
+
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
