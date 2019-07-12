@@ -28,6 +28,3 @@ test-client = { package = "substrate-test-client", path = "../../core/test-clien
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../srml/treasury" }
 wabt = "~0.7.4"
-
-[features]
-benchmarks = []
