@@ -83,7 +83,7 @@ pub struct OverlayedChangeSet {
 	/// `commit_transaction` or `drop_transaction`
 	/// will change this state.
 	pub(crate) history: Vec<TransactionState>,
-  /// Current state in history.
+	/// Current state in history.
 	pub(crate) state: usize,
 	/// Top level storage changes.
 	pub(crate) top: HashMap<Vec<u8>, History<OverlayedValue>>,
@@ -106,9 +106,9 @@ impl Default for OverlayedChangeSet {
 impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
 
-    let mut result = OverlayedChangeSet::default();
+		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, v)| (k, History(vec![(v, 0)]))).collect();
-    result
+		result
 	}
 }
 
@@ -254,8 +254,8 @@ impl<V> History<V> {
 	}
 
 	fn set(&mut self, history: &[TransactionState], state: usize, val: V) {
-    	// TODO EMCH : this is not optimal : can end get_mut as soon as ix < state
-    	// needs a variant for get_mut.
+			// TODO EMCH : this is not optimal : can end get_mut as soon as ix < state
+			// needs a variant for get_mut.
 		match self.get_mut(history) {
 			Some((v, ix)) => {
 				if ix == state {
@@ -334,7 +334,7 @@ impl OverlayedChangeSet {
 		}
 		self.history.push(TransactionState::Pending);
 		self.state = self.history.len() - 1;
-  }
+	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
@@ -344,6 +344,45 @@ impl OverlayedChangeSet {
 		self.history.push(TransactionState::Pending);
 		self.state = self.history.len() - 1;
 	}
+
+	/// Create a new transactional layre
+	pub fn start_transaction(&mut self) {
+		self.history.push(TransactionState::Pending);
+		self.state = self.history.len() - 1;
+	}
+
+
+	/// Discard a transactional layer.
+	/// A transaction is always running (history always end with pending).
+	pub fn discard_transaction(&mut self) {
+		debug_assert!(self.history.len() > self.state);
+		self.history[self.state] = TransactionState::Dropped;
+		let mut i = self.state;
+		// revert state to previuos pending (or create new pending)
+		while i > 0 {
+			i -= 1;
+			match self.history[i] {
+				TransactionState::Pending => {
+					self.state = i;
+					return;
+				},
+				TransactionState::Dropped => (), 
+				TransactionState::Prospective
+				| TransactionState::Committed => break,
+			}
+		}
+		self.history.push(TransactionState::Pending);
+		self.state = self.history.len() - 1;
+	}
+
+	/// Commit a transactional layer.
+	pub fn commit_transaction(&mut self) {
+		debug_assert!(self.history.len() > self.state);
+		self.history[self.state] = TransactionState::Prospective;
+		self.history.push(TransactionState::Pending);
+		self.state = self.history.len() - 1;
+	}
+
 
 	/// Iterator over current state of the overlay.
 	pub fn top_iter_ext(&self) -> impl Iterator<Item = (&Vec<u8>, &OverlayedValue)> {
@@ -559,7 +598,7 @@ impl OverlayedChanges {
 		committed: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		prospective: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> Self {
-    let mut changes = OverlayedChangeSet::default();
+		let mut changes = OverlayedChangeSet::default();
 		changes.top = committed.into_iter().map(|(k, v)|
 			(k, History(vec![(OverlayedValue { value: v, extrinsics: None }, 0)]))).collect();
 		changes.commit_prospective();
