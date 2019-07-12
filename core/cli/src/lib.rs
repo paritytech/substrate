@@ -361,8 +361,8 @@ fn fill_network_configuration(
 	Ok(())
 }
 
-fn input_keystore_password() -> Result<String, String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
+fn input_password(prompt: &str) -> Result<String, String> {
+	rpassword::read_password_from_tty(Some(prompt))
 		.map_err(|e| format!("{:?}", e))
 }
 
@@ -375,9 +375,6 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	if cli.interactive_password {
-		config.password = input_keystore_password()?.into()
-	}
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -401,8 +398,6 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
-
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
 	config.state_cache_size = cli.state_cache_size;
@@ -414,15 +409,6 @@ where
 		),
 	};
 
-	let role =
-		if cli.light {
-			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
-			service::Roles::AUTHORITY
-		} else {
-			service::Roles::FULL
-		};
-
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
@@ -433,19 +419,30 @@ where
 		other: exec_all_or(exec.execution_other),
 	};
 
-	config.offchain_worker = match (cli.offchain_worker, role) {
-		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
+	let is_dev = cli.shared_params.dev;
+
+	config.aura = cli.aura || cli.validator || is_dev;
+	config.grandpa_voter = cli.grandpa_voter || cli.validator || is_dev;
+
+	config.roles = if cli.light {
+		service::Roles::LIGHT
+	} else if config.aura {
+		service::Roles::AUTHORITY
+	} else {
+		service::Roles::FULL
+	};
+
+	config.offchain_worker = match (cli.offchain_worker, config.aura) {
+		(params::OffchainWorkerEnabled::WhenValidating, true) => true,
 		(params::OffchainWorkerEnabled::Always, _) => true,
 		(params::OffchainWorkerEnabled::Never, _) => false,
 		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
 	};
 
-	config.roles = role;
-	config.disable_grandpa = cli.no_grandpa;
-	config.grandpa_voter = cli.grandpa_voter;
-
-
-	let is_dev = cli.shared_params.dev;
+	if cli.offchain_worker_password {
+		config.offchain_worker_password =
+			input_password("Offchain worker password: ")?.into()
+	}
 
 	let client_id = config.client_id();
 	fill_network_configuration(
@@ -462,16 +459,12 @@ where
 		cli.pool_config,
 	)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
+	config.key = cli.key;
+	if config.key.is_none() {
+		config.key = cli.keyring.account.map(|account| format!("//{}", account));
 	}
-
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
+	if is_dev && config.key.is_none() {
+		config.key = Some("//Alice".into());
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
@@ -506,7 +499,7 @@ where
 	}
 
 	// Imply forced authoring on --dev
-	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
+	config.force_authoring = cli.force_authoring || is_dev;
 
 	Ok(config)
 }
@@ -719,14 +712,6 @@ fn parse_address(
 	}
 
 	Ok(address)
-}
-
-fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("keystore");
-	path
 }
 
 fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {

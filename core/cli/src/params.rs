@@ -305,24 +305,19 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Specify custom keystore path
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
 	/// Specify additional key seed
 	#[structopt(long = "key", value_name = "STRING")]
 	pub key: Option<String>,
 
-	/// Enable validator mode
+	/// Shortcut for `--aura` and `--grandpa-voter`.
 	#[structopt(long = "validator")]
 	pub validator: bool,
 
-	/// Disable GRANDPA when running in validator mode
-	#[structopt(long = "no-grandpa")]
-	pub no_grandpa: bool,
+	/// Enable AURA.
+	#[structopt(long = "aura")]
+	pub aura: bool,
 
-	/// Run GRANDPA voter even when no additional key seed via `--key` is specified. This can for example be of interest
-	/// when running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
+	/// Enable GRANDPA voter.
 	#[structopt(long = "grandpa-voter")]
 	pub grandpa_voter: bool,
 
@@ -421,9 +416,9 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Interactive password for validator key.
-	#[structopt(short = "i")]
-	pub interactive_password: bool,
+	/// Interactive password for offchain worker keys
+	#[structopt(long = "offchain-worker-password")]
+	pub offchain_worker_password: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.
