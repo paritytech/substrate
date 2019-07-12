@@ -991,7 +991,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
 /// 			}},
-/// 		RpcExtensions = () {},
+/// 		RpcExtensions = (),
 /// 	}
 /// }
 /// ```
