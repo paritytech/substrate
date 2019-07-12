@@ -30,7 +30,6 @@ grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
-substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
 structopt = "0.2"
 transaction-factory = { path = "../../test-utils/transaction-factory" }

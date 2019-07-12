@@ -24,9 +24,8 @@ use std::time::Duration;
 use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use grandpa_primitives::{AuthorityPair as GrandpaPair};
 use node_executor;
-use primitives::Pair;
-use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -39,7 +38,6 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
-use log::info;
 use substrate_service::TelemetryOnConnect;
 
 construct_simple_protocol! {
@@ -86,8 +84,12 @@ construct_service_factory! {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key() {
-					info!("Using aura key {}", aura_key.public());
+				if service.config.aura {
+					let local_store = service.store()
+						.create_local_store::<AuraPair>();
+					if let Some(seed) = &service.config.key {
+						service.store().set_key_from_seed::<AuraPair>(seed.as_str())?;
+					}
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
@@ -100,7 +102,7 @@ construct_service_factory! {
 
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						Arc::new(aura_key),
+						local_store,
 						client,
 						select_chain,
 						block_import,
@@ -113,44 +115,40 @@ construct_service_factory! {
 					service.spawn_task(Box::new(select));
 				}
 
-				let grandpa_key = if service.config.disable_grandpa {
-					None
-				} else {
-					service.fg_authority_key()
-				};
-
 				let config = grandpa::Config {
-					local_key: grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
 					name: Some(service.config.name.clone())
 				};
 
-				match config.local_key {
-					None if !service.config.grandpa_voter => {
-						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-							config,
-							link_half,
-							service.network(),
-							service.on_exit(),
-						)?));
-					},
-					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
-					_ => {
-						let telemetry_on_connect = TelemetryOnConnect {
-							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-						};
-						let grandpa_config = grandpa::GrandpaParams {
-							config: config,
-							link: link_half,
-							network: service.network(),
-							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-							on_exit: service.on_exit(),
-							telemetry_on_connect: Some(telemetry_on_connect),
-						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-					},
+				if service.config.grandpa_voter {
+					let local_store = service.store()
+						.create_local_store::<GrandpaPair>();
+					if let Some(seed) = &service.config.key {
+						service.store().set_key_from_seed::<GrandpaPair>(seed.as_str())?;
+					}
+
+					let telemetry_on_connect = TelemetryOnConnect {
+						telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+					};
+					let grandpa_config = grandpa::GrandpaParams {
+						config,
+						session_store: local_store,
+						link: link_half,
+						network: service.network(),
+						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+						on_exit: service.on_exit(),
+						telemetry_on_connect: Some(telemetry_on_connect),
+					};
+					service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				} else {
+					service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+						config,
+						link_half,
+						service.network(),
+						service.on_exit(),
+					)?));
 				}
 
 				Ok(service)
@@ -160,7 +158,6 @@ construct_service_factory! {
 			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
-				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
@@ -170,7 +167,7 @@ construct_service_factory! {
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				import_queue::<_, _, AuraPair>(
-					slot_duration,
+					SlotDuration::get_or_compute(&*client)?,
 					Box::new(block_import),
 					Some(Box::new(justification_import)),
 					None,
@@ -189,7 +186,8 @@ construct_service_factory! {
 					client.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
 				let finality_proof_import = block_import.clone();
-				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
+				let finality_proof_request_builder = finality_proof_import
+					.create_finality_proof_request_builder();
 
 				import_queue::<_, _, AuraPair>(
 					SlotDuration::get_or_compute(&*client)?,
