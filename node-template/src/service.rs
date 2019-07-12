@@ -3,7 +3,6 @@
 #![warn(unused_extern_crates)]
 
 use std::sync::Arc;
-use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
 use substrate_service::{
@@ -15,7 +14,7 @@ use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
-use primitives::{ed25519::Pair, Pair as PairT};
+use primitives::ed25519::Pair;
 use inherents::InherentDataProviders;
 use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 use substrate_executor::native_executor_instance;
@@ -68,8 +67,12 @@ construct_service_factory! {
 			},
 		AuthoritySetup = {
 			|service: Self::FullService| {
-				if let Some(key) = service.authority_key() {
-					info!("Using authority key {}", key.public());
+				if service.config.aura {
+					let session_store = service.store().create_local_store::<Pair>();
+					if let Some(seed) = &service.config.key {
+						service.store().set_key_from_seed::<Pair>(seed.as_str())?;
+					}
+
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -79,7 +82,7 @@ construct_service_factory! {
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						Arc::new(key),
+						session_store,
 						client.clone(),
 						select_chain,
 						client,
