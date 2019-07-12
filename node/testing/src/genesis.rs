@@ -20,7 +20,7 @@ use crate::keyring::*;
 use keyring::AuthorityKeyring;
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
-	GrandpaConfig, IndicesConfig, ContractsConfig, DOLLARS, MILLICENTS,
+	GrandpaConfig, IndicesConfig, ContractsConfig, DOLLARS, MILLICENTS, WASM_BINARY,
 };
 use primitives::ChangesTrieConfiguration;
 use runtime_primitives::Perbill;
@@ -35,7 +35,7 @@ pub fn config(support_changes_trie: bool) -> GenesisConfig {
 				digest_interval: 2,
 				digest_levels: 2,
 			}) } else { None },
-			..Default::default()
+			code: WASM_BINARY.to_vec(),
 		}),
 		indices: Some(IndicesConfig {
 			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
