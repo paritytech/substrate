@@ -31,9 +31,8 @@ use node_primitives::{
 	Moment, Signature,
 };
 use grandpa::fg_primitives::{
-	self, ScheduledChange, GrandpaEquivocationProof, AuthoritySignature,
-	AuthorityId, PrevoteEquivocation, PrecommitEquivocation, Challenge,
-	Prevote, Precommit, PrevoteChallenge, PrecommitChallenge
+	self, ScheduledChange, AuthoritySignature, AuthorityId, GrandpaEquivocation,
+	Challenge, Prevote, Precommit,
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -520,46 +519,34 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn grandpa_prevote_challenge(digest: &DigestFor<Block>) 
-		-> Option<PrevoteChallenge<Block>> {
+		fn grandpa_prevote_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<Block>> {
 			Grandpa::grandpa_prevote_challenge(digest)
 		}
 
-		fn grandpa_precommit_challenge(digest: &DigestFor<Block>) 
-		-> Option<PrecommitChallenge<Block>> {
+		fn grandpa_precommit_challenge(digest: &DigestFor<Block>)
+			-> Option<Challenge<Block>> {
 			Grandpa::grandpa_precommit_challenge(digest)
 		}
 
-		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
+		fn construct_equivocation_report_call(
+			equivocation: GrandpaEquivocation<Block>
 		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_prevote_equivocation(proof));
-			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-			extrinsic.encode()
+			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
+			let call = Call::Grandpa(grandpa_call);
+			call.encode()
 		}
 
-		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
-		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_precommit_equivocation(proof));
-			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-			extrinsic.encode()
+		fn construct_rejecting_prevotes_report_call(challenge: Challenge<Block>) -> Vec<u8> {
+			let grandpa_call = GrandpaCall::report_rejecting_prevotes(challenge);
+			let call = Call::Grandpa(grandpa_call);
+			call.encode()
 		}
 
-		fn construct_rejecting_prevotes_report_call(
-			proof: PrevoteChallenge<Block>
-		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_rejecting_prevotes(proof));
-			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-			extrinsic.encode()
-		}
-
-		fn construct_rejecting_precommits_report_call(
-			proof: PrecommitChallenge<Block>
-		) -> Vec<u8> {
-			let report_call = Call::Grandpa(GrandpaCall::report_rejecting_precommits(proof));
-			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-			extrinsic.encode()
+		fn construct_rejecting_precommits_report_call(challenge: Challenge<Block>) -> Vec<u8> {
+			let grandpa_call = GrandpaCall::report_rejecting_precommits(challenge);
+			let call = Call::Grandpa(grandpa_call);
+			call.encode()
 		}
 	}
 
@@ -576,8 +563,7 @@ impl_runtime_apis! {
 			proof: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature>,
 		) -> Vec<u8> {
 			let report_call = Call::Aura(AuraCall::report_equivocation(proof));
-			let extrinsic = UncheckedExtrinsic::new_unsigned(report_call);
-			extrinsic.encode()
+			report_call.encode()
 		}
 	}
 

@@ -35,9 +35,10 @@ use serde::Serialize;
 use rstd::prelude::*;
 use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use parity_codec::{self as codec, Encode, Decode, Codec};
+
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
-	Parameter
+	Parameter, storage::StorageMap,
 };
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId, Block},
@@ -48,15 +49,15 @@ use primitives::{
 	transaction_validity::TransactionValidity
 };
 use fg_primitives::{
-	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaEquivocationProof,
-	GrandpaPrevote as Prevote, GrandpaPrecommit as Precommit, SignedPrecommit,
-	Message, localized_payload, Equivocation,
-	AncestryChain, Chain, validate_commit, VoterSet
+	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrevote, GrandpaPrecommit,
+	SignedPrecommit, VoterSet, GrandpaMessage, localized_payload, AncestryChain,
+	Chain, validate_commit,
 };
 pub use fg_primitives::{
-	AuthorityId, AuthorityWeight, AuthoritySignature, RejectingVoteSet,
-	ChallengedVote, Challenge, CHALLENGE_SESSION_LENGTH, Commit
+	AuthorityId, AuthorityWeight, AuthoritySignature, CHALLENGE_SESSION_LENGTH,
+	Commit, safety::{self, ChallengedVote, RejectingVoteSet},
 };
+
 use system::{DigestOf, ensure_signed};
 use num_traits as num;
 use core::iter::FromIterator;
@@ -67,7 +68,7 @@ mod tests;
 /// Consensus log type of this module.
 #[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum Signal<H, N, Header, Signature, Id> {
+pub enum Signal<H, N, Header> {
 	/// Authorities set change has been signaled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChange(ScheduledChange<N>),
@@ -76,12 +77,10 @@ pub enum Signal<H, N, Header, Signature, Id> {
 	/// before applying and the new set of authorities.
 	ForcedAuthoritiesChange(N, ScheduledChange<N>),
 
-	PrevoteChallenge(Challenge<H, N, Header, Signature, Id, Prevote<H, N>>),
-
-	PrecommitChallenge(Challenge<H, N, Header, Signature, Id, Precommit<H, N>>),
+	Challenge(safety::Challenge<H, N, Header>),
 }
 
-impl<H, N, Header, Signature, Id> Signal<H, N, Header, Signature, Id> {
+impl<H, N, Header> Signal<H, N, Header> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
@@ -100,16 +99,9 @@ impl<H, N, Header, Signature, Id> Signal<H, N, Header, Signature, Id> {
 		}
 	}
 
-	pub fn try_into_prevote_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>> {
+	pub fn try_into_challenge(self) -> Option<safety::Challenge<H, N, Header>> {
 		match self {
-			Signal::PrevoteChallenge(challenge) => Some(challenge),
-			_ => None,
-		}
-	}
-
-	pub fn try_into_precommit_challenge(self) -> Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>> {
-		match self {
-			Signal::PrecommitChallenge(challenge) => Some(challenge),
+			Signal::Challenge(challenge) => Some(challenge),
 			_ => None,
 		}
 	}
@@ -120,8 +112,9 @@ pub trait Trait: system::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The signature of the authority.
-	type Signature: Verify<Signer=AuthorityId> + Codec + Clone + Eq + core::fmt::Debug;
+	type Signature: Verify<Signer=AuthorityId> + Codec + Clone + Eq;
 
+	/// The block.
 	type Block: BlockT<Hash=<Self as system::Trait>::Hash, Header=<Self as system::Trait>::Header>;
 }
 
@@ -166,38 +159,6 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 	}
 }
 
-/// A stored pending change.
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredPendingChallenge<H, N, Header, Signature, Id> {
-	/// The block number this was scheduled at.
-	pub scheduled_at: N,
-	/// The delay in blocks until it will expire.
-	pub delay: N,
-
-	pub parent_hash: H,
-	
-	pub prevote_challenge: Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
-
-	pub precommit_challenge: Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
-}
-
-
-/// A stored pending change.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredChallengeSession<H, N, Header, Signature, Id> {
-	/// The block number this was scheduled at.
-	pub scheduled_at: N,
-	/// The delay in blocks until it will expire.
-	pub delay: N,
-
-	pub parent_hash: H,
-	
-	pub prevote_challenge: Option<Challenge<H, N, Header, Signature, Id, Prevote<H, N>>>,
-
-	pub precommit_challenge: Option<Challenge<H, N, Header, Signature, Id, Precommit<H, N>>>,
-}
-
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
@@ -215,12 +176,11 @@ decl_storage! {
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
-		ChallengeSessions get(challenge_sessions): Vec<
-			StoredChallengeSession<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
-		>;
+		/// Open challenge sessions.
+		ChallengeSessions get(challenge_sessions): map T::Hash => Option<StoredChallengeSession<T>>;
 
-		/// Pending challenge.
-		PendingChallenge: Option<StoredPendingChallenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>>;
+		/// Pending challenges.
+		PendingChallenge: Vec<StoredPendingChallenge<T>>;
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -230,22 +190,19 @@ decl_storage! {
 	}
 }
 
-/// Prevote equivocation.
-pub type PrevoteEquivocation<Hash, Number> =
-	Equivocation<AuthorityId, Prevote<Hash, Number>, AuthoritySignature>;
+type Hash<T> = <T as system::Trait>::Hash;
+type Number<T> = <T as system::Trait>::BlockNumber;
+type Header<T> = <T as system::Trait>::Header;
 
-/// Precommit equivocation.
-pub type PrecommitEquivocation<Hash, Number> =
-	Equivocation<AuthorityId, Precommit<Hash, Number>, AuthoritySignature>;
+type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
+type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>, Header<T>>;
 
-type PrevoteEquivocationProof<T> = 
-	GrandpaEquivocationProof<PrevoteEquivocation<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
-type PrecommitEquivocationProof<T> = 
-	GrandpaEquivocationProof<PrecommitEquivocation<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
-type PrevoteChallenge<T> =
-	Challenge<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber, <T as system::Trait>::Header, <T as Trait>::Signature, AuthorityId, Prevote<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
-type PrecommitChallenge<T> =
-	Challenge<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber, <T as system::Trait>::Header, <T as Trait>::Signature, AuthorityId, Precommit<<T as system::Trait>::Hash, <T as system::Trait>::BlockNumber>>;
+type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
+type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
+type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
+
+type Equivocation<T> = safety::GrandpaEquivocation<Header<T>, Number<T>>;
+type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -254,9 +211,8 @@ decl_module! {
 		/// Report prevote equivocation.
 		fn report_prevote_equivocation(
 			origin,
-			equivocation_proof: PrevoteEquivocationProof<T>
+			equivocation: Equivocation<T>
 		) {
-			let equivocation = equivocation_proof.equivocation;
 			let identity = equivocation.identity;
 
 			let first_vote = equivocation.first.0;
@@ -268,8 +224,8 @@ decl_module! {
 			if first_vote != second_vote {
 				let first_payload = localized_payload(
 					equivocation.round_number,
-					equivocation_proof.set_id,
-					&Message::Prevote(first_vote),
+					equivocation.set_id,
+					&first_vote,
 				);
 
 				if !first_signature.verify(first_payload.as_slice(), &identity) {
@@ -278,8 +234,8 @@ decl_module! {
 
 				let second_payload = localized_payload(
 					equivocation.round_number,
-					equivocation_proof.set_id,
-					&Message::Prevote(second_vote),
+					equivocation.set_id,
+					&second_vote,
 				);
 
 				if !second_signature.verify(second_payload.as_slice(), &identity) {
@@ -295,9 +251,8 @@ decl_module! {
 		/// Report precommit equivocation.
 		fn report_precommit_equivocation(
 			origin,
-			equivocation_proof: PrecommitEquivocationProof<T>
+			equivocation: Equivocation<T>
 		) {
-			let equivocation = equivocation_proof.equivocation;
 			let identity = equivocation.identity;
 
 			let first_vote = equivocation.first.0;
@@ -309,8 +264,8 @@ decl_module! {
 			if first_vote != second_vote {
 				let first_payload = localized_payload(
 					equivocation.round_number,
-					equivocation_proof.set_id,
-					&Message::Precommit(first_vote),
+					equivocation.set_id,
+					&first_vote,
 				);
 
 				if !first_signature.verify(first_payload.as_slice(), &identity) {
@@ -319,8 +274,8 @@ decl_module! {
 
 				let second_payload = localized_payload(
 					equivocation.round_number,
-					equivocation_proof.set_id,
-					&Message::Precommit(second_vote),
+					equivocation.set_id,
+					&second_vote,
 				);
 
 				if !second_signature.verify(second_payload.as_slice(), &identity) {
@@ -334,92 +289,30 @@ decl_module! {
 		}
 
 		/// Answer a previous challenge by providing a set of prevotes.
-		fn report_prevotes_answer(origin, answer: PrevoteChallenge<T>) {
+		fn report_prevotes_answer(origin, answer: Challenge<T>) {
 			ensure_signed(origin)?;
-
-			// Check that target block is the same as previous challenge.
-			let previous_challenge = get_challenge(answer.precommit_challenge);
 
 			// Check that prevotes set has supermajority for B.
-			// TODO: probably is better to use another struct for `answer`.
-			// TODO: check signatures.
 			{
-				let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
-				let votes = challenge.rejecting_set.votes;
-				let commit = Commit {
-					target_hash: previous_challenge.finalized_block.0,
-					target_number: previous_challenge.finalized_block.1,
-					precommits: votes.into_iter().map(|challenged_vote| {
-						SignedPrecommit {
-							precommit: Precommit {
-								target_hash: challenged_vote.vote.target_hash,
-								target_number: challenged_vote.vote.target_number,
-							},
-							signature: challenged_vote.signature, // TODO: It doesn't matter
-							id: challenged_vote.authority,
-						}
-					}).collect(),
-				};
-
-				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-				let voters = <Module<T>>::grandpa_authorities();
-				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
-
-				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
-					if let Some(ghost) = validation_result.ghost() {
-						// TODO: I think this should check that ghost is ancestor of B.
-						if *ghost != challenge.finalized_block {
-							return Err("Invalid proof of finalized block")
-						}
-					}
-				}
-			}
-
-			let culprits = previous_challenge.culprits;
-		}
-
-		/// Report unjustified precommit votes.
-		fn report_rejecting_prevotes(origin, challenge: PrevoteChallenge<T>) {
-			ensure_signed(origin)?;
-
-			// Check that block proof contains supermajority of precommits for B.
-			// TODO: Check signatures.
-			{
-				let headers: &[T::Header] = challenge.finalized_block_proof.headers.as_slice();
-				let commit = challenge.finalized_block_proof.commit.clone();
-				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-				let voters = <Module<T>>::grandpa_authorities();
-				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
-
-				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
-					if let Some(ghost) = validation_result.ghost() {
-						// TODO: I think this should check that ghost is ancestor of B.
-						if *ghost != challenge.finalized_block {
-							return Err("Invalid proof of finalized block")
-						}
-					}
-				}
-			}
-
-			// Check that rejecting vote doesn't have supermajority for B.
-			// TODO: check signatures.
-			{
-				let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
-				let votes = challenge.rejecting_set.votes;
-				let commit = Commit {
+				let previous_challenge = <ChallengeSessions<T>>::take(answer.previous_challenge.expect("FIXME")).expect("FIXME");
+				let challenge = previous_challenge.challenge.expect("FIXME");
+				let headers: &[T::Header] = answer.rejecting_set.headers.as_slice();
+				let votes = answer.rejecting_set.votes; // TODO: Check signatures.
+				let commit = Commit::<_, _, Option<()>, _> {
 					target_hash: challenge.finalized_block.0,
 					target_number: challenge.finalized_block.1,
 					precommits: votes.into_iter().map(|challenged_vote| {
 						SignedPrecommit {
-							precommit: Precommit {
-								target_hash: challenged_vote.vote.target_hash,
-								target_number: challenged_vote.vote.target_number,
+							precommit: Precommit::<T> {
+								target_hash: *challenged_vote.vote.target().0,
+								target_number: challenged_vote.vote.target().1,
 							},
-							signature: challenged_vote.signature, // TODO: It doesn't matter
+							signature: None, // TODO: Check it doesn't matter.
 							id: challenged_vote.authority,
 						}
 					}).collect(),
 				};
+
 				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
 				let voters = <Module<T>>::grandpa_authorities();
 				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
@@ -427,11 +320,81 @@ decl_module! {
 				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
 					if let Some(ghost) = validation_result.ghost() {
 						// TODO: I think this should check that ghost is ancestor of B.
-						if *ghost != challenge.finalized_block {
-							return Err("Invalid proof of finalized block")
+						if *ghost == answer.finalized_block {
+							// TODO: get culprits
+							// let culprits = get_culprits(previous_challenge.finalized_block_proof);
+							// Slash culprits
 						}
 					}
 				}
+			}
+
+			return Err("Invalid answer to challenge")
+		}
+
+		/// Report unjustified precommit votes.
+		fn report_rejecting_prevotes(origin, challenge: Challenge<T>) {
+			ensure_signed(origin)?;
+
+			let round_s = challenge.rejecting_set.round;
+			let round_b = challenge.finalized_block_proof.round;
+
+			if round_s == round_b {
+				// Check that block proof contains supermajority of precommits for B.
+				// TODO: Check signatures.
+				{
+					let headers: &[T::Header] = challenge.finalized_block_proof.headers.as_slice();
+					let commit = challenge.finalized_block_proof.commit.clone();
+					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
+					let voters = <Module<T>>::grandpa_authorities();
+					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
+
+					if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+						if let Some(ghost) = validation_result.ghost() {
+							// TODO: I think this should check that ghost is ancestor of B.
+							if *ghost != challenge.finalized_block {
+								return Err("Invalid proof of finalized block")
+							}
+						}
+					}
+				}
+
+				// Check that rejecting vote doesn't have supermajority for B.
+				// TODO: check signatures.
+				{
+					let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
+					let votes = challenge.rejecting_set.votes;
+					let commit = Commit {
+						target_hash: challenge.finalized_block.0,
+						target_number: challenge.finalized_block.1,
+						precommits: votes.into_iter().map(|challenged_vote| {
+							SignedPrecommit {
+								precommit: Precommit::<T> {
+									target_hash: *challenged_vote.vote.target().0,
+									target_number: challenged_vote.vote.target().1,
+								},
+								signature: challenged_vote.signature, // TODO: It doesn't matter
+								id: challenged_vote.authority,
+							}
+						}).collect(),
+					};
+					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
+					let voters = <Module<T>>::grandpa_authorities();
+					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
+
+					if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+						if let Some(ghost) = validation_result.ghost() {
+							// TODO: I think this should check that ghost is ancestor of B.
+							if *ghost != challenge.finalized_block {
+								return Err("Invalid proof of finalized block")
+							}
+						}
+					}
+				}
+			} 
+			
+			if round_s > round_b {
+
 			}
 
 			// let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
@@ -451,10 +414,7 @@ decl_module! {
 		}
 
 		/// Report unjustified precommit votes.
-		fn report_rejecting_precommits(
-			origin,
-			challenge: PrecommitChallenge<T>
-		) {
+		fn report_rejecting_precommits(origin, challenge: Challenge<T>) {
 			ensure_signed(origin)?;
 			// TODO: Check that is a *new* challenge?
 			
@@ -482,14 +442,12 @@ decl_module! {
 					}
 				}
 
-				// TODO: Slash the equivocators?
+				// TODO: Slash the equivocators in `equivocators_set`.
 			}
 
 			if round_s > round_b {
 				// In this case we need to iterate by attaching a digest?
 
-				// I guess there should be some mechanism to manage the pending challenge in case
-				// of new challenges being pushed by the tx. Leaving it like this for now.
 				// if !<PendingChallenge<T>>::exists() {
 					// Need to create session
 					// let parent_hash = <system::Module<T>>::parent_hash();
@@ -538,9 +496,9 @@ decl_module! {
 				}
 			}
 
-			if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
+			// if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
 				// Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
-			}
+			// }
 		}
 	}
 }
@@ -597,7 +555,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Signal<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>) {
+	fn deposit_log(log: Signal<T::Hash, T::BlockNumber, T::Header>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
@@ -606,10 +564,10 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> Module<T> {
 	pub fn grandpa_log(
 		digest: &DigestOf<T>
-	) -> Option<Signal<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>> {
+	) -> Option<Signal<T::Hash, T::BlockNumber, T::Header>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
 		digest.convert_first(|l| l.try_to::<
-			Signal<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId>
+			Signal<T::Hash, T::BlockNumber, T::Header>
 		>(id))
 	}
 
@@ -625,16 +583,9 @@ impl<T: Trait> Module<T> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 
-	pub fn grandpa_prevote_challenge(digest: &DigestOf<T>)
-		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Prevote<T::Hash, T::BlockNumber>>>
+	pub fn grandpa_challenge(digest: &DigestOf<T>) -> Option<Challenge<T>>
 	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_prevote_challenge())
-	}
-
-	pub fn grandpa_precommit_challenge(digest: &DigestOf<T>)
-		-> Option<Challenge<T::Hash, T::BlockNumber, T::Header, T::Signature, AuthorityId, Precommit<T::Hash, T::BlockNumber>>>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_precommit_challenge())
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
 	}
 }
 

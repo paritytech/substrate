@@ -38,11 +38,25 @@ use alloc::collections::BTreeMap;
 use std::collections::BTreeMap;
 use num_traits as num;
 
+pub use consensus_accountable_safety_primitives as safety;
+
 pub use grandpa_primitives::{
 	Precommit as GrandpaPrecommit, Prevote as GrandpaPrevote, Equivocation,
-	Message, Error as GrandpaError, Chain, validate_commit, Commit, VoterSet,
-	SignedPrecommit,
+	Message as GrandpaMessage, Error as GrandpaError, Chain, validate_commit,
+	Commit, VoterSet, SignedPrecommit,
 };
+
+/// The `ConsensusEngineId` of GRANDPA.
+pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
+
+/// WASM function call to check for pending changes.
+pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
+
+/// WASM function call to get current GRANDPA authorities.
+pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
+
+/// Length of a challenge session in blocks.
+pub const CHALLENGE_SESSION_LENGTH: u32 = 8;
 
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
@@ -54,9 +68,6 @@ pub type AuthorityId = substrate_primitives::ed25519::Public;
 /// Signature for a Grandpa authority.
 pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
 
-/// The `ConsensusEngineId` of GRANDPA.
-pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
-
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
@@ -64,20 +75,18 @@ pub type Prevote<Block> = GrandpaPrevote<<Block as BlockT>::Hash, NumberFor<Bloc
 
 pub type Precommit<Block> = GrandpaPrecommit<<Block as BlockT>::Hash, NumberFor<Block>>;
 
-/// Prevote equivocation.
-pub type PrevoteEquivocation<Block> =
-	Equivocation<AuthorityId, Prevote<Block>, AuthoritySignature>;
+pub type Message<Block> = GrandpaMessage<<Block as BlockT>::Hash, NumberFor<Block>>;
 
-/// Precommit equivocation.
-pub type PrecommitEquivocation<Block> =
-	Equivocation<AuthorityId, Precommit<Block>, AuthoritySignature>;
+/// Grandpa equivocation.
+pub type GrandpaEquivocation<Block> =
+	safety::GrandpaEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>;
 
-pub type PrevoteChallenge<Block> = 
-	Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>>;
-
-pub type PrecommitChallenge<Block> = 
-	Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>>;
-
+/// Grandpa challenge
+pub type Challenge<Block> = safety::Challenge<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	<Block as BlockT>::Header
+>;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
@@ -88,14 +97,6 @@ pub struct ScheduledChange<N> {
 	/// The number of blocks to delay.
 	pub delay: N,
 }
-
-/// WASM function call to check for pending changes.
-pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
-/// WASM function call to get current GRANDPA authorities.
-pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
-
-/// Length of a challenge session in blocks.
-pub const CHALLENGE_SESSION_LENGTH: u32 = 8;
 
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
@@ -155,80 +156,24 @@ decl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// Check a digest for a prevote challenge.
-		fn grandpa_prevote_challenge(digest: &DigestFor<Block>) -> Option<PrevoteChallenge<Block>>;
+		fn grandpa_prevote_challenge(digest: &DigestFor<Block>) -> Option<Challenge<Block>>;
 
 		/// Check a digest for a precommit challenge.
-		fn grandpa_precommit_challenge(digest: &DigestFor<Block>) -> Option<PrecommitChallenge<Block>>;
+		fn grandpa_precommit_challenge(digest: &DigestFor<Block>) -> Option<Challenge<Block>>;
 		
-		/// Construct a call for reporting the prevote equivocation.
-		fn construct_prevote_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrevoteEquivocation<Block>>
-		) -> Vec<u8>;
-		
-		/// Construct a call to report the precommit equivocation.
-		fn construct_precommit_equivocation_report_call(
-			proof: GrandpaEquivocationProof<PrecommitEquivocation<Block>>
-		) -> Vec<u8>;
+		/// Construct a call to report the equivocation.
+		fn construct_equivocation_report_call(proof: GrandpaEquivocation<Block>) -> Vec<u8>;
 
 		/// Construct a call to report the rejecting set of prevotes.
-		fn construct_rejecting_prevotes_report_call(challenge: PrevoteChallenge<Block>) -> Vec<u8>;
+		fn construct_rejecting_prevotes_report_call(challenge: Challenge<Block>) -> Vec<u8>;
 
 		/// Construct a call to report the rejecting set of precommits.
-		fn construct_rejecting_precommits_report_call(challenge: PrecommitChallenge<Block>) -> Vec<u8>;
+		fn construct_rejecting_precommits_report_call(challenge: Challenge<Block>) -> Vec<u8>;
 	}
-}
-
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
-pub struct GrandpaEquivocationProof<E> {
-	pub set_id: u64,
-	pub equivocation: E,
 }
 
 pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
-}
-
-/// A challenge is a transaction T containing
-/// a) the set of votes S being challenged, that were cast in round r_S,
-/// b) a reference to a finalized block B, with respect to which the set of votes S is incompatible,
-/// c) a set C_B of pre-commit votes in round r_B (where r_B <= r_S) having supermajority for B,
-///    and thus proving that B was indeed finalized in round r_B, and
-/// d) a reference to a previous challenge, if the current tx is an answer to it.
-
-
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct Challenge<H, N, Header, S, Id, Vote> {
-	pub culprits: Vec<Id>, // TODO: Optimize.
-	pub finalized_block: (H, N),
-	pub finalized_block_proof: FinalizedBlockProof<H, N, Header, S, Id>,
-	pub rejecting_set: RejectingVoteSet<Vote, Header>,
-	pub previous_challenge: Option<H>,
-}
-
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct FinalizedBlockProof<H, N, Header, S, Id> {
-	pub commit: Commit<H, N, S, Id>,
-	pub headers: Vec<Header>,
-	pub round: u64,
-}
-
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct RejectingVoteSet<Vote, Header> {
-	pub votes: Vec<ChallengedVote<Vote>>,
-	pub headers: Vec<Header>,
-	pub round: u64,
-}
-
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct ChallengedVote<Vote> {
-	// Prevote or Precommit
-	pub vote: Vote,
-	pub authority: AuthorityId,
-	pub signature: AuthoritySignature,
 }
 
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
