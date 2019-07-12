@@ -31,6 +31,7 @@ grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-gr
 grandpa-primitives = { package = "finality-grandpa-primitives", path = "/home/marcio/repos/finality-grandpa/primitives" }
 # grandpa-primitives = { package = "finality-grandpa-primitives", git = "https://github.com/paritytech/finality-grandpa/", branch = "marcio/grandpa-primitives", path = "primitives" }
 consensus_accountable_safety = { package = "substrate-consensus-accountable-safety", path = "../consensus/accountable-safety" }
+consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../consensus/accountable-safety/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 num-traits = { version = "0.2" }
 

@@ -32,12 +32,13 @@ use consensus_common::{
 	SelectChain,
 };
 use consensus_accountable_safety::SubmitReport;
+use consensus_accountable_safety_primitives::{
+	RejectingVoteSet, FinalizedBlockProof, ChallengedVote
+};
 use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature,
-	AuthorityId, Challenge, FinalizedBlockProof, ChallengedVote,
-	RejectingVoteSet, SignedPrecommit,
+	AuthorityId, Challenge, SignedPrecommit,
 };
-use srml_grandpa::Signal;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
@@ -468,7 +469,7 @@ where
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
-		let maybe_challenge = api.grandpa_prevote_challenge(&at, digest);
+		let maybe_challenge = api.grandpa_challenge(&at, digest);
 
 		match maybe_challenge {
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),

@@ -4512,6 +4512,7 @@ dependencies = [
  "srml-grandpa 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-accountable-safety 2.0.0",
+ "substrate-consensus-accountable-safety-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-inherents 2.0.0",

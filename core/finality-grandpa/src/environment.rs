@@ -32,13 +32,14 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet, AccountableSafety,
+	voter, voter_set::VoterSet, AccountableSafety, Message
 };
 use grandpa_primitives::Equivocation;
 use fg_primitives::{GrandpaEquivocation, GrandpaApi};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash, ProvideRuntimeApi
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	ProvideRuntimeApi,
 };
 use substrate_primitives::{Blake2Hasher, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -774,13 +775,22 @@ where
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocation {
+		let proof = GrandpaEquivocation::<Block> {
+			round_number: equivocation.round_number,
+			identity: equivocation.identity,
+			first: (
+				Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.first.0),
+				equivocation.first.1,
+			),
+			second: (
+				Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.second.0),
+				equivocation.second.1,
+			),
 			set_id: self.set_id,
-			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		self.inner.runtime_api()
-			.construct_prevote_equivocation_report_call(&block_id, proof)
+			.construct_equivocation_report_call(&block_id, proof)
 			.map(|call| {
 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
 				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
@@ -796,13 +806,22 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocation {
+		let proof = GrandpaEquivocation::<Block> {
+			round_number: equivocation.round_number,
+			identity: equivocation.identity,
+			first: (
+				Message::Precommit(equivocation.first.0),
+				equivocation.first.1,
+			),
+			second: (
+				Message::Precommit(equivocation.second.0),
+				equivocation.second.1,
+			),
 			set_id: self.set_id,
-			equivocation,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		self.inner.runtime_api()
-			.construct_precommit_equivocation_report_call(&block_id, proof)
+			.construct_equivocation_report_call(&block_id, proof)
 			.map(|call| {
 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
 				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
