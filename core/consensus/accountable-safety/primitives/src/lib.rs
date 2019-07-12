@@ -110,14 +110,14 @@ pub struct ChallengedVote<H, N> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct StoredPendingChallenge<H, N, Header> {
+	/// Parent block hash.
+	pub parent_hash: H,
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
-
-	pub parent_hash: H,
-	
-	pub challenge: Option<Challenge<H, N, Header>>,
+	/// The challenge submitted.
+	pub challenge: Challenge<H, N, Header>,
 }
 
 /// A stored pending change.

@@ -136,7 +136,7 @@ decl_storage! {
 		ChallengeSessions get(challenge_sessions): map T::Hash => Option<StoredChallengeSession<T>>;
 
 		/// Pending challenges.
-		PendingChallenge: Vec<StoredPendingChallenge<T>>;
+		PendingChallenges get(pending_challenges): Vec<StoredPendingChallenge<T>>;
 
 		/// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -279,7 +279,7 @@ decl_module! {
 				// TODO: check signatures.
 				{
 					let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
-					let votes = challenge.rejecting_set.votes;
+					let votes = challenge.rejecting_set.votes.clone();
 					let commit = Commit {
 						target_hash: challenge.finalized_block.0,
 						target_number: challenge.finalized_block.1,
@@ -310,23 +310,23 @@ decl_module! {
 			} 
 			
 			if round_s > round_b {
+				// Iterate by attaching a digest.
 
+				// Push new session.
+				let parent_hash = <system::Module<T>>::parent_hash();
+				let current_height = <system::ChainContext::<T>>::default().current_height();
+
+				let challenge_session = StoredPendingChallenge::<T> {
+					scheduled_at: current_height,
+					delay: CHALLENGE_SESSION_LENGTH.into(),
+					parent_hash,
+					challenge: challenge.clone(),
+				};
+
+				let mut pending_challenges = Self::pending_challenges();
+				pending_challenges.push(challenge_session);
+				<PendingChallenges<T>>::put(pending_challenges);
 			}
-
-			// let ChallengedVoteSet { ref challenged_votes, set_id, round } = proof.challenged_votes;
-
-			// // Check all votes are for round_s and that are incompatible with B
-			// for ChallengedVote { vote, authority, signature } in challenged_votes {
-			// 	let message = Message::Prevote(vote.clone());
-			// 	let payload = localized_payload(round, set_id, &message);
-
-			// 	if !signature.verify(payload.as_slice(),&authority) {
-			// 		return TransactionValidity::Invalid(0)
-			// 	}
-			// }
-			
-			// if there is a reference to a previous challenge check that is correct.
-
 		}
 
 		/// Report unjustified precommit votes.
@@ -343,7 +343,7 @@ decl_module! {
 				let mut authority_vote_map = BTreeMap::new();
 				let mut equivocators_set = BTreeSet::new();
 
-				for challenged_vote in challenge.rejecting_set.votes {
+				for challenged_vote in challenge.rejecting_set.votes.clone() {
 					// TODO: Check signature.
 					let ChallengedVote { vote, authority, signature } = challenged_vote;
 					match authority_vote_map.get(&authority) {
@@ -362,23 +362,22 @@ decl_module! {
 			}
 
 			if round_s > round_b {
-				// In this case we need to iterate by attaching a digest?
+				// Iterate by attaching a digest.
 
-				// if !<PendingChallenge<T>>::exists() {
-					// Need to create session
-					// let parent_hash = <system::Module<T>>::parent_hash();
-					// let current_height = <system::ChainContext::<T>>::default().current_height();
+				// Push new session.
+				let parent_hash = <system::Module<T>>::parent_hash();
+				let current_height = <system::ChainContext::<T>>::default().current_height();
 
-					// let challenge_session = StoredPendingChallenge {
-					// 	scheduled_at: current_height,
-					// 	delay: CHALLENGE_SESSION_LENGTH.into(),
-					// 	parent_hash,
-					// 	prevote_challenge: None,
-					// 	precommit_challenge: Some(challenge.clone()),
-					// };
+				let challenge_session = StoredPendingChallenge::<T> {
+					scheduled_at: current_height,
+					delay: CHALLENGE_SESSION_LENGTH.into(),
+					parent_hash,
+					challenge: challenge.clone(),
+				};
 
-					// <PendingChallenge<T>>::put(challenge_session);
-				// }
+				let mut pending_challenges = Self::pending_challenges();
+				pending_challenges.push(challenge_session);
+				<PendingChallenges<T>>::put(pending_challenges);
 			}
 		}
 
