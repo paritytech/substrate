@@ -18,15 +18,18 @@
 #[cfg(feature = "bench")]
 extern crate test;
 
-use std::{str::FromStr, io::{stdin, Read}};
+use std::{str::FromStr, io::{stdin, Read}, convert::TryInto};
 use hex_literal::hex;
 use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, crypto::Ss58Codec, blake2_256};
+use substrate_primitives::{
+	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public,
+	crypto::{Ss58Codec, set_default_ss58_version}, blake2_256
+};
 use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
+use node_runtime::{Call, UncheckedExtrinsic, CheckNonce, TakeFees, BalancesCall};
 
 mod vanity;
 
@@ -87,6 +90,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
 	let password = matches.value_of("password");
+	let maybe_network = matches.value_of("network");
+	if let Some(network) = maybe_network {
+		let v = network.try_into()
+			.expect("Invalid network name: must be polkadot/substrate/kusama");
+		set_default_ss58_version(v);
+	}
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			// create a new randomly generated mnemonic phrase
@@ -161,11 +170,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.sign(payload)
 			});
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
 				raw_payload.1,
 				signer.public().into(),
 				signature.into(),
 				era,
+				(CheckNonce(index), TakeFees(0)),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -202,11 +211,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			);
 
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
 				raw_payload.1,
 				signer.public().into(),
 				signature.into(),
 				era,
+				(CheckNonce(index), TakeFees(0)),
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
