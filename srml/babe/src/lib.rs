@@ -116,7 +116,9 @@ decl_storage! {
 		LastTimestamp get(last): T::Moment;
 
 		/// The current authorities set.
-		Authorities get(authorities) build(authorities): Vec<(AuthorityId, Weight)>;
+		Authorities get(authorities) build(|config: &GenesisConfig| {
+			config.authorities.clone()
+		}): Vec<(AuthorityId, Weight)>;
 
 		/// The epoch randomness.
 		///
@@ -143,7 +145,9 @@ decl_storage! {
 		EpochIndex get(epoch_index): u64;
 
 		/// The number of slots per epoch
-		SlotsPerEpoch get(slots_per_epoch) build(slots_per_epoch): SlotNumber;
+		SlotsPerEpoch get(slots_per_epoch) build(|config: &GenesisConfig| {
+			config.slots_per_epoch
+		}): SlotNumber;
 
 		/// Set to `true` when this code discovers that an epoch change is
 		/// needed. Set to `false` by the actual change.
