@@ -5,7 +5,7 @@ use primitives::sr25519;
 
 use srml_rolling_window::Module as RollingWindow;
 use std::marker::PhantomData;
-use runtime_support::traits::{KeyOwnerProofSystem, ReportSlash, DoSlash};
+use runtime_support::traits::{KeyOwnerProofSystem, ReportSlash, DoSlash, Misbehavior};
 use runtime_primitives::{Perbill, traits::Hash};
 
 type FullId<T, K> = <<T as Trait>::KeyOwner as KeyOwnerProofSystem<K>>::FullIdentification;
@@ -81,8 +81,8 @@ pub struct MyMisconduct<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
 // do this more elegant with some macro
 // preferable with some linkage to the `misbehavior kind` ideally
 impl<T, DoSlash> MyMisconduct<T, DoSlash> {
-	fn kind() -> u32 {
-		0
+	fn kind() -> Misbehavior {
+		Misbehavior::Equivocation
 	}
 
 	fn base_severity() -> Perbill {
@@ -92,13 +92,17 @@ impl<T, DoSlash> MyMisconduct<T, DoSlash> {
 
 impl<T, Who, DS> ReportSlash<T::Hash, Who> for MyMisconduct<T, DS>
 where
-	T: Trait + srml_rolling_window::Trait,
+	T: Trait + srml_rolling_window::Trait<Kind = Misbehavior>,
 	DS: DoSlash<Who, Perbill>,
 {
 	fn slash(footprint: T::Hash, who: Who) {
 		let kind = Self::kind();
 		let base_seve = Self::base_severity();
-		let num_violations = RollingWindow::<T>::report_misbehavior(kind, footprint);
+		RollingWindow::<T>::report_misbehavior(kind, footprint);
+
+		// use `RollingWindow::get_misbehaved_uniq` if you want the number of unique misconduct in each session
+		let num_violations = RollingWindow::<T>::get_misbehaved(kind);
+
 		// number of validators
 		let n = 50;
 
@@ -139,7 +143,9 @@ mod tests {
 		pub enum Origin for Test {}
 	}
 
-	impl srml_rolling_window::Trait for Test {}
+	impl srml_rolling_window::Trait for Test {
+		type Kind = Misbehavior;
+	}
 
 	impl system::Trait for Test {
 		type Origin = Origin;

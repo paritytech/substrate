@@ -28,6 +28,9 @@ use crate::runtime_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
 /// A trait for querying a single fixed value from a type.
 pub trait Get<T> {
 	/// Return a constant value.
@@ -660,9 +663,10 @@ pub trait DoSlash<Identification, Severity> {
     fn do_slash(identification: Identification, severity: Severity);
 }
 
-/// temp, obviosly not a trait
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
-pub enum MisbehaviorKind {
+/// Temp, obviously not a trait
+#[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum Misbehavior {
 	/// ..
 	Equivocation = 0,
 	/// ..

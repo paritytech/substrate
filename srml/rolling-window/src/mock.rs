@@ -17,12 +17,14 @@
 #![allow(unused)]
 
 use super::*;
+use serde::{Serialize, Deserialize};
 use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
 use substrate_primitives::{Blake2Hasher, H256};
 use srml_staking::{GenesisConfig, StakerStatus};
 use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
 use std::{marker::PhantomData, cell::RefCell};
 use std::collections::{HashSet, HashMap};
+use parity_codec::{Encode, Decode, Codec};
 
 pub type AccountId = u64;
 pub type Exposure = u64;
@@ -56,6 +58,13 @@ impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 {
 		0
 	}
+}
+
+#[derive(Debug, Copy, Clone, Encode, Decode, Serialize, Deserialize)]
+pub enum Kind {
+	One,
+	Two,
+	Three,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -121,7 +130,9 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 }
 
-impl Trait for Test {}
+impl Trait for Test {
+	type Kind = Kind;
+}
 
 impl session::historical::Trait for Test {
 	type FullIdentification = srml_staking::Exposure<AccountId, Balance>;
