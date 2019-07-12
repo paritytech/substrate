@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 derive_more = "0.14.0"
 futures = "0.1.17"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 parking_lot = "0.8.0"
 lazy_static = "1.0"
 log = "0.4"

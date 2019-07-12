@@ -77,7 +77,6 @@ pub fn config(support_changes_trie: bool) -> GenesisConfig {
 		collective_Instance1: Some(Default::default()),
 		collective_Instance2: Some(Default::default()),
 		elections: Some(Default::default()),
-		timestamp: Some(Default::default()),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
 			gas_price: 1 * MILLICENTS,
