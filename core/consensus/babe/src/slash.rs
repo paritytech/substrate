@@ -11,7 +11,7 @@ use runtime_primitives::{Perbill, traits::Hash};
 type FullId<T, K> = <<T as Trait>::KeyOwner as KeyOwnerProofSystem<K>>::FullIdentification;
 
 /// Trait for reporting slashes
-pub trait Trait: srml_system::Trait {
+pub trait Trait: srml_rolling_window::Trait<Kind = Misbehavior> {
 	/// Key that identifies the owner
     type KeyOwner: KeyOwnerProofSystem<sr25519::Public>;
     /// Type of slashing
@@ -90,7 +90,7 @@ impl<T, DoSlash> MyMisconduct<T, DoSlash> {
 
 impl<T, Who, DS> ReportSlash<T::Hash, Who> for MyMisconduct<T, DS>
 where
-	T: Trait + srml_rolling_window::Trait<Kind = Misbehavior>,
+	T: Trait,
 	DS: DoSlash<Who, Perbill>,
 {
 	fn slash(footprint: T::Hash, who: Who) {

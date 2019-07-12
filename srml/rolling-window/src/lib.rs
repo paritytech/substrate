@@ -14,11 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # noooo docs
+//! # Rolling Window module
+//!
+//! ## Overview
+//!
+//! The Rolling Window Module is similar to `simple moving average` except
+//! that it just reports the number of occurrences in the window instead of
+//! calculating the average.
+//!
+//! It is mainly implemented to keep track of misbehaviors and only the take
+//! the last `sessions` of misbehaviors into account.
 //!
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs, rust_2018_idioms)]
 
 #[cfg(test)]
 mod mock;
@@ -32,7 +42,9 @@ use sr_primitives::traits::MaybeSerializeDebug;
 type Window = u32;
 type Session = u32;
 
+/// Rolling Window trait
 pub trait Trait: system::Trait {
+	/// Kind to report
 	type Kind: Copy + Clone + Codec + MaybeSerializeDebug;
 }
 
@@ -40,7 +52,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
 		/// Misbehavior reports
 		///
-		/// It maps each kind into an unique hash and the session number for the misconduct
+		/// It maps each kind into a hash and the session number when it occurred
 		MisconductReports get(kind): linked_map T::Kind => Vec<(Session, T::Hash)>;
 
 		/// Rolling window length for different kinds
@@ -55,9 +67,6 @@ decl_storage! {
 
 decl_module! {
 	/// Rolling Window module
-	///
-	/// It is similar to a `simple moving average` except that it just
-	/// return the number of misbehaviors in the window instead of calculating the average
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
@@ -178,7 +187,7 @@ impl<T: Trait> Module<T> {
 
 	fn kill_storage() {
 		for (key, _) in <WindowLength<T>>::enumerate() {
-				<WindowLength<T>>::remove(key);
+			<WindowLength<T>>::remove(key);
 		}
 
 		for (key, _) in <MisconductReports<T>>::enumerate() {
