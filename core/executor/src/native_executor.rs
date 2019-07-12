@@ -113,7 +113,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
 			cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages)
-				.ok()?.1.clone()
+				.ok()?.version().clone()
 		})
 	}
 }
@@ -136,12 +136,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	) -> (Result<NativeOrEncoded<R>>, bool){
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
-			let (module, onchain_version) = match cache.fetch_runtime(
+			let cached_runtime = match cache.fetch_runtime(
 				&self.fallback, ext, self.default_heap_pages,
 			) {
-				Ok((module, onchain_version)) => (module, onchain_version),
+				Ok(cached_runtime) => cached_runtime,
 				Err(e) => return (Err(e), false),
 			};
+			let onchain_version = cached_runtime.version();
 			match (
 				use_native,
 				onchain_version
@@ -159,17 +160,21 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(
-						self.fallback
-							.call_in_wasm_module(ext, &module, method, data)
-							.map(NativeOrEncoded::Encoded),
+						cached_runtime.with(|module|
+							self.fallback
+								.call_in_wasm_module(ext, module, method, data)
+								.map(NativeOrEncoded::Encoded)
+						),
 						false
 					)
 				}
 				(false, _, _) => {
 					(
-						self.fallback
-							.call_in_wasm_module(ext, &module, method, data)
-							.map(NativeOrEncoded::Encoded),
+						cached_runtime.with(|module|
+							self.fallback
+								.call_in_wasm_module(ext, module, method, data)
+								.map(NativeOrEncoded::Encoded)
+						),
 						false
 					)
 				}

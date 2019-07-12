@@ -25,8 +25,9 @@ use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
 use runtime_version::RuntimeVersion;
 use state_machine::Externalities;
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
+use std::rc::Rc;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 #[derive(Debug)]
@@ -40,7 +41,7 @@ enum CacheError {
 
 /// A runtime along with its version and initial state snapshot.
 #[derive(Clone)]
-struct CachedRuntime {
+pub struct CachedRuntime {
 	/// A wasm module instance.
 	instance: WasmModuleInstanceRef,
 	/// Runtime version according to `Core_version`.
@@ -49,6 +50,31 @@ struct CachedRuntime {
 	version: Option<RuntimeVersion>,
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
+}
+
+impl CachedRuntime {
+	/// Perform an operation with the clean version of the runtime wasm instance.
+	pub fn with<R, F>(&self, f: F) -> R
+	where
+		F: FnOnce(&WasmModuleInstanceRef) -> R,
+	{
+		self.state_snapshot.apply(&self.instance).expect(
+			"applying the snapshot can only fail if the passed instance is different
+			from the one that was used for creation of the snapshot;
+			we use the snapshot that is directly associated with the instance;
+			thus the snapshot was created using the instance;
+			qed",
+		);
+		f(&self.instance)
+	}
+
+	/// Returns the version of this cached runtime.
+	///
+	/// Returns `None` if the runtime doesn't provide the information or there was an error
+	/// while fetching it.
+	pub fn version(&self) -> Option<RuntimeVersion> {
+		self.version.clone()
+	}
 }
 
 /// A state snapshot of an instance taken just after instantiation.
@@ -167,7 +193,7 @@ pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the hash of their code.
-	instances: HashMap<[u8; 32], Result<CachedRuntime, CacheError>>,
+	instances: HashMap<[u8; 32], Result<Rc<CachedRuntime>, CacheError>>,
 }
 
 impl RuntimesCache {
@@ -216,30 +242,17 @@ impl RuntimesCache {
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		default_heap_pages: Option<u64>,
-	) -> Result<(WasmModuleInstanceRef, Option<RuntimeVersion>), Error> {
-		let code_hash = ext.original_storage_hash(well_known_keys::CODE).ok_or(Error::InvalidCode)?;
+	) -> Result<Rc<CachedRuntime>, Error> {
+		let code_hash = ext
+			.original_storage_hash(well_known_keys::CODE)
+			.ok_or(Error::InvalidCode)?;
 
 		// This is direct result from fighting with borrowck.
-		let handle_result = |cached_result: &Result<CachedRuntime, CacheError>| {
-			match *cached_result {
+		let handle_result =
+			|cached_result: &Result<Rc<CachedRuntime>, CacheError>| match *cached_result {
 				Err(_) => Err(Error::InvalidCode),
-				Ok(CachedRuntime  {
-					ref instance,
-					ref version,
-					ref state_snapshot,
-					..
-				}) => {
-					state_snapshot.apply(&instance).expect(
-						"applying the snapshot can only fail if the passed instance is different
-						from the one that was used for creation of the snapshot;
-						we use the snapshot that is directly associated with the instance;
-						thus the snapshot was created using the instance;
-						qed",
-					);
-					Ok((instance.clone(), version.clone()))
-				}
-			}
-		};
+				Ok(ref cached_runtime) => Ok(Rc::clone(cached_runtime)),
+			};
 
 		match self.instances.entry(code_hash.into()) {
 			Entry::Occupied(o) => handle_result(o.get()),
@@ -258,7 +271,7 @@ impl RuntimesCache {
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		default_heap_pages: Option<u64>,
-	) -> Result<CachedRuntime, CacheError> {
+	) -> Result<Rc<CachedRuntime>, CacheError> {
 		let code = ext
 			.original_storage(well_known_keys::CODE)
 			.ok_or(CacheError::CodeNotFound)?;
@@ -293,11 +306,11 @@ impl RuntimesCache {
 			.call_in_wasm_module(ext, &instance, "Core_version", &[])
 			.ok()
 			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-		Ok(CachedRuntime {
+		Ok(Rc::new(CachedRuntime {
 			instance,
 			version,
 			state_snapshot,
-		})
+		}))
 	}
 }
 
