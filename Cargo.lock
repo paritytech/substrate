@@ -4294,6 +4294,7 @@ dependencies = [
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
+ "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
@@ -4340,6 +4341,7 @@ dependencies = [
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
+ "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
@@ -4520,12 +4522,8 @@ name = "substrate-keystore"
 version = "2.0.0"
 dependencies = [
  "derive_more 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 2.0.0",
- "subtle 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4682,6 +4680,7 @@ dependencies = [
  "sr-version 2.0.0",
  "substrate-client 2.0.0",
  "substrate-executor 2.0.0",
+ "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",

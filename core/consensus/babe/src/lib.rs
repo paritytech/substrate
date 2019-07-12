@@ -36,7 +36,7 @@ use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, time::{In
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
+use primitives::{Blake2Hasher, H256, Pair, Public};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -78,6 +78,7 @@ use futures::{Future, IntoFuture, future, stream::Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
+use keystore::LocalStore;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
@@ -142,7 +143,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub config: Config,
 
 	/// The key of the node we are running on.
-	pub local_key: Arc<sr25519::Pair>,
+	pub session_store: Arc<LocalStore<AuthorityPair>>,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -172,7 +173,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 /// Start the babe worker. The returned future should be run in a tokio runtime.
 pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	config,
-	local_key,
+	session_store,
 	client,
 	select_chain,
 	block_import,
@@ -201,7 +202,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
-		local_key,
+		session_store,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
@@ -221,7 +222,7 @@ struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
-	local_key: Arc<sr25519::Pair>,
+	session_store: Arc<LocalStore<AuthorityPair>>,
 	sync_oracle: SO,
 	force_authoring: bool,
 	threshold: u64,
@@ -249,7 +250,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
-		let pair = self.local_key.clone();
 		let ref client = self.client;
 		let block_import = self.block_import.clone();
 		let ref env = self.env;
@@ -287,12 +287,12 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			return Box::new(future::ok(()));
 		}
 
-		let proposal_work = if let Some(((inout, vrf_proof, _batchable_proof), authority_index)) = claim_slot(
+		let proposal_work = if let Some(((inout, vrf_proof, _batchable_proof), authority_index, pair)) = claim_slot(
 			&randomness,
 			slot_info.number,
 			epoch_index,
 			epoch,
-			&pair,
+			&self.session_store,
 			self.threshold,
 		) {
 			debug!(
@@ -325,7 +325,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 
 			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			Timeout::new(
+			let timeout = Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
 					generic::Digest {
@@ -336,7 +336,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					remaining_duration,
 				).into_future(),
 				remaining_duration,
-			)
+			);
+			(timeout, pair)
 		} else {
 			return Box::new(future::ok(()));
 		};
@@ -488,7 +489,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize]);
 
-		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
+		if AuthorityPair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					&randomness,
@@ -769,7 +770,7 @@ fn register_babe_inherent_data_provider(
 	}
 }
 
-fn get_keypair(q: &sr25519::Pair) -> &Keypair {
+fn get_keypair(q: &AuthorityPair) -> &Keypair {
 	q.as_ref()
 }
 
@@ -800,11 +801,20 @@ fn claim_slot(
 	slot_number: u64,
 	epoch: u64,
 	Epoch { ref authorities, .. }: Epoch,
-	key: &sr25519::Pair,
+	session_store: &Arc<LocalStore<AuthorityPair>>,
 	threshold: u64,
-) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
-	let public = &key.public();
-	let authority_index = authorities.iter().position(|s| &s.0 == public)?;
+) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize, AuthorityPair)> {
+	let mut keys = authorities.iter()
+		.enumerate()
+		.filter_map(|(index, public)| {
+			session_store.get_key(public).map(|key| (index, key))
+		})
+		.collect::<Vec<_>>();
+	let (index, key) = if keys.len() == 1 {
+		keys.remove(0)
+	} else {
+		return None;
+	};
 	let transcript = make_transcript(randomness, slot_number, epoch);
 
 	// Compute the threshold we will use.
@@ -813,9 +823,9 @@ fn claim_slot(
 	// be empty.  Therefore, this division is safe.
 	let threshold = threshold / authorities.len() as u64;
 
-	get_keypair(key)
+	get_keypair(&key)
 		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
-		.map(|s|(s, authority_index))
+		.map(|vrf| (vrf, index, key))
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
