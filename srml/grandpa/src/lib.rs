@@ -165,10 +165,9 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report equivocation.
-		fn report_equivocation(
-			origin,
-			equivocation: Equivocation<T>
-		) {
+		fn report_equivocation(origin, equivocation: Equivocation<T>) {
+			ensure_signed(origin)?;
+
 			let identity = equivocation.identity;
 
 			let first_vote = equivocation.first.0;
@@ -248,7 +247,7 @@ decl_module! {
 			return Err("Invalid answer to challenge")
 		}
 
-		/// Report unjustified precommit votes.
+		/// Report rejecting set of prevotes.
 		fn report_rejecting_prevotes(origin, challenge: Challenge<T>) {
 			ensure_signed(origin)?;
 
@@ -329,7 +328,7 @@ decl_module! {
 			}
 		}
 
-		/// Report unjustified precommit votes.
+		/// Report rejecting set of precommits.
 		fn report_rejecting_precommits(origin, challenge: Challenge<T>) {
 			ensure_signed(origin)?;
 			// TODO: Check that is a *new* challenge?
