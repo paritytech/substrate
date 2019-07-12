@@ -1019,7 +1019,7 @@ macro_rules! construct_service_factory {
 				{ $( $select_chain_init:tt )* },
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 			RpcExtensions = $rpc_extensions_ty:ty
-				{ $( $rpc_extensions:tt )* },
+				$( { $( $rpc_extensions:tt )* } )?,
 		}
 	) => {
 		$( #[$attr] )*
@@ -1112,14 +1112,14 @@ macro_rules! construct_service_factory {
 				client: Arc<$crate::FullClient<Self>>,
 				transaction_pool: Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>,
 			) -> Self::RpcExtensions {
-				( $( $rpc_extensions )* ) (client, transaction_pool)
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
 			}
 
 			fn build_light_rpc_extensions(
 				client: Arc<$crate::LightClient<Self>>,
 				transaction_pool: Arc<$crate::TransactionPool<Self::LightTransactionPoolApi>>,
 			) -> Self::RpcExtensions {
-				( $( $rpc_extensions )* ) (client, transaction_pool)
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
 			}
 		}
 	}
