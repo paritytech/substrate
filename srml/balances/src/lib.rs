@@ -1133,7 +1133,7 @@ where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(T::Balance);
+pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(pub T::Balance);
 
 #[cfg(feature = "std")]
 impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {

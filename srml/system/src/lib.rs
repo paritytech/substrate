@@ -755,7 +755,7 @@ impl<T: Trait> Module<T> {
 
 /// Nonce check and increment to give replay protection for transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckNonce<T: Trait>(T::Index);
+pub struct CheckNonce<T: Trait>(pub T::Index);
 
 #[cfg(feature = "std")]
 impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
