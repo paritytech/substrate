@@ -758,6 +758,14 @@ impl<T: Trait> Module<T> {
 pub struct CheckNonce<T: Trait>(T::Index);
 
 #[cfg(feature = "std")]
+impl<T: Trait> CheckNonce<T> {
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(nonce: T::Index) -> Self {
+		Self(nonce)
+	}
+}
+
+#[cfg(feature = "std")]
 impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)

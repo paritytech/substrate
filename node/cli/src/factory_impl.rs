@@ -130,14 +130,14 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
+		let check_nonce = system::CheckNonce::from(index);
+		let take_fees = balances::TakeFees::from(0);
 
 		sign::<service::Factory, Self>(CheckedExtrinsic {
-			signed: Some((sender.clone(), index)),
+			signed: Some((sender.clone(), (check_nonce, take_fees))),
 			function: Call::Balances(
 				BalancesCall::transfer(
-					indices::address::Address::Id(
-						destination.clone().into()
-					),
+					indices::address::Address::Id(destination.clone().into()),
 					(*amount).into()
 				)
 			)
@@ -233,9 +233,9 @@ fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 	phase: u64,
 ) -> <RA::Block as BlockT>::Extrinsic {
 	let s = match xt.signed {
-		Some((signed, index)) => {
+		Some((signed, extra)) => {
 			let era = Era::mortal(256, phase);
-			let payload = (index.into(), xt.function, era, prior_block_hash);
+			let payload = (xt.function, era, prior_block_hash, extra.clone());
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
 					key.sign(&sr_io::blake2_256(b))
@@ -244,8 +244,8 @@ fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 				}
 			}).into();
 			UncheckedExtrinsic {
-				signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
-				function: payload.1,
+				signature: Some((indices::address::Address::Id(signed), signature, era, extra)),
+				function: payload.0,
 			}
 		}
 		None => UncheckedExtrinsic {

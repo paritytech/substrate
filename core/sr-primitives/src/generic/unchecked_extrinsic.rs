@@ -209,7 +209,7 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, DispatchError};
+	use crate::traits::SignedExtension;
 	use serde::{Serialize, Deserialize};
 
 	struct TestContext;
@@ -237,89 +237,151 @@ mod tests {
 		}
 	}
 
-	const DUMMY_ACCOUNTID: u64 = 0;
+	type TestAccountId = u64;
+	type TestCall = Vec<u8>;
 
+	const TEST_ACCOUNT: TestAccountId = 0;
+
+	// NOTE: this is demonstration. One can simply use `()` for testing.
 	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
 	}
-	type Ex = UncheckedExtrinsic<u64, Vec<u8>, TestSig, TestExtra>;
-	type CEx = CheckedExtrinsic<u64, Vec<u8>, TestExtra>;
+
+	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
+	type CEx = CheckedExtrinsic<TestAccountId, TestCall, TestExtra>;
 
 	#[test]
 	fn unsigned_codec_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal(), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::immortal(), 0u64).encode()),
+			Era::immortal(),
+			TestExtra
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn large_signed_codec_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8; 257], Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()), Era::immortal(), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 257], Era::immortal(), 0u64)
+				.using_encoded(blake2_256)[..].to_owned()),
+			Era::immortal(),
+			TestExtra
+		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
 
 	#[test]
 	fn unsigned_check_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8;0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		assert!(!ux.is_signed().unwrap_or(false));
 		assert!(<Ex as Checkable<TestContext>>::check(ux, &TestContext).is_ok());
 	}
 
 	#[test]
 	fn badly_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, vec![0u8]), Era::immortal(), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, vec![0u8; 0]),
+			Era::immortal(),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn immortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::immortal(), 0u64).encode()), Era::immortal(), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::immortal(), 0u64, TestExtra).encode()),
+			Era::immortal(),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0, TestExtra)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
+		);
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::mortal(32, 42), 42u64, TestExtra).encode()),
+			Era::mortal(32, 42),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0, TestExtra)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
+		);
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (Compact::from(DUMMY_ACCOUNTID), vec![0u8;0], Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::mortal(32, 11), 11u64, TestExtra).encode()),
+			Era::mortal(32, 11),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0, TestExtra)), function: vec![0u8;0] }));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }));
 	}
 
 	#[test]
 	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::mortal(32, 10), 10u64).encode()),
+			Era::mortal(32, 10),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, vec![0u8;0], DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, vec![0u8;0], Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43), TestExtra);
+		let ux = Ex::new_signed(
+			vec![0u8; 0],
+			TEST_ACCOUNT,
+			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::mortal(32, 43), 43u64).encode()),
+			Era::mortal(32, 43),
+			TestExtra
+		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
 	fn encoding_matches_vec() {
-		let ex = Ex::new_unsigned(vec![0u8;0]);
+		let ex = Ex::new_unsigned(vec![0u8; 0]);
 		let encoded = ex.encode();
 		let decoded = Ex::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(decoded, ex);

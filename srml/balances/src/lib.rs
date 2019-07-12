@@ -1136,6 +1136,14 @@ where
 pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(T::Balance);
 
 #[cfg(feature = "std")]
+impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(fee: T::Balance) -> Self {
+		Self(fee)
+	}
+}
+
+#[cfg(feature = "std")]
 impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
@@ -1154,8 +1162,8 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		who: &Self::AccountId,
 		weight: Weight,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
-		let fee_x = T::Balance::from(weight as u32);
-		// should be weight_to_fee(weight)
+		let fee_x = T::Balance::from(weight);
+		// TODO TODO: should be weight_to_fee(weight)
 		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
 		let fee = fee + self.0.clone();
 		let imbalance = <Module<T, I>>::withdraw(

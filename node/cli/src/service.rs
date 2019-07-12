@@ -219,7 +219,7 @@ mod tests {
 	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, CENTS, UncheckedExtrinsic};
-	use parity_codec::{Compact, Encode, Decode};
+	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
@@ -358,18 +358,22 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+			let check_nonce = system::CheckNonce::from(index);
+			let take_fees = balances::TakeFees::from(0);
+			let extra = (check_nonce, take_fees);
+
+			let raw_payload = (function, era, genesis_hash, extra.clone());
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
 				signer.sign(payload)
 			});
 			let xt = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				from.into(),
 				signature.into(),
 				era,
+				extra,
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 

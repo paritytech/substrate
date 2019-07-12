@@ -880,6 +880,12 @@ impl<
 	}
 }
 
+/// To be used only for testing.
+#[cfg(feature = "std")]
+impl SignedExtension for () {
+	type AccountId = u64;
+}
+
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
 /// enact a piece of extrinsic information by marshalling and dispatching to a named function
 /// call.

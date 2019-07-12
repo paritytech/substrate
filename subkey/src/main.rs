@@ -23,10 +23,10 @@ use hex_literal::hex;
 use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, crypto::Ss58Codec, blake2_256};
-use parity_codec::{Encode, Decode, Compact};
+use parity_codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
+use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
 
 mod vanity;
 
@@ -86,6 +86,9 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
+	let extra = |i: Index, f: Balance| {
+		(system::CheckNonce::<Runtime>::from(i), balances::TakeFees::<Runtime>::from(f))
+	};
 	let password = matches.value_of("password");
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
@@ -153,7 +156,8 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
 			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+
+			let raw_payload = (function, era, genesis_hash, extra(index, 0));
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
@@ -161,11 +165,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.sign(payload)
 			});
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
 				era,
+				extra(index, 0),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -192,7 +196,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			let era = Era::immortal();
 
-			let raw_payload = (Compact(index), function, era, prior_block_hash);
+			let raw_payload = (function, era, prior_block_hash, extra(index, 0));
 			let signature = raw_payload.using_encoded(|payload|
 				if payload.len() > 256 {
 					signer.sign(&blake2_256(payload)[..])
@@ -202,11 +206,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			);
 
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
 				era,
+				extra(index, 0),
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));

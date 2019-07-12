@@ -24,7 +24,7 @@ use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-	Currency, MakePayment, ReservableCurrency}
+	Currency, ReservableCurrency}
 };
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -118,7 +118,8 @@ fn lock_reasons_should_work() {
 			"account liquidity restrictions prevent withdrawal"
 		);
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+		// NOTE: this causes a fee payment.
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -126,15 +127,12 @@ fn lock_reasons_should_work() {
 			<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 			"account liquidity restrictions prevent withdrawal"
 		);
-		assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert_noop!(
-			<Balances as MakePayment<_>>::make_payment(&1, 1),
-			"account liquidity restrictions prevent withdrawal"
-		);
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_err());
 	});
 }
 
