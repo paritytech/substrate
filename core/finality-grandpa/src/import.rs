@@ -469,7 +469,7 @@ where
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
-		let maybe_challenge = api.grandpa_challenge(&at, digest);
+		let maybe_challenge = api.grandpa_challenges(&at, digest);
 
 		match maybe_challenge {
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),

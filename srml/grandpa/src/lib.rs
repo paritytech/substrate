@@ -63,6 +63,20 @@ use core::iter::FromIterator;
 mod mock;
 mod tests;
 
+type Hash<T> = <T as system::Trait>::Hash;
+type Number<T> = <T as system::Trait>::BlockNumber;
+type Header<T> = <T as system::Trait>::Header;
+
+type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
+type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>, Header<T>>;
+
+type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
+type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
+type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
+
+type Equivocation<T> = safety::GrandpaEquivocation<Hash<T>, Number<T>>;
+type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
+
 pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
@@ -146,20 +160,6 @@ decl_storage! {
 	}
 }
 
-type Hash<T> = <T as system::Trait>::Hash;
-type Number<T> = <T as system::Trait>::BlockNumber;
-type Header<T> = <T as system::Trait>::Header;
-
-type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
-type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>, Header<T>>;
-
-type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
-type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
-type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
-
-type Equivocation<T> = safety::GrandpaEquivocation<Hash<T>, Number<T>>;
-type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
@@ -211,7 +211,7 @@ decl_module! {
 			// Check that prevotes set has supermajority for B.
 			{
 				let previous_challenge = <ChallengeSessions<T>>::take(answer.previous_challenge.expect("FIXME")).expect("FIXME");
-				let challenge = previous_challenge.challenge.expect("FIXME");
+				let challenge = previous_challenge.challenge;
 				let headers: &[T::Header] = answer.rejecting_set.headers.as_slice();
 				let votes = answer.rejecting_set.votes; // TODO: Check signatures.
 				let commit = Commit::<_, _, Option<()>, _> {
@@ -411,6 +411,8 @@ decl_module! {
 				}
 			}
 
+			let pending_challenges = Self::pending_challenges();
+
 			// if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
 				// Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
 			// }
@@ -470,16 +472,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
+	fn deposit_log(log: ConsensusLog<T::Hash, T::BlockNumber, T::Header>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::Hash, T::BlockNumber, T::Header>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
+		digest.convert_first(|l| l.try_to::<ConsensusLog<T::Hash, T::BlockNumber, T::Header>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>)
@@ -494,10 +496,9 @@ impl<T: Trait> Module<T> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 
-	pub fn grandpa_challenge(digest: &DigestOf<T>) -> Option<Challenge<T>>
+	pub fn grandpa_challenges(digest: &DigestOf<T>) -> Option<Vec<Challenge<T>>>
 	{
-		// Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenge())
-		None
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_challenges())
 	}
 }
 

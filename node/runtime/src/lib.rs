@@ -536,9 +536,9 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn grandpa_challenge(digest: &DigestFor<Block>)
-			-> Option<Challenge<Block>> {
-			Grandpa::grandpa_challenge(digest)
+		fn grandpa_challenges(digest: &DigestFor<Block>)
+			-> Option<Vec<Challenge<Block>>> {
+			Grandpa::grandpa_challenges(digest)
 		}
 
 		fn construct_equivocation_report_call(

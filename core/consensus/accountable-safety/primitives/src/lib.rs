@@ -131,5 +131,5 @@ pub struct StoredChallengeSession<H, N, Header> {
 
 	pub parent_hash: H,
 	
-	pub challenge: Option<Challenge<H, N, Header>>,
+	pub challenge: Challenge<H, N, Header>,
 }

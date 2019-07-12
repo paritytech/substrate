@@ -103,7 +103,7 @@ pub struct ScheduledChange<N> {
 /// An consensus log item for GRANDPA.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Decode, Encode, PartialEq, Eq, Clone)]
-pub enum ConsensusLog<N: Codec> {
+pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec> {
 	/// Schedule an authority set change.
 	///
 	/// Precedence towards earlier or later digest items can be given
@@ -136,17 +136,17 @@ pub enum ConsensusLog<N: Codec> {
 	/// Note that the authority with given index is disabled until the next change.
 	#[codec(index = "3")]
 	OnDisabled(AuthorityIndex),
-
-	// #[codec(index = "4")]
-	// Challenge(safety::Challenge<H, N, Header>),
+	/// Set of challenges submitted.
+	#[codec(index = "4")]
+	Challenges(Vec<safety::Challenge<H, N, Header>>),
 }
 
-impl<N: Codec> ConsensusLog<N> {
+impl<H: Codec, N: Codec, Header: Codec> ConsensusLog<H, N, Header> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
 			ConsensusLog::ScheduledChange(change) => Some(change),
-			ConsensusLog::ForcedChange(_, _) | ConsensusLog::OnDisabled(_) => None,
+			_ => None,
 		}
 	}
 
@@ -154,7 +154,15 @@ impl<N: Codec> ConsensusLog<N> {
 	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
 		match self {
 			ConsensusLog::ForcedChange(median, change) => Some((median, change)),
-			ConsensusLog::ScheduledChange(_) | ConsensusLog::OnDisabled(_) => None,
+			_ => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained set of challenges.
+	pub fn try_into_challenges(self) -> Option<Vec<safety::Challenge<H, N, Header>>> {
+		match self {
+			ConsensusLog::Challenges(challenges) => Some(challenges),
+			_ => None,
 		}
 	}
 }
@@ -217,7 +225,7 @@ decl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// Check a digest for a challenge.
-		fn grandpa_challenge(digest: &DigestFor<Block>) -> Option<Challenge<Block>>;
+		fn grandpa_challenges(digest: &DigestFor<Block>) -> Option<Vec<Challenge<Block>>>;
 
 		/// Construct a call to report the equivocation.
 		fn construct_equivocation_report_call(proof: GrandpaEquivocation<Block>) -> Vec<u8>;
