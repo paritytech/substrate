@@ -31,7 +31,7 @@ use parity_codec::Encode;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, SlotNumber};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, SlotNumber, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
