@@ -20,7 +20,7 @@
 mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
-use futures::{prelude::*, channel::mpsc};
+use futures::{prelude::*, channel::mpsc, stream::Fuse};
 use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
@@ -156,7 +156,7 @@ pub struct Peerset {
 	data: peersstate::PeersState,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
-	rx: mpsc::UnboundedReceiver<Action>,
+	rx: Fuse<mpsc::UnboundedReceiver<Action>>,
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
 	created: Instant,
@@ -175,7 +175,7 @@ impl Peerset {
 
 		let mut peerset = Peerset {
 			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
-			rx,
+			rx: rx.fuse(),
 			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
 			created: Instant::now(),
