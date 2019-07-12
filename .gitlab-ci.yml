@@ -158,16 +158,18 @@ test-linux-stable-int:
     variables:
       - $DEPLOY_TAG
   script:
-    - echo "___Logs will be saved to the job artifacts only in case of failure.___"
+    - echo "___Logs will be partly shown at the end in case of failure.___"
+    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
-        &> ${CI_COMMIT_REF_NAME}_int_failure.log
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   artifacts:
-    name:                          $CI_COMMIT_REF_SLUG
+    name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
     paths:
-      - ${CI_COMMIT_REF_NAME}_int_failure.log
+      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
   allow_failure:                   true
 
 
