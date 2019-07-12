@@ -163,11 +163,13 @@ test-linux-stable-int:
     - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
-    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
+  after_script:
+    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
+    expire_in:                     24 hrs
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
   allow_failure:                   true
