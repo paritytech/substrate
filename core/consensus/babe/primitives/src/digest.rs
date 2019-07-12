@@ -52,7 +52,6 @@ pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 /// A raw version of `BabePreDigest`, usable on `no_std`.
 #[derive(Copy, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub struct RawBabePreDigest {
 	/// Slot number
 	pub slot_number: SlotNumber,
