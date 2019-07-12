@@ -323,6 +323,7 @@ impl From<srml_system::Event> for Event {
 
 runtime_support::parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
+	pub const MinimumPeriod: u64 = 5;
 }
 
 impl srml_system::Trait for Runtime {
@@ -342,7 +343,7 @@ impl srml_timestamp::Trait for Runtime {
 	/// A timestamp: seconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 
 /// Adds one to the given input and returns the final result.
