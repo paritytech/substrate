@@ -55,7 +55,6 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
 use consensus_aura::AuraEquivocationProof;
-// TODO: move this trait to runtime_primitives::traits?
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
@@ -147,6 +146,7 @@ impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
 	type Signature = AuthoritySignature;
+	type KeyOwnerSystem = Historical;
 }
 
 impl indices::Trait for Runtime {
@@ -410,6 +410,7 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Signature = AuthoritySignature;
 	type Block = Block;
+	type KeyOwnerSystem = Historical;
 }
 
 parameter_types! {
@@ -559,7 +560,6 @@ impl_runtime_apis! {
 			challenge: Challenge<Block>
 		) -> Option<Vec<u8>> {
 			let mut proofs = Vec::with_capacity(challenge.suspects.len());
-			// TODO: Optimize, are we adding more proofs than needed?
 			for suspect in challenge.suspects.as_slice() {
 				let proof = Historical::prove((
 					key_types::ED25519,
@@ -576,7 +576,6 @@ impl_runtime_apis! {
 			challenge: Challenge<Block>
 		) -> Option<Vec<u8>> {
 			let mut proofs = Vec::with_capacity(challenge.suspects.len());
-			// TODO: Optimize, are we adding more proofs than needed?
 			for suspect in challenge.suspects.as_slice() {
 				let proof = Historical::prove((
 					key_types::ED25519,

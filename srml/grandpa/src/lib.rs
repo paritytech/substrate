@@ -36,15 +36,15 @@ use parity_codec::{self as codec, Encode, Decode, Codec};
 
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
-	Parameter, storage::StorageMap,
+	Parameter, storage::StorageMap, traits::KeyOwnerProofSystem,
 };
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId, Block},
 	traits::{
 		CurrentHeight, MaybeSerializeDebug, ValidateUnsigned, Verify, Header as HeaderT,
-		Block as BlockT, Member
+		Block as BlockT, Member, TypedKey,
 	},
-	transaction_validity::TransactionValidity
+	transaction_validity::TransactionValidity, key_types,
 };
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrevote, GrandpaPrecommit,
@@ -56,6 +56,7 @@ pub use fg_primitives::{
 	Commit, safety::{self, ChallengedVote, RejectingVoteSet},
 };
 
+use substrate_primitives::crypto::KeyTypeId;
 use session::historical::Proof;
 use system::{DigestOf, ensure_signed};
 use num_traits as num;
@@ -87,6 +88,9 @@ pub trait Trait: system::Trait {
 
 	/// The block.
 	type Block: BlockT<Hash=<Self as system::Trait>::Hash, Header=<Self as system::Trait>::Header>;
+
+	/// The session key proof owned system.
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
 /// A stored pending change, old format.
@@ -170,6 +174,16 @@ decl_module! {
 			ensure_signed(origin)?;
 
 			let (equivocation, proof) = proved_equivocation;
+
+			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+				(key_types::ED25519, equivocation.identity.encode()),
+				proof,
+			);
+
+			if to_punish.is_none() {
+				return Err("Bad session key proof")
+			}
+
 			let identity = equivocation.identity;
 
 			let first_vote = equivocation.first.0;
@@ -206,8 +220,24 @@ decl_module! {
 		}
 
 		/// Answer a previous challenge by providing a set of prevotes.
-		fn report_prevotes_answer(origin, answer: Challenge<T>) {
+		fn report_prevotes_answer(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
 			ensure_signed(origin)?;
+
+			let (answer, proofs) = proved_challenge;
+
+			let mut to_punish = Vec::new();
+
+			// TODO: Hmm, probably I need another struct for `answer`.
+			for (idx, proof) in proofs.iter().enumerate() {
+				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::ED25519, answer.suspects[idx].encode()),
+					proof.clone(),
+				);
+				if maybe_suspects.is_none() {
+					return Err("Bad session key proof")
+				}
+				to_punish.push(maybe_suspects.expect("already checked; qed"));
+			}
 
 			// Check that prevotes set has supermajority for B.
 			{
@@ -254,6 +284,19 @@ decl_module! {
 			ensure_signed(origin)?;
 
 			let (challenge, proofs) = proved_challenge;
+
+			let mut to_punish = Vec::new();
+
+			for (idx, proof) in proofs.iter().enumerate() {
+				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::ED25519, challenge.suspects[idx].encode()),
+					proof.clone(),
+				);
+				if maybe_suspects.is_none() {
+					return Err("Bad session key proof")
+				}
+				to_punish.push(maybe_suspects.expect("already checked; qed"));
+			}
 
 			let round_s = challenge.rejecting_set.round;
 			let round_b = challenge.finalized_block_proof.round;
@@ -338,6 +381,19 @@ decl_module! {
 			// TODO: Check that is a *new* challenge?
 			
 			let (challenge, proofs) = proved_challenge;
+
+			let mut to_punish = Vec::new();
+
+			for (idx, proof) in proofs.iter().enumerate() {
+				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::ED25519, challenge.suspects[idx].encode()),
+					proof.clone(),
+				);
+				if maybe_suspects.is_none() {
+					return Err("Bad session key proof")
+				}
+				to_punish.push(maybe_suspects.expect("already checked; qed"));
+			}
 
 			// TODO: Check these two guys.
 			let round_s = challenge.rejecting_set.round;

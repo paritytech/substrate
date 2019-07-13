@@ -61,9 +61,9 @@ use srml_support::{
 use primitives::{
 	traits::{
 		SaturatedConversion, Saturating, Zero, One, Member, Verify,
-		ValidateUnsigned, Header, TypedKey
+		ValidateUnsigned, Header, TypedKey,
 	},
-	generic::DigestItem, transaction_validity::TransactionValidity,
+	generic::DigestItem, transaction_validity::TransactionValidity, key_types,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -78,7 +78,7 @@ use substrate_consensus_aura_primitives::{
 };
 use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
-use session::historical::Proof;
+use session::historical::{self, Proof};
 use system::ensure_signed;
 
 mod mock;
@@ -165,7 +165,7 @@ impl HandleReport for () {
 	fn handle_report(_report: AuraReport) { }
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait + historical::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
 
@@ -174,9 +174,12 @@ pub trait Trait: timestamp::Trait {
 
 	/// The signature type for an authority.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
+
+	/// The session key owner system.
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
-fn valid_equivocation_proof<T: Trait>(
+fn valid_equivocation<T: Trait>(
 	proof: &AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>
 ) -> bool {
 	let header1 = proof.first_header();
@@ -239,11 +242,15 @@ decl_module! {
 			)
 		) {
 			let who = ensure_signed(origin)?;
-
 			let (equivocation, proof) = proved_equivocation;
+			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+				(key_types::ED25519, equivocation.identity().encode()),
+				proof,
+			);
 
-			if valid_equivocation_proof::<T>(&equivocation) {
+			if to_punish.is_some() && valid_equivocation::<T>(&equivocation) {
 				// This is the place where we will slash.
+
 			}
 		}
 	}
