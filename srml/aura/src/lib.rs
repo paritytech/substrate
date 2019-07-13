@@ -54,23 +54,29 @@ use rstd::{result, prelude::*};
 use parity_codec::Encode;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
-use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
+use srml_support::{
+	decl_storage, decl_module, Parameter, storage::StorageValue,
+	traits::{Get, KeyOwnerProofSystem},
+};
 use primitives::{
 	traits::{
 		SaturatedConversion, Saturating, Zero, One, Member, Verify,
 		ValidateUnsigned, Header, TypedKey
 	},
-	generic::DigestItem, transaction_validity::TransactionValidity
+	generic::DigestItem, transaction_validity::TransactionValidity,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+use inherents::{
+	RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError
+};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{
 	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author, AuraEquivocationProof
 };
+use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use system::ensure_signed;
 

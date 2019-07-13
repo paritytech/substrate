@@ -22,9 +22,10 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
+	construct_runtime, parameter_types,
+	traits::{SplitTwoWays, Currency, OnUnbalanced, KeyOwnerProofSystem}
 };
-use substrate_primitives::{u32_trait::{_1, _2, _3, _4}};
+use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use parity_codec::{Encode, Decode, Compact};
 use node_primitives::{
 	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Hash, Index,
@@ -56,6 +57,7 @@ use substrate_primitives::OpaqueMetadata;
 use consensus_aura::AuraEquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
+use session::historical;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -441,6 +443,7 @@ construct_runtime!(
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
+		Historical: historical::{Module},
 		Sudo: sudo,
 	}
 );
@@ -544,6 +547,8 @@ impl_runtime_apis! {
 		fn construct_equivocation_report_call(
 			equivocation: GrandpaEquivocation<Block>
 		) -> Vec<u8> {
+			let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))
+				.expect("FIXME");
 			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			call.encode()
