@@ -30,7 +30,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use futures::sync::mpsc;
-use futures03::{StreamExt as _, TryStreamExt as _};
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
