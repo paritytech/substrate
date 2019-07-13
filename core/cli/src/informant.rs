@@ -20,6 +20,7 @@ use ansi_term::Colour;
 use std::fmt;
 use std::time;
 use futures::{Future, Stream};
+use futures03::{StreamExt as _, TryStreamExt as _};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use network::SyncState;
@@ -81,7 +82,7 @@ where C: Components {
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 
-	let display_block_import = client.import_notification_stream().for_each(move |n| {
+	let display_block_import = client.import_notification_stream().map(|v| Ok::<_, ()>(v)).compat().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last {
 			if n.header.parent_hash() != last_hash {
