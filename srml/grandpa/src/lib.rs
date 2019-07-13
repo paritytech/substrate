@@ -56,6 +56,7 @@ pub use fg_primitives::{
 	Commit, safety::{self, ChallengedVote, RejectingVoteSet},
 };
 
+use session::historical::Proof;
 use system::{DigestOf, ensure_signed};
 use num_traits as num;
 use core::iter::FromIterator;
@@ -165,9 +166,10 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report equivocation.
-		fn report_equivocation(origin, equivocation: Equivocation<T>) {
+		fn report_equivocation(origin, proved_equivocation: (Equivocation<T>, Proof)) {
 			ensure_signed(origin)?;
 
+			let (equivocation, proof) = proved_equivocation;
 			let identity = equivocation.identity;
 
 			let first_vote = equivocation.first.0;
@@ -248,8 +250,10 @@ decl_module! {
 		}
 
 		/// Report rejecting set of prevotes.
-		fn report_rejecting_prevotes(origin, challenge: Challenge<T>) {
+		fn report_rejecting_prevotes(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
 			ensure_signed(origin)?;
+
+			let (challenge, proofs) = proved_challenge;
 
 			let round_s = challenge.rejecting_set.round;
 			let round_b = challenge.finalized_block_proof.round;
@@ -329,10 +333,12 @@ decl_module! {
 		}
 
 		/// Report rejecting set of precommits.
-		fn report_rejecting_precommits(origin, challenge: Challenge<T>) {
+		fn report_rejecting_precommits(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
 			ensure_signed(origin)?;
 			// TODO: Check that is a *new* challenge?
 			
+			let (challenge, proofs) = proved_challenge;
+
 			// TODO: Check these two guys.
 			let round_s = challenge.rejecting_set.round;
 			let round_b = challenge.finalized_block_proof.round;

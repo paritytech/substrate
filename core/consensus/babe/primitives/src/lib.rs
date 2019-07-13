@@ -125,35 +125,47 @@ decl_runtime_apis! {
 
 		/// Construct a call to report the equivocation.
 		fn construct_equivocation_report_call(
-			proof: BabeEquivocationProof<<Block as BlockT>::Header, AuthoritySignature>,
+			proof: BabeEquivocationProof<
+				<Block as BlockT>::Header,
+				AuthoritySignature,
+				AuthorityId,
+			>,
 		) -> Vec<u8>;
 	}
 }
 
 /// Represents an Babe equivocation proof.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub struct BabeEquivocationProof<H, S> {
+pub struct BabeEquivocationProof<H, S, P> {
+	identity: P,
 	first_header: H,
 	second_header: H,
 	first_signature: S,
 	second_signature: S,
 }
 
-impl<H, S> AuthorshipEquivocationProof<H, S> for BabeEquivocationProof<H, S>
+impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for BabeEquivocationProof<H, S, P>
 {
 	/// Create a new Babe equivocation proof.
 	fn new(
+		identity: P,
 		first_header: H,
 		second_header: H,
 		first_signature: S,
 		second_signature: S,
 	) -> Self {
 		BabeEquivocationProof {
+			identity,
 			first_header,
 			second_header,
 			first_signature,
 			second_signature,
 		}
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &P {
+		&self.identity
 	}
 
 	/// Get the first header involved in the equivocation.

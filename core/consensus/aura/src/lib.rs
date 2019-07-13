@@ -401,7 +401,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, AuraEquivocationProof<B::Header, P::Signature>, P::Signature,
+				_, _, AuraEquivocationProof<B::Header, P::Signature, P::Public>, P::Signature,
 			>(
 				client,
 				slot_now,
@@ -424,7 +424,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 					.map(|call| {
 						transaction_pool.as_ref().map(|txpool| {
 							let pair = Pair::from_phrase("FIXME", None).expect("FIXME").0;
-							txpool.submit_report_call(client, pair, call.as_slice())
+							txpool.submit_report_call(client, pair, call.expect("FIXME").as_slice())
 						});
 						info!(target: "afg", "Equivocation report has been submitted")
 					}).unwrap_or_else(|err|

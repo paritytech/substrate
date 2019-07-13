@@ -55,6 +55,8 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
 use consensus_aura::AuraEquivocationProof;
+// TODO: move this trait to runtime_primitives::traits?
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 use session::historical;
@@ -546,24 +548,45 @@ impl_runtime_apis! {
 
 		fn construct_equivocation_report_call(
 			equivocation: GrandpaEquivocation<Block>
-		) -> Vec<u8> {
-			let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))
-				.expect("FIXME");
-			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
+		) -> Option<Vec<u8>> {
+			let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))?;
+			let grandpa_call = GrandpaCall::report_equivocation((equivocation, proof));
 			let call = Call::Grandpa(grandpa_call);
-			call.encode()
+			Some(call.encode())
 		}
 
-		fn construct_rejecting_prevotes_report_call(challenge: Challenge<Block>) -> Vec<u8> {
-			let grandpa_call = GrandpaCall::report_rejecting_prevotes(challenge);
+		fn construct_rejecting_prevotes_report_call(
+			challenge: Challenge<Block>
+		) -> Option<Vec<u8>> {
+			let mut proofs = Vec::with_capacity(challenge.suspects.len());
+			// TODO: Optimize, are we adding more proofs than needed?
+			for suspect in challenge.suspects.as_slice() {
+				let proof = Historical::prove((
+					key_types::ED25519,
+					suspect.encode(),
+				))?;
+				proofs.push(proof);
+			}
+			let grandpa_call = GrandpaCall::report_rejecting_prevotes((challenge, proofs));
 			let call = Call::Grandpa(grandpa_call);
-			call.encode()
+			Some(call.encode())
 		}
 
-		fn construct_rejecting_precommits_report_call(challenge: Challenge<Block>) -> Vec<u8> {
-			let grandpa_call = GrandpaCall::report_rejecting_precommits(challenge);
+		fn construct_rejecting_precommits_report_call(
+			challenge: Challenge<Block>
+		) -> Option<Vec<u8>> {
+			let mut proofs = Vec::with_capacity(challenge.suspects.len());
+			// TODO: Optimize, are we adding more proofs than needed?
+			for suspect in challenge.suspects.as_slice() {
+				let proof = Historical::prove((
+					key_types::ED25519,
+					suspect.encode(),
+				))?;
+				proofs.push(proof);
+			}
+			let grandpa_call = GrandpaCall::report_rejecting_precommits((challenge, proofs));
 			let call = Call::Grandpa(grandpa_call);
-			call.encode()
+			Some(call.encode())
 		}
 	}
 
@@ -577,10 +600,11 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature>,
-		) -> Vec<u8> {
-			let report_call = Call::Aura(AuraCall::report_equivocation(proof));
-			report_call.encode()
+			equivocation: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId>,
+		) -> Option<Vec<u8>> {
+			let proof = Historical::prove((key_types::ED25519, equivocation.identity().encode()))?;
+			let report_call = Call::Aura(AuraCall::report_equivocation((equivocation, proof)));
+			Some(report_call.encode())
 		}
 	}
 

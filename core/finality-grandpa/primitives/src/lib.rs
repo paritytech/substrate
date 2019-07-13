@@ -228,13 +228,19 @@ decl_runtime_apis! {
 		fn grandpa_challenges(digest: &DigestFor<Block>) -> Option<Vec<Challenge<Block>>>;
 
 		/// Construct a call to report the equivocation.
-		fn construct_equivocation_report_call(proof: GrandpaEquivocation<Block>) -> Vec<u8>;
+		fn construct_equivocation_report_call(
+			proof: GrandpaEquivocation<Block>
+		) -> Option<Vec<u8>>;
 
 		/// Construct a call to report the rejecting set of prevotes.
-		fn construct_rejecting_prevotes_report_call(challenge: Challenge<Block>) -> Vec<u8>;
+		fn construct_rejecting_prevotes_report_call(
+			challenge: Challenge<Block>
+		) -> Option<Vec<u8>>;
 
 		/// Construct a call to report the rejecting set of precommits.
-		fn construct_rejecting_precommits_report_call(challenge: Challenge<Block>) -> Vec<u8>;
+		fn construct_rejecting_precommits_report_call(
+			challenge: Challenge<Block>
+		) -> Option<Vec<u8>>;
 	}
 }
 

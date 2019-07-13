@@ -78,6 +78,7 @@ use substrate_consensus_aura_primitives::{
 };
 use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
+use session::historical::Proof;
 use system::ensure_signed;
 
 mod mock;
@@ -176,7 +177,7 @@ pub trait Trait: timestamp::Trait {
 }
 
 fn valid_equivocation_proof<T: Trait>(
-	proof: &AuraEquivocationProof<T::Header, T::Signature>
+	proof: &AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>
 ) -> bool {
 	let header1 = proof.first_header();
 	let header2 = proof.second_header();
@@ -223,7 +224,7 @@ decl_storage! {
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities) config(): Vec<<T::Signature as Verify>::Signer>;
+		pub Authorities get(authorities) config(): Vec<T::AuthorityId>;
 	}
 }
 
@@ -232,11 +233,16 @@ decl_module! {
 		/// Report equivocation.
 		fn report_equivocation(
 			origin,
-			equivocation_proof: AuraEquivocationProof<T::Header, T::Signature>
+			proved_equivocation: (
+				AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>,
+				Proof,
+			)
 		) {
 			let who = ensure_signed(origin)?;
 
-			if valid_equivocation_proof::<T>(&equivocation_proof) {
+			let (equivocation, proof) = proved_equivocation;
+
+			if valid_equivocation_proof::<T>(&equivocation) {
 				// This is the place where we will slash.
 			}
 		}

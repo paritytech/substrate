@@ -62,7 +62,7 @@ pub fn check_equivocation<C, H, E, V>(
 		C: AuxStore,
 		V: Verify + Encode + Decode + Clone,
 		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
-		E: AuthorshipEquivocationProof<H, V>,
+		E: AuthorshipEquivocationProof<H, V, V::Signer>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -91,6 +91,7 @@ pub fn check_equivocation<C, H, E, V>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
+					signer.clone(),
 					prev_header.clone(),
 					header.clone(),
 					prev_signature.clone(),

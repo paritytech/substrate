@@ -36,6 +36,7 @@ treasury = { package = "srml-treasury", path = "../../srml/treasury", default-fe
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
 consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default-features = false }
+consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../core/consensus/accountable-safety/primitives", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }

@@ -59,8 +59,12 @@ decl_runtime_apis! {
 
 		/// Construct a call to report the equivocation.
 		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<<Block as BlockT>::Header, Signature>,
-		) -> Vec<u8>;
+			proof: AuraEquivocationProof<
+				<Block as BlockT>::Header,
+				Signature,
+				AuthorityId,
+			>,
+		) -> Option<Vec<u8>>;
 	}
 }
 
@@ -81,26 +85,34 @@ pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> O
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
-pub struct AuraEquivocationProof<H, S> {
+pub struct AuraEquivocationProof<H, S, P> {
+	identity: P,
 	first_header: H,
 	second_header: H,
 	first_signature: S,
 	second_signature: S,
 }
 
-impl<H, S> AuthorshipEquivocationProof<H, S> for AuraEquivocationProof<H, S> {
+impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for AuraEquivocationProof<H, S, P> {
 	fn new(
+		identity: P,
 		first_header: H,
 		second_header: H,
 		first_signature: S,
 		second_signature: S,
 	) -> Self {
 		AuraEquivocationProof {
+			identity,
 			first_header,
 			second_header,
 			first_signature,
 			second_signature
 		}
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &P {
+		&self.identity
 	}
 
 	/// Get the first header involved in the equivocation.

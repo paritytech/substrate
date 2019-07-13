@@ -20,21 +20,27 @@
 
 use rstd::vec::Vec;
 use parity_codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::Serialize;
+
+use session::historical::Proof;
 use grandpa_primitives::{Message, Commit};
 use substrate_primitives::ed25519::{
 	Public as AuthorityId, Signature as AuthoritySignature
 };
-#[cfg(feature = "std")]
-use serde::Serialize;
 
-pub trait AuthorshipEquivocationProof<H, S> {
+pub trait AuthorshipEquivocationProof<H, S, P> {
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
+		identity: P,
 		first_header: H,
 		second_header: H,
 		first_signature: S, 
 		second_signature: S,
 	) -> Self;
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &P;
 
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &H;
@@ -75,7 +81,7 @@ pub struct GrandpaEquivocation<H, N> {
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Challenge<H, N, Header> {
-	pub culprits: Vec<AuthorityId>, // TODO: Optimize.
+	pub suspects: Vec<AuthorityId>, // TODO: Optimize to bitset?
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: FinalizedBlockProof<H, N, Header>,
 	pub rejecting_set: RejectingVoteSet<H, N, Header>,

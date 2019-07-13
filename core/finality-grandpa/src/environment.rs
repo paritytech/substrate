@@ -775,7 +775,7 @@ where
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocation::<Block> {
+		let mut grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
 			first: (
@@ -790,10 +790,14 @@ where
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, proof)
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation)
 			.map(|call| {
 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
-				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
+				self.transaction_pool.submit_report_call(
+					self.inner.deref(),
+					pair,
+					call.expect("FIXME").as_slice(),
+				);
 				info!(target: "afg", "Equivocation report has been submitted")
 			}).unwrap_or_else(|err|
 				error!(target: "afg", "Error constructing equivocation report: {}", err)
@@ -806,7 +810,7 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		let proof = GrandpaEquivocation::<Block> {
+		let grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
 			first: (
@@ -821,10 +825,14 @@ where
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, proof)
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation)
 			.map(|call| {
 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
-				self.transaction_pool.submit_report_call(self.inner.deref(), pair, call.as_slice());
+				self.transaction_pool.submit_report_call(
+					self.inner.deref(),
+					pair,
+					call.expect("FIXME").as_slice()
+				);
 				info!(target: "afg", "Equivocation report has been submitted")
 			}).unwrap_or_else(|err|
 				error!(target: "afg", "Error constructing equivocation report: {}", err)

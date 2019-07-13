@@ -186,7 +186,7 @@ decl_module! {
 		/// Report equivocation.
 		fn report_equivocation(
 			_origin,
-			_equivocation_proof: BabeEquivocationProof<T::Header, T::Signature>
+			_equivocation_proof: BabeEquivocationProof<T::Header, T::Signature, T::AuthorityId>
 		) {
 			// This is the place where we will slash.
 		}
