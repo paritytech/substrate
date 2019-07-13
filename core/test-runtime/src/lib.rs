@@ -670,7 +670,7 @@ cfg_if! {
 				}
 				fn epoch() -> consensus_babe::Epoch {
 					consensus_babe::Epoch {
-						authorities: srml_babe::authorities::<Runtime>(),
+						authorities: system::authorities(),
 						randomness: srml_babe::random::<Runtime>(),
 					}
 				}
