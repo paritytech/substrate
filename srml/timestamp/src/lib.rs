@@ -44,7 +44,10 @@
 //!
 //! * `get` - Gets the current time for the current block. If this function is called prior to
 //! setting the timestamp, it will return the timestamp of the previous block.
-//! * `minimum_period` - Gets the minimum (and advised) period between blocks for the chain.
+//!
+//! ### Trait Getters
+//!
+//! * `MinimumPeriod` - Gets the minimum (and advised) period between blocks for the chain.
 //!
 //! ## Usage
 //!
@@ -93,8 +96,7 @@ use parity_codec::Encode;
 use parity_codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
-use srml_support::for_each_tuple;
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple, traits::Get};
 use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
@@ -208,39 +210,42 @@ pub trait Trait: system::Trait {
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
+
+	/// The minimum period between blocks. Beware that this is different to the *expected* period
+	/// that the block production apparatus provides. Your chosen consensus system will generally
+	/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
+	/// period on default settings.
+	type MinimumPeriod: Get<Self::Moment>;
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The minimum period between blocks. Beware that this is different to the *expected* period
+		/// that the block production apparatus provides. Your chosen consensus system will generally
+		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
+		/// period on default settings.
+		const MinimumPeriod: T::Moment = T::MinimumPeriod::get();
+
 		/// Set the current time.
 		///
-		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
-		/// if this call hasn't been invoked by that time.
+		/// This call should be invoked exactly once per block. It will panic at the finalization
+		/// phase, if this call hasn't been invoked by that time.
 		///
-		/// The timestamp should be greater than the previous one by the amount specified by `minimum_period`.
+		/// The timestamp should be greater than the previous one by the amount specified by
+		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
-				Self::now().is_zero() || now >= Self::now() + <MinimumPeriod<T>>::get(),
+				Self::now().is_zero() || now >= Self::now() + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
 			<Self as Store>::Now::put(now.clone());
 			<Self as Store>::DidUpdate::put(true);
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
-		}
-
-		// Manage upgrade. Remove after all networks upgraded.
-		// TODO: #2133
-		fn on_initialize() {
-			if let Some(period) = <BlockPeriod<T>>::take() {
-				if !<MinimumPeriod<T>>::exists() {
-					<MinimumPeriod<T>>::put(period)
-				}
-			}
 		}
 
 		fn on_finalize() {
@@ -253,16 +258,6 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
 		pub Now get(now) build(|_| 0.into()): T::Moment;
-
-		/// Old storage item provided for compatibility. Remove after all networks upgraded.
-		// TODO: #2133
-		pub BlockPeriod: Option<T::Moment>;
-
-		/// The minimum period between blocks. Beware that this is different to the *expected* period
-		/// that the block production apparatus provides. Your chosen consensus system will generally
-		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
-		/// period on default settings.
-		pub MinimumPeriod get(minimum_period) config(): T::Moment = 3.into();
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
@@ -301,7 +296,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			.expect("Gets and decodes timestamp inherent data")
 			.saturated_into();
 
-		let next_time = cmp::max(data, Self::now() + <MinimumPeriod<T>>::get());
+		let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
 		Some(Call::set(next_time.into()))
 	}
 
@@ -315,7 +310,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-		let minimum = (Self::now() + <MinimumPeriod<T>>::get()).saturated_into::<u64>();
+		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 		if t > data + MAX_TIMESTAMP_DRIFT {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
@@ -356,19 +351,19 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 	}
+	parameter_types! {
+		pub const MinimumPeriod: u64 = 5;
+	}
 	impl Trait for Test {
 		type Moment = u64;
 		type OnTimestampSet = ();
+		type MinimumPeriod = MinimumPeriod;
 	}
 	type Timestamp = Module<Test>;
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
-			minimum_period: 5,
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -379,11 +374,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
-			minimum_period: 5,
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -394,11 +385,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
-			minimum_period: 5,
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);

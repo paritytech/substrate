@@ -34,7 +34,6 @@ pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
-	BoxFinalityProofRequestBuilder,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
@@ -854,7 +853,6 @@ pub fn import_queue<B, C, E>(
 	block_import: BoxBlockImport<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
@@ -879,7 +877,6 @@ pub fn import_queue<B, C, E>(
 		block_import,
 		justification_import,
 		finality_proof_import,
-		finality_proof_request_builder,
 	), timestamp_core))
 }
 
@@ -903,6 +900,7 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 	use futures::{Async, stream::Stream as _};
+	use futures03::{StreamExt as _, TryStreamExt as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -1030,6 +1028,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);
