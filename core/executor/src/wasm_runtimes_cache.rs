@@ -260,7 +260,7 @@ impl RuntimesCache {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
 				let result = Self::create_wasm_instance(wasm_executor, ext, default_heap_pages);
 				if let Err(ref err) = result {
-					warn!(target: "runtimes_cachce", "cannot create a runtime: {:?}", err);
+					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
 				handle_result(v.insert(result))
 			}
