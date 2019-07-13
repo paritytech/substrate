@@ -455,7 +455,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	randomness: [u8; 32],
 	threshold: u64,
 	slots_per_epoch: u64,
-) -> Result<CheckedHeader<B::Header, ([u8; 32], B::Header), (DigestItemFor<B>, DigestItemFor<B>)>, String>
+) -> Result<CheckedHeader<B::Header, B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
@@ -478,7 +478,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	} else if authority_index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
-		let (pre_hash, author): (_, &sr25519::Public) = (header.hash(), &authorities[authority_index as usize]);
+		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize]);
 
 		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
@@ -516,7 +516,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			}
 
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-			Ok(CheckedHeader::Checked((randomness, header), (pre_digest, seal)))
+			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
 		}
@@ -640,7 +640,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			self.config.slots_per_epoch(),
 		)?;
 		match checked_header {
-			CheckedHeader::Checked((_randomness, pre_header), (pre_digest, seal)) => {
+			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
 				let BabePreDigest { slot_number, .. } = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
@@ -668,8 +668,8 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 					"pre_header" => ?pre_header);
 
 				// `Consensus` is the Babe-specific authorities change log.
-				// It's an encoded `Vec<AuthorityId>`, the same format as is stored in the cache,
-				// so no need to decode/re-encode.
+				// It’s an encoded `Epoch`, the same format as is stored in the
+				// cache, so no need to decode/re-encode.
 				let maybe_keys = pre_header.digest()
 					.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID)))
 					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
@@ -811,10 +811,10 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 
 	// check if we already have initialized the cache
 	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<AuthorityId>> = cache
+	let genesis_epoch: Option<Epoch> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
 		.and_then(|v| Decode::decode(&mut &v[..]));
-	if genesis_authorities.is_some() {
+	if genesis_epoch.is_some() {
 		return Ok(());
 	}
 
@@ -823,8 +823,8 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 			"Error initializing authorities cache: {}",
 			error,
 		)));
-	let genesis_authorities = epoch(client, &genesis_id)?;
-	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
+	let genesis_epoch = epoch(client, &genesis_id)?;
+	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_epoch.encode())
 		.map_err(map_err)
 }
 
