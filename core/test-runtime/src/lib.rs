@@ -518,8 +518,12 @@ cfg_if! {
 					}
 				}
 				fn epoch() -> consensus_babe::Epoch {
+					let authorities = system::authorities();
+					assert!(!authorities.is_empty(), "no authorities!");
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 0)).collect();
+					assert!(!authorities.is_empty(), "no authorities!");
 					consensus_babe::Epoch {
-						authorities: srml_babe::authorities::<Runtime>(),
+						authorities,
 						randomness: srml_babe::random::<Runtime>(),
 					}
 				}
@@ -668,9 +672,14 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
+
 				fn epoch() -> consensus_babe::Epoch {
+					let authorities = system::authorities();
+					assert!(!authorities.is_empty(), "no authorities!");
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 0)).collect();
+					assert!(!authorities.is_empty(), "no authorities!");
 					consensus_babe::Epoch {
-						authorities: system::authorities().into_iter().map(|x|(x, 1)).collect(),
+						authorities,
 						randomness: srml_babe::random::<Runtime>(),
 					}
 				}

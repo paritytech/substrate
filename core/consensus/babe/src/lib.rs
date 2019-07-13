@@ -265,7 +265,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let epoch = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
+		let epoch = match epoch(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
 				error!(
@@ -623,8 +623,8 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let Epoch { authorities, randomness } =
-			authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+			epoch(self.client.as_ref(), &BlockId::Hash(parent_hash))
+			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -705,7 +705,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 	}
 }
 
-fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
+fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
@@ -716,8 +716,15 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusErro
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
-				BabeApi::epoch(&*client.runtime_api(), at).ok()
+				let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
+				if s.authorities.is_empty() {
+					error!("No authorities!");
+					None
+				} else {
+					Some(s)
+				}
 			} else {
+				error!("bad api!");
 				None
 			}
 		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
@@ -816,7 +823,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 			"Error initializing authorities cache: {}",
 			error,
 		)));
-	let genesis_authorities = authorities(client, &genesis_id)?;
+	let genesis_authorities = epoch(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
 		.map_err(map_err)
 }
@@ -1093,7 +1100,7 @@ mod tests {
 		let client = test_client::new();
 
 		assert_eq!(client.info().chain.best_number, 0);
-		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap().authorities, vec![
+		assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().authorities, vec![
 			(Keyring::Alice.into(), 0),
 			(Keyring::Bob.into(), 0),
 			(Keyring::Charlie.into(), 0),
