@@ -68,7 +68,7 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
 //! used to create and call contracts.
 //!
-//! * [`ink`](https://github.com/paritytech/ink) is 
+//! * [`ink`](https://github.com/paritytech/ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 //!
@@ -104,7 +104,8 @@ use runtime_primitives::traits::{
 };
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{
-	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child
+	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
+	parameter_types,
 };
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
 use system::{ensure_signed, RawOrigin, ensure_root};
@@ -280,21 +281,38 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>
 pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
-pub const DEFAULT_SIGNED_CLAIM_HANDICAP: u32 = 0;
-pub const DEFAULT_TOMBSTONE_DEPOSIT: u32 = 0;
-pub const DEFAULT_STORAGE_SIZE_OFFSET: u32 = 0;
-pub const DEFAULT_RENT_BYTE_FEE: u32 = 0;
-pub const DEFAULT_RENT_DEPOSIT_OFFSET: u32 = 0;
-pub const DEFAULT_SURCHARGE_REWARD: u32 = 0;
-pub const DEFAULT_TRANSFER_FEE: u32 = 0;
-pub const DEFAULT_CREATION_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
-pub const DEFAULT_CONTRACT_FEE: u32 = 21;
-pub const DEFAULT_CALL_BASE_FEE: u32 = 135;
-pub const DEFAULT_CREATE_BASE_FEE: u32 = 175;
-pub const DEFAULT_MAX_DEPTH: u32 = 100;
-pub const DEFAULT_BLOCK_GAS_LIMIT: u32 = 10_000_000;
+parameter_types! {
+	/// A resonable default value for [`Trait::SignedClaimedHandicap`].
+	pub const DefaultSignedClaimHandicap: u32 = 2;
+	/// A resonable default value for [`Trait::TombstoneDeposit`].
+	pub const DefaultTombstoneDeposit: u32 = 16;
+	/// A resonable default value for [`Trait::StorageSizeOffset`].
+	pub const DefaultStorageSizeOffset: u32 = 8;
+	/// A resonable default value for [`Trait::RentByteFee`].
+	pub const DefaultRentByteFee: u32 = 4;
+	/// A resonable default value for [`Trait::RentDepositOffset`].
+	pub const DefaultRentDepositOffset: u32 = 1000;
+	/// A resonable default value for [`Trait::SurchargeReward`].
+	pub const DefaultSurchargeReward: u32 = 150;
+	/// A resonable default value for [`Trait::TransferFee`].
+	pub const DefaultTransferFee: u32 = 0;
+	/// A resonable default value for [`Trait::CreationFee`].
+	pub const DefaultCreationFee: u32 = 0;
+	/// A resonable default value for [`Trait::TransactionBaseFee`].
+	pub const DefaultTransactionBaseFee: u32 = 0;
+	/// A resonable default value for [`Trait::TransactionByteFee`].
+	pub const DefaultTransactionByteFee: u32 = 0;
+	/// A resonable default value for [`Trait::ContractFee`].
+	pub const DefaultContractFee: u32 = 21;
+	/// A resonable default value for [`Trait::CallBaseFee`].
+	pub const DefaultCallBaseFee: u32 = 1000;
+	/// A resonable default value for [`Trait::CreateBaseFee`].
+	pub const DefaultCreateBaseFee: u32 = 1000;
+	/// A resonable default value for [`Trait::MaxDepth`].
+	pub const DefaultMaxDepth: u32 = 1024;
+	/// A resonable default value for [`Trait::BlockGasLimit`].
+	pub const DefaultBlockGasLimit: u32 = 10_000_000;
+}
 
 pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
@@ -361,24 +379,19 @@ pub trait Trait: timestamp::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
-	/// The fee required to create a contract instance. A reasonable default value
-	/// is 21.
+	/// The fee required to create a contract instance.
 	type ContractFee: Get<BalanceOf<Self>>;
 
-	/// The base fee charged for calling into a contract. A reasonable default
-	/// value is 135.
+	/// The base fee charged for calling into a contract.
 	type CallBaseFee: Get<Gas>;
 
-	/// The base fee charged for creating a contract. A reasonable default value
-	/// is 175.
+	/// The base fee charged for creating a contract.
 	type CreateBaseFee: Get<Gas>;
 
-	/// The maximum nesting level of a call/create stack. A reasonable default
-	/// value is 100.
+	/// The maximum nesting level of a call/create stack.
 	type MaxDepth: Get<u32>;
 
-	/// The maximum amount of gas that could be expended per block. A reasonable
-	/// default value is 10_000_000.
+	/// The maximum amount of gas that could be expended per block.
 	type BlockGasLimit: Get<Gas>;
 }
 
