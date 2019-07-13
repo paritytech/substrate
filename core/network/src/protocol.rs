@@ -1196,7 +1196,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// A batch of blocks have been processed, with or without errors.
-	/// Call this when a batch of blocks have been processed by the import queue, with or without
+	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.
 	pub fn blocks_processed(
 		&mut self,
@@ -1205,7 +1205,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
 		let peers = self.context_data.peers.clone();
-		let results = self.sync.blocks_processed(
+		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
 			results,

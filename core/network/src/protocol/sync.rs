@@ -695,11 +695,11 @@ impl<B: Block> ChainSync<B> {
 
 	/// A batch of blocks have been processed, with or without errors.
 	///
-	/// Call this when a batch of blocks have been processed by the import queue, with or without
-	/// errors.
+	/// Call this when a batch of blocks have been processed by the import
+	/// queue, with or without errors.
 	///
 	/// `peer_info` is passed in case of a restart.
-	pub fn blocks_processed<'a>(
+	pub fn on_blocks_processed<'a>(
 		&'a mut self,
 		imported: usize,
 		count: usize,
@@ -786,7 +786,7 @@ impl<B: Block> ChainSync<B> {
 			self.queue_blocks.remove(&hash);
 		}
 		if has_error {
-			self.best_importing_number = Zero::zero();
+			self.best_importing_number = Zero::zero()
 		}
 
 		output.into_iter()
@@ -987,9 +987,9 @@ impl<B: Block> ChainSync<B> {
 	}
 
 	/// Restart the sync process.
-	fn restart<'a>
-		(&'a mut self, mut peer_info: impl FnMut(&PeerId) -> Option<protocol::PeerInfo<B>> + 'a)
-		-> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
+	fn restart<'a, F>
+		(&'a mut self, mut peer_info: F) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
+		where F: FnMut(&PeerId) -> Option<protocol::PeerInfo<B>> + 'a
 	{
 		self.queue_blocks.clear();
 		self.best_importing_number = Zero::zero();
