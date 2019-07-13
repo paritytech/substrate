@@ -69,7 +69,7 @@
 //! # 	}
 //! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
