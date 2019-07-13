@@ -670,7 +670,7 @@ cfg_if! {
 				}
 				fn epoch() -> consensus_babe::Epoch {
 					consensus_babe::Epoch {
-						authorities: system::authorities(),
+						authorities: system::authorities().into_iter().map(|x|(x, 1)).collect(),
 						randomness: srml_babe::random::<Runtime>(),
 					}
 				}
