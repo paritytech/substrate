@@ -31,7 +31,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, SlotNumber, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -112,15 +112,15 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		/// The last timestamp.
-		LastTimestamp get(last): T::Moment;
+		NextRandomness config(next_randomness): [u8; 32];
 
-		/// The current authorities set.
-		Authorities get(authorities) build(|config: &GenesisConfig| {
-			config.authorities.clone()
-		}): Vec<(AuthorityId, Weight)>;
+		/// Randomness under construction
+		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
 
-		/// The epoch randomness.
+		/// Current epoch
+		pub Authorities get(authorities) config(): Vec<(AuthorityId, Weight)>;
+
+		/// The epoch randomness for the *current* epoch.
 		///
 		/// # Security
 		///
@@ -130,33 +130,18 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		EpochRandomness get(epoch_randomness): [u8; VRF_OUTPUT_LENGTH];
+		pub Randomness get(random) config(): [u8; 32];
 
-		/// The randomness under construction
-		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
-
-		/// The data for the next epoch
-		NextEpoch get(next_epoch) build(|config: &GenesisConfig| Epoch {
-			randomness: [0; 32],
-			authorities: config.authorities.clone(),
-		}): Epoch;
-
-		/// The current epoch
-		EpochIndex get(epoch_index): u64;
-
-		/// The number of slots per epoch
-		SlotsPerEpoch get(slots_per_epoch) build(|config: &GenesisConfig| {
-			config.slots_per_epoch
-		}): SlotNumber;
-
-		/// Set to `true` when this code discovers that an epoch change is
-		/// needed. Set to `false` by the actual change.
-		LastSlotInEpoch: bool;
+		/// Current epoch index
+		EpochIndex: u64;
 	}
-	add_extra_genesis {
-		config(slots_per_epoch): u64;
-		config(authorities): Vec<(AuthorityId, Weight)>;
-	}
+}
+
+pub fn authorities<T: Trait>() -> Vec<(AuthorityId, u64)> {
+	<Module<T> as Store>::Authorities::get()
+}
+pub fn random<T: Trait>() -> [u8; 32] {
+	<Module<T> as Store>::Randomness::get()
 }
 
 decl_module! {
@@ -173,23 +158,15 @@ decl_module! {
 				} else {
 					None
 				}) {
-				let slots_per_epoch = Self::slots_per_epoch();
-				if slots_per_epoch > 0 {
-					LastSlotInEpoch::put(i.slot_number % slots_per_epoch == slots_per_epoch - 1)
-				}
 				return Self::deposit_vrf_output(&i.vrf_output)
 			}
 		}
 	}
 }
 
-pub fn epoch<T: Trait>() -> Epoch {
-	Epoch { randomness: EpochRandomness::get(), authorities: Authorities::get() }
-}
-
 impl<T: Trait> RandomnessBeacon for Module<T> {
 	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
-		Self::epoch_randomness()
+		Self::random()
 	}
 }
 
@@ -222,9 +199,13 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into())
 	}
 
-	fn change_authorities(new: Epoch) {
-		NextEpoch::put(&new);
+	fn get_inherent_digests() -> system::DigestOf<T> {
+		<system::Module<T>>::digest()
+	}
 
+	fn change_epoch(new: Epoch) {
+		Authorities::put(&new.authorities);
+		Randomness::put(&new.randomness);
 		Self::deposit_consensus(ConsensusLog::NextEpochData(new))
 	}
 
@@ -232,19 +213,24 @@ impl<T: Trait> Module<T> {
 		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
 	}
 
-	fn get_inherent_digests() -> system::DigestOf<T> {
-		<system::Module<T>>::digest()
+	/// Call this function exactly once when an epoch changes, to update the
+	/// randomness. Returns the new randomness.
+	fn randomness_change_epoch(epoch_index: u64) -> [u8; 32] {
+		let this_randomness = NextRandomness::get();
+		let next_randomness = compute_randomness(
+			this_randomness,
+			epoch_index,
+			UnderConstruction::get(),
+		);
+		UnderConstruction::put(&[0; 32]);
+		NextRandomness::put(&next_randomness);
+		this_randomness
 	}
+
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
-}
-
-impl<T: Trait> session::ShouldEndSession<u64> for Module<T> {
-	fn should_end_session(_now: u64) -> bool {
-		LastSlotInEpoch::take()
-	}
 }
 
 impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
@@ -255,30 +241,39 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		use staking::BalanceOf;
 		let to_votes = |b: BalanceOf<T>|
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b);
-		let rho = UnderConstruction::get();
-		UnderConstruction::put([0; 32]);
-		let last_epoch_randomness = EpochRandomness::get();
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 		EpochIndex::put(epoch_index);
-		let next_authorities = validators.map(|(account, k)| {
+
+		// *This* epoch’s authorities.
+		let authorities = validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
-		let Epoch { authorities, randomness } = NextEpoch::get();
-		EpochRandomness::put(randomness);
-		Authorities::put(authorities);
-		let mut s = [0; 72];
-		s[..32].copy_from_slice(&last_epoch_randomness);
-		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
-		s[40..].copy_from_slice(&rho);
-		let randomness = runtime_io::blake2_256(&s);
-		Self::change_authorities(Epoch { randomness, authorities: next_authorities })
+
+		// What was the next epoch is now the current epoch
+		let randomness = Self::randomness_change_epoch(epoch_index);
+		Self::change_epoch(Epoch {
+			randomness,
+			authorities,
+		})
 	}
 
 	fn on_disabled(i: usize) {
 		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
 	}
+}
+
+fn compute_randomness(
+	last_epoch_randomness: [u8; 32],
+	epoch_index: u64,
+	rho: [u8; VRF_OUTPUT_LENGTH],
+) -> [u8; 32] {
+	let mut s = [0; 40 + VRF_OUTPUT_LENGTH];
+	s[..32].copy_from_slice(&last_epoch_randomness);
+	s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
+	s[40..].copy_from_slice(&rho);
+	runtime_io::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {

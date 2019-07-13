@@ -50,8 +50,6 @@ use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 pub use consensus_babe::AuthorityId;
-#[cfg(any(feature = "std", test))]
-use keyring::sr25519::Keyring;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type AuraId = AuthorityId;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
@@ -316,7 +314,7 @@ runtime_support::impl_outer_origin!{
 pub struct Event;
 
 impl From<srml_system::Event> for Event {
-	fn from(evt: srml_system::Event) -> Self {
+	fn from(_evt: srml_system::Event) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -520,8 +518,10 @@ cfg_if! {
 					}
 				}
 				fn epoch() -> consensus_babe::Epoch {
-					let authorities = system::authorities().into_iter().map(|s|(s, 0)).collect();
-					consensus_babe::Epoch { authorities, ..srml_babe::epoch::<Runtime>() }
+					consensus_babe::Epoch {
+						authorities: srml_babe::authorities::<Runtime>(),
+						randomness: srml_babe::random::<Runtime>(),
+					}
 				}
 			}
 
@@ -668,7 +668,12 @@ cfg_if! {
 						slots_per_epoch: 20,
 					}
 				}
-				fn epoch() -> consensus_babe::Epoch { srml_babe::epoch::<Runtime>() }
+				fn epoch() -> consensus_babe::Epoch {
+					consensus_babe::Epoch {
+						authorities: srml_babe::authorities::<Runtime>(),
+						randomness: srml_babe::random::<Runtime>(),
+					}
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
