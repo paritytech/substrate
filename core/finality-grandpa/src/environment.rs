@@ -41,7 +41,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 	ProvideRuntimeApi,
 };
-use substrate_primitives::{Blake2Hasher, H256, Pair};
+use substrate_primitives::{Blake2Hasher, H256, Pair, ed25519::Pair as AuthorityPair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -349,6 +349,7 @@ where
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	P: Pair,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.inner, base, block)
@@ -478,10 +479,10 @@ where
 	RA: 'static + Send + Sync + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	P: Pair,
 	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	P: Pair,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -740,9 +741,9 @@ where
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
 			// finalized block.
 			warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
-				  hash,
-				  number,
-				  status.finalized_number,
+				hash,
+				number,
+				status.finalized_number,
 			);
 
 			return Ok(());
@@ -789,19 +790,17 @@ where
 			set_id: self.set_id,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, grandpa_equivocation)
-			.map(|call| {
-				let pair = Pair::from_string("FIXME", None).expect("FIXME");
-				self.transaction_pool.submit_report_call(
-					self.inner.deref(),
-					pair,
-					call.expect("FIXME").as_slice(),
-				);
-				info!(target: "afg", "Equivocation report has been submitted")
-			}).unwrap_or_else(|err|
-				error!(target: "afg", "Error constructing equivocation report: {}", err)
+		let maybe_report_call = self.inner.runtime_api()
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+
+		if let (Ok(Some(report_call)), Some(session_key)) = (maybe_report_call, self.config.local_key.clone()) {
+			self.transaction_pool.submit_report_call(
+				self.inner.deref(),
+				session_key.deref(),
+				report_call.as_slice(),
 			);
+			info!(target: "afg", "Equivocation report has been submitted");
+		}
 	}
 
 	fn precommit_equivocation(
@@ -824,19 +823,17 @@ where
 			set_id: self.set_id,
 		};
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
-		self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, grandpa_equivocation)
-			.map(|call| {
-				let pair = Pair::from_string("FIXME", None).expect("FIXME");
-				self.transaction_pool.submit_report_call(
-					self.inner.deref(),
-					pair,
-					call.expect("FIXME").as_slice()
-				);
-				info!(target: "afg", "Equivocation report has been submitted")
-			}).unwrap_or_else(|err|
-				error!(target: "afg", "Error constructing equivocation report: {}", err)
+		let maybe_report_call = self.inner.runtime_api()
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+
+		if let (Ok(Some(report_call)), Some(session_key)) = (maybe_report_call, self.config.local_key.clone()) {
+			self.transaction_pool.submit_report_call(
+				self.inner.deref(),
+				session_key.deref(),
+				report_call.as_slice(),
 			);
+			info!(target: "afg", "Equivocation report has been submitted");
+		}
 	}
 }
 

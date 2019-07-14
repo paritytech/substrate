@@ -424,7 +424,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 					.map(|call| {
 						transaction_pool.as_ref().map(|txpool| {
 							let pair = Pair::from_phrase("FIXME", None).expect("FIXME").0;
-							txpool.submit_report_call(client, pair, call.expect("FIXME").as_slice())
+							txpool.submit_report_call(client, &pair, call.expect("FIXME").as_slice())
 						});
 						info!(target: "afg", "Equivocation report has been submitted")
 					}).unwrap_or_else(|err|

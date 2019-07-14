@@ -26,12 +26,12 @@ use runtime_primitives::{generic::BlockId, AnySignature};
 use log::{info, warn};
 use client::blockchain::HeaderBackend;
 use client::transaction_builder::api::TransactionBuilder as TransactionBuilderApi;
-use substrate_primitives::crypto::Pair as PairT;
+use substrate_primitives::{crypto::Pair as PairT, ed25519};
 
 /// Trait to submit report calls to the transaction pool.
 pub trait SubmitReport<C, Block, Pair> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, pair: Pair, encoded_call: &[u8]);
+	fn submit_report_call(&self, client: &C, pair: &ed25519::Pair, encoded_call: &[u8]);
 }
 
 impl<C, Block, T: PoolApi + Send + Sync + 'static, P> SubmitReport<C, Block, P> for T 
@@ -43,9 +43,9 @@ where
 	C::Api: TransactionBuilderApi<Block>,
 	P: PairT,
 	P::Public: Encode + Decode,
-	AnySignature: From<<P as PairT>::Signature>,
+	AnySignature: From<<ed25519::Pair as PairT>::Signature>,
 {
-	fn submit_report_call(&self, client: &C, pair: P, encoded_call: &[u8]) {
+	fn submit_report_call(&self, client: &C, pair: &ed25519::Pair, encoded_call: &[u8]) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
 		let block_id = BlockId::<Block>::number(client.info().best_number);
 		let encoded_account_id = pair.public().encode();
