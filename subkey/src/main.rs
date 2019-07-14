@@ -87,7 +87,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
 	let extra = |i: Index, f: Balance| {
-		(system::CheckNonce::<Runtime>::from(i), balances::TakeFees::<Runtime>::from(f))
+		(
+			system::CheckNonce::<Runtime>::from(i),
+			system::CheckWeight::<Runtime>::from(),
+			balances::TakeFees::<Runtime>::from(f),
+		)
 	};
 	let password = matches.value_of("password");
 	match matches.subcommand() {

@@ -91,8 +91,6 @@ use primitives::weights::Weighable;
 mod internal {
 	use primitives::traits::DispatchError;
 
-	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
-
 	pub enum ApplyError {
 		BadSignature(&'static str),
 		Stale,
@@ -283,17 +281,10 @@ where
 			<system::Module<System>>::note_extrinsic(encoded);
 		}
 
-		// Check the weight of the block if that extrinsic is applied.
-		let weight = xt.weight(encoded_len);
-
-		// TODO: Consider placing into a transaction extension.
-		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
-			return Err(internal::ApplyError::FullBlock);
-		}
-
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
+		let weight = xt.weight(encoded_len);
 		let r = Applyable::dispatch(xt, weight)
 			.map_err(internal::ApplyError::from)?;
 
@@ -369,7 +360,7 @@ mod tests {
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
+	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason, Get};
 	use system;
 	use hex_literal::hex;
 
@@ -389,6 +380,7 @@ mod tests {
 	pub struct Runtime;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
 	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -401,6 +393,7 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -435,12 +428,12 @@ mod tests {
 		}
 	}
 
-	type SignedExtra = (system::CheckNonce<Runtime>, balances::TakeFees<Runtime>);
+	type SignedExtra = node_runtime::SignedExtra<Runtime>;
 	type TestXt = primitives::testing::TestXt<Call<Runtime>, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
-		(system::CheckNonce::from(nonce), balances::TakeFees::from(fee))
+		(system::CheckNonce::from(nonce), system::CheckWeight::from(), balances::TakeFees::from(fee))
 	}
 
 	#[test]
@@ -551,7 +544,7 @@ mod tests {
 			let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(0, 0));
 			let xt2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(1, 0));
 			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
+			let len = if should_fail { ( <Runtime as system::Trait>::MaximumBlockWeight::get() - 1) as usize } else { encoded.len() };
 			let encoded_len = encoded.len() as u32;
 			with_externalities(&mut t, || {
 				Executive::initialize_block(&Header::new(
@@ -583,14 +576,16 @@ mod tests {
 	}
 
 	#[test]
-	fn default_block_weight() {
-		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69), extra(0, 0));
+	fn default_block_weight_is_stored() {
+		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(0, 0));
+		let x1 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(1, 0));
+		let x2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(2, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext();
 		with_externalities(&mut t, || {
 			Executive::apply_extrinsic(xt.clone()).unwrap();
-			Executive::apply_extrinsic(xt.clone()).unwrap();
-			Executive::apply_extrinsic(xt.clone()).unwrap();
+			Executive::apply_extrinsic(x1.clone()).unwrap();
+			Executive::apply_extrinsic(x2.clone()).unwrap();
 			assert_eq!(
 				<system::Module<Runtime>>::all_extrinsics_weight(),
 				3 * (0 /*base*/ + len /*len*/ * 1 /*byte*/)

@@ -359,8 +359,9 @@ mod tests {
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 			let era = Era::immortal();
 			let check_nonce = system::CheckNonce::from(index);
+			let check_weight = system::CheckWeight::from();
 			let take_fees = balances::TakeFees::from(0);
-			let extra = (check_nonce, take_fees);
+			let extra = (check_nonce, check_weight, take_fees);
 
 			let raw_payload = (function, era, genesis_hash, extra.clone());
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {

@@ -98,6 +98,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -110,6 +111,7 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;

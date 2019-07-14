@@ -109,6 +109,7 @@ pub fn set_next_validators(next: Vec<u64>) {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -121,6 +122,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;

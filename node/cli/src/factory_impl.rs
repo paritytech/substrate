@@ -24,7 +24,7 @@ use rand::rngs::StdRng;
 use parity_codec::Decode;
 use keyring::sr25519::Keyring;
 use node_primitives::Hash;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
+use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall, Runtime};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
@@ -53,6 +53,12 @@ pub struct FactoryState<N> {
 }
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
+
+impl<Number> FactoryState<Number> {
+	fn build_extra(index: node_primitives::Index) -> node_runtime::SignedExtra<Runtime> {
+		(system::CheckNonce::from(index), system::CheckWeight::from(), balances::TakeFees::from(0))
+	}
+}
 
 impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
@@ -130,11 +136,8 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-		let check_nonce = system::CheckNonce::from(index);
-		let take_fees = balances::TakeFees::from(0);
-
 		sign::<service::Factory, Self>(CheckedExtrinsic {
-			signed: Some((sender.clone(), (check_nonce, take_fees))),
+			signed: Some((sender.clone(), Self::build_extra(index))),
 			function: Call::Balances(
 				BalancesCall::transfer(
 					indices::address::Address::Id(destination.clone().into()),

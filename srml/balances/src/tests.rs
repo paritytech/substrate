@@ -658,3 +658,20 @@ fn extra_balance_should_transfer() {
 		}
 	);
 }
+
+#[test]
+fn signed_extension_take_fees_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.transaction_fees(10, 1)
+			.monied(true)
+			.build(),
+		|| {
+			assert!(TakeFees::<Runtime>::from(0).validate(&1, 10).is_ok());
+			assert_eq!(Balances::free_balance(&1), 100 - 20);
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).validate(&1, 10).is_ok());
+			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
+		}
+	);
+}

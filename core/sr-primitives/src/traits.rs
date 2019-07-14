@@ -840,45 +840,63 @@ pub trait SignedExtension:
 	) -> Result<(), DispatchError> { Self::validate_unsigned(weight).map(|_| ()) }
 }
 
-impl<
-	AccountId,
-	A: SignedExtension<AccountId=AccountId>,
-	B: SignedExtension<AccountId=AccountId>,
-> SignedExtension for (A, B) {
-	type AccountId = AccountId;
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<ValidTransaction, DispatchError> {
-		let a = self.0.validate(who, weight)?;
-		let b = self.1.validate(who, weight)?;
-		Ok(a.combine_with(b))
-	}
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> {
-		self.0.pre_dispatch(who, weight)?;
-		self.1.pre_dispatch(who, weight)?;
-		Ok(())
-	}
-	fn validate_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<ValidTransaction, DispatchError> {
-		let a = A::validate_unsigned(weight)?;
-		let b = B::validate_unsigned(weight)?;
-		Ok(a.combine_with(b))
-	}
-	fn pre_dispatch_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> {
-		A::pre_dispatch_unsigned(weight)?;
-		B::pre_dispatch_unsigned(weight)?;
-		Ok(())
-	}
+macro_rules! tuple_impl_indexed {
+	($first:ident, $($rest:ident,)+ ; $first_index:tt, $($rest_index:tt,)+) => {
+		tuple_impl_indexed!([$first] [$($rest)+] ; [$first_index,] [$($rest_index,)+]);
+	};
+	([$($direct:ident)+] ; [$($index:tt,)+]) => {
+		impl<
+			AccountId,
+			$($direct: SignedExtension<AccountId=AccountId>),+
+		> SignedExtension for ($($direct),+,) {
+			type AccountId = AccountId;
+			fn validate(
+				&self,
+				who: &Self::AccountId,
+				weight: crate::weights::Weight,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, weight)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch(
+				self,
+				who: &Self::AccountId,
+				weight: crate::weights::Weight,
+			) -> Result<(), DispatchError> {
+				$(self.$index.pre_dispatch(who, weight)?;)+
+				Ok(())
+			}
+			fn validate_unsigned(
+				weight: crate::weights::Weight,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$($direct::validate_unsigned(weight)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch_unsigned(
+				weight: crate::weights::Weight,
+			) -> Result<(), DispatchError> {
+				$($direct::pre_dispatch_unsigned(weight)?;)+
+				Ok(())
+			}
+		}
+
+	};
+	([$($direct:ident)+] [] ; [$($index:tt,)+] []) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+	};
+	(
+		[$($direct:ident)+] [$first:ident $($rest:ident)*]
+		;
+		[$($index:tt,)+] [$first_index:tt, $($rest_index:tt,)*]
+	) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+		tuple_impl_indexed!([$($direct)+ $first] [$($rest)*] ; [$($index,)+ $first_index,] [$($rest_index,)*]);
+	};
 }
+
+// TODO TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths.
+#[allow(non_snake_case)]
+tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
 /// To be used only for testing.
 #[cfg(feature = "std")]

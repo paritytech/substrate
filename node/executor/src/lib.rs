@@ -80,8 +80,10 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
-	fn transfer_fee(bytes: Balance) -> Balance {
-		<TransactionBaseFee as Get<Balance>>::get() + <TransactionByteFee as Get<Balance>>::get() * bytes
+	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
+		<TransactionBaseFee as Get<Balance>>::get() +
+		<TransactionByteFee as Get<Balance>>::get() *
+		(extrinsic.encode().len() as Balance)
 	}
 
 	fn creation_fee() -> Balance {
@@ -137,8 +139,8 @@ mod tests {
 		}
 	}
 
-	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
-		(system::CheckNonce::from(nonce), balances::TakeFees::from(extra_fee))
+	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra<Runtime> {
+		(system::CheckNonce::from(nonce), system::CheckWeight::from(), balances::TakeFees::from(extra_fee))
 	}
 
 	fn xt() -> UncheckedExtrinsic {
@@ -259,7 +261,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -295,7 +297,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -490,7 +492,6 @@ mod tests {
 		// session change => consensus authorities change => authorities change digest item appears
 		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
 		assert_eq!(digest.logs().len(), 0);
-//		assert!(digest.logs()[0].as_consensus().is_some());
 
 		(block1, block2)
 	}
@@ -528,7 +529,7 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
 				EventRecord {
@@ -565,8 +566,8 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// TODO TODO: this needs investigating: why are we deducting creation fee twice here? and why bob also pays it?
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(169) - 2 * creation_fee());
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
+			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -621,15 +622,15 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(169) - 2 * creation_fee());
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
+			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
 		});
 	}
 
@@ -875,7 +876,7 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(169) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}

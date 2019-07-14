@@ -67,6 +67,7 @@ impl Get<u64> for TransactionByteFee {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -79,6 +80,7 @@ impl system::Trait for Runtime {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
 }
 impl Trait for Runtime {
 	type Balance = u64;

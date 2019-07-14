@@ -103,7 +103,7 @@ impl ValidTransaction {
 	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
 		ValidTransaction {
-			priority: self.priority + other.priority,
+			priority: self.priority.saturating_add(other.priority),
 			requires: { self.requires.append(&mut other.requires); self.requires },
 			provides: { self.provides.append(&mut other.provides); self.provides },
 			longevity: self.longevity.min(other.longevity),
