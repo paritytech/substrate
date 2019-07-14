@@ -29,7 +29,7 @@
 
 use blocks::BlockCollection;
 use client::{BlockStatus, ClientInfo, error::Error as ClientError};
-use consensus::{BlockOrigin, import_queue::IncomingBlock};
+use consensus::{BlockOrigin, import_queue::{IncomingBlock, BlockImportResult, BlockImportError}};
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
 	message::{self, generic::FinalityProofRequest, BlockAttributes, BlockRequest, BlockResponse, FinalityProofResponse},
@@ -79,6 +79,18 @@ const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
 /// Reputation change when a peer sent us a status message with a different
 /// genesis than us.
 const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
+
+/// Reputation change for peers which send us a block with an incomplete header.
+const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
+
+/// Reputation change for peers which send us a block which we fail to verify.
+const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
+
+/// Reputation change for peers which send us a bad block.
+const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
+
+/// Reputation change for peers which send us a block with bad justifications.
+const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
 
 /// The main data structure which contains all the state for a chains
 /// active syncing strategy.
@@ -414,11 +426,6 @@ impl<B: Block> ChainSync<B> {
 		})
 	}
 
-	/// Clears all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.extra_justifications.reset()
-	}
-
 	/// Schedule a finality proof request for the given block.
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let client = &self.client;
@@ -690,13 +697,99 @@ impl<B: Block> ChainSync<B> {
 	///
 	/// Call this when a batch of blocks have been processed by the import
 	/// queue, with or without errors.
-	pub fn on_blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		for hash in processed_blocks {
+	///
+	/// `peer_info` is passed in case of a restart.
+	pub fn on_blocks_processed<'a>(
+		&'a mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		mut peer_info: impl FnMut(&PeerId) -> Option<protocol::PeerInfo<B>>
+	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
+		trace!(target: "sync", "Imported {} of {}", imported, count);
+
+		let mut output = Vec::new();
+
+		let mut has_error = false;
+		let mut hashes = vec![];
+		for (result, hash) in results {
+			hashes.push(hash);
+
+			if has_error {
+				continue;
+			}
+
+			if result.is_err() {
+				has_error = true;
+			}
+
+			match result {
+				Ok(BlockImportResult::ImportedKnown(_number)) => {}
+				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
+					if aux.clear_justification_requests {
+						trace!(
+							target: "sync",
+							"Block imported clears all pending justification requests {}: {:?}",
+							number,
+							hash
+						);
+						self.extra_justifications.reset()
+					}
+
+					if aux.needs_justification {
+						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
+						self.request_justification(&hash, number);
+					}
+
+					if aux.bad_justification {
+						if let Some(peer) = who {
+							info!("Sent block with bad justification to import");
+							output.push(Err(BadPeer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE)));
+						}
+					}
+
+					if aux.needs_finality_proof {
+						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
+						self.request_finality_proof(&hash, number);
+					}
+				},
+				Err(BlockImportError::IncompleteHeader(who)) => {
+					if let Some(peer) = who {
+						info!("Peer sent block with incomplete header to import");
+						output.push(Err(BadPeer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE)));
+						output.extend(self.restart(&mut peer_info));
+					}
+				},
+				Err(BlockImportError::VerificationFailed(who, e)) => {
+					if let Some(peer) = who {
+						info!("Verification failed from peer: {}", e);
+						output.push(Err(BadPeer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE)));
+						output.extend(self.restart(&mut peer_info));
+					}
+				},
+				Err(BlockImportError::BadBlock(who)) => {
+					if let Some(peer) = who {
+						info!("Bad block");
+						output.push(Err(BadPeer(peer, BAD_BLOCK_REPUTATION_CHANGE)));
+						output.extend(self.restart(&mut peer_info));
+					}
+				},
+				Err(BlockImportError::UnknownParent) |
+				Err(BlockImportError::Cancelled) |
+				Err(BlockImportError::Other(_)) => {
+					output.extend(self.restart(&mut peer_info));
+				},
+			};
+		}
+
+		for hash in hashes {
 			self.queue_blocks.remove(&hash);
 		}
 		if has_error {
 			self.best_importing_number = Zero::zero()
 		}
+
+		output.into_iter()
 	}
 
 	/// Call this when a justification has been processed by the import queue,
@@ -894,7 +987,7 @@ impl<B: Block> ChainSync<B> {
 	}
 
 	/// Restart the sync process.
-	pub fn restart<'a, F>
+	fn restart<'a, F>
 		(&'a mut self, mut peer_info: F) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
 		where F: FnMut(&PeerId) -> Option<protocol::PeerInfo<B>> + 'a
 	{

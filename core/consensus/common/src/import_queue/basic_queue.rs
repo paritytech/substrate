@@ -27,15 +27,6 @@ use crate::import_queue::{
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
 
-/// Reputation change for peers which send us a block with an incomplete header.
-const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change for peers which send us a block which we fail to verify.
-const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
-/// Reputation change for peers which send us a bad block.
-const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
-/// Reputation change for peers which send us a block with bad justifications.
-const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
-
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with pluggable verification.
 pub struct BasicQueue<B: BlockT> {
@@ -202,88 +193,16 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	}
 
 	fn import_a_batch_of_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+		let result_sender = &self.result_sender;
 		let (imported, count, results) = import_many_blocks(
 			&mut *self.block_import,
 			origin,
 			blocks,
 			self.verifier.clone(),
+			|| !result_sender.is_closed(),
 		);
 
-		trace!(target: "sync", "Imported {} of {}", imported, count);
-
-		let mut has_error = false;
-		let mut hashes = vec![];
-		for (result, hash) in results {
-			hashes.push(hash);
-
-			if has_error {
-				continue;
-			}
-
-			if result.is_err() {
-				has_error = true;
-			}
-
-			match result {
-				Ok(BlockImportResult::ImportedKnown(number)) => self.result_sender.block_imported(&hash, number),
-				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
-					self.result_sender.block_imported(&hash, number);
-
-					if aux.clear_justification_requests {
-						trace!(
-							target: "sync",
-							"Block imported clears all pending justification requests {}: {:?}",
-							number,
-							hash
-						);
-						self.result_sender.clear_justification_requests();
-					}
-
-					if aux.needs_justification {
-						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
-						self.result_sender.request_justification(&hash, number);
-					}
-
-					if aux.bad_justification {
-						if let Some(peer) = who {
-							info!("Sent block with bad justification to import");
-							self.result_sender.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
-						}
-					}
-
-					if aux.needs_finality_proof {
-						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
-						self.result_sender.request_finality_proof(&hash, number);
-					}
-				},
-				Err(BlockImportError::IncompleteHeader(who)) => {
-					if let Some(peer) = who {
-						info!("Peer sent block with incomplete header to import");
-						self.result_sender.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::VerificationFailed(who, e)) => {
-					if let Some(peer) = who {
-						info!("Verification failed from peer: {}", e);
-						self.result_sender.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::BadBlock(who)) => {
-					if let Some(peer) = who {
-						info!("Bad block");
-						self.result_sender.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
-						self.result_sender.restart();
-					}
-				},
-				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
-					self.result_sender.restart();
-				},
-			};
-		}
-
-		self.result_sender.blocks_processed(hashes, has_error);
+		self.result_sender.blocks_processed(imported, count, results);
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
@@ -332,11 +251,15 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 }
 
 /// Import several blocks at once, returning import result for each block.
+///
+/// The `keep_going` closure will be called regularly. If it returns false, then the function will
+/// end prematurely.
 fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,
+	keep_going: impl Fn() -> bool,
 ) -> (usize, usize, Vec<(
 	Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 	B::Hash,
@@ -361,9 +284,15 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
+		if !keep_going() {
+			// Setting `has_error` to true cancels the rest of the import.
+			has_error = true;
+		}
+
+		let block_number = block.header.as_ref().map(|h| h.number().clone());
 		let block_hash = block.hash;
 		let import_result = if has_error {
-			Err(BlockImportError::Error)
+			Err(BlockImportError::Cancelled)
 		} else {
 			import_single_block(
 				import_handle,
@@ -373,12 +302,13 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			)
 		};
 		let was_ok = import_result.is_ok();
-		results.push((import_result, block_hash));
 		if was_ok {
+			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
 			imported += 1;
 		} else {
 			has_error = true;
 		}
+		results.push((import_result, block_hash));
 	}
 
 	(imported, count, results)
