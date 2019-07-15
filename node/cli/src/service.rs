@@ -25,7 +25,7 @@ use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use primitives::Pair;
+use primitives::{Pair, ed25519};
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -165,6 +165,26 @@ construct_service_factory! {
 				|
 				{
 					let slot_duration = SlotDuration::get_or_compute(&*client)?;
+
+					let maybe_pair = {
+						// TODO: There should be a better way to get a key pair.
+
+						let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+							match substrate_keystore::Store::open(keystore_path.clone()) {
+								Ok(ks) => Some(ks),
+								Err(err) => None,
+							}
+						} else {
+							None
+						};
+
+						if let Some(keystore) = keystore.as_mut() {
+							Some(keystore.generate_from_seed::<ed25519::Pair>(&config.keys[0])?)
+						} else {
+							None
+						}
+					};
+
 					let (block_import, link_half) =
 						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _>(
 							client.clone(), client.clone(), select_chain, transaction_pool.clone()
