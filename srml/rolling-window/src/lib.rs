@@ -74,7 +74,6 @@ impl<T: Trait> Module<T> {
 			<MisconductReports<T>>::mutate(kind, |window| {
 				// it is guaranteed that `reported_session` happened before `session`
 				window.retain(|(reported_session, window_length, _)| {
-
 					let diff = session.wrapping_sub(*reported_session);
 					diff < *window_length
 				});
@@ -85,8 +84,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report misbehaviour for a kind
-	///
-	/// If a non-existing kind is reported it is ignored
 	pub fn report_misbehavior(kind: T::Kind, window_length: u32, footprint: T::Hash) {
 		let session = SessionIndex::get();
 
@@ -110,7 +107,7 @@ impl<T: Trait> Module<T> {
 		let window = <MisconductReports<T>>::get(kind);
 
 		let mut seen_ids = rstd::vec::Vec::new();
-		let mut unique = 0;
+		let mut unique = 0_u64;
 		// session can never be smaller than 0
 		let mut last_session = 0;
 
@@ -122,7 +119,7 @@ impl<T: Trait> Module<T> {
 
 			// Unfortunately O(n)
 			if !seen_ids.contains(&id) {
-				unique += 1;
+				unique = unique.saturating_add(1);
 				seen_ids.push(id);
 			}
 

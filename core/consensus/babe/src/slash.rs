@@ -74,11 +74,9 @@ impl<T: Trait> BabeSlashReporter<T> {
 	}
 }
 
-pub struct MyMisconduct<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
+pub struct BabeEquivocation<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
 
-// do this more elegant with some macro
-// preferable with some linkage to the `misbehavior kind` ideally
-impl<T, DoSlash> MyMisconduct<T, DoSlash> {
+impl<T, DoSlash> BabeEquivocation<T, DoSlash> {
 	fn kind() -> Misbehavior {
 		Misbehavior::Equivocation
 	}
@@ -92,7 +90,7 @@ impl<T, DoSlash> MyMisconduct<T, DoSlash> {
 	}
 }
 
-impl<T, Who, DS> ReportSlash<T::Hash, Who> for MyMisconduct<T, DS>
+impl<T, Who, DS> ReportSlash<T::Hash, Who> for BabeEquivocation<T, DS>
 where
 	T: Trait,
 	DS: DoSlash<Who, Perbill>,
@@ -107,6 +105,7 @@ where
 		let num_violations = RollingWindow::<T>::get_misbehaved_unique(kind);
 
 		// number of validators
+		// should probably be something like: `srml_staking::Module<T>::validators().len()`
 		let n = 50;
 
 		// example how to estimate severity
