@@ -29,6 +29,7 @@ use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
+use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
 use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
@@ -641,11 +642,13 @@ struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 }
 
 impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().block_imported(&hash, number)
-	}
-	fn blocks_processed(&mut self, hashes: Vec<B::Hash>, has_error: bool) {
-		self.protocol.user_protocol_mut().blocks_processed(hashes, has_error)
+	fn blocks_processed(
+		&mut self,	
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
@@ -654,9 +657,6 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn clear_justification_requests(&mut self) {
-		self.protocol.user_protocol_mut().clear_justification_requests()
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)
@@ -677,11 +677,5 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
-		self.protocol.user_protocol_mut().report_peer(who, reputation_change)
-	}
-	fn restart(&mut self) {
-		self.protocol.user_protocol_mut().restart()
 	}
 }
