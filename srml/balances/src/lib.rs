@@ -1157,13 +1157,16 @@ use primitives::weights::Weight;
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
 
+	type AdditionalSigned = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
 	fn validate(
 		&self,
 		who: &Self::AccountId,
 		weight: Weight,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
 		let fee_x = T::Balance::from(weight);
-		// TODO TODO: should be weight_to_fee(weight)
+		// TODO: should be weight_to_fee(weight)
 		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
 		let fee = fee + self.0.clone();
 		let imbalance = <Module<T, I>>::withdraw(

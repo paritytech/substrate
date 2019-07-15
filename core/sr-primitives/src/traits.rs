@@ -813,7 +813,15 @@ pub trait SignedExtension:
 	/// The type which encodes the sender identity.
 	type AccountId;
 
-	/// Validate a signed transaction for the transaction queue.
+	/// Any additional data that will go into the signed payload. This may be created dynamically
+	/// from the transaction using the `additional_signed` function.
+	type AdditionalSigned: Encode;
+
+	/// Construct any additional data that should be in the signed payload of the transaction. Can
+	/// also perform any pre-signature-verification checks and return an error if needed.
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
+
+		/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
@@ -846,6 +854,12 @@ impl<
 	B: SignedExtension<AccountId=AccountId>,
 > SignedExtension for (A, B) {
 	type AccountId = AccountId;
+	type AdditionalSigned = (A::AdditionalSigned, B::AdditionalSigned);
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		Ok((self.0.additional_signed()?, self.1.additional_signed()?))
+	}
+
 	fn validate(
 		&self,
 		who: &Self::AccountId,
@@ -884,6 +898,8 @@ impl<
 #[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
+	type AdditionalSigned = ();
+	fn additional_signed(&self) -> result::Result<(), &'static str> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

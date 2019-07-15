@@ -77,11 +77,11 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use primitives::{
-	generic, weights::Weight, traits::{
+	generic::{self, Era}, weights::Weight, traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
-		Lookup, DispatchError
+		Lookup, DispatchError, SaturatedConversion
 	}, transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity
 	},
@@ -774,6 +774,8 @@ impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+	fn additional_signed(&self) -> Result<(), &'static str> { Ok(()) }
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -816,6 +818,38 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		})
 	}
 }
+
+
+/// Nonce check and increment to give replay protection for transactions.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckEra<T> {
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(era: Era) -> Self {
+		Self((era, rstd::marker::PhantomData))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = T::Hash;
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		if !<BlockHash<T>>::exists(n) { Err("transaction birth block ancient")? }
+		Ok(<Module<T>>::block_hash(n))
+	}
+}
+
 
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {

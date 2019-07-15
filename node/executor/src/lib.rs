@@ -80,6 +80,7 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
+	// TODO: fix for being charged based on weight now.
 	fn transfer_fee(bytes: Balance) -> Balance {
 		<TransactionBaseFee as Get<Balance>>::get() + <TransactionByteFee as Get<Balance>>::get() * bytes
 	}
