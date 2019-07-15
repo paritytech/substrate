@@ -28,6 +28,10 @@ use state_machine::Externalities;
 use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::rc::Rc;
+use std::fs::{File, OpenOptions};
+use std::os::unix::io::AsRawFd;
+use std::ptr;
+use tempdir::TempDir;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 #[derive(Debug)]
@@ -40,7 +44,6 @@ enum CacheError {
 }
 
 /// A runtime along with its version and initial state snapshot.
-#[derive(Clone)]
 pub struct CachedRuntime {
 	/// A wasm module instance.
 	instance: WasmModuleInstanceRef,
@@ -65,6 +68,17 @@ impl CachedRuntime {
 			thus the snapshot was created using the instance;
 			qed",
 		);
+		let mem_instance = WasmExecutor::get_mem_instance(&self.instance).unwrap();
+		let slave = self.state_snapshot.mem.slave_memory();
+
+		unsafe {
+			mem_instance.set_raw_buf(
+				slave.ptr,
+				slave.len,
+				slave.len,
+			);
+		}
+
 		f(&self.instance)
 	}
 
@@ -77,15 +91,88 @@ impl CachedRuntime {
 	}
 }
 
+struct MmapLinearMemory {
+	/// A temporary directory that has the file with the wasm runtime heap.
+	///
+	/// We need to retain it for the lifetime of the heap.
+	temp_dir: TempDir,
+	/// The file that will be used for mapping the linear memory.
+	memory_file: File,
+	len: usize,
+}
+
+impl MmapLinearMemory {
+	fn create(seed_data: &[u8]) -> Self {
+		let temp_dir = TempDir::new("substrate_heap").unwrap();
+		let path = temp_dir.path().join("heap");
+
+		let f = OpenOptions::new()
+			.read(true)
+			.create(true)
+			.write(true)
+			.truncate(true)
+			.open(path)
+			.unwrap(); // TODO:
+
+		Self {
+			temp_dir,
+			memory_file: f,
+			len: seed_data.len(),
+		}
+	}
+
+	fn slave_memory(&self) -> SlaveMemory {
+		unsafe {
+            let ptr = libc::mmap(
+                ptr::null_mut(),
+                self.len,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE,
+                self.memory_file.as_raw_fd(),
+                0,
+            ) as *mut u8;
+
+            if ptr as isize == -1 {
+                panic!();
+            }
+
+            SlaveMemory { ptr, len: self.len }
+        }
+	}
+}
+
+struct SlaveMemory {
+	ptr: *mut u8,
+	len: usize,
+}
+
+impl Drop for SlaveMemory {
+	fn drop(&mut self) {
+		let ret_val = unsafe {
+            // Safety proof:
+            // - `self.ptr` was allocated by a call to `mmap`.
+            // - `self.len` was saved at the same time and it doesn't change throughout the lifetime
+            //   of `self`.
+            libc::munmap(self.ptr as *mut libc::c_void, self.len)
+        };
+
+        // There is no reason for `munmap` to fail to deallocate a private annonymous mapping
+        // allocated by `mmap`.
+        // However, for the cases when it actually fails prefer to fail, in order to not leak
+        // and exhaust the virtual memory.
+        assert_eq!(ret_val, 0, "munmap failed");
+	}
+}
+
 /// A state snapshot of an instance taken just after instantiation.
 ///
 /// It is used for restoring the state of the module after execution.
-#[derive(Clone)]
 struct StateSnapshot {
 	/// The offset and the content of the memory segments that should be used to restore the snapshot
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
+	mem: MmapLinearMemory,
 	heap_pages: u32,
 }
 
@@ -93,6 +180,7 @@ impl StateSnapshot {
 	// Returns `None` if instance is not valid.
 	fn take(
 		module_instance: &WasmModuleInstanceRef,
+		mem: MmapLinearMemory,
 		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
@@ -133,6 +221,7 @@ impl StateSnapshot {
 			data_segments: prepared_segments,
 			global_mut_values,
 			heap_pages,
+			mem,
 		})
 	}
 
@@ -141,23 +230,6 @@ impl StateSnapshot {
 	///
 	/// Returns `Err` if applying the snapshot is failed.
 	fn apply(&self, instance: &WasmModuleInstanceRef) -> Result<(), CacheError> {
-		let memory = instance
-			.export_by_name("memory")
-			.ok_or(CacheError::ApplySnapshotFailed)?
-			.as_memory()
-			.cloned()
-			.ok_or(CacheError::ApplySnapshotFailed)?;
-
-		// First, erase the memory and copy the data segments into it.
-		memory
-			.erase()
-			.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		for (offset, contents) in &self.data_segments {
-			memory
-				.set(*offset, contents)
-				.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		}
-
 		// Second, restore the values of mutable globals.
 		for (global_ref, global_val) in instance
 			.globals()
@@ -293,14 +365,24 @@ impl RuntimesCache {
 		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
 			.map_err(|_| CacheError::Instantiation)?;
 
+		let mem_instance = WasmExecutor::get_mem_instance(&instance).unwrap(); // TODO:
+		let mmap_linear_memory = mem_instance.with_direct_access(|mem| {
+			MmapLinearMemory::create(mem)
+		});
+
 		// Take state snapshot before executing anything.
-		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages as u32)
-			.expect(
-				"`take` returns `Err` if the module is not valid;
-				we already loaded module above, thus the `Module` is proven to be valid at this point;
-				qed
-				",
-			);
+		let state_snapshot = StateSnapshot::take(
+			&instance,
+			mmap_linear_memory,
+			data_segments,
+			heap_pages as u32
+		)
+		.expect(
+			"`take` returns `Err` if the module is not valid;
+			we already loaded module above, thus the `Module` is proven to be valid at this point;
+			qed
+			",
+		);
 
 		let version = wasm_executor
 			.call_in_wasm_module(ext, &instance, "Core_version", &[])

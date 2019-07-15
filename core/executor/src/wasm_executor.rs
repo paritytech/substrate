@@ -1288,7 +1288,7 @@ impl WasmExecutor {
 		)
 	}
 
-	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
+	pub fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
 		Ok(module
 			.export_by_name("memory")
 			.ok_or_else(|| Error::InvalidMemoryReference)?
