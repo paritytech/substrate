@@ -1604,9 +1604,12 @@ where
 	}
 
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info : ChainInfo<Block> = self.backend.blockchain().info();
-		Ok(self.backend.blockchain().header(BlockId::Hash(info.best_hash))?
-			.expect("Best block header must always exist"))
+		let info = self.backend.blockchain().info();
+		let best_hash = self.best_containing(info.best_hash, None)?
+			.unwrap_or(info.best_hash);
+
+		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
+			.expect("given block hash was fetched from block in db; qed"))
 	}
 
 	/// Get the most recent block hash of the best (longest) chains
