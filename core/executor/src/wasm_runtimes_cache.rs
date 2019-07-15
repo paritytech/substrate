@@ -29,6 +29,7 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::rc::Rc;
 use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::ptr;
 use tempdir::TempDir;
@@ -99,6 +100,7 @@ struct MmapLinearMemory {
 	/// The file that will be used for mapping the linear memory.
 	memory_file: File,
 	len: usize,
+	ptr: *mut u8,
 }
 
 impl MmapLinearMemory {
@@ -106,7 +108,7 @@ impl MmapLinearMemory {
 		let temp_dir = TempDir::new("substrate_heap").unwrap();
 		let path = temp_dir.path().join("heap");
 
-		let f = OpenOptions::new()
+		let mut f = OpenOptions::new()
 			.read(true)
 			.create(true)
 			.write(true)
@@ -114,9 +116,29 @@ impl MmapLinearMemory {
 			.open(path)
 			.unwrap(); // TODO:
 
+		f.write_all(seed_data).unwrap();
+
+		let ptr = unsafe {
+            let ptr = libc::mmap(
+                ptr::null_mut(),
+                seed_data.len(),
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE,
+                f.as_raw_fd(),
+                0,
+            ) as *mut u8;
+
+            if ptr as isize == -1 {
+                panic!();
+            }
+
+			ptr
+        };
+
 		Self {
 			temp_dir,
 			memory_file: f,
+			ptr,
 			len: seed_data.len(),
 		}
 	}
@@ -125,7 +147,7 @@ impl MmapLinearMemory {
 		unsafe {
             let ptr = libc::mmap(
                 ptr::null_mut(),
-                self.len,
+                dbg!(self.len),
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_PRIVATE,
                 self.memory_file.as_raw_fd(),
@@ -155,11 +177,6 @@ impl Drop for SlaveMemory {
             //   of `self`.
             libc::munmap(self.ptr as *mut libc::c_void, self.len)
         };
-
-        // There is no reason for `munmap` to fail to deallocate a private annonymous mapping
-        // allocated by `mmap`.
-        // However, for the cases when it actually fails prefer to fail, in order to not leak
-        // and exhaust the virtual memory.
         assert_eq!(ret_val, 0, "munmap failed");
 	}
 }
