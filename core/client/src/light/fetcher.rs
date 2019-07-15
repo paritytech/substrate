@@ -107,6 +107,8 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	/// Known changes trie roots for the range of blocks [tries_roots.0..max_block].
 	/// Proofs for roots of ascendants of tries_roots.0 are provided by the remote node.
 	pub tries_roots: (Header::Number, Header::Hash, Vec<Header::Hash>),
+	/// Optional Child Storage key to read.
+	pub storage_key: Option<Vec<u8>>,
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -297,6 +299,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				number: request.last_block.0,
 			},
 			remote_max_block,
+			request.storage_key.as_ref().map(Vec::as_slice),
 			&request.key)
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}

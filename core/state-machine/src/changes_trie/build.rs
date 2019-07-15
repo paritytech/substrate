@@ -63,7 +63,8 @@ pub fn prepare_input<'a, B, S, H, Number>(
 		config,
 		storage)?;
 	top.extend(prepared.0);
-	// TODO EMCH should zip with extrinsics (let's wait optim merge).
+	// zipping with extrinsics could be faster, but requires iterator
+	// to stay ordered.
 	for (storage_key, child) in prepared.1 {
 		if let Some(ix) = children.iter().position(|v| v.0 == storage_key) {
 			children[ix].1.extend(child);
@@ -259,17 +260,12 @@ fn prepare_digest_input<'a, S, H, Number>(
 mod test {
 	use parity_codec::Encode;
 	use primitives::Blake2Hasher;
-	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX, CHILD_STORAGE_KEY_PREFIX};
+	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
-	fn child_trie_key(k: &[u8]) -> Vec<u8> {
-		let mut res =	CHILD_STORAGE_KEY_PREFIX.to_vec();
-		res.extend_from_slice(k);
-		res
-	}
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {
 		let backend: InMemory<_> = vec![
 			(vec![100], vec![255]),
@@ -279,8 +275,8 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
-		let child_trie_key1 = child_trie_key(b"1");
-		let child_trie_key2 = child_trie_key(b"2");
+		let child_trie_key1 = b"1".to_vec();
+		let child_trie_key2 = b"2".to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
@@ -401,11 +397,11 @@ mod test {
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![103] }, vec![0, 1]),
 			], vec![
-			(ChildIndex { block: 5, storage_key: child_trie_key(&b"1"[..]) },
+			(ChildIndex { block: 5, storage_key: b"1".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 				]),
-			(ChildIndex { block: 5, storage_key: child_trie_key(&b"2"[..]) },
+			(ChildIndex { block: 5, storage_key: b"2".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2]),
 				]),
@@ -433,13 +429,13 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
 		], vec![
-			(ChildIndex { block: 4, storage_key: child_trie_key(&b"1"[..]) },
+			(ChildIndex { block: 4, storage_key: b"1".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 
 					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 				]),
-			(ChildIndex { block: 4, storage_key: child_trie_key(&b"2"[..]) },
+			(ChildIndex { block: 4, storage_key: b"2".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2]),
 				]),
@@ -468,13 +464,13 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![103] }, vec![4]),
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![105] }, vec![4, 8]),
 		], vec![
-			(ChildIndex { block: 16, storage_key: child_trie_key(&b"1"[..]) },
+			(ChildIndex { block: 16, storage_key: b"1".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 
 					InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
 				]),
-			(ChildIndex { block: 16, storage_key: child_trie_key(&b"2"[..]) },
+			(ChildIndex { block: 16, storage_key: b"2".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2]),
 				]),
@@ -509,13 +505,13 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
 		], vec![
-			(ChildIndex { block: 4, storage_key: child_trie_key(&b"1"[..]) },
+			(ChildIndex { block: 4, storage_key: b"1".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 
 					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 				]),
-			(ChildIndex { block: 4, storage_key: child_trie_key(&b"2"[..]) },
+			(ChildIndex { block: 4, storage_key: b"2".to_vec() },
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2]),
 				]),

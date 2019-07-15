@@ -81,7 +81,8 @@ pub trait OnDemandNetwork<B: BlockT> {
 		last: <B as BlockT>::Hash,
 		min: <B as BlockT>::Hash,
 		max: <B as BlockT>::Hash,
-		key: Vec<u8>
+		storage_key: Option<Vec<u8>>,
+		key: Vec<u8>,
 	);
 
 	/// Send to `who` a body request.
@@ -601,6 +602,7 @@ impl<Block: BlockT> Request<Block> {
 					data.last_block.1.clone(),
 					data.tries_roots.1.clone(),
 					data.max_block.1.clone(),
+					data.storage_key.clone(),
 					data.key.clone(),
 				),
 			RequestData::RemoteBody(ref data, _) =>
@@ -757,7 +759,7 @@ pub mod tests {
 			_: Vec<u8>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
-			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Vec<u8>) {}
+			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
 		fn send_body_request(&mut self, _: &PeerId, _: RequestId, _: BlockAttributes, _: FromBlock<<B as BlockT>::Hash,
 			<<B as BlockT>::Header as HeaderT>::Number>, _: Option<B::Hash>, _: Direction, _: Option<u32>) {}
 	}

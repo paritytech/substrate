@@ -305,7 +305,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 		for key in keys {
 			let mut last_block = None;
 			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
-			for (block, _) in self.client.key_changes(begin, end, key)?.into_iter().rev() {
+			for (block, _) in self.client.key_changes(begin, end, None, key)?.into_iter().rev() {
 				if last_block == Some(block) {
 					continue;
 				}
