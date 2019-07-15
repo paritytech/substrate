@@ -670,17 +670,15 @@ pub enum Misbehavior {
 	/// Validator is not online
 	Unresponsiveness,
 	/// Unjustified vote
-	GrandpaUnjustifiedVote,
+	UnjustifiedVote,
 	/// Rejecting set of votes
-	GranpaRejectSetVotes,
+	RejectSetVotes,
 	/// Equivocation
-	GrandpaEquivocation,
+	Equivocation,
 	/// Invalid Vote
-	GrandpaInvalidVote,
-	/// Equivocation
-	BabeEquivocation,
+	InvalidVote,
 	/// Invalid block
-	BabeInvalidBlock,
+	InvalidBlock,
 	/// Parachain Invalid validity statement
-	ParachainInvalidValidityStatement,
+	ParachainInvalid,
 }

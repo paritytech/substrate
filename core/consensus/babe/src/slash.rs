@@ -80,7 +80,11 @@ pub struct MyMisconduct<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
 // preferable with some linkage to the `misbehavior kind` ideally
 impl<T, DoSlash> MyMisconduct<T, DoSlash> {
 	fn kind() -> Misbehavior {
-		Misbehavior::BabeEquivocation
+		Misbehavior::Equivocation
+	}
+
+	fn window_length() -> u32 {
+		10
 	}
 
 	fn base_severity() -> Perbill {
@@ -96,14 +100,11 @@ where
 	fn slash(footprint: T::Hash, who: Who) {
 		let kind = Self::kind();
 		let base_seve = Self::base_severity();
-		RollingWindow::<T>::report_misbehavior(kind, footprint);
+		let window_length = Self::window_length();
 
-		let num_violations = match RollingWindow::<T>::get_misbehaved_unique(kind) {
-			// if non-registered kind was registered (probably a bug)
-			// don't slash in that case...
-			None => return,
-			Some(v) => v,
-		};
+		RollingWindow::<T>::report_misbehavior(kind, window_length, footprint);
+
+		let num_violations = RollingWindow::<T>::get_misbehaved_unique(kind);
 
 		// number of validators
 		let n = 50;
@@ -114,7 +115,7 @@ where
 		} else if num_violations < 1000 {
 			// 3k / n^2
 			// ignore base severity because `Permill` doesn't provide addition, e.g. (base + estimate)
-			Perbill::from_rational_approximation(3 * num_violations, n*n)
+			Perbill::from_rational_approximation(3 * num_violations, n * n)
 		} else {
 			Perbill::one()
 		};

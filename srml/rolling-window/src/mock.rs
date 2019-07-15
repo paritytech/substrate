@@ -128,6 +128,7 @@ impl session::Trait for Test {
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 
 impl Trait for Test {
@@ -137,6 +138,10 @@ impl Trait for Test {
 impl session::historical::Trait for Test {
 	type FullIdentification = srml_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = srml_staking::ExposureOf<Test>;
+}
+
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
 }
 
 parameter_types! {
@@ -277,10 +282,6 @@ impl ExtBuilder {
 			current_session_reward: self.reward,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
-
-		let _ = timestamp::GenesisConfig::<Test>{
-			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 
 		let _ = session::GenesisConfig::<Test> {

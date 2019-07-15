@@ -39,7 +39,7 @@ use srml_support::{
 use parity_codec::Codec;
 use sr_primitives::traits::MaybeSerializeDebug;
 
-type Window = u32;
+type WindowLength = u32;
 type Session = u32;
 
 /// Rolling Window trait
@@ -52,13 +52,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
 		/// Misbehavior reports
 		///
-		/// It maps each kind into a hash and session number when it occurred
-		MisconductReports get(kind): linked_map T::Kind => Vec<(Session, T::Hash)>;
-
-		/// Rolling window length for different kinds
-		///
-		/// Each kind has its own window length
-		WindowLength get(w) config(): linked_map T::Kind => Window;
+		/// It maps each kind into a hash (identity of reporter), window_length and session number when it occurred
+		MisconductReports get(kind): linked_map T::Kind => Vec<(Session, WindowLength, T::Hash)>;
 
 		/// Session index
 		SessionIndex get(s) config(): u32 = 0;
@@ -71,23 +66,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// On startup initialize all kinds
-	///
-	/// WARNING: Make sure that all kinds is unique otherwise
-	/// a kind may be overwritten by another kind and cause
-	/// unexpected behaviour. In other words a window length
-	/// might be smaller or bigger than expected.
-	pub fn on_initialize(kinds: Vec<(T::Kind, Window)>) {
-		// just be careful if this would be called other than on startup
-		// it may remove some existing items in the window but fetching window
-		// lengths would be faulty afterwards
-		Self::kill_storage();
-
-		for (kind, window_length) in kinds {
-			<WindowLength::<T>>::insert(kind, window_length);
-		}
-	}
-
 	/// Remove items that doesn't fit into the rolling window
 	pub fn on_session_end() {
 		let mut session_wrapped = false;
@@ -102,13 +80,11 @@ impl<T: Trait> Module<T> {
 
 		for (kind, _) in <MisconductReports<T>>::enumerate() {
 			<MisconductReports<T>>::mutate(kind, |window| {
-				let w = <WindowLength<T>>::get(kind);
-
 				// it is guaranteed that `s` happened before `session`
-				window.retain(|(s, _)| {
+				window.retain(|(s, w, _)| {
 
-					let window_wrapped = s.checked_add(w).is_none();
-					let x = s.wrapping_add(w);
+					let window_wrapped = s.checked_add(*w).is_none();
+					let x = s.wrapping_add(*w);
 
 					match (session_wrapped, window_wrapped) {
 						(false, true) => true,
@@ -126,36 +102,26 @@ impl<T: Trait> Module<T> {
 	/// Report misbehaviour for a kind
 	///
 	/// If a non-existing kind is reported it is ignored
-	pub fn report_misbehavior(kind: T::Kind, footprint: T::Hash) {
-		if Self::is_registered_kind(kind) {
-			let session = SessionIndex::get();
+	pub fn report_misbehavior(kind: T::Kind, window_length: u32, footprint: T::Hash) {
+		let session = SessionIndex::get();
 
-			if <MisconductReports<T>>::exists(kind) {
-				<MisconductReports<T>>::mutate(kind, |w| w.push((session, footprint)));
-			} else {
-				<MisconductReports<T>>::insert(kind, vec![(session, footprint)]);
-			}
+		if <MisconductReports<T>>::exists(kind) {
+			<MisconductReports<T>>::mutate(kind, |w| w.push((session, window_length, footprint)));
+		} else {
+			<MisconductReports<T>>::insert(kind, vec![(session, window_length, footprint)]);
 		}
 	}
 
 	/// Return number of misbehaviors in the current window which
 	/// may include duplicated misbehaviours
-	pub fn get_misbehaved(kind: T::Kind) -> Option<u64> {
-		if !Self::is_registered_kind(kind) {
-			return None;
-		} else {
-			Some(<MisconductReports<T>>::get(kind).len() as u64)
-		}
+	pub fn get_misbehaved(kind: T::Kind) -> u64 {
+		<MisconductReports<T>>::get(kind).len() as u64
 	}
 
 
 	/// Return number of misbehaviors in the current window which
 	/// ignores duplicated misbehaviours in each session
-	pub fn get_misbehaved_unique(kind: T::Kind) -> Option<u64> {
-		if !Self::is_registered_kind(kind) {
-			return None;
-		}
-
+	pub fn get_misbehaved_unique(kind: T::Kind) -> u64 {
 		let window = <MisconductReports<T>>::get(kind);
 
 		let mut seen_ids = rstd::vec::Vec::new();
@@ -163,7 +129,7 @@ impl<T: Trait> Module<T> {
 		// session can never be smaller than 0
 		let mut last_session = 0;
 
-		for (session, id) in window {
+		for (session, _, id) in window {
 			// new session reset `seen_ids`
 			if session > last_session {
 				seen_ids.clear();
@@ -178,21 +144,7 @@ impl<T: Trait> Module<T> {
 			last_session = session;
 		}
 
-		Some(unique)
-	}
-
-	fn is_registered_kind(kind: T::Kind) -> bool {
-		<WindowLength<T>>::exists(kind)
-	}
-
-	fn kill_storage() {
-		for (key, _) in <WindowLength<T>>::enumerate() {
-			<WindowLength<T>>::remove(key);
-		}
-
-		for (key, _) in <MisconductReports<T>>::enumerate() {
-			<WindowLength<T>>::remove(key);
-		}
+		unique
 	}
 }
 
@@ -213,39 +165,39 @@ mod tests {
 			.build(),
 		|| {
 
-			let kinds = vec![(Kind::One, 4), (Kind::Two, 3)];
+			const WINDOW_ONE: u32 = 4;
+			const WINDOW_TWO: u32 = 3;
 
-			RollingWindow::on_initialize(kinds);
 
 			for i in 1..=10 {
-				RollingWindow::report_misbehavior(Kind::One, H256::zero());
-				assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), i);
+				RollingWindow::report_misbehavior(Kind::One, WINDOW_ONE, H256::zero());
+				assert_eq!(RollingWindow::get_misbehaved(Kind::One), i);
 			}
 
 			for i in 1..=4 {
-				RollingWindow::report_misbehavior(Kind::Two, H256::zero());
-				assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), i);
+				RollingWindow::report_misbehavior(Kind::Two, WINDOW_TWO, H256::zero());
+				assert_eq!(RollingWindow::get_misbehaved(Kind::Two), i);
 			}
 
 			RollingWindow::on_session_end();
 			// session = 1
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 10);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 4);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 10);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 4);
 
 			RollingWindow::on_session_end();
 			// session = 2
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 10);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 4);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 10);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 4);
 
 			RollingWindow::on_session_end();
 			// session = 3
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 10);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 0);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 10);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 0);
 
 			RollingWindow::on_session_end();
 			// session = 4
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 0);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 0);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 0);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 0);
 
 		});
 	}
@@ -255,66 +207,52 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default()
 			.build(),
 		|| {
-			let kinds = vec![(Kind::One, 3), (Kind::Two, 2)];
-			RollingWindow::on_initialize(kinds);
+			const WINDOW_ONE: u32 = 3;
+			const WINDOW_TWO: u32 = 2;
 
 			let one: H256 = [1_u8; 32].into();
 			let two: H256 = [2_u8; 32].into();
 
 			for _ in 0..10 {
-				RollingWindow::report_misbehavior(Kind::One, H256::zero());
+				RollingWindow::report_misbehavior(Kind::One, WINDOW_ONE, H256::zero());
 			}
 
 			for _ in 0..33 {
-				RollingWindow::report_misbehavior(Kind::Two, H256::zero());
+				RollingWindow::report_misbehavior(Kind::Two, WINDOW_TWO, H256::zero());
 			}
 
-			RollingWindow::report_misbehavior(Kind::One, one);
-			RollingWindow::report_misbehavior(Kind::One, two);
+			RollingWindow::report_misbehavior(Kind::One, WINDOW_ONE, one);
+			RollingWindow::report_misbehavior(Kind::One, WINDOW_ONE, two);
 
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 12);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One).unwrap(), 3);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 33);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two).unwrap(), 1);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 12);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One), 3);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 33);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two), 1);
 			RollingWindow::on_session_end();
 			// session index = 1
 
 			for _ in 0..5 {
-				RollingWindow::report_misbehavior(Kind::One, H256::zero());
+				RollingWindow::report_misbehavior(Kind::One, WINDOW_ONE, H256::zero());
 			}
 
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 17);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One).unwrap(), 4);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 33);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two).unwrap(), 1);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 17);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One), 4);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 33);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two), 1);
 			RollingWindow::on_session_end();
 			// session index = 2
 			// Kind::Two should have been expired
 
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 17);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One).unwrap(), 4);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two).unwrap(), 0);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two).unwrap(), 0);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 17);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One), 4);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 0);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two), 0);
 			RollingWindow::on_session_end();
 			// session index = 3
 			// events that happend in session 0 should have been expired
 
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One).unwrap(), 5);
-			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One).unwrap(), 1);
-		});
-	}
-
-	#[test]
-	fn non_existing_kind() {
-		with_externalities(&mut ExtBuilder::default()
-			.build(),
-		|| {
-			RollingWindow::on_initialize(vec![]);
-
-			let one: H256 = [1_u8; 32].into();
-
-			RollingWindow::report_misbehavior(Kind::One, one);
-			assert!(RollingWindow::get_misbehaved(Kind::One).is_none());
+			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 5);
+			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::One), 1);
 		});
 	}
 }
