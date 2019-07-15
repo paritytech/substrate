@@ -174,7 +174,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		sync_oracle,
 		inherent_data_providers,
 		AuraSlotCompatible,
-		std::num::NonZeroU64::new(1).expect("1 is not 0; qed"),
 	))
 }
 

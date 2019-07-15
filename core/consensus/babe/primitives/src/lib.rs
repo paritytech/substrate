@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-//#![deny(warnings)]
-//#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod digest;
@@ -62,6 +62,8 @@ pub type Weight = u64;
 pub struct Epoch {
 	/// The authorities and their weights
 	pub authorities: Vec<(AuthorityId, Weight)>,
+	/// The epoch index
+	pub epoch_index: u64,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }

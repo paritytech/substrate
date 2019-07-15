@@ -525,6 +525,7 @@ cfg_if! {
 					consensus_babe::Epoch {
 						authorities,
 						randomness: srml_babe::random::<Runtime>(),
+						epoch_index: 1,
 					}
 				}
 			}

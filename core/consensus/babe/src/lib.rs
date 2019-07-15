@@ -23,7 +23,7 @@
 //! This crate is highly unstable and experimental.  Breaking changes may
 //! happen at any point.  This crate is also missing features, such as banning
 //! of malicious validators, that are essential for a production network.
-#![forbid(unsafe_code, missing_docs, unused_must_use)]
+#![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
 #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -36,7 +36,7 @@ use runtime_primitives::traits::{
 	Block, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}, num::NonZeroU64};
+use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
@@ -114,11 +114,6 @@ impl Config {
 	pub fn threshold(&self) -> u64 {
 		self.0.threshold
 	}
-
-	/// Retrieve the number of slots per BABE epoch
-	pub fn slots_per_epoch(&self) -> u64 {
-		self.0.slots_per_epoch
-	}
 }
 
 impl SlotCompatible for BabeLink {
@@ -168,9 +163,6 @@ pub struct BabeParams<C, E, I, SO, SC> {
 
 	/// The source of timestamps for relative slots
 	pub time_source: BabeLink,
-
-	/// The number of slots per epoch
-	pub slots_per_epoch: NonZeroU64,
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
@@ -185,7 +177,6 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	inherent_data_providers,
 	force_authoring,
 	time_source,
-	slots_per_epoch,
 }: BabeParams<C, E, I, SO, SC>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
@@ -210,7 +201,6 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		threshold: config.threshold(),
-		slots_per_epoch: config.slots_per_epoch(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
 	Ok(slots::start_slot_worker(
@@ -220,7 +210,6 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		time_source,
-		slots_per_epoch,
 	))
 }
 
@@ -232,7 +221,6 @@ struct BabeWorker<C, E, I, SO> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	threshold: u64,
-	slots_per_epoch: u64,
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -280,7 +268,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
-		let Epoch { ref authorities, randomness } = epoch;
+		let Epoch { ref authorities, randomness, epoch_index } = epoch;
 		if authorities.is_empty() {
 			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
 		}
@@ -295,7 +283,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let proposal_work = if let Some(((inout, vrf_proof, _batchable_proof), authority_index)) = claim_slot(
 			&randomness,
 			slot_info.number,
-			slot_info.number / self.slots_per_epoch,
+			epoch_index,
 			epoch,
 			&pair,
 			self.threshold,
@@ -453,8 +441,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	hash: B::Hash,
 	authorities: &[AuthorityId],
 	randomness: [u8; 32],
+	epoch_index: u64,
 	threshold: u64,
-	slots_per_epoch: u64,
 ) -> Result<CheckedHeader<B::Header, B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -485,7 +473,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 				let transcript = make_transcript(
 					&randomness,
 					slot_number,
-					slot_number / slots_per_epoch,
+					epoch_index,
 				);
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, vrf_output, vrf_proof)
@@ -622,7 +610,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let Epoch { authorities, randomness } =
+		let Epoch { authorities, randomness, epoch_index } =
 			epoch(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
@@ -636,8 +624,8 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			hash,
 			&authorities[..],
 			randomness,
+			epoch_index,
 			self.config.threshold(),
-			self.config.slots_per_epoch(),
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
@@ -864,7 +852,7 @@ pub fn import_queue<B, C, E>(
 // FIXME #2532: need to allow deprecated until refactor is done
 // https://github.com/paritytech/substrate/issues/2532
 #[cfg(test)]
-#[allow(unused_imports, deprecated)]
+#[allow(deprecated)]
 #[cfg_attr(test, allow(dead_code))]
 mod tests {
 	use super::*;
@@ -885,7 +873,6 @@ mod tests {
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
-	use test_client::AuthorityKeyring;
 
 	type Error = client::error::Error;
 
@@ -1034,7 +1021,6 @@ mod tests {
 				inherent_data_providers,
 				force_authoring: false,
 				time_source: Default::default(),
-				slots_per_epoch: NonZeroU64::new(20).expect("20 is not 0; qed"),
 			}).expect("Starts babe"));
 		}
 		debug!(target: "babe", "checkpoint 5");
@@ -1082,6 +1068,7 @@ mod tests {
 		let epoch = Epoch {
 			authorities: vec![(pair.public(), 0)],
 			randomness: [0; 32],
+			epoch_index: 1,
 		};
 		loop {
 			match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {

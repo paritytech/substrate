@@ -256,6 +256,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		Self::change_epoch(Epoch {
 			randomness,
 			authorities,
+			epoch_index,
 		})
 	}
 
