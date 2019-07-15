@@ -789,19 +789,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		written_out: *mut u32
 	) -> *mut u8 => {
 		let kind = offchain::CryptoKind::try_from(kind)
-			.map_err(|_| "crypto kind OOB while ext_decrypt: wasm")?;
+			.map_err(|_| "crypto kind OOB while ext_local_authority_pubkey: wasm")?;
 
 		let res = this.ext.offchain()
 			.map(|api| api.local_authority_pubkey(kind))
-			.ok_or_else(|| "Calling unavailable API ext_decrypt: wasm")?;
+			.ok_or_else(|| "Calling unavailable API ext_local_authority_pubkey: wasm")?;
 
 		let encoded = res.encode();
 		let len = encoded.len() as u32;
 		let offset = this.heap.allocate(len)? as u32;
 		this.memory.set(offset, &encoded)
-			.map_err(|_| "Invalid attempt to set memory in ext_http_response_headers")?;
+			.map_err(|_| "Invalid attempt to set memory in ext_local_authority_pubkey")?;
 		this.memory.write_primitive(written_out, len)
-			.map_err(|_| "Invalid attempt to write written_out in ext_http_response_headers")?;
+			.map_err(|_| "Invalid attempt to write written_out in ext_local_authority_pubkey")?;
 		Ok(offset)
 	},
 	ext_decrypt(
