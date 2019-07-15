@@ -50,7 +50,7 @@ pub fn prepare_input<'a, B, S, H, Number>(
 		Number: BlockNumber,
 {
 	let mut top = Vec::new();
-	let mut children = Vec::new();
+	let mut children = Vec::<(ChildIndex<Number>, Vec<InputPair<Number>>)>::new();
 	let prepared = prepare_extrinsics_input(
 		backend,
 		parent.number.clone() + 1.into(),
@@ -63,7 +63,14 @@ pub fn prepare_input<'a, B, S, H, Number>(
 		config,
 		storage)?;
 	top.extend(prepared.0);
-	children.extend(prepared.1.map(|(k,i)| (k, i.collect())));
+	// TODO EMCH should zip with extrinsics (let's wait optim merge).
+	for (storage_key, child) in prepared.1 {
+		if let Some(ix) = children.iter().position(|v| v.0 == storage_key) {
+			children[ix].1.extend(child);
+		} else {
+			children.push((storage_key, child.collect()));
+		}
+	}
 	
 	Ok(Some((
 		top,
@@ -184,9 +191,11 @@ fn prepare_digest_input<'a, S, H, Number>(
 			let mut children_roots = BTreeMap::<Vec<u8>, _>::new();
 			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
 				if let Some(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-					let mut trie_root = <H as Hasher>::Out::default();
-					trie_root.as_mut().copy_from_slice(value);
-					children_roots.insert(trie_key.storage_key, trie_root);
+					if let Some(value) = <Vec<u8>>::decode(&mut &value[..]) {
+						let mut trie_root = <H as Hasher>::Out::default();
+						trie_root.as_mut().copy_from_slice(&value[..]);
+						children_roots.insert(trie_key.storage_key, trie_root);
+					}
 				}
 			});
 
@@ -222,7 +231,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 					digest_map.entry(trie_key.key).or_default()
 						.insert(digest_build_block.clone());
 				});
- 
+
 			let child_index = ChildIndex::<Number> {
 				block: parent.number.clone() + One::one(),
 				storage_key,
@@ -250,12 +259,17 @@ fn prepare_digest_input<'a, S, H, Number>(
 mod test {
 	use parity_codec::Encode;
 	use primitives::Blake2Hasher;
-	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX, CHILD_STORAGE_KEY_PREFIX};
 	use crate::backend::InMemory;
 	use crate::changes_trie::storage::InMemoryStorage;
-	use crate::overlayed_changes::OverlayedValue;
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
+	fn child_trie_key(k: &[u8]) -> Vec<u8> {
+		let mut res =	CHILD_STORAGE_KEY_PREFIX.to_vec();
+		res.extend_from_slice(k);
+		res
+	}
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {
 		let backend: InMemory<_> = vec![
 			(vec![100], vec![255]),
@@ -265,6 +279,8 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
+		let child_trie_key1 = child_trie_key(b"1");
+		let child_trie_key2 = child_trie_key(b"2");
 		let storage = InMemoryStorage::with_inputs(vec![
 			(1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
@@ -298,9 +314,24 @@ mod test {
 			]),
 			(9, Vec::new()), (10, Vec::new()), (11, Vec::new()), (12, Vec::new()), (13, Vec::new()),
 			(14, Vec::new()), (15, Vec::new()),
+		], vec![(child_trie_key1.clone(), vec![
+				(1, vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![101] }, vec![0, 2]),
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![105] }, vec![0, 2, 4]),
+				]),
+				(2, vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 2, key: vec![102] }, vec![0]),
+				]),
+				(4, vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 2, key: vec![102] }, vec![0, 3]),
+
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
+				]),
+			]),
 		]);
 		let changes = OverlayedChanges {
-			prospective: vec![
+			prospective: OverlayedChangeSet { top: vec![
 				(vec![100], OverlayedValue {
 					value: Some(vec![200]),
 					extrinsics: Some(vec![0, 2].into_iter().collect())
@@ -310,7 +341,22 @@ mod test {
 					extrinsics: Some(vec![0, 1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-			committed: vec![
+				children: vec![
+					(child_trie_key1.clone(), vec![
+						(vec![100], OverlayedValue {
+							value: Some(vec![200]),
+							extrinsics: Some(vec![0, 2].into_iter().collect())
+						})
+					].into_iter().collect()),
+					(child_trie_key2, vec![
+						(vec![100], OverlayedValue {
+							value: Some(vec![200]),
+							extrinsics: Some(vec![0, 2].into_iter().collect())
+						})
+					].into_iter().collect()),
+				].into_iter().collect()
+			},
+			committed: OverlayedChangeSet { top: vec![
 				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 					value: Some(3u32.encode()),
 					extrinsics: None,
@@ -324,6 +370,15 @@ mod test {
 					extrinsics: Some(vec![1].into_iter().collect())
 				}),
 			].into_iter().collect(),
+				children: vec![
+					(child_trie_key1, vec![
+						(vec![100], OverlayedValue {
+							value: Some(vec![202]),
+							extrinsics: Some(vec![3].into_iter().collect())
+						})
+					].into_iter().collect()),
+				].into_iter().collect(),
+			},
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
 		};
 
@@ -341,11 +396,20 @@ mod test {
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 4 },
 		).unwrap();
-		assert_eq!(changes_trie_nodes, Some(vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![103] }, vec![0, 1]),
-		]));
+		assert_eq!(changes_trie_nodes, Some((vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![103] }, vec![0, 1]),
+			], vec![
+			(ChildIndex { block: 5, storage_key: child_trie_key(&b"1"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
+				]),
+			(ChildIndex { block: 5, storage_key: child_trie_key(&b"2"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2]),
+				]),
+		])));
 	}
 
 	#[test]
@@ -359,7 +423,7 @@ mod test {
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },
 		).unwrap();
-		assert_eq!(changes_trie_nodes, Some(vec![
+		assert_eq!(changes_trie_nodes, Some((vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
@@ -368,7 +432,18 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
-		]));
+		], vec![
+			(ChildIndex { block: 4, storage_key: child_trie_key(&b"1"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
+
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
+				]),
+			(ChildIndex { block: 4, storage_key: child_trie_key(&b"2"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2]),
+				]),
+		])));
 	}
 
 	#[test]
@@ -382,7 +457,7 @@ mod test {
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 15 },
 		).unwrap();
-		assert_eq!(changes_trie_nodes, Some(vec![
+		assert_eq!(changes_trie_nodes, Some((vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![103] }, vec![0, 1]),
@@ -392,7 +467,18 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![103] }, vec![4]),
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![105] }, vec![4, 8]),
-		]));
+		], vec![
+			(ChildIndex { block: 16, storage_key: child_trie_key(&b"1"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
+
+					InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
+				]),
+			(ChildIndex { block: 16, storage_key: child_trie_key(&b"2"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2]),
+				]),
+		])));
 	}
 
 	#[test]
@@ -413,7 +499,7 @@ mod test {
 			&changes,
 			&AnchorBlockId { hash: Default::default(), number: 3 },
 		).unwrap();
-		assert_eq!(changes_trie_nodes, Some(vec![
+		assert_eq!(changes_trie_nodes, Some((vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
@@ -422,6 +508,17 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
-		]));
+		], vec![
+			(ChildIndex { block: 4, storage_key: child_trie_key(&b"1"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
+
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
+				]),
+			(ChildIndex { block: 4, storage_key: child_trie_key(&b"2"[..]) },
+				vec![
+					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2]),
+				]),
+		])));
 	}
 }

@@ -29,6 +29,8 @@ use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::{TrieBackendEssence};
 
+// TODO EMCH adapt iterator for children -> at a given storage_key
+
 /// Return changes of given key at given blocks range.
 /// `max` is the number of best known block.
 /// Changes are returned in descending order (i.e. last block comes first).
@@ -482,7 +484,7 @@ mod tests {
 			(16, vec![
 				InputPair::DigestIndex(DigestIndex { block: 16, key: vec![42] }, vec![4, 8]),
 			]),
-		]);
+		], vec![]);
 
 		(config, backend)
 	}

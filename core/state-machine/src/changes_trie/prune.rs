@@ -54,6 +54,9 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	current_block: &AnchorBlockId<H::Out, Number>,
 	mut remove_trie_node: F,
 ) {
+
+// TODO EMCH need iter prune children!!!
+
 	// select range for pruning
 	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number.clone()) {
 		Some((first, last)) => (first, last),
