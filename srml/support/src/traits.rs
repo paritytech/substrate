@@ -668,39 +668,3 @@ pub trait WindowLength<T> {
 	/// Fetch window length
 	fn window_length(&self) -> &T;
 }
-
-/// Misbehavior type which takes window length as input
-/// Each variant and its data is a seperate kind
-/// For example `Unresponsiveness(0)` and `Unresponsiveness(1)` are different
-#[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum Misbehavior {
-	/// Validator is not online
-	Unresponsiveness(u32),
-	/// Unjustified vote
-	UnjustifiedVote(u32),
-	/// Rejecting set of votes
-	RejectSetVotes(u32),
-	/// Equivocation
-	Equivocation(u32),
-	/// Invalid Vote
-	InvalidVote(u32),
-	/// Invalid block
-	InvalidBlock(u32),
-	/// Parachain Invalid validity statement
-	ParachainInvalidity(u32),
-}
-
-impl WindowLength<u32> for Misbehavior {
-	fn window_length(&self) -> &u32 {
-		match self {
-			Misbehavior::Unresponsiveness(len) => len,
-			Misbehavior::UnjustifiedVote(len) => len,
-			Misbehavior::RejectSetVotes(len) => len,
-			Misbehavior::Equivocation(len) => len,
-			Misbehavior::InvalidVote(len) => len,
-			Misbehavior::InvalidBlock(len) => len,
-			Misbehavior::ParachainInvalidity(len) => len,
-		}
-	}
-}

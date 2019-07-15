@@ -23,11 +23,10 @@
 //! This crate is highly unstable and experimental.  Breaking changes may
 //! happen at any point.  This crate is also missing features, such as banning
 //! of malicious validators, that are essential for a production network.
-// #![forbid(unsafe_code, missing_docs, unused_must_use)]
-// #![cfg_attr(not(test), forbid(dead_code))]
+#![forbid(unsafe_code, missing_docs, unused_must_use)]
+#![cfg_attr(not(test), forbid(dead_code))]
 extern crate core;
 mod digest;
-mod slash;
 use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
@@ -87,7 +86,6 @@ use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
 pub use babe_primitives::AuthorityId;
 
-
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
 // and `super::babe::Config` can be eliminated.
@@ -121,7 +119,6 @@ impl Config {
 		self.0.threshold
 	}
 }
-
 
 impl SlotCompatible for BabeLink {
 	fn extract_timestamp_and_slot(
@@ -504,25 +501,6 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 				&header,
 				author,
 			).map_err(|e| e.to_string())? {
-
-
-				// @niklasad1: temp just to check the everything fits together
-				//....
-				//.....
-				// This will report a misconduct and slash
-				{
-					let _e = slash::EquivocationProof::new(
-						equivocation_proof.fst_header().clone(),
-						equivocation_proof.snd_header().clone(),
-						Default::default(),
-						0,
-					);
-
-					// T: type that implements system::Trait
-					// slash::BabeSlashReporter::<T>::report_equivocation(e);
-				}
-
-
 				info!(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
