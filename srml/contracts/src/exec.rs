@@ -262,6 +262,8 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
+	pub timestamp: T::Moment,
+	pub block_number: T::BlockNumber,
 }
 
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
@@ -285,6 +287,8 @@ where
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
+			timestamp: <timestamp::Module<T>>::now(),
+			block_number: <system::Module<T>>::block_number(),
 		}
 	}
 
@@ -301,6 +305,8 @@ where
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
+			timestamp: self.timestamp.clone(),
+			block_number: self.block_number.clone(),
 		}
 	}
 
@@ -366,8 +372,8 @@ where
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
 							value_transferred: value,
-							timestamp: <timestamp::Module<T>>::now(),
-							block_number: <system::Module<T>>::block_number(),
+							timestamp: self.timestamp.clone(),
+							block_number: self.block_number.clone(),
 						},
 						input_data,
 						empty_output_buf,
@@ -437,8 +443,8 @@ where
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
-						timestamp: <timestamp::Module<T>>::now(),
-						block_number: <system::Module<T>>::block_number(),
+						timestamp: self.timestamp.clone(),
+						block_number: self.block_number.clone(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
