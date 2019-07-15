@@ -177,7 +177,7 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// Handler for updating the weight multiplier at the end of each block.
 	///
-	/// it receives the current block's weight as input and returns the next weight multiplier for next
+	/// It receives the current block's weight as input and returns the next weight multiplier for next
 	/// block.
 	///
 	/// Note that passing `()` will keep the value constant.
