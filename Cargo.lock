@@ -5721,7 +5721,7 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/wasmi.git?branch=ser-cow#97661cf3fe97ec6e801eedce0651b9e802e02a13"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-cow#358adb334a69cd67e54c4c44e7e39a72dd7e77af"
 dependencies = [
  "libc 0.2.60 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory_units 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5734,7 +5734,7 @@ dependencies = [
 [[package]]
 name = "wasmi-validation"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/wasmi.git?branch=ser-cow#97661cf3fe97ec6e801eedce0651b9e802e02a13"
+source = "git+https://github.com/paritytech/wasmi.git?branch=ser-cow#358adb334a69cd67e54c4c44e7e39a72dd7e77af"
 dependencies = [
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

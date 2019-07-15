@@ -35,7 +35,7 @@ use std::ptr;
 use std::iter;
 use std::slice;
 use tempdir::TempDir;
-use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue, MemoryBackend};
+use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue, MemoryBackend, ByteBuf};
 
 #[derive(Debug)]
 enum CacheError {
@@ -133,14 +133,12 @@ impl MmapLinearMemory {
 		unsafe {
             let ptr = libc::mmap(
                 ptr::null_mut(),
-                dbg!(self.len),
+                self.len,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_PRIVATE,
                 self.memory_file.as_raw_fd(),
                 0,
             ) as *mut u8;
-
-			dbg!(ptr as usize);
 
             if ptr as isize == -1 {
                 panic!();
@@ -157,28 +155,20 @@ struct SlaveMemory {
 }
 
 impl MemoryBackend for SlaveMemory {
-	fn alloc(&mut self, initial: usize, maximum: usize) -> Result<(), &'static str> {
+	fn alloc(&mut self, initial: usize, _maximum: Option<usize>) -> Result<ByteBuf, &'static str> {
+		Ok(ByteBuf {
+			ptr: self.ptr,
+			len: self.len,
+		})
+	}
+    fn realloc(&mut self, new_len: usize) -> Result<ByteBuf, &'static str> {
 		panic!()
 	}
-    fn realloc(&mut self, new_len: usize) -> Result<(), &'static str> {
-		dbg!(new_len);
-		Ok(())
-	}
-    fn len(&self) -> usize {
-		self.len
-	}
-    fn as_slice(&self) -> &[u8] {
-		unsafe {
-			slice::from_raw_parts(self.ptr, self.len)
-		}
-	}
-    fn as_slice_mut(&mut self) -> &mut [u8] {
-		unsafe {
-			slice::from_raw_parts_mut(self.ptr, self.len)
-		}
-	}
     fn erase(&mut self) -> Result<(), &'static str> {
-		for v in self.as_slice_mut() {
+		let data = unsafe {
+			slice::from_raw_parts_mut(self.ptr, self.len)
+		};
+		for v in data {
             *v = 0;
         }
         Ok(())
