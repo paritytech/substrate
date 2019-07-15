@@ -357,6 +357,7 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::generic::Era;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
@@ -433,7 +434,12 @@ mod tests {
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
-		(system::CheckNonce::from(nonce), system::CheckWeight::from(), balances::TakeFees::from(fee))
+		(
+			system::CheckEra::from(Era::Immortal),
+			system::CheckNonce::from(nonce),
+			system::CheckWeight::from(),
+			balances::TakeFees::from(fee)
+		)
 	}
 
 	#[test]

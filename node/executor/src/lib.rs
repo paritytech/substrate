@@ -80,6 +80,7 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
+	// TODO: fix for being charged based on weight now.
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 		<TransactionBaseFee as Get<Balance>>::get() +
 		<TransactionByteFee as Get<Balance>>::get() *
@@ -117,8 +118,7 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let era = Era::mortal(256, 0);
-				let payload = (xt.function, era, GENESIS_HASH, extra.clone());
+				let payload = (xt.function, extra.clone(), GENESIS_HASH);
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -128,7 +128,7 @@ mod tests {
 					}
 				}).into();
 				UncheckedExtrinsic {
-					signature: Some((indices::address::Address::Id(signed), signature, era, extra)),
+					signature: Some((indices::address::Address::Id(signed), signature, extra)),
 					function: payload.0,
 				}
 			}
@@ -140,7 +140,12 @@ mod tests {
 	}
 
 	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra<Runtime> {
-		(system::CheckNonce::from(nonce), system::CheckWeight::from(), balances::TakeFees::from(extra_fee))
+		(
+			system::CheckEra::from(Era::mortal(256, 0)),
+			system::CheckNonce::from(nonce),
+			system::CheckWeight::from(),
+			balances::TakeFees::from(extra_fee)
+		)
 	}
 
 	fn xt() -> UncheckedExtrinsic {

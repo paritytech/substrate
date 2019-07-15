@@ -813,7 +813,15 @@ pub trait SignedExtension:
 	/// The type which encodes the sender identity.
 	type AccountId;
 
-	/// Validate a signed transaction for the transaction queue.
+	/// Any additional data that will go into the signed payload. This may be created dynamically
+	/// from the transaction using the `additional_signed` function.
+	type AdditionalSigned: Encode + Default;
+
+	/// Construct any additional data that should be in the signed payload of the transaction. Can
+	/// also perform any pre-signature-verification checks and return an error if needed.
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> { Ok(Default::default()) }
+
+		/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
@@ -850,6 +858,10 @@ macro_rules! tuple_impl_indexed {
 			$($direct: SignedExtension<AccountId=AccountId>),+
 		> SignedExtension for ($($direct),+,) {
 			type AccountId = AccountId;
+			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+				Ok(( $(self.$index.additional_signed()?,)+ ))
+			}
 			fn validate(
 				&self,
 				who: &Self::AccountId,
@@ -894,14 +906,15 @@ macro_rules! tuple_impl_indexed {
 	};
 }
 
-// TODO TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths.
+// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths.
 #[allow(non_snake_case)]
 tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
-/// To be used only for testing.
+/// Only for base bone testing when you don't care about signed extensions at all.\
 #[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
+	type AdditionalSigned = ();
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

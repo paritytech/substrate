@@ -78,11 +78,11 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use primitives::{
-	generic, weights::Weight, traits::{
+	generic::{self, Era}, weights::Weight, traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
-		Lookup, DispatchError
+		Lookup, DispatchError, SaturatedConversion
 	}, transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity
 	},
@@ -759,14 +759,8 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
-	type AccountId = T::AccountId;
-	// TODO TODO: make sure that this has to be here and not in validate.
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		weight: Weight,
-	) -> Result<(), DispatchError> {
+impl<T: Trait + Send + Sync> CheckWeight<T> {
+	fn internal_check_weight(weight: Weight) -> Result<(), DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let next_weight = current_weight.saturating_add(weight);
 		if next_weight > T::MaximumBlockWeight::get() {
@@ -774,6 +768,29 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		}
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+
+	fn pre_dispatch(
+		self,
+		_who: &Self::AccountId,
+		weight: Weight,
+	) -> Result<(), DispatchError> {
+		Self::internal_check_weight(weight)
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_weight: Weight,
+	) -> Result<ValidTransaction, DispatchError> {
+		// TODO: check for a maximum size and weight here as well.
+		// write priority based on tx weight type + tip.
+		Ok(ValidTransaction::default())
 	}
 }
 
@@ -812,6 +829,8 @@ impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -852,6 +871,36 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 			longevity: TransactionLongevity::max_value(),
 			propagate: true,
 		})
+	}
+}
+
+/// Nonce check and increment to give replay protection for transactions.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckEra<T> {
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(era: Era) -> Self {
+		Self((era, rstd::marker::PhantomData))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = T::Hash;
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		if !<BlockHash<T>>::exists(n) { Err("transaction birth block ancient")? }
+		Ok(<Module<T>>::block_hash(n))
 	}
 }
 

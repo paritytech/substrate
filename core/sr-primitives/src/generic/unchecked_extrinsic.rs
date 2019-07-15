@@ -22,11 +22,8 @@ use std::fmt;
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use crate::codec::{Decode, Encode, Input};
-use crate::traits::{
-	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, SignedExtension,
-	BlockNumberToHash, Lookup, Checkable, Extrinsic, SaturatedConversion
-};
-use super::{CheckedExtrinsic, Era};
+use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
+use super::CheckedExtrinsic;
 
 const TRANSACTION_VERSION: u8 = 1;
 
@@ -40,7 +37,7 @@ where
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature, Era, Extra)>,
+	pub signature: Option<(Address, Signature, Extra)>,
 	/// The function that should be called.
 	pub function: Call,
 }
@@ -53,11 +50,10 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 		function: Call,
 		signed: Address,
 		signature: Signature,
-		era: Era,
 		extra: Extra
 	) -> Self {
 		UncheckedExtrinsic {
-			signature: Some((signed, signature, era, extra)),
+			signature: Some((signed, signature, extra)),
 			function,
 		}
 	}
@@ -79,8 +75,8 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 	}
 }
 
-impl<Address, AccountId, Call, Signature, Extra, Context, Hash, BlockNumber>
-	Checkable<Context>
+impl<Address, AccountId, Call, Signature, Extra, Lookup>
+	Checkable<Lookup>
 for
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
@@ -89,22 +85,16 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	BlockNumber: SimpleArithmetic,
-	Hash: Encode,
-	Context: Lookup<Source=Address, Target=AccountId>
-		+ CurrentHeight<BlockNumber=BlockNumber>
-		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
+	Lookup: traits::Lookup<Source=Address, Target=AccountId>
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
-	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
+	fn check(self, lookup: &Lookup) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
-			Some((signed, signature, era, extra)) => {
-				let current_u64 = context.current_height().saturated_into::<u64>();
-				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
-					.ok_or("transaction birth block ancient")?;
-				let signed = context.lookup(signed)?;
-				let raw_payload = (self.function, era, h, extra);
+			Some((signed, signature, extra)) => {
+				let additional_signed = extra.additional_signed()?;
+				let raw_payload = (self.function, extra, additional_signed);
+				let signed = lookup.lookup(signed)?;
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -115,7 +105,7 @@ where
 					return Err(crate::BAD_SIGNATURE)
 				}
 				CheckedExtrinsic {
-					signed: Some((signed, raw_payload.3)),
+					signed: Some((signed, raw_payload.1)),
 					function: raw_payload.0,
 				}
 			}
@@ -200,7 +190,7 @@ where
 	Extra: SignedExtension,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2, &x.3)), self.function)
+		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
 	}
 }
 
@@ -209,7 +199,8 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::SignedExtension;
+	use crate::generic::Era;
+	use crate::traits::{SignedExtension, BlockNumberToHash, Lookup, CurrentHeight};
 	use serde::{Serialize, Deserialize};
 
 	struct TestContext;
@@ -247,6 +238,7 @@ mod tests {
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
+		type AdditionalSigned = ();
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
@@ -264,8 +256,7 @@ mod tests {
 		let ux = Ex::new_signed(
 			vec![0u8; 0],
 			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::immortal(), 0u64).encode()),
-			Era::immortal(),
+			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
 			TestExtra
 		);
 		let encoded = ux.encode();
@@ -277,9 +268,8 @@ mod tests {
 		let ux = Ex::new_signed(
 			vec![0u8; 0],
 			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 257], Era::immortal(), 0u64)
+			TestSig(TEST_ACCOUNT, (vec![0u8; 257], TestExtra)
 				.using_encoded(blake2_256)[..].to_owned()),
-			Era::immortal(),
 			TestExtra
 		);
 		let encoded = ux.encode();
@@ -299,7 +289,6 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, vec![0u8; 0]),
-			Era::immortal(),
 			TestExtra
 		);
 		assert!(ux.is_signed().unwrap_or(false));
@@ -307,12 +296,11 @@ mod tests {
 	}
 
 	#[test]
-	fn immortal_signed_check_should_work() {
+	fn signed_check_should_work() {
 		let ux = Ex::new_signed(
 			vec![0u8; 0],
 			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::immortal(), 0u64, TestExtra).encode()),
-			Era::immortal(),
+			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
 			TestExtra
 		);
 		assert!(ux.is_signed().unwrap_or(false));
@@ -320,63 +308,6 @@ mod tests {
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
 			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
 		);
-	}
-
-	#[test]
-	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(
-			vec![0u8; 0],
-			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::mortal(32, 42), 42u64, TestExtra).encode()),
-			Era::mortal(32, 42),
-			TestExtra
-		);
-		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
-		);
-	}
-
-	#[test]
-	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(
-			vec![0u8; 0],
-			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (vec![0u8; 0], Era::mortal(32, 11), 11u64, TestExtra).encode()),
-			Era::mortal(32, 11),
-			TestExtra
-		);
-		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }));
-	}
-
-	#[test]
-	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(
-			vec![0u8; 0],
-			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::mortal(32, 10), 10u64).encode()),
-			Era::mortal(32, 10),
-			TestExtra
-		);
-		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
-	}
-
-	#[test]
-	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(
-			vec![0u8; 0],
-			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (TEST_ACCOUNT, vec![0u8; 0], Era::mortal(32, 43), 43u64).encode()),
-			Era::mortal(32, 43),
-			TestExtra
-		);
-		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
 	}
 
 	#[test]
