@@ -29,11 +29,13 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::rc::Rc;
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{Write, Seek, SeekFrom};
 use std::os::unix::io::AsRawFd;
 use std::ptr;
+use std::iter;
+use std::slice;
 use tempdir::TempDir;
-use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
+use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue, MemoryBackend};
 
 #[derive(Debug)]
 enum CacheError {
@@ -73,11 +75,7 @@ impl CachedRuntime {
 		let slave = self.state_snapshot.mem.slave_memory();
 
 		unsafe {
-			mem_instance.set_raw_buf(
-				slave.ptr,
-				slave.len,
-				slave.len,
-			);
+			mem_instance.set_backend(Box::new(slave));
 		}
 
 		f(&self.instance)
@@ -100,13 +98,12 @@ struct MmapLinearMemory {
 	/// The file that will be used for mapping the linear memory.
 	memory_file: File,
 	len: usize,
-	ptr: *mut u8,
 }
 
 impl MmapLinearMemory {
-	fn create(seed_data: &[u8]) -> Self {
+	fn create(len: usize) -> Self {
 		let temp_dir = TempDir::new("substrate_heap").unwrap();
-		let path = temp_dir.path().join("heap");
+		let path = dbg!(temp_dir.path().join("heap"));
 
 		let mut f = OpenOptions::new()
 			.read(true)
@@ -116,31 +113,20 @@ impl MmapLinearMemory {
 			.open(path)
 			.unwrap(); // TODO:
 
-		f.write_all(seed_data).unwrap();
-
-		let ptr = unsafe {
-            let ptr = libc::mmap(
-                ptr::null_mut(),
-                seed_data.len(),
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE,
-                f.as_raw_fd(),
-                0,
-            ) as *mut u8;
-
-            if ptr as isize == -1 {
-                panic!();
-            }
-
-			ptr
-        };
+		unsafe {
+			libc::ftruncate(f.as_raw_fd(), len as i64);
+		}
 
 		Self {
 			temp_dir,
 			memory_file: f,
-			ptr,
-			len: seed_data.len(),
+			len,
 		}
+	}
+
+	fn set(&mut self, offset: usize, contents: &[u8]) {
+		self.memory_file.seek(SeekFrom::Start(offset as u64)).unwrap();
+		self.memory_file.write_all(contents).unwrap();
 	}
 
 	fn slave_memory(&self) -> SlaveMemory {
@@ -154,6 +140,8 @@ impl MmapLinearMemory {
                 0,
             ) as *mut u8;
 
+			dbg!(ptr as usize);
+
             if ptr as isize == -1 {
                 panic!();
             }
@@ -166,6 +154,35 @@ impl MmapLinearMemory {
 struct SlaveMemory {
 	ptr: *mut u8,
 	len: usize,
+}
+
+impl MemoryBackend for SlaveMemory {
+	fn alloc(&mut self, initial: usize, maximum: usize) -> Result<(), &'static str> {
+		panic!()
+	}
+    fn realloc(&mut self, new_len: usize) -> Result<(), &'static str> {
+		dbg!(new_len);
+		Ok(())
+	}
+    fn len(&self) -> usize {
+		self.len
+	}
+    fn as_slice(&self) -> &[u8] {
+		unsafe {
+			slice::from_raw_parts(self.ptr, self.len)
+		}
+	}
+    fn as_slice_mut(&mut self) -> &mut [u8] {
+		unsafe {
+			slice::from_raw_parts_mut(self.ptr, self.len)
+		}
+	}
+    fn erase(&mut self) -> Result<(), &'static str> {
+		for v in self.as_slice_mut() {
+            *v = 0;
+        }
+        Ok(())
+	}
 }
 
 impl Drop for SlaveMemory {
@@ -197,7 +214,7 @@ impl StateSnapshot {
 	// Returns `None` if instance is not valid.
 	fn take(
 		module_instance: &WasmModuleInstanceRef,
-		mem: MmapLinearMemory,
+		mut mem: MmapLinearMemory,
 		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
@@ -224,6 +241,10 @@ impl StateSnapshot {
 				_ => return None,
 			};
 			prepared_segments.push((offset, contents))
+		}
+
+		for (offset, contents) in &prepared_segments {
+			mem.set(*offset as usize, contents);
 		}
 
 		// Collect all values of mutable globals.
@@ -383,9 +404,7 @@ impl RuntimesCache {
 			.map_err(|_| CacheError::Instantiation)?;
 
 		let mem_instance = WasmExecutor::get_mem_instance(&instance).unwrap(); // TODO:
-		let mmap_linear_memory = mem_instance.with_direct_access(|mem| {
-			MmapLinearMemory::create(mem)
-		});
+		let mmap_linear_memory = MmapLinearMemory::create(mem_instance.current_size().0 * 65536);
 
 		// Take state snapshot before executing anything.
 		let state_snapshot = StateSnapshot::take(
