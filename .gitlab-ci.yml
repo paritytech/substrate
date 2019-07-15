@@ -247,14 +247,9 @@ build-linux-subkey:
     - mkdir -p ./artifacts
     - mv ./target/release/subkey ./artifacts/.
     - echo -n "Subkey version = "
-    # - if [ "${CI_COMMIT_TAG}" ]; then
-    #     echo "${CI_COMMIT_TAG}" | tee ./artifacts/SUBKEY-VERSION;
-    #   else
-    - cat ./artifacts/subkey --version # debug
     - ./artifacts/subkey --version |
-        sed -n -r 's/^subkey ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
         tee ./artifacts/SUBKEY-VERSION;
-      # fi
     - sha256sum ./artifacts/subkey | tee ./artifacts/subkey.sha256
 
 build-rust-doc-release:
@@ -281,6 +276,7 @@ build-rust-doc-release:
   stage:                           publish
   dependencies:
     - build-linux-release
+    - build-linux-subkey
   <<:                              *build-only
   <<:                              *kubernetes-build
 
