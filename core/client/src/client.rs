@@ -1643,7 +1643,7 @@ where
 			}
 		}
 
-		let (leaves, best_already_checked) = {
+		let leaves = {
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
@@ -1655,29 +1655,24 @@ where
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
 			if canon_hash == target_hash {
-				// if no block at the given max depth exists fallback to the best block
+				// if a `max_number` is given we try to fetch the block at the
+				// given depth, if it doesn't exist or `max_number` is not
+				// provided, we continue to search from all leaves below.
 				if let Some(max_number) = maybe_max_number {
 					if let Some(header) = self.backend.blockchain().hash(max_number)? {
 						return Ok(Some(header));
 					}
 				}
-
-				return Ok(Some(info.best_hash));
 			} else if info.finalized_number >= *target_header.number() {
 				// header is on a dead fork.
 				return Ok(None);
 			}
 
-			(self.backend.blockchain().leaves()?, info.best_hash)
+			self.backend.blockchain().leaves()?
 		};
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in leaves {
-			// ignore canonical chain which we already checked above
-			if leaf_hash == best_already_checked {
-				continue;
-			}
-
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 
