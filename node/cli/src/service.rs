@@ -147,11 +147,7 @@ construct_service_factory! {
 							telemetry_on_connect: Some(telemetry_on_connect),
 							transaction_pool: service.transaction_pool(),
 						};
-						service.spawn_task(Box::new(
-							grandpa::run_grandpa_voter::<
-								_, _, _, _, _, _, _, _, grandpa_primitives::AuthorityPair
-							>(grandpa_config)?
-						));
+						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 					},
 				}
 

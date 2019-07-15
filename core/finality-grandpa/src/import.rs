@@ -250,7 +250,7 @@ where
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 	PRA::Api: GrandpaApi<Block>,
-	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 	SC: SelectChain<Block>,
 	P: Pair,
 {
@@ -586,7 +586,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T, P> BlockImport<Block>
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 		PRA::Api: GrandpaApi<Block>,
-		T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
+		T: SubmitReport<Client<B, E, Block, RA>, Block>,
 		SC: SelectChain<Block>,
 		P: Pair,
 {
@@ -748,7 +748,7 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 {
 
 	/// Import a block justification and finalize the block.
