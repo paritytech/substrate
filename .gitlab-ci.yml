@@ -240,8 +240,9 @@ build-linux-subkey:
     variables:
       - $DEPLOY_TAG
   script:
-    - cd subkey
+    - cd ./subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - cd ..
     # - time cargo build --release
     - sccache -s
     - mkdir -p ./artifacts
