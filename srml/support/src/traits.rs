@@ -670,6 +670,8 @@ pub trait WindowLength<T> {
 }
 
 /// Misbehavior type which takes window length as input
+/// Each variant and its data is a seperate kind
+/// For example `Unresponsiveness(0)` and `Unresponsiveness(1)` are different
 #[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Misbehavior {
