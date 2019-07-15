@@ -287,34 +287,6 @@ where
 			}
 		}
 
-		// Poll mDNS.
-		#[cfg(not(target_os = "unknown"))]
-		loop {
-			match self.mdns.poll(params) {
-				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
-					match event {
-						MdnsEvent::Discovered(list) => {
-							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
-							if let Some(peer_id) = self.discoveries.pop_front() {
-								let ev = DiscoveryOut::Discovered(peer_id);
-								return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
-							}
-						},
-						MdnsEvent::Expired(_) => {}
-					}
-				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
-					match event {},		// `event` is an enum with no variant
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
-			}
-		}
-
 		// Poll Kademlia.
 		loop {
 			match self.kademlia.poll(params) {
@@ -371,6 +343,34 @@ where
 					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
 				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
 					return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			}
+		}
+
+		// Poll mDNS.
+		#[cfg(not(target_os = "unknown"))]
+		loop {
+			match self.mdns.poll(params) {
+				Async::NotReady => break,
+				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+					match event {
+						MdnsEvent::Discovered(list) => {
+							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
+							if let Some(peer_id) = self.discoveries.pop_front() {
+								let ev = DiscoveryOut::Discovered(peer_id);
+								return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+							}
+						},
+						MdnsEvent::Expired(_) => {}
+					}
+				},
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Async::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
+					match event {},		// `event` is an enum with no variant
 				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
