@@ -187,7 +187,11 @@ construct_service_factory! {
 
 					let (block_import, link_half) =
 						grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _, _>(
-							client.clone(), client.clone(), select_chain, transaction_pool.clone()
+							client.clone(),
+							client.clone(),
+							select_chain,
+							transaction_pool.clone(),
+							maybe_pair.clone(),
 						)?;
 					let justification_import = block_import.clone();
 

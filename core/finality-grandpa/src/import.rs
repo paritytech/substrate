@@ -45,7 +45,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, DigestFor,
 	Header as HeaderT, NumberFor, ProvideRuntimeApi
 };
-use substrate_primitives::{H256, Blake2Hasher, crypto::Pair as Pair};
+use substrate_primitives::{H256, Blake2Hasher, crypto::Pair as Pair, ed25519};
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use grandpa::AccountableSafety;
 
@@ -72,6 +72,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> {
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	api: Arc<PRA>,
 	transaction_pool: Option<Arc<T>>,
+	local_key: Option<ed25519::Pair>,
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> AccountableSafety
@@ -139,6 +140,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone, T> Clone for
 			consensus_changes: self.consensus_changes.clone(),
 			api: self.api.clone(),
 			transaction_pool: self.transaction_pool.clone(),
+			local_key: self.local_key.clone(),
 		}
 	}
 }
@@ -722,7 +724,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		api: Arc<PRA>,
-		transaction_pool: Option<Arc<T>>
+		transaction_pool: Option<Arc<T>>,
+		local_key: Option<ed25519::Pair>,
 	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC, T> {
 		GrandpaBlockImport {
 			inner,
@@ -732,6 +735,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>
 			consensus_changes,
 			api,
 			transaction_pool,
+			local_key,
 		}
 	}
 }

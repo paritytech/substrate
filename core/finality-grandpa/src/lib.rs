@@ -421,6 +421,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T>(
 	api: Arc<PRA>,
 	select_chain: SC,
 	transaction_pool: Option<Arc<T>>,
+	local_key: Option<ed25519::Pair>,
 ) -> Result<(
 		GrandpaBlockImport<B, E, Block, RA, PRA, SC, T>,
 		LinkHalf<B, E, Block, RA, SC>
@@ -465,6 +466,7 @@ where
 			persistent_data.consensus_changes.clone(),
 			api,
 			transaction_pool.clone(),
+			local_key,
 		),
 		LinkHalf {
 			client,
