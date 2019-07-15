@@ -410,7 +410,7 @@ mod tests {
 					upgrade::apply(out.stream, upgrade, endpoint)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone());
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
