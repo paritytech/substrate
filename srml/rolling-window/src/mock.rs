@@ -21,7 +21,7 @@ use serde::{Serialize, Deserialize};
 use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
 use substrate_primitives::{Blake2Hasher, H256};
 use srml_staking::{GenesisConfig, StakerStatus};
-use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get}};
+use srml_support::{impl_outer_origin, parameter_types, traits::{Currency, Get, WindowLength}};
 use std::{marker::PhantomData, cell::RefCell};
 use std::collections::{HashSet, HashMap};
 use parity_codec::{Encode, Decode, Codec};
@@ -65,6 +65,16 @@ pub enum Kind {
 	One,
 	Two,
 	Three,
+}
+
+impl WindowLength<u32> for Kind {
+	fn window_length(&self) -> &u32 {
+		match self {
+			Kind::One => &4,
+			Kind::Two => &3,
+			Kind::Three => &2,
+		}
+	}
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

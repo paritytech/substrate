@@ -78,11 +78,8 @@ pub struct BabeEquivocation<T, DoSlash>((PhantomData<T>, PhantomData<DoSlash>));
 
 impl<T, DoSlash> BabeEquivocation<T, DoSlash> {
 	fn kind() -> Misbehavior {
-		Misbehavior::Equivocation
-	}
-
-	fn window_length() -> u32 {
-		10
+		// window length is 10 sessions
+		Misbehavior::Equivocation(10)
 	}
 
 	fn base_severity() -> Perbill {
@@ -98,9 +95,8 @@ where
 	fn slash(footprint: T::Hash, who: Who) {
 		let kind = Self::kind();
 		let base_seve = Self::base_severity();
-		let window_length = Self::window_length();
 
-		RollingWindow::<T>::report_misbehavior(kind, window_length, footprint);
+		RollingWindow::<T>::report_misbehavior(kind, footprint);
 
 		let num_violations = RollingWindow::<T>::get_misbehaved_unique(kind);
 
@@ -164,7 +160,7 @@ mod tests {
 
 	impl Trait for Test {
 		type KeyOwner = FakeSlasher<Self>;
-		type EquivocationSlash = MyMisconduct<Self, FakeSlasher<Self>>;
+		type EquivocationSlash = BabeEquivocation<Self, FakeSlasher<Self>>;
 	}
 
 	pub struct FakeSlasher<T>(PhantomData<T>);

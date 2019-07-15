@@ -663,22 +663,42 @@ pub trait DoSlash<Identification, Severity> {
     fn do_slash(identification: Identification, severity: Severity);
 }
 
-/// Temp, obviously not a trait
+/// Trait for representing window length
+pub trait WindowLength<T> {
+	/// Fetch window length
+	fn window_length(&self) -> &T;
+}
+
+/// Misbehavior type which takes window length as input
 #[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Misbehavior {
 	/// Validator is not online
-	Unresponsiveness,
+	Unresponsiveness(u32),
 	/// Unjustified vote
-	UnjustifiedVote,
+	UnjustifiedVote(u32),
 	/// Rejecting set of votes
-	RejectSetVotes,
+	RejectSetVotes(u32),
 	/// Equivocation
-	Equivocation,
+	Equivocation(u32),
 	/// Invalid Vote
-	InvalidVote,
+	InvalidVote(u32),
 	/// Invalid block
-	InvalidBlock,
+	InvalidBlock(u32),
 	/// Parachain Invalid validity statement
-	ParachainInvalid,
+	ParachainInvalidity(u32),
+}
+
+impl WindowLength<u32> for Misbehavior {
+	fn window_length(&self) -> &u32 {
+		match self {
+			Misbehavior::Unresponsiveness(len) => len,
+			Misbehavior::UnjustifiedVote(len) => len,
+			Misbehavior::RejectSetVotes(len) => len,
+			Misbehavior::Equivocation(len) => len,
+			Misbehavior::InvalidVote(len) => len,
+			Misbehavior::InvalidBlock(len) => len,
+			Misbehavior::ParachainInvalidity(len) => len,
+		}
+	}
 }
