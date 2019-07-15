@@ -1075,8 +1075,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
-			// FIXME: #1442 reorganize best block to be the best chain containing
-			// `block`.
+			// NOTE: we're setting the finalized block as best block, this might
+			// be slightly innacurate since we might have a "better" block
+			// further along this chain, but since best chain selection logic is
+			// pluggable we cannot make a better choice here. usages that need
+			// an accurate "best" block need to go through `SelectChain`
+			// instead.
+			operation.op.mark_head(BlockId::Hash(block))?;
 		}
 
 		let enacted = route_from_finalized.enacted();
