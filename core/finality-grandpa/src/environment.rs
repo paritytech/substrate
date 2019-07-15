@@ -308,7 +308,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T, P> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -319,10 +319,9 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T,
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) transaction_pool: Arc<T>,
-	pub(crate) _phantom: std::marker::PhantomData<P>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T, P> Environment<B, E, Block, N, RA, SC, T, P> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -338,9 +337,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T, P> Environment<B, E, Blo
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T, P>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, T, P>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -349,7 +348,6 @@ where
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	P: Pair,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.inner, base, block)
@@ -467,9 +465,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T, P>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, T, P>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256> + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -479,8 +477,7 @@ where
 	RA: 'static + Send + Sync + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	P: Pair,
-	T: SubmitReport<Client<B, E, Block, RA>, Block, P>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
@@ -776,30 +773,37 @@ where
 		equivocation: Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+
+		let first_vote = Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.first.0);
+		let second_vote = Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.second.0);
+		let first_signature = equivocation.first.1;
+		let second_signature = equivocation.second.1;
+
 		let mut grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
-			first: (
-				Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.first.0),
-				equivocation.first.1,
-			),
-			second: (
-				Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.second.0),
-				equivocation.second.1,
-			),
+			first: (first_vote, first_signature),
+			second: (second_vote, second_signature),
 			set_id: self.set_id,
 		};
+
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		let maybe_report_call = self.inner.runtime_api()
 			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
 
-		if let (Ok(Some(report_call)), Some(session_key)) = (maybe_report_call, self.config.local_key.clone()) {
-			self.transaction_pool.submit_report_call(
-				self.inner.deref(),
-				session_key.deref(),
-				report_call.as_slice(),
-			);
-			info!(target: "afg", "Equivocation report has been submitted");
+		if let Ok(Some(report_call)) = maybe_report_call {
+			if let Some(session_key) = self.config.local_key.clone() {
+				self.transaction_pool.submit_report_call(
+					self.inner.deref(),
+					session_key.deref(),
+					report_call.as_slice(),
+				);
+				info!(target: "afg", "Equivocation report has been submitted");
+			} else {
+				error!(target: "afg", "Failed to get local key for equivocation report")
+			}
+		} else {
+			error!(target: "afg", "Failed to construct equivocation report call")
 		}
 	}
 
@@ -809,30 +813,37 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		info!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		let grandpa_equivocation = GrandpaEquivocation::<Block> {
+
+		let first_vote = Message::<Block::Hash, NumberFor<Block>>::Precommit(equivocation.first.0);
+		let second_vote = Message::<Block::Hash, NumberFor<Block>>::Precommit(equivocation.second.0);
+		let first_signature = equivocation.first.1;
+		let second_signature = equivocation.second.1;
+
+		let mut grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
-			first: (
-				Message::Precommit(equivocation.first.0),
-				equivocation.first.1,
-			),
-			second: (
-				Message::Precommit(equivocation.second.0),
-				equivocation.second.1,
-			),
+			first: (first_vote, first_signature),
+			second: (second_vote, second_signature),
 			set_id: self.set_id,
 		};
+
 		let block_id = BlockId::number(self.inner.info().chain.best_number);
 		let maybe_report_call = self.inner.runtime_api()
 			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
 
-		if let (Ok(Some(report_call)), Some(session_key)) = (maybe_report_call, self.config.local_key.clone()) {
-			self.transaction_pool.submit_report_call(
-				self.inner.deref(),
-				session_key.deref(),
-				report_call.as_slice(),
-			);
-			info!(target: "afg", "Equivocation report has been submitted");
+		if let Ok(Some(report_call)) = maybe_report_call {
+			if let Some(session_key) = self.config.local_key.clone() {
+				self.transaction_pool.submit_report_call(
+					self.inner.deref(),
+					session_key.deref(),
+					report_call.as_slice(),
+				);
+				info!(target: "afg", "Equivocation report has been submitted");
+			} else {
+				error!(target: "afg", "Failed to get local key for equivocation report")
+			}
+		} else {
+			error!(target: "afg", "Failed to construct equivocation report call")
 		}
 	}
 }

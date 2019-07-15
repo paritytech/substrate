@@ -373,7 +373,7 @@ fn check_header<C, B: Block, P: Pair, T>(
 	C: client::backend::AuxStore + ProvideRuntimeApi + HeaderBackend<B>,
 	C::Api: AuraApi<B, P::Public, P::Signature>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
-	T: SubmitReport<C, B, P>,
+	T: SubmitReport<C, B>,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -507,7 +507,7 @@ impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
-	T: SubmitReport<C, B, P> + Send + Sync,
+	T: SubmitReport<C, B> + Send + Sync,
 {
 	fn verify(
 		&self,
@@ -690,7 +690,7 @@ pub fn import_queue<B, C, P, T>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
-	T: SubmitReport<C, B, P> + Send + Sync + 'static,
+	T: SubmitReport<C, B> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;

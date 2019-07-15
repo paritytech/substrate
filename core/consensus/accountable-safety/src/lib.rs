@@ -26,38 +26,40 @@ use runtime_primitives::{generic::BlockId, AnySignature};
 use log::{info, warn};
 use client::blockchain::HeaderBackend;
 use client::transaction_builder::api::TransactionBuilder as TransactionBuilderApi;
-use substrate_primitives::{crypto::Pair as PairT, ed25519};
+use substrate_primitives::{crypto::Pair as PairT, ed25519::Pair};
 
 /// Trait to submit report calls to the transaction pool.
-pub trait SubmitReport<C, Block, Pair> {
+pub trait SubmitReport<C, Block> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, pair: &ed25519::Pair, encoded_call: &[u8]);
+	fn submit_report_call(&self, client: &C, pair: &Pair, encoded_call: &[u8]);
 }
 
-impl<C, Block, T: PoolApi + Send + Sync + 'static, P> SubmitReport<C, Block, P> for T 
+impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block> for T 
 where 
 	Block: BlockT + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,
 	<Block as BlockT>::Extrinsic: Decode,
 	C: HeaderBackend<Block> + ProvideRuntimeApi,
 	C::Api: TransactionBuilderApi<Block>,
-	P: PairT,
-	P::Public: Encode + Decode,
-	AnySignature: From<<ed25519::Pair as PairT>::Signature>,
 {
-	fn submit_report_call(&self, client: &C, pair: &ed25519::Pair, encoded_call: &[u8]) {
+	fn submit_report_call(&self, client: &C, pair: &Pair, encoded_call: &[u8]) {
 		info!(target: "accountable-safety", "Submitting report call to tx pool");
+
 		let block_id = BlockId::<Block>::number(client.info().best_number);
 		let encoded_account_id = pair.public().encode();
+
 		let signing_payload = client.runtime_api()
 			.signing_payload(&block_id, encoded_account_id.clone(), encoded_call.to_vec())
-			.expect("FIXME");
+			.expect("Signing payload for report call should work; qed");
 		let signature = AnySignature::from(pair.sign(signing_payload.as_slice()));
+
 		let encoded_extrinsic = client.runtime_api()
 			.build_transaction(&block_id, signing_payload, encoded_account_id, signature)
-			.expect("FIXME");
+			.expect("Build transaction for report call should work; qed");
+
 		let uxt = Decode::decode(&mut encoded_extrinsic.as_slice())
-			.expect("Encoded extrinsic is valid");
+			.expect("Encoded extrinsic is valid; qed");
+
 		match self.submit_one(&block_id, uxt) {
 			Err(e) => warn!("Error importing misbehavior report: {:?}", e),
 			Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
