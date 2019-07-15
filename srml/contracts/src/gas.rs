@@ -274,7 +274,7 @@ macro_rules! match_tokens {
 			// have an iterator of Box<dyn Any> and to downcast we need to specify
 			// the type which we want downcast to.
 			//
-			// So what we do is we assign `_pattern_typed_next_ref` to the a variable which has
+			// So what we do is we assign `_pattern_typed_next_ref` to a variable which has
 			// the required type.
 			//
 			// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
@@ -366,7 +366,7 @@ mod tests {
 	// Make sure that if the gas meter is charged by exceeding amount then not only an error
 	// returned for that charge, but also for all consequent charges.
 	//
-	// This is not striclty necessary, because the execution should be interrupred immediatelly
+	// This is not strictly necessary, because the execution should be interrupted immediately
 	// if the gas meter runs out of gas. However, this is just a nice property to have.
 	#[test]
 	fn overcharge_is_unrecoverable() {

@@ -75,6 +75,7 @@ members = [
 	"srml/example",
 	"srml/executive",
 	"srml/finality-tracker",
+	"srml/generic-asset",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",

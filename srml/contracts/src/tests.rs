@@ -127,9 +127,13 @@ impl balances::Trait for Test {
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
 }
+parameter_types! {
+	pub const MinimumPeriod: u64 = 1;
+}
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;

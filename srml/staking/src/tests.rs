@@ -1714,59 +1714,46 @@ fn bond_with_no_staked_value() {
 	// Particularly when she votes and the candidate is elected.
 	with_externalities(&mut ExtBuilder::default()
 	.validator_count(3)
+	.existential_deposit(5)
 	.nominate(false)
 	.minimum_validator_count(1)
 	.build(), || {
-		// setup
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-		let _ = Balances::deposit_creating(&3, 1000);
-		let initial_balance_2 = Balances::free_balance(&2);
-		let initial_balance_4 = Balances::free_balance(&4);
+		// Can't bond with 1
+		assert_noop!(
+			Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
+			"can not bond with value less than minimum balance"
+		);
+		// bonded with absolute minimum value possible.
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
+		assert_eq!(Balances::locks(&1)[0].amount, 5);
 
-		// Stingy validator.
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+		// unbonding even 1 will cause all to be unbonded.
+		assert_ok!(Staking::unbond(Origin::signed(2), 1));
+		assert_eq!(
+			Staking::ledger(2),
+			Some(StakingLedger {
+				stash: 1,
+				active: 0,
+				total: 5,
+				unlocking: vec![UnlockChunk {value: 5, era: 3}]
+			})
+		);
 
 		start_era(1);
-
-		assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
-
-		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 31).
-		assert_eq!(Staking::slot_stake(), 31);
-
-		// make the stingy one elected.
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
-
 		start_era(2);
 
-		// Stingy one is selected
-		assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
-		assert_eq!(Staking::stakers(1), Exposure {
-			own: 1,
-			total: 501,
-			others: vec![IndividualExposure { who: 3, value: 500}],
-		});
-		// New slot stake.
-		assert_eq!(Staking::slot_stake(), 501);
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4);
+		// not yet removed.
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+		assert!(Staking::ledger(2).is_some());
+		assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 		start_era(3);
 
-		// Approximation resulting from Perbill conversion
-		let approximation = 1;
-		let reward = Staking::current_session_reward() * 3;
-		// 2 will not get a reward of only 1
-		// 4 will get the rest
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 3 - approximation);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 3 - approximation);
+		// poof. Account 1 is removed from the staking system.
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+		assert!(Staking::ledger(2).is_none());
+		assert_eq!(Balances::locks(&1).len(), 0);
+
 	});
 }
 

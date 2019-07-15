@@ -20,9 +20,9 @@ use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
 	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig,
-	CouncilConfig, AuraConfig, ImOnlineConfig, IndicesConfig, SessionConfig, StakingConfig,
-	SudoConfig, TechnicalCommitteeConfig,	SystemConfig, TimestampConfig, WASM_BINARY,
-	Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS, MILLICENTS, SECS_PER_BLOCK,
+	CouncilConfig, AuraConfig,  ImOnlineConfig, IndicesConfig, SessionConfig, StakingConfig,
+	SudoConfig,	TechnicalCommitteeConfig, SystemConfig, WASM_BINARY, Perbill, SessionKeys,
+	StakerStatus, DAYS, DOLLARS, MILLICENTS,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -116,7 +116,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.0.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -127,7 +127,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
@@ -143,9 +143,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			presentation_duration: 1 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
@@ -256,7 +253,7 @@ pub fn testnet_genesis(
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.0.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -267,7 +264,7 @@ pub fn testnet_genesis(
 			current_session_reward: 0,
 			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
@@ -285,9 +282,6 @@ pub fn testnet_genesis(
 			presentation_duration: 10,
 			term_duration: 1000000,
 			desired_seats: desired_seats,
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 2,                    // 2*2=4 second block time.
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
@@ -352,23 +346,15 @@ pub(crate) mod tests {
 	use service_test;
 	use crate::service::Factory;
 
-	fn local_testnet_genesis_instant() -> GenesisConfig {
-		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
-	}
-
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
-		let mut genesis = testnet_genesis(
+		testnet_genesis(
 			vec![
 				get_authority_keys_from_seed("Alice"),
 			],
 			get_account_id_from_seed("Alice"),
 			None,
 			false,
-		);
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
+		)
 	}
 
 	/// Local testnet config (single validator - Alice)
@@ -387,7 +373,7 @@ pub(crate) mod tests {
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
+		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis, vec![], None, None, None, None)
 	}
 
 	#[test]
