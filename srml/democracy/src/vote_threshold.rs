@@ -22,13 +22,15 @@ use parity_codec::{Encode, Decode};
 use primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 
-/// A means of determining if a vote is past pass threshold.
+/// A means of determining if a vote is above the required threshold to pass.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.
+	/// See [implementation](./trait.Approved.html#method.approved).
 	SuperMajorityApprove,
-	/// A supermajority of rejects is needed to fail this vote.
+	/// A supermajority of rejections is needed to fail this vote.
+	/// See [implementation](./trait.Approved.html#method.approved).
 	SuperMajorityAgainst,
 	/// A simple majority of approvals is needed to pass this vote.
 	SimpleMajority,
@@ -42,7 +44,9 @@ pub trait Approved<Balance> {
 }
 
 /// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
-fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy>(mut n1: T, mut d1: T, mut n2: T, mut d2: T) -> bool {
+fn compare_rationals<T>(mut n1: T, mut d1: T, mut n2: T, mut d2: T) -> bool
+	where T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy
+{
 	// Uses a continued fractional representation for a non-overflowing compare.
 	// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
 	loop {
@@ -69,14 +73,37 @@ fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, 
 	}
 }
 
-impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Rem<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
-	/// Given `approve` votes for and `against` votes against from a total electorate size of
-	/// `electorate` of whom `voters` voted (`electorate - voters` are abstainers) then returns true if the
-	/// overall outcome is in favor of approval.
+impl<Balance> Approved<Balance> for VoteThreshold
+	where Balance: IntegerSquareRoot
+		+ Zero
+		+ Ord
+		+ Add<Balance, Output = Balance>
+		+ Mul<Balance, Output = Balance>
+		+ Div<Balance, Output = Balance>
+		+ Rem<Balance, Output = Balance>
+		+ Copy
+{
+
+	/// Return true if the overall outcome is in favor of approval.
+	///
+	/// - `approve` is the number of votes approving of a proposal.
+	/// - `against` is the number of votes against a proposal.
+	/// - `voters` is the total number of voters who voted.
+	/// - `electorate` is the total electorate size.
 	///
 	/// We assume each *voter* may cast more than one *vote*, hence `voters` is not necessarily equal to
-	/// `approve + against`.
-	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool {
+	/// `approve + against`. Likewise, `electorate - voters` are abstainers.
+	///
+	/// If `self` is a `SuperMajority` variant, this implements *Adaptive Quorum Biasing* such
+	/// that the required supermajority increases with lower turnout. As turnout approaches 100%,
+	/// the required majority approaches 50%.
+	fn approved(
+		&self,
+		approve: Balance,
+		against: Balance,
+		voters: Balance,
+		electorate: Balance,
+	) -> bool {
 		let sqrt_voters = voters.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
 		if sqrt_voters.is_zero() { return false; }
