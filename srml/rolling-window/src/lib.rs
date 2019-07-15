@@ -68,15 +68,15 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Remove items that doesn't fit into the rolling window
 	pub fn on_session_end() {
-		let session = match SessionIndex::get().wrapping_add(1);
+		let session = SessionIndex::get().wrapping_add(1);
 
 		for (kind, _) in <MisconductReports<T>>::enumerate() {
 			<MisconductReports<T>>::mutate(kind, |window| {
 				// it is guaranteed that `reported_session` happened before `session`
 				window.retain(|(reported_session, window_length, _)| {
 
-					let diff = session.wrapping_sub(reported_session);
-					diff < window_length
+					let diff = session.wrapping_sub(*reported_session);
+					diff < *window_length
 				});
 			});
 		}
