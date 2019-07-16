@@ -112,10 +112,7 @@ else
 	# drop through into pushing `gotissues` and exit 1...
 fi
 
-# dropped through. there's something wrong; mark `gotissues` and exit 1.
-
-github_label "A4-gotissues"
-
+# dropped through. there's something wrong;  exit 1.
 
 exit 1
 

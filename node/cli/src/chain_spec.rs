@@ -17,10 +17,13 @@
 //! Substrate chain configurations.
 
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::{AccountId, AuraId};
-use node_runtime::{CouncilSeatsConfig, AuraConfig, DemocracyConfig, SystemConfig,
-	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractsConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, SessionKeys};
+use node_primitives::{AccountId, AuraId, Balance};
+use node_runtime::{
+	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig, CouncilConfig,
+	AuraConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
+	SystemConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
+	MILLICENTS,
+};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
@@ -35,6 +38,10 @@ pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 /// Flaming Fir testnet generator
 pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/flaming-fir.json"))
+}
+
+fn session_keys(key: ed25519::Public) -> SessionKeys {
+	SessionKeys { ed25519: key }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -88,34 +95,19 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		hex!["9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"].unchecked_into(),
 	];
 
-	const MILLICENTS: u128 = 1_000_000_000;
-	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.
-	const DOLLARS: u128 = 100 * CENTS;
-
-	const SECS_PER_BLOCK: u64 = 6;
-	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
-	const HOURS: u64 = MINUTES * 60;
-	const DAYS: u64 = HOURS * 24;
-
-	const ENDOWMENT: u128 = 10_000_000 * DOLLARS;
-	const STASH: u128 = 100 * DOLLARS;
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = 100 * DOLLARS;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
-			_genesis_phantom_data: Default::default(),
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
 			balances: endowed_accounts.iter().cloned()
 				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
-			existential_deposit: 1 * DOLLARS,
-			transfer_fee: 1 * CENTS,
-			creation_fee: 1 * CENTS,
 			vesting: vec![],
 		}),
 		indices: Some(IndicesConfig {
@@ -124,8 +116,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.0.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -136,50 +127,26 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: vec![],
-			candidacy_bond: 10 * DOLLARS,
-			voter_bond: 1 * DOLLARS,
-			voting_fee: 2 * DOLLARS,
-			present_slash_per_voter: 1 * CENTS,
-			carry_count: 6,
+		collective_Instance1: Some(CouncilConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		elections: Some(ElectionsConfig {
+			members: vec![],
 			presentation_duration: 1 * DAYS,
-			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
-			decay_ratio: 0,
-			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
-		}),
-		treasury: Some(TreasuryConfig {
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1 * DOLLARS,
-			spend_period: 1 * DAYS,
-			burn: Permill::from_percent(50),
 		}),
 		contracts: Some(ContractsConfig {
-			signed_claim_handicap: 2,
-			rent_byte_price: 4,
-			rent_deposit_offset: 1000,
-			storage_size_offset: 8,
-			surcharge_reward: 150,
-			tombstone_deposit: 16,
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
-			transfer_fee: 1 * CENTS,
-			creation_fee: 1 * CENTS,
-			contract_fee: 1 * CENTS,
-			call_base_fee: 1000,
-			create_base_fee: 1000,
-			gas_price: 1 * MILLICENTS,
-			max_depth: 1024,
-			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
+			gas_price: 1 * MILLICENTS,
 		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
@@ -189,7 +156,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -264,53 +230,25 @@ pub fn testnet_genesis(
 		]
 	});
 
-	const STASH: u128 = 1 << 20;
-	const ENDOWMENT: u128 = 1 << 20;
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = 100 * DOLLARS;
 
-	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
-	let mut contracts_config = ContractsConfig {
-		signed_claim_handicap: 2,
-		rent_byte_price: 4,
-		rent_deposit_offset: 1000,
-		storage_size_offset: 8,
-		surcharge_reward: 150,
-		tombstone_deposit: 16,
-		transaction_base_fee: 1,
-		transaction_byte_fee: 0,
-		transfer_fee: 0,
-		creation_fee: 0,
-		contract_fee: 21,
-		call_base_fee: 135,
-		create_base_fee: 175,
-		gas_price: 1,
-		max_depth: 1024,
-		block_gas_limit: 10_000_000,
-		current_schedule: Default::default(),
-	};
-	// this should only be enabled on development chains
-	contracts_config.current_schedule.enable_println = enable_println;
+	let desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
-			_genesis_phantom_data: Default::default(),
+			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			existential_deposit: 500,
-			transfer_fee: 0,
-			creation_fee: 0,
 			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| (x.0.clone(), session_keys(x.2.clone()))).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -321,35 +259,32 @@ pub fn testnet_genesis(
 			current_session_reward: 0,
 			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: endowed_accounts.iter()
+		collective_Instance1: Some(CouncilConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		elections: Some(ElectionsConfig {
+			members: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
-			candidacy_bond: 10,
-			voter_bond: 2,
-			voting_fee: 5,
-			present_slash_per_voter: 1,
-			carry_count: 4,
 			presentation_duration: 10,
-			approval_voting_period: 20,
 			term_duration: 1000000,
-			desired_seats: council_desired_seats,
-			decay_ratio: council_desired_seats / 3,
-			inactive_grace_period: 1,
+			desired_seats: desired_seats,
 		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 2,                    // 2*2=4 second block time.
+		contracts: Some(ContractsConfig {
+			current_schedule: contracts::Schedule {
+				enable_println, // this should only be enabled on development chains
+				..Default::default()
+			},
+			gas_price: 1 * MILLICENTS,
 		}),
-		treasury: Some(TreasuryConfig {
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1_000_000,
-			spend_period: 12 * 60 * 24,
-			burn: Permill::from_percent(50),
-		}),
-		contracts: Some(contracts_config),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
@@ -358,7 +293,6 @@ pub fn testnet_genesis(
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 	}
 }
@@ -402,23 +336,15 @@ pub(crate) mod tests {
 	use service_test;
 	use crate::service::Factory;
 
-	fn local_testnet_genesis_instant() -> GenesisConfig {
-		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
-	}
-
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
-		let mut genesis = testnet_genesis(
+		testnet_genesis(
 			vec![
 				get_authority_keys_from_seed("Alice"),
 			],
 			get_account_id_from_seed("Alice"),
 			None,
 			false,
-		);
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
+		)
 	}
 
 	/// Local testnet config (single validator - Alice)
@@ -437,7 +363,7 @@ pub(crate) mod tests {
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
+		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis, vec![], None, None, None, None)
 	}
 
 	#[test]

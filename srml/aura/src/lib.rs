@@ -52,8 +52,11 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use parity_codec::Encode;
-use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue};
-use primitives::{traits::{SaturatedConversion, Saturating, Zero, One, Member}, generic::DigestItem};
+use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
+use primitives::{
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, TypedKey},
+	generic::DigestItem,
+};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -153,7 +156,7 @@ pub trait Trait: timestamp::Trait {
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + Default;
+	type AuthorityId: Member + Parameter + TypedKey + Default;
 }
 
 decl_storage! {
@@ -184,6 +187,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
+
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
@@ -196,8 +200,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+	fn on_disabled(i: usize) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::<T::AuthorityId>::OnDisabled(i as u64).encode(),
+		);
+
+		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
@@ -234,7 +243,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
+		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
@@ -274,7 +283,8 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = session::Module::<T>::validators();
+		use staking::SessionInterface;
+		let validators = T::SessionInterface::validators();
 
 		report.punish(
 			validators.len(),

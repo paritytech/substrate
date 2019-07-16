@@ -63,6 +63,21 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> {
 	api: Arc<PRA>,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone> Clone for
+	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+{
+	fn clone(&self) -> Self {
+		GrandpaBlockImport {
+			inner: self.inner.clone(),
+			select_chain: self.select_chain.clone(),
+			authority_set: self.authority_set.clone(),
+			send_voter_commands: self.send_voter_commands.clone(),
+			consensus_changes: self.consensus_changes.clone(),
+			api: self.api.clone(),
+		}
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
@@ -76,7 +91,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		let mut out = Vec::new();
 		let chain_info = self.inner.info().chain;
 
 		// request justifications for all pending changes for which change blocks have already been imported
@@ -94,16 +110,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 				if let Ok(Some(hash)) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
-							link.request_justification(&header.hash(), *header.number());
+							out.push((header.hash(), *header.number()));
 						}
 					}
 				}
 			}
 		}
+
+		out
 	}
 
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		justification: Justification,
@@ -387,7 +405,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
+	fn import_block(&mut self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();
@@ -407,7 +425,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
 		let enacts_consensus_change = !new_cache.is_empty();
-		let import_result = self.inner.import_block(block, new_cache);
+		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
 			match import_result {
@@ -501,7 +519,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 	}
 
 	fn check_block(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
@@ -545,7 +563,7 @@ where
 	/// If `enacts_change` is set to true, then finalizing this block *must*
 	/// enact an authority set change, the function will panic otherwise.
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		justification: Justification,

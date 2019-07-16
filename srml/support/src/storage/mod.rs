@@ -149,6 +149,10 @@ pub trait StorageValue<T: Codec> {
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: Borrow<T>>(val: Arg);
 
+	/// Store a value under this key into the provided storage instance; this can take any reference
+	/// type that derefs to `T` (and has `Encode` implemented).
+	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg>;
+
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
 
@@ -179,6 +183,9 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	}
 	fn put<Arg: Borrow<T>>(val: Arg) {
 		U::put(val.borrow(), &mut RuntimeStorage)
+	}
+	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
+		U::put_ref(val, &mut RuntimeStorage)
 	}
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
 		U::mutate(f, &mut RuntimeStorage)
@@ -216,6 +223,10 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
 
+	/// Store a value under this key into the provided storage instance; this can take any reference
+	/// type that derefs to `T` (and has `Encode` implemented).
+	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg>;
+
 	/// Remove the value under a key.
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
@@ -247,6 +258,10 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
 		U::insert(key.borrow(), val.borrow(), &mut RuntimeStorage)
+	}
+
+	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
+		U::insert_ref(key.borrow(), val, &mut RuntimeStorage)
 	}
 
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {

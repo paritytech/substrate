@@ -176,5 +176,5 @@ fn import_block<F>(
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 	};
-	client.import_block(import, HashMap::new()).expect("Failed to import block");
+	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
 }

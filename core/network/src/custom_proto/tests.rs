@@ -26,7 +26,7 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
 use test_client::runtime::Block;
-use crate::protocol::message::{Message as MessageAlias, generic::Message};
+use crate::message::{Message as MessageAlias, generic::Message};
 use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage};
 
 /// Builds two nodes that have each other as bootstrap nodes.
@@ -157,7 +157,7 @@ impl<T: CustomMessage + Send + 'static> NetworkBehaviour for CustomProtoWithAddr
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters
+		params: &mut impl PollParameters
 	) -> Async<
 		NetworkBehaviourAction<
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,

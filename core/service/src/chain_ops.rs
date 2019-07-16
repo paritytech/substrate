@@ -22,7 +22,7 @@ use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
-use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
+use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link, BlockImportError, BlockImportResult};
 use network::message;
 
 use consensus_common::BlockOrigin;
@@ -111,22 +111,30 @@ impl WaitLink {
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {
-		self.imported_blocks += 1;
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		self.imported_blocks += imported as u64;
+		if results.iter().any(|(r, _)| r.is_err()) {
+			warn!("There was an error importing {} blocks", count);
+		}
 	}
 }
 
-/// Import blocks from a binary stream.
+/// Returns a future that import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
 	config: FactoryFullConfiguration<F>,
 	exit: E,
 	mut input: R
-) -> error::Result<()>
+) -> error::Result<impl Future<Item = (), Error = ()>>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
 	let (client, mut state) = new_client::<F>(config)?;
 	let select_chain = components::FullComponents::<F>::build_select_chain(&mut state, client.clone())?;
-	let mut queue = components::FullComponents::<F>::build_import_queue(&mut state, client.clone(), select_chain)?;
+	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(&mut state, client.clone(), select_chain)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -168,13 +176,17 @@ pub fn import_blocks<F, E, R>(
 		}
 
 		block_count = b;
-		if b % 1000 == 0 {
+		if b % 1000 == 0 && b != 0 {
 			info!("#{} blocks were added to the queue", b);
 		}
 	}
 
 	let mut link = WaitLink::new();
-	tokio::run(futures::future::poll_fn(move || {
+	Ok(futures::future::poll_fn(move || {
+		if exit_recv.try_recv().is_ok() {
+			return Ok(Async::Ready(()));
+		}
+
 		let blocks_before = link.imported_blocks;
 		queue.poll_actions(&mut link);
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
@@ -185,15 +197,12 @@ pub fn import_blocks<F, E, R>(
 			);
 		}
 		if link.imported_blocks >= count {
+			info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
 			Ok(Async::Ready(()))
 		} else {
 			Ok(Async::NotReady)
 		}
-	}));
-
-	info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
-
-	Ok(())
+	}))
 }
 
 /// Revert the chain.

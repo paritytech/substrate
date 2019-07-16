@@ -240,15 +240,11 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
+	use srml_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use primitives::{
-		BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-		testing::Header
-	};
+	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -259,6 +255,9 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -269,6 +268,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
+		type BlockHashCount = BlockHashCount;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -280,7 +280,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]

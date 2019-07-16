@@ -26,7 +26,6 @@
 // our error-chain could potentially blow up otherwise
 #![recursion_limit="128"]
 
-extern crate crossbeam_channel;
 #[macro_use] extern crate log;
 
 use std::sync::Arc;
@@ -49,7 +48,7 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 pub use self::error::Error;
 pub use block_import::{
 	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult,
-	JustificationImport, FinalityProofImport, FinalityProofRequestBuilder,
+	JustificationImport, FinalityProofImport,
 };
 pub use select_chain::SelectChain;
 

@@ -79,17 +79,15 @@ use rstd::map;
 use primitives::{generic, traits::{self, CheckEqual, SimpleArithmetic,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+	Zero,
 }};
-#[cfg(any(feature = "std", test))]
-use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::Contains
+	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get},
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
-use crate::{self as system};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -184,6 +182,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
+
+	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+	type BlockHashCount: Get<Self::BlockNumber>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -205,24 +206,28 @@ decl_module! {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		fn set_heap_pages(pages: u64) {
+		fn set_heap_pages(origin, pages: u64) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
-		pub fn set_code(new: Vec<u8>) {
+		pub fn set_code(origin, new: Vec<u8>) {
+			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
-		fn set_storage(items: Vec<KeyValue>) {
+		fn set_storage(origin, items: Vec<KeyValue>) {
+			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
 		}
 
 		/// Kill some items from storage.
-		fn kill_storage(keys: Vec<Key>) {
+		fn kill_storage(origin, keys: Vec<Key>) {
+			ensure_root(origin)?;
 			for key in &keys {
 				storage::unhashed::kill(&key);
 			}
@@ -357,7 +362,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -485,14 +490,14 @@ impl<T: Trait> Module<T> {
 
 		// Index of the to be added event.
 		let event_idx = {
-			let old_event_count = <EventCount<T>>::get();
+			let old_event_count = EventCount::get();
 			let new_event_count = match old_event_count.checked_add(1) {
 				// We've reached the maximum number of events at this block, just
 				// don't do anything and leave the event_count unaltered.
 				None => return,
 				Some(nc) => nc,
 			};
-			<EventCount<T>>::put(new_event_count);
+			EventCount::put(new_event_count);
 			old_event_count
 		};
 
@@ -524,12 +529,12 @@ impl<T: Trait> Module<T> {
 
 	/// Gets extrinsics count.
 	pub fn extrinsic_count() -> u32 {
-		<ExtrinsicCount<T>>::get().unwrap_or_default()
+		ExtrinsicCount::get().unwrap_or_default()
 	}
 
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> u32 {
-		<AllExtrinsicsWeight<T>>::get().unwrap_or_default()
+		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
@@ -553,19 +558,31 @@ impl<T: Trait> Module<T> {
 			*index = (*index + 1) % 81;
 		});
 		<Events<T>>::kill();
-		<EventCount<T>>::kill();
+		EventCount::kill();
 		<EventTopics<T>>::remove_prefix(&());
 	}
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
-		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsWeight<T>>::kill();
+		ExtrinsicCount::kill();
+		AllExtrinsicsWeight::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+
+		// move block hash pruning window by one block
+		let block_hash_count = <T::BlockHashCount>::get();
+		if number > block_hash_count {
+			let to_remove = number - block_hash_count - One::one();
+
+			// keep genesis hash
+			if to_remove != Zero::zero() {
+				<BlockHash<T>>::remove(to_remove);
+			}
+		}
+
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
 
@@ -699,7 +716,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This function is called only when the block is being constructed locally.
 	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
+		ExtrinsicData::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
@@ -713,19 +730,19 @@ impl<T: Trait> Module<T> {
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsWeight<T>>::put(&total_length);
+		AllExtrinsicsWeight::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
-		<ExtrinsicCount<T>>::put(extrinsic_index);
+		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -766,10 +783,8 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::Header;
-	use srml_support::impl_outer_origin;
+	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -777,6 +792,11 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 10;
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -787,6 +807,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
+		type BlockHashCount = BlockHashCount;
 	}
 
 	impl From<Event> for u16 {
@@ -801,7 +822,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
 	#[test]
@@ -903,5 +924,38 @@ mod tests {
 				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
+	}
+
+	#[test]
+	fn prunes_block_hash_mappings() {
+		with_externalities(&mut new_test_ext(), || {
+			// simulate import of 15 blocks
+			for n in 1..=15 {
+				System::initialize(
+					&n,
+					&[n as u8 - 1; 32].into(),
+					&[0u8; 32].into(),
+					&Default::default(),
+				);
+
+				System::finalize();
+			}
+
+			// first 5 block hashes are pruned
+			for n in 0..5 {
+				assert_eq!(
+					System::block_hash(n),
+					H256::zero(),
+				);
+			}
+
+			// the remaining 10 are kept
+			for n in 5..15 {
+				assert_eq!(
+					System::block_hash(n),
+					[n as u8; 32].into(),
+				);
+			}
+		})
 	}
 }

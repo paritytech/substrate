@@ -5,11 +5,10 @@
 use std::sync::Arc;
 use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
+use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	TaskExecutor,
 	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
@@ -18,7 +17,7 @@ use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
-use network::construct_simple_protocol;
+use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 use substrate_executor::native_executor_instance;
 use substrate_service::construct_service_factory;
 
@@ -28,7 +27,7 @@ native_executor_instance!(
 	pub Executor,
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
-	include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm")
+	WASM_BINARY
 );
 
 #[derive(Default)]
@@ -63,12 +62,12 @@ construct_service_factory! {
 		SetupState = SetupState,
 		Configuration = (),
 		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
-				FullComponents::<Factory>::new(config, executor)
+			{ |config: FactoryFullConfiguration<Self>|
+				FullComponents::<Factory>::new(config)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<Pair>>| {
-				if let Some(key) = key {
+			|service: Self::FullService| {
+				if let Some(key) = service.authority_key::<Pair>() {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
@@ -79,7 +78,7 @@ construct_service_factory! {
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						key.clone(),
+						Arc::new(key),
 						client.clone(),
 						select_chain,
 						client,
@@ -88,22 +87,21 @@ construct_service_factory! {
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
 
 				Ok(service)
 			}
 		},
 		LightService = LightComponents<Self>
-			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
+						Box::new(client.clone()),
 						None,
 						None,
 						client,
@@ -115,15 +113,15 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
+						Box::new(client.clone()),
 						None,
 						None,
 						client,
 						config.custom.inherent_data_providers.clone(),
-					).map_err(Into::into)
+					).map(|q| (q, fprb)).map_err(Into::into)
 				}
 			},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>

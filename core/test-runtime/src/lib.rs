@@ -56,6 +56,10 @@ pub type AuraId = AuthorityId;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type BabeId = AuthorityId;
 
+// Inlucde the WASM binary
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("test"),
@@ -470,6 +474,7 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: std::u64::MAX,
+						median_required_blocks: 100,
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
@@ -611,6 +616,7 @@ cfg_if! {
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
+						median_required_blocks: 0,
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,

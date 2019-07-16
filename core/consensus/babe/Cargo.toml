@@ -6,8 +6,7 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.4.0"
-parity-codec-derive = "3.3.0"
+parity-codec = { version = "4.1.1", features = ["derive"] }
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
@@ -29,6 +28,7 @@ rand = "0.6.5"
 merlin = "1.0.3"
 
 [dev-dependencies]
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}

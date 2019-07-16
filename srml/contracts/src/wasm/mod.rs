@@ -63,17 +63,17 @@ pub struct WasmExecutable {
 }
 
 /// Loader which fetches `WasmExecutable` from the code cache.
-pub struct WasmLoader<'a, T: Trait> {
-	schedule: &'a Schedule<T::Gas>,
+pub struct WasmLoader<'a> {
+	schedule: &'a Schedule,
 }
 
-impl<'a, T: Trait> WasmLoader<'a, T> {
-	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+impl<'a> WasmLoader<'a> {
+	pub fn new(schedule: &'a Schedule) -> Self {
 		WasmLoader { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
+impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
@@ -93,17 +93,17 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
 }
 
 /// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a, T: Trait> {
-	schedule: &'a Schedule<T::Gas>,
+pub struct WasmVm<'a> {
+	schedule: &'a Schedule,
 }
 
-impl<'a, T: Trait> WasmVm<'a, T> {
-	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+impl<'a> WasmVm<'a> {
+	pub fn new(schedule: &'a Schedule) -> Self {
 		WasmVm { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
+impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
@@ -134,7 +134,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 
 		let mut runtime = Runtime::new(
 			ext,
-			input_data,
+			input_data.to_vec(),
 			empty_output_buf,
 			&self.schedule,
 			memory,
@@ -175,7 +175,7 @@ mod tests {
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
 	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
-	use crate::gas::GasMeter;
+	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
 	use crate::CodeHash;
@@ -291,6 +291,8 @@ mod tests {
 		fn rent_allowance(&self) -> u64 {
 			self.rent_allowance
 		}
+
+		fn block_number(&self) -> u64 { 121 }
 	}
 
 	fn execute<E: Ext>(
@@ -303,9 +305,9 @@ mod tests {
 		use crate::exec::Vm;
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
-		let schedule = crate::Schedule::<u64>::default();
+		let schedule = crate::Schedule::default();
 		let prefab_module =
-			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
@@ -906,14 +908,20 @@ mod tests {
 	fn gas_left() {
 		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
+
+		let mut return_buf = Vec::new();
 		execute(
 			CODE_GAS_LEFT,
 			&[],
-			&mut Vec::new(),
+			&mut return_buf,
 			&mut mock_ext,
 			&mut gas_meter,
 		)
 		.unwrap();
+
+		let gas_left = Gas::decode(&mut &return_buf[..]).unwrap();
+		assert!(gas_left < 50_000, "gas_left must be less than initial");
+		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1336,4 +1344,70 @@ mod tests {
 			Err("during execution"),
 		);
 	}
+
+	/// calls `ext_block_number`, loads the current block number from the scratch buffer and
+	/// compares it with the constant 121.
+	const CODE_BLOCK_NUMBER: &str = r#"
+(module
+	(import "env" "ext_block_number" (func $ext_block_number))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block height in the scratch buffer
+		(call $ext_block_number)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 121.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 121)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn block_number() {
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_BLOCK_NUMBER,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+	}
+
 }

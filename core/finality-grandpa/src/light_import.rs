@@ -27,10 +27,11 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::{Verifier, SharedFinalityProofRequestBuilder}, well_known_cache_keys,
+	import_queue::Verifier, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
-	Error as ConsensusError, FinalityProofRequestBuilder,
+	Error as ConsensusError,
 };
+use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
@@ -84,6 +85,16 @@ pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for GrandpaLightBlockImport<B, E, Block, RA> {
+	fn clone(&self) -> Self {
+		GrandpaLightBlockImport {
+			client: self.client.clone(),
+			authority_set_provider: self.authority_set_provider.clone(),
+			data: self.data.clone(),
+		}
+	}
+}
+
 /// Mutable data of light block importer.
 struct LightImportData<Block: BlockT<Hash=H256>> {
 	last_finalized: Block::Hash,
@@ -100,8 +111,8 @@ struct LightAuthoritySet {
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
 	/// Create finality proof request builder.
-	pub fn create_finality_proof_request_builder(&self) -> SharedFinalityProofRequestBuilder<Block> {
-		Arc::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
+	pub fn create_finality_proof_request_builder(&self) -> BoxFinalityProofRequestBuilder<Block> {
+		Box::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
 	}
 }
 
@@ -116,7 +127,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	type Error = ConsensusError;
 
 	fn import_block(
-		&self,
+		&mut self,
 		block: ImportBlock<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -126,7 +137,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	}
 
 	fn check_block(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
@@ -144,19 +155,22 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
+	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+		let mut out = Vec::new();
 		let chain_info = self.client.info().chain;
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
 			if *pending_number > chain_info.finalized_number && *pending_number <= chain_info.best_number {
-				link.request_finality_proof(pending_hash, *pending_number);
+				out.push((pending_hash.clone(), *pending_number));
 			}
 		}
+
+		out
 	}
 
 	fn import_finality_proof(
-		&self,
+		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		finality_proof: Vec<u8>,
@@ -203,7 +217,7 @@ impl LightAuthoritySet {
 struct GrandpaFinalityProofRequestBuilder<B: BlockT<Hash=H256>>(Arc<RwLock<LightImportData<B>>>);
 
 impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBuilder<B> {
-	fn build_request_data(&self, _hash: &B::Hash) -> Vec<u8> {
+	fn build_request_data(&mut self, _hash: &B::Hash) -> Vec<u8> {
 		let data = self.0.read();
 		make_finality_proof_request(
 			data.last_finalized,
@@ -214,7 +228,7 @@ impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityPro
 
 /// Try to import new block.
 fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
-	client: &Client<B, E, Block, RA>,
+	mut client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	mut block: ImportBlock<Block>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -233,7 +247,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
 	let enacts_consensus_change = !new_cache.is_empty();
-	let import_result = client.import_block(block, new_cache);
+	let import_result = BlockImport::import_block(&mut client, block, new_cache);
 
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
@@ -534,6 +548,19 @@ pub mod tests {
 		pub GrandpaLightBlockImport<B, E, Block, RA>
 	);
 
+	impl<B, E, Block: BlockT<Hash=H256>, RA> Clone
+		for NoJustificationsImport<B, E, Block, RA> where
+			NumberFor<Block>: grandpa::BlockNumberOps,
+			B: Backend<Block, Blake2Hasher> + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+			DigestFor<Block>: Encode,
+			RA: Send + Sync,
+	{
+		fn clone(&self) -> Self {
+			NoJustificationsImport(self.0.clone())
+		}
+	}
+
 	impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		for NoJustificationsImport<B, E, Block, RA> where
 			NumberFor<Block>: grandpa::BlockNumberOps,
@@ -545,7 +572,7 @@ pub mod tests {
 		type Error = ConsensusError;
 
 		fn import_block(
-			&self,
+			&mut self,
 			mut block: ImportBlock<Block>,
 			new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
@@ -554,7 +581,7 @@ pub mod tests {
 		}
 
 		fn check_block(
-			&self,
+			&mut self,
 			hash: Block::Hash,
 			parent_hash: Block::Hash,
 		) -> Result<ImportResult, Self::Error> {
@@ -572,12 +599,12 @@ pub mod tests {
 	{
 		type Error = ConsensusError;
 
-		fn on_start(&self, link: &mut dyn consensus_common::import_queue::Link<Block>) {
-			self.0.on_start(link)
+		fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+			self.0.on_start()
 		}
 
 		fn import_finality_proof(
-			&self,
+			&mut self,
 			hash: Block::Hash,
 			number: NumberFor<Block>,
 			finality_proof: Vec<u8>,
