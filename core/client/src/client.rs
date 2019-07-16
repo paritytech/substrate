@@ -2495,4 +2495,14 @@ pub(crate) mod tests {
 			None,
 		);
 	}
+
+	#[test]
+	fn get_header_by_block_number_doesnt_panic() {
+		let client = test_client::new();
+
+		// backend uses u32 for block numbers, make sure we don't panic when
+		// trying to convert
+		let id = BlockId::<Block>::Number(72340207214430721);
+		assert!(client.header(&id).is_err());
+	}
 }
