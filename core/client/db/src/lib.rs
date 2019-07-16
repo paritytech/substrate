@@ -1118,6 +1118,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
+				meta_updates.push((hash, *number, true, false));
 			} else {
 				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}

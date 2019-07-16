@@ -497,6 +497,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let mut transaction = DBTransaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
 			self.db.write(transaction).map_err(db_err)?;
+			self.update_meta(hash, header.number().clone(), true, false);
 			Ok(())
 		} else {
 			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)))
