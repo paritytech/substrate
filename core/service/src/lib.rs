@@ -28,10 +28,11 @@ pub mod error;
 use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
+use libp2p::{ multihash::Multihash, Multiaddr};
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
@@ -47,6 +48,7 @@ use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
+use network::{Event, DhtEvent};
 
 pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
@@ -431,7 +433,9 @@ impl<Components: components::Components> Service<Components> {
 			client.clone(),
 			network_status_sinks.clone(),
 			system_rpc_rx,
-			has_bootnodes
+			has_bootnodes,
+			// TODO: Public key might be <disabled-keystore>, handle that!
+			public_key.clone(),
 		)
 			.map_err(|_| ())
 			.select(exit.clone())
@@ -637,10 +641,16 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
+	public_key: String,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
+
+	let hashed_public_key = libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, &public_key.as_bytes()).unwrap();
+
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
+
+	let mut report_ext_addresses_interval = tokio_timer::Interval::new_interval(Duration::from_secs(5));
 
 	let mut imported_blocks_stream = client.import_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
@@ -654,6 +664,24 @@ fn build_network_future<
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
 			network.on_block_imported(notification.hash, notification.header);
 		}
+
+		while let Ok(Async::Ready(_)) = report_ext_addresses_interval.poll() {
+			let external_addresses = network.external_addresses();
+
+			println!("==== external addresses: {:?}", external_addresses);
+
+			// println!("network state: {:?}", network.network_state());
+
+			// TODO: Remove unwrap.
+			let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
+
+			network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
+
+			// TODO: Let's trigger a search for us for now. Remove.
+			network.service().get_value(&hashed_public_key.clone());
+		}
+
+
 
 		// We poll `finality_notification_stream`, but we only take the last event.
 		let mut last = None;
@@ -707,11 +735,16 @@ fn build_network_future<
 			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
 		}
 
-		// Main network polling.
-		match network.poll() {
-			Ok(Async::NotReady) => {}
-			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
-			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
+		while let Ok(Async::Ready(Some(Event::Dht(DhtEvent::ValueFound(values))))) = network.poll().map_err(|err| {
+				warn!(target: "service", "Error in network: {:?}", err);
+		}) {
+			for (key, value) in values.iter() {
+				let value = std::str::from_utf8(value).unwrap();
+
+				let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
+
+				println!("==== Found the following external addresses on the DHT: {:?}", external_addresses);
+			}
 		}
 
 		// Now some diagnostic for performances.
