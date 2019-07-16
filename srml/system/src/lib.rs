@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use primitives::{
-	generic::{self, Era}, weights::Weight, traits::{
+	generic::{self, Era}, weights::{Weight, TransactionInfo} , traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
@@ -755,19 +755,19 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Weight limit check and increment.
+/// resource limit check.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> {
-	fn internal_check_weight(weight: Weight) -> Result<(), DispatchError> {
+	fn internal_check_weight(info: TransactionInfo) -> Result<(), DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
-		let next_weight = current_weight.saturating_add(weight);
-		if next_weight > T::MaximumBlockWeight::get() {
-			return Err(DispatchError::Payment)
+		if !info.will_cause_full_block(current_weight, T::MaximumBlockWeight::get()) {
+			// TODO: better error description.
+			Err(DispatchError::Payment)
+		} else {
+			Ok(())
 		}
-		AllExtrinsicsWeight::put(next_weight);
-		Ok(())
 	}
 }
 
@@ -780,21 +780,20 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn pre_dispatch(
 		self,
 		_who: &Self::AccountId,
-		weight: Weight,
+		info: TransactionInfo,
 		_len: usize,
 	) -> Result<(), DispatchError> {
-		Self::internal_check_weight(weight)
+		Self::internal_check_weight(info)
 	}
 
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_weight: Weight,
+		info: TransactionInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
-		// TODO: check for a maximum size and weight here as well.
-		// write priority based on tx weight type + tip.
-		Ok(ValidTransaction::default())
+		Self::internal_check_weight(info)?;
+		Ok(ValidTransaction { priority: info.priority, ..Default::default() })
 	}
 }
 
@@ -840,7 +839,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		_weight: Weight,
+		_info: TransactionInfo,
 		_len: usize,
 	) -> Result<(), DispatchError> {
 		let expected = <AccountNonce<T>>::get(who);
@@ -856,7 +855,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		_weight: Weight,
+		info: TransactionInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		// check index
@@ -873,7 +872,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		};
 
 		Ok(ValidTransaction {
-			priority: _weight as TransactionPriority,
+			priority: info.weight as TransactionPriority,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),

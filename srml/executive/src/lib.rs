@@ -284,8 +284,8 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let weight = xt.weigh();
-		let r = Applyable::dispatch(xt, weight, encoded_len)
+		let transaction_info = xt.weigh();
+		let r = Applyable::dispatch(xt, transaction_info, encoded_len)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -339,8 +339,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let weight = xt.weigh();
-		xt.validate::<UnsignedValidator>(weight, encoded_len)
+		let transaction_info = xt.weigh();
+		xt.validate::<UnsignedValidator>(transaction_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

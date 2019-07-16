@@ -26,7 +26,9 @@ pub use srml_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::{
-	weights::{TransactionWeight, Weigh, Weight, WeighData}, traits::{Dispatchable, DispatchResult}
+	weights::{TransactionWeight, Weigh, TransactionInfo, WeighData, PrioritizeData,
+		TransactionPriority, IsOperational},
+	traits::{Dispatchable, DispatchResult}
 };
 
 /// A type that cannot be instantiated.
@@ -1111,12 +1113,23 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weigh
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn weigh(&self) -> $crate::dispatch::Weight {
-				match self {
+			fn weigh(&self) -> $crate::dispatch::TransactionInfo {
+				let weight = match self {
 					$( $call_type::$fn_name($( ref $param_name ),*) =>
 						<$crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
-				}
+				};
+				let priority = match self {
+					$( $call_type::$fn_name($( ref $param_name ),*) =>
+						<$crate::dispatch::PrioritizeData<( $( & $param, )* )>>::prioritize(&$weight, ($( $param_name, )*)), )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				};
+				let is_operational = match self {
+					$( $call_type::$fn_name($( ref $param_name ),*) =>
+						<$crate::dispatch::IsOperational<( $( & $param, )* )>>::is_operational(&$weight, ($( $param_name, )*)), )*
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
+				};
+				$crate::dispatch::TransactionInfo { weight, priority, is_operational }
 			}
 		}
 
@@ -1262,7 +1275,7 @@ macro_rules! impl_outer_dispatch {
 			,)*
 		}
 		impl $crate::dispatch::Weigh for $call_type {
-			fn weigh(&self) -> $crate::dispatch::Weight {
+			fn weigh(&self) -> $crate::dispatch::TransactionInfo {
 				match self {
 					$( $call_type::$camelcase(call) => call.weigh(), )*
 				}
