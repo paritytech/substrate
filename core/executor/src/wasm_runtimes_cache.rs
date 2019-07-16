@@ -82,8 +82,6 @@ impl CachedRuntime {
 /// It is used for restoring the state of the module after execution.
 #[derive(Clone)]
 struct StateSnapshot {
-	/// The offset and the content of the memory segments that should be used to restore the snapshot
-	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
 	heap_pages: u32,
@@ -93,34 +91,8 @@ impl StateSnapshot {
 	// Returns `None` if instance is not valid.
 	fn take(
 		module_instance: &WasmModuleInstanceRef,
-		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
-		let mut prepared_segments = Vec::with_capacity(data_segments.len());
-		for mut segment in data_segments {
-			// Just replace contents of the segment since the segments will be discarded later
-			// anyway.
-			let contents = mem::replace(segment.value_mut(), vec![]);
-
-			let init_expr = segment.offset().code();
-			// [op, End]
-			if init_expr.len() != 2 {
-				return None;
-			}
-			let offset = match init_expr[0] {
-				Instruction::I32Const(v) => v as u32,
-				Instruction::GetGlobal(idx) => {
-					let global_val = module_instance.globals().get(idx as usize)?.get();
-					match global_val {
-						RuntimeValue::I32(v) => v as u32,
-						_ => return None,
-					}
-				}
-				_ => return None,
-			};
-			prepared_segments.push((offset, contents))
-		}
-
 		// Collect all values of mutable globals.
 		let global_mut_values = module_instance
 			.globals()
@@ -130,7 +102,6 @@ impl StateSnapshot {
 			.collect();
 
 		Some(Self {
-			data_segments: prepared_segments,
 			global_mut_values,
 			heap_pages,
 		})
@@ -141,23 +112,6 @@ impl StateSnapshot {
 	///
 	/// Returns `Err` if applying the snapshot is failed.
 	fn apply(&self, instance: &WasmModuleInstanceRef) -> Result<(), CacheError> {
-		let memory = instance
-			.export_by_name("memory")
-			.ok_or(CacheError::ApplySnapshotFailed)?
-			.as_memory()
-			.cloned()
-			.ok_or(CacheError::ApplySnapshotFailed)?;
-
-		// First, erase the memory and copy the data segments into it.
-		memory
-			.erase()
-			.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		for (offset, contents) in &self.data_segments {
-			memory
-				.set(*offset, contents)
-				.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		}
-
 		// Second, restore the values of mutable globals.
 		for (global_ref, global_val) in instance
 			.globals()
@@ -281,7 +235,7 @@ impl RuntimesCache {
 		//
 		// A return of this error actually indicates that there is a problem in logic, since
 		// we just loaded and validated the `module` above.
-		let data_segments = extract_data_segments(&code).ok_or(CacheError::CantDeserializeWasm)?;
+		// let data_segments = extract_data_segments(&code).ok_or(CacheError::CantDeserializeWasm)?;
 
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
@@ -294,7 +248,7 @@ impl RuntimesCache {
 			.map_err(|_| CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.
-		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages as u32)
+		let state_snapshot = StateSnapshot::take(&instance, heap_pages as u32)
 			.expect(
 				"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;
