@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
@@ -25,6 +25,7 @@ use primitives::offchain::{
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr,
 };
 use primitives::crypto::{Pair, Protected};
 use primitives::{ed25519, sr25519};
@@ -34,9 +35,7 @@ use runtime_primitives::{
 };
 use transaction_pool::txpool::{Pool, ChainApi};
 use network::NetworkStateInfo;
-use network::multiaddr::Multiaddr;
-use serde::{Serialize, Deserialize};
-use bincode;
+use network::{PeerId, Multiaddr};
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {
@@ -53,13 +52,6 @@ struct CryptoKey {
 enum Key {
 	Sr25519(sr25519::Pair),
 	Ed25519(ed25519::Pair),
-}
-
-/// Information about the local node's network state.
-#[derive(Serialize, Deserialize)]
-pub struct LocalNetworkState {
-	external_addresses: HashSet<Multiaddr>,
-	peer_id: String,
 }
 
 /// Asynchronous offchain API.
@@ -170,7 +162,7 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		Ok(CryptoKeyId(id))
 	}
 
-	fn local_authority_pubkey(&self, kind: CryptoKind) -> Result<Vec<u8>, ()> {
+	fn authority_pubkey(&self, kind: CryptoKind) -> Result<Vec<u8>, ()> {
 		match self.read_key(None, kind) {
 			Ok(key) => {
 				let public = match key {
@@ -184,16 +176,17 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		}
 	}
 
-	fn local_network_state(&self) -> Result<Vec<u8>, ()> {
-		let network_state = &self.network_state;
-		let state = LocalNetworkState {
-			external_addresses: network_state.external_addresses(),
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		let external_addresses = self.network_state
+			.external_addresses()
+			.into_iter()
+			.collect();
 
-			// TODO derive `Serialize` for `libp2p::core::PeerId`
-			peer_id: network_state.peer_id().to_base58(),
-		};
-
-		bincode::serialize(&state).map_err(|_| ())
+		let state = NetworkState::new(
+			self.network_state.peer_id(),
+			external_addresses,
+		);
+		Ok(OpaqueNetworkState::from(state))
 	}
 
 	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _kind: CryptoKind, _data: &[u8]) -> Result<Vec<u8>, ()> {
@@ -323,6 +316,72 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 	}
 }
 
+/// Information about the local node's network state.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct NetworkState {
+	peer_id: PeerId,
+	external_addresses: Vec<Multiaddr>,
+}
+
+impl NetworkState {
+	fn new(peer_id: PeerId, external_addresses: Vec<Multiaddr>) -> Self {
+		NetworkState {
+			peer_id,
+			external_addresses,
+		}
+	}
+}
+
+impl From<NetworkState> for OpaqueNetworkState {
+	fn from(state: NetworkState) -> OpaqueNetworkState {
+		let enc = Encode::encode(&state.peer_id.as_bytes().to_vec());
+		let peer_id = OpaquePeerId::new(enc);
+
+		let external_addresses: Vec<OpaqueMultiaddr> = state
+			.external_addresses
+			.iter()
+			.map(|multiaddr| {
+				let e = Encode::encode(&multiaddr.to_string());
+				OpaqueMultiaddr::new(e)
+			})
+			.collect();
+
+		OpaqueNetworkState {
+			peer_id,
+			external_addresses,
+		}
+	}
+}
+
+impl From<OpaqueNetworkState> for NetworkState {
+	fn from(state: OpaqueNetworkState) -> NetworkState {
+		let inner_vec = state.peer_id.0;
+
+		let bytes: Vec<u8> = <Vec<u8>>::decode(&mut &inner_vec[..])
+			.expect("It's always a valid Vec<u8> which is encoded; qed");
+		let peer_id = PeerId::from_bytes(bytes)
+			.expect("These bytes were exported from a valid PeerId; qed");
+
+		let multiaddr: Vec<Multiaddr> = state.external_addresses
+			.iter()
+			.map(|enc_multiaddr| {
+				let inner_vec = &enc_multiaddr.0;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..])
+					.expect("It's always a valid Vec<u8> which is encoded; qed");
+				let multiaddr_str = &String::from_utf8(bytes)
+					.expect("A valid String was originally encoded; qed");
+				Multiaddr::from_str(multiaddr_str)
+					.expect("The String was exported from a valid Multiaddr; qed")
+			})
+			.collect();
+
+		NetworkState {
+			peer_id,
+			external_addresses: multiaddr,
+		}
+	}
+}
+
 /// Offchain extensions implementation API
 ///
 /// This is the asynchronous processing part of the API.
@@ -395,6 +454,7 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::{collections::HashSet, convert::TryFrom};
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
 	use network::PeerId;
@@ -508,5 +568,24 @@ mod tests {
 			api.verify(None, CryptoKind::Sr25519, msg, &signature).is_err(),
 			"Invalid kind should trigger a missing key error."
 		);
+	}
+
+	#[test]
+	fn should_convert_network_states() {
+		// given
+		let state = NetworkState::new(
+			PeerId::random(),
+			vec![
+				Multiaddr::try_from("/ip4/127.0.0.1/tcp/1234".to_string()).unwrap(),
+				Multiaddr::try_from("/ip6/2601:9:4f81:9700:803e:ca65:66e8:c21").unwrap(),
+			],
+		);
+
+		// when
+		let opaque_state = OpaqueNetworkState::from(state.clone());
+		let converted_back_state = NetworkState::from(opaque_state);
+
+		// then
+		assert_eq!(state, converted_back_state);
 	}
 }

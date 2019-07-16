@@ -756,6 +756,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
+
 #[cfg(test)]
 mod tests {
 	use crate::codec::{Encode, Decode};

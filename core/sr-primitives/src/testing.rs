@@ -47,6 +47,7 @@ impl TypedKey for UintAuthorityId {
 impl AsRef<[u8]> for UintAuthorityId {
 	fn as_ref(&self) -> &[u8] {
 		let ptr = self.0 as *const _;
+		// It's safe to do this here since `UintAuthorityId` is `u64`.
 		unsafe { std::slice::from_raw_parts(ptr, 8) }
 	}
 }

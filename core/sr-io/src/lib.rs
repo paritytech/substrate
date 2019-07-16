@@ -38,6 +38,7 @@ use primitives::offchain::{
 	HttpRequestId, HttpRequestStatus, HttpError,
 	CryptoKind, CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Error verifying ECDSA signature
@@ -240,10 +241,11 @@ export_api! {
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
 		/// Returns information about the local node's network state.
-		fn local_network_state() -> Result<Vec<u8>, ()>;
+		fn network_state() -> Result<OpaqueNetworkState, ()>;
 
 		/// Returns the currently configured authority public key, if available.
-		fn local_authority_pubkey(crypto: CryptoKind) -> Result<Vec<u8>, ()>;
+		// TODO [ToDr] change into crypto_pubkey(&self, key: Option<CryptoKeyId>, kind: CryptoKind)
+		fn authority_pubkey(crypto: CryptoKind) -> Result<Vec<u8>, ()>;
 
 		/// Create new key(pair) for signing/encryption/decryption.
 		///

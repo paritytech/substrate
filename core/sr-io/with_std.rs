@@ -269,16 +269,16 @@ impl OffchainApi for () {
 		}, "submit_transaction can be called only in the offchain worker context")
 	}
 
-	fn local_network_state() -> Result<Vec<u8>, ()> {
+	fn network_state() -> Result<OpaqueNetworkState, ()> {
 		with_offchain(|ext| {
-			ext.local_network_state()
-		}, "local_network_state can be called only in the offchain worker context")
+			ext.network_state()
+		}, "network_state can be called only in the offchain worker context")
 	}
 
-	fn local_authority_pubkey(crypto: offchain::CryptoKind) -> Result<Vec<u8>, ()> {
+	fn authority_pubkey(crypto: offchain::CryptoKind) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.local_authority_pubkey(crypto)
-		}, "local_authority_pubkey can be called only in the offchain worker context")
+			ext.authority_pubkey(crypto)
+		}, "authority_pubkey can be called only in the offchain worker context")
 	}
 
 	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {

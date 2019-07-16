@@ -31,6 +31,7 @@ use primitives::offchain::{
 	CryptoKind,
 	CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Pending request.
@@ -139,11 +140,11 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn local_network_state(&self) -> Result<Vec<u8>, ()> {
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn local_authority_pubkey(&self, _kind: CryptoKind) -> Result<Vec<u8>, ()> {
+	fn authority_pubkey(&self, _kind: CryptoKind) -> Result<Vec<u8>, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 

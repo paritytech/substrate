@@ -43,7 +43,7 @@ use version::RuntimeVersion;
 use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::{offchain::CryptoKind, OpaqueMetadata};
+use substrate_primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
@@ -384,9 +384,6 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
-
-	// The crypto kind must equal the crypto used for `AuthorityId`!
-	const CRYPTO_KIND: CryptoKind = CryptoKind::Ed25519;
 
 	fn is_valid_authority_id(authority_id: &<Self as im_online::Trait>::AuthorityId) -> bool {
 		Aura::authorities()
