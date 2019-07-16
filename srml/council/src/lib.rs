@@ -132,7 +132,6 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
-
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 1;

@@ -51,10 +51,12 @@ pub struct CreationFee;
 impl Get<u64> for CreationFee {
 	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
 }
+
 pub struct TransactionBaseFee;
 impl Get<u64> for TransactionBaseFee {
 	fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
 }
+
 pub struct TransactionByteFee;
 impl Get<u64> for TransactionByteFee {
 	fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
