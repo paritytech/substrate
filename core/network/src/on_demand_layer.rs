@@ -19,6 +19,7 @@
 use crate::protocol::on_demand::RequestData;
 use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
+use futures03::compat::{Compat01As03, Future01CompatExt as _};
 use parking_lot::Mutex;
 use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
@@ -82,22 +83,22 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	B: BlockT,
 	B::Header: HeaderT,
 {
-	type RemoteHeaderResult = RemoteResponse<B::Header>;
-	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
-	type RemoteCallResult = RemoteResponse<Vec<u8>>;
-	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
-	type RemoteBodyResult = RemoteResponse<Vec<B::Extrinsic>>;
+	type RemoteHeaderResult = Compat01As03<RemoteResponse<B::Header>>;
+	type RemoteReadResult = Compat01As03<RemoteResponse<Option<Vec<u8>>>>;
+	type RemoteCallResult = Compat01As03<RemoteResponse<Vec<u8>>>;
+	type RemoteChangesResult = Compat01As03<RemoteResponse<Vec<(NumberFor<B>, u32)>>>;
+	type RemoteBodyResult = Compat01As03<RemoteResponse<Vec<B::Extrinsic>>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteHeader(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteRead(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 
 	fn remote_read_child(
@@ -106,25 +107,25 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteCall(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 
 	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteChanges(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 
 	fn remote_body(&self, request: RemoteBodyRequest<B::Header>) -> Self::RemoteBodyResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self.requests_send.unbounded_send(RequestData::RemoteBody(request, sender));
-		RemoteResponse { receiver }
+		RemoteResponse { receiver }.compat()
 	}
 }
 

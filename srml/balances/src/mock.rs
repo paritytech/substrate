@@ -161,12 +161,22 @@ impl ExtBuilder {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
-				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
+				vec![
+					(1, 10 * self.existential_deposit),
+					(2, 20 * self.existential_deposit),
+					(3, 30 * self.existential_deposit),
+					(4, 40 * self.existential_deposit),
+					(12, 10 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},
 			vesting: if self.vesting && self.monied {
-				vec![(1, 0, 10), (2, 10, 20)]
+				vec![
+					(1, 0, 10, 5 * self.existential_deposit),
+					(2, 10, 20, 0),
+					(12, 10, 20, 5 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},

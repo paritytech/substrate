@@ -277,20 +277,26 @@ decl_event!(
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct VestingSchedule<Balance> {
+pub struct VestingSchedule<Balance, BlockNumber> {
 	/// Locked amount at genesis.
-	pub offset: Balance,
-	/// Amount that gets unlocked every block from genesis.
+	pub locked: Balance,
+	/// Amount that gets unlocked every block after `starting_block`.
 	pub per_block: Balance,
+	/// Starting block for unlocking(vesting).
+	pub starting_block: BlockNumber,
 }
 
-impl<Balance: SimpleArithmetic + Copy> VestingSchedule<Balance> {
+impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> VestingSchedule<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
-	pub fn locked_at<BlockNumber>(&self, n: BlockNumber) -> Balance
+	pub fn locked_at(&self, n: BlockNumber) -> Balance
 		where Balance: From<BlockNumber>
 	{
-		if let Some(x) = Balance::from(n).checked_mul(&self.per_block) {
-			self.offset.max(x) - x
+		// Number of blocks that count toward vesting
+		// Saturating to 0 when n < starting_block
+		let vested_block_count = n.saturating_sub(self.starting_block);
+		// Return amount that is still locked in vesting
+		if let Some(x) = Balance::from(vested_block_count).checked_mul(&self.per_block) {
+			self.locked.max(x) - x
 		} else {
 			Zero::zero()
 		}
@@ -315,23 +321,30 @@ decl_storage! {
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
-			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
-				let begin = <T::Balance as From<T::BlockNumber>>::from(begin);
+			// Generate initial vesting configuration
+			// * who - Account which we are generating vesting configuration for
+			// * begin - Block when the account will start to vest
+			// * length - Number of blocks from `begin` until fully vested
+			// * liquid - Number of units which can be spent before vesting begins
+			config.vesting.iter().filter_map(|&(ref who, begin, length, liquid)| {
 				let length = <T::Balance as From<T::BlockNumber>>::from(length);
 
 				config.balances.iter()
 					.find(|&&(ref w, _)| w == who)
 					.map(|&(_, balance)| {
-						// <= begin it should be >= balance
-						// >= begin+length it should be <= 0
+						// Total genesis `balance` minus `liquid` equals funds locked for vesting
+						let locked = balance.saturating_sub(liquid);
+						// Number of units unlocked per block after `begin`
+						let per_block = locked / length.max(primitives::traits::One::one());
 
-						let per_block = balance / length.max(primitives::traits::One::one());
-						let offset = begin * per_block + balance;
-
-						(who.clone(), VestingSchedule { offset, per_block })
+						(who.clone(), VestingSchedule {
+							locked: locked,
+							per_block: per_block,
+							starting_block: begin
+						})
 					})
 			}).collect::<Vec<_>>()
-		}): map T::AccountId => Option<VestingSchedule<T::Balance>>;
+		}): map T::AccountId => Option<VestingSchedule<T::Balance, T::BlockNumber>>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -366,7 +379,8 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
+		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, T::Balance)>;
+		// ^^ begin, length, amount liquid at genesis
 	}
 }
 
@@ -471,7 +485,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
 			Self::free_balance(who)
-				.min(v.locked_at::<T::BlockNumber>(<system::Module<T>>::block_number()))
+				.min(v.locked_at(<system::Module<T>>::block_number()))
 		} else {
 			Zero::zero()
 		}
