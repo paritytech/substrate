@@ -17,7 +17,7 @@
 //! The overlayed changes to state.
 
 #[cfg(test)] use std::iter::FromIterator;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, BTreeSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
@@ -45,7 +45,7 @@ pub struct OverlayedValue {
 	pub value: Option<Vec<u8>>,
 	/// The set of extinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
-	pub extrinsics: Option<HashSet<u32>>,
+	pub extrinsics: Option<BTreeSet<u32>>,
 }
 
 /// Prospective or committed overlayed change set.
@@ -185,7 +185,7 @@ impl OverlayedChanges {
 					map_entry.insert(key.clone(), OverlayedValue {
 						value: None,
 						extrinsics: extrinsic_index.map(|i| {
-							let mut e = HashSet::default();
+							let mut e = BTreeSet::default();
 							e.insert(i);
 							e
 						}),

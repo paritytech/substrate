@@ -442,7 +442,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn get_value(&mut self, key: &Multihash) {
+	pub fn get_value(&self, key: &Multihash) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
@@ -452,7 +452,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&self, key: Multihash, value: Vec<u8>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
@@ -643,7 +643,7 @@ struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 
 impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
 	fn blocks_processed(
-		&mut self,	
+		&mut self,
 		imported: usize,
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>

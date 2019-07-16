@@ -1071,6 +1071,7 @@ pub mod tests {
 			max_block: (100, Default::default()),
 			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
+			storage_key: None,
 			retry_count: None,
 		}, tx));
 		let thread = ::std::thread::spawn(move || {
