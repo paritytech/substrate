@@ -53,7 +53,7 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn is_online(origin, authority_id: T::AuthorityId) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_era(authority_id);
+//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_era(&authority_id);
 //! 			Ok(())
 //! 		}
 //! 	}
