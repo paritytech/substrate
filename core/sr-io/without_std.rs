@@ -390,13 +390,13 @@ pub mod ext {
 		/// # Returns
 		///
 		/// The encoded `Result<offchain::OpaqueNetworkState, ()>`.
-		/// `msg_len` contains the length of the message.
+		/// `written_out` contains the length of the message.
 		///
 		/// The ownership of the returned buffer is transferred to the runtime
 		/// code and the runtime is responsible for freeing it. This is always
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
-		fn ext_network_state(msg_len: *mut u32) -> *mut u8;
+		fn ext_network_state(written_out: *mut u32) -> *mut u8;
 
 		/// Returns the locally configured authority public key, if available.
 		/// The `crypto` argument is `offchain::CryptoKind` converted to `u32`.
@@ -404,13 +404,13 @@ pub mod ext {
 		/// # Returns
 		///
 		/// The encoded `Result<PublicKey encoded to Vec<u8>, ()>`.
-		/// `msg_len` contains the length of the message.
+		/// `written_out` contains the length of the message.
 		///
 		/// The ownership of the returned buffer is transferred to the runtime
 		/// code and the runtime is responsible for freeing it. This is always
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
-		fn ext_authority_pubkey(crypto: u32, msg_len: *mut u32) -> *mut u8;
+		fn ext_authority_pubkey(crypto: u32, written_out: *mut u32) -> *mut u8;
 
 		/// Create new key(pair) for signing/encryption/decryption.
 		///

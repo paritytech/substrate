@@ -780,7 +780,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to set memory in ext_network_state")?;
 
 		this.memory.write_primitive(written_out, len)
-			.map_err(|_| "Invalid attempt to write msg_len in ext_network_state")?;
+			.map_err(|_| "Invalid attempt to write written_out in ext_network_state")?;
 
 		Ok(offset)
 	},
