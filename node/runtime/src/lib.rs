@@ -36,7 +36,7 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::weights::Weight;
+use runtime_primitives::call_attributes::Weight;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };

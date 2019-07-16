@@ -73,7 +73,7 @@ mod tests {
 	use primitives::{H256, Blake2Hasher};
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use runtime_primitives::weights::Weight;
+	use runtime_primitives::call_attributes::Weight;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}

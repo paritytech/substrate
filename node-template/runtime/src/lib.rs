@@ -17,7 +17,8 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify},
+	call_attributes::Weight,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},

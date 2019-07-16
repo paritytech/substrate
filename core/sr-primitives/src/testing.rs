@@ -24,7 +24,7 @@ use crate::traits::{
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
-use crate::weights::{CallDescriptor, CallMetadata};
+use crate::call_attributes::{CallDescriptor, CallMetadata};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};

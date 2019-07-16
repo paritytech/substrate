@@ -86,7 +86,7 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::CallMetadata;
+use primitives::call_attributes::CallMetadata;
 
 mod internal {
 	use primitives::traits::DispatchError;

@@ -35,7 +35,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::weights::CallDescriptor;
+use crate::call_attributes::CallDescriptor;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {

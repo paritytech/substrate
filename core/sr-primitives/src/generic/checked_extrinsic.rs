@@ -22,7 +22,7 @@ use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
 	ValidateUnsigned
 };
-use crate::weights::{CallMetadata, CallDescriptor};
+use crate::call_attributes::{CallMetadata, CallDescriptor};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its

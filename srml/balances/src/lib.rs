@@ -1153,7 +1153,7 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 use primitives::traits::{DispatchError, SaturatedConversion};
 use primitives::transaction_validity::ValidTransaction;
-use primitives::weights::CallDescriptor;
+use primitives::call_attributes::CallDescriptor;
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;

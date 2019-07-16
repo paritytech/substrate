@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use primitives::{
-	generic::{self, Era}, weights::{CallDescriptor, Weight}, traits::{
+	generic::{self, Era}, call_attributes::{CallDescriptor, Weight}, traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,

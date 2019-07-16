@@ -26,8 +26,9 @@ pub use srml_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::{
-	weights::{WeightedTransaction, CallMetadata, CallDescriptor}, traits::{Dispatchable, DispatchResult}
-};
+	call_attributes::{WeightedTransaction, CallMetadata, CallDescriptor},
+	traits::{Dispatchable, DispatchResult,
+}};
 
 /// A type that cannot be instantiated.
 pub enum Never {}

@@ -41,7 +41,7 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 pub mod testing;
 
-pub mod weights;
+pub mod call_attributes;
 pub mod traits;
 use traits::{SaturatedConversion, UniqueSaturatedInto};
 
