@@ -17,14 +17,15 @@
 //! Operation on unhashed runtime storage
 
 use crate::rstd::borrow::Borrow;
-use super::{Codec, Encode, Decode, KeyedVec, Vec, IncrementalInput};
+use super::{Codec, Encode, Decode, KeyedVec, Vec, IncrementalChildInput};
 
 pub mod generator;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
 	runtime_io::read_child_storage(storage_key, key, &mut [0; 0][..], 0).map(|_| {
-		let mut input = IncrementalInput {
+		let mut input = IncrementalChildInput {
+			storage_key,
 			key,
 			pos: 0,
 		};
