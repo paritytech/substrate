@@ -815,11 +815,11 @@ pub trait SignedExtension:
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
-	type AdditionalSigned: Encode + Default;
+	type AdditionalSigned: Encode;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> { Ok(Default::default()) }
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
 		/// Validate a signed transaction for the transaction queue.
 	fn validate(
@@ -915,6 +915,7 @@ tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

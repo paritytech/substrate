@@ -429,7 +429,12 @@ mod tests {
 		}
 	}
 
-	type SignedExtra = node_runtime::SignedExtra<Runtime>;
+	type SignedExtra = (
+		system::CheckEra<Runtime>,
+		system::CheckNonce<Runtime>,
+		system::CheckWeight<Runtime>,
+		balances::TakeFees<Runtime>
+	);
 	type TestXt = primitives::testing::TestXt<Call<Runtime>, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
 

@@ -1158,6 +1158,7 @@ use primitives::weights::Weight;
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
 	type AdditionalSigned = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(
 		&self,

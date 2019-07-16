@@ -199,7 +199,6 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::generic::Era;
 	use crate::traits::{SignedExtension, BlockNumberToHash, Lookup, CurrentHeight};
 	use serde::{Serialize, Deserialize};
 
@@ -239,6 +238,7 @@ mod tests {
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
 		type AdditionalSigned = ();
+		fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;

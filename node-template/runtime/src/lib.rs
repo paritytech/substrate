@@ -231,11 +231,11 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
-pub type SignedExtra<R> = (system::CheckNonce<R>, system::CheckWeight<R>, balances::TakeFees<R>);
+pub type SignedExtra = (system::CheckNonce<Runtime>, system::CheckWeight<Runtime>, balances::TakeFees<Runtime>);
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, AccountSignature, SignedExtra<Runtime>>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, AccountSignature, SignedExtra>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra<Runtime>>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules>;
 
