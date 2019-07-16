@@ -57,7 +57,8 @@ impl<Number> FactoryState<Number> {
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
 			system::CheckWeight::from(),
-			balances::TakeFees::from(0))
+			balances::TakeFees::from(0)
+		)
 	}
 }
 
