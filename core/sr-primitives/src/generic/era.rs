@@ -85,7 +85,7 @@ impl Era {
 	pub fn birth(self, current: u64) -> u64 {
 		match self {
 			Era::Immortal => 0,
-			Era::Mortal(period, phase) => (current.max(phase) - phase) / period * period + phase,
+			Era::Mortal(period, phase) => (current.max(phase) - phase) / period + phase,
 		}
 	}
 
