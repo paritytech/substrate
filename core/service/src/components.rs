@@ -367,7 +367,8 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// Build finality proof provider for serving network requests on full node.
 	fn build_finality_proof_provider(
-		client: Arc<FullClient<Self>>
+		state: &mut FullComponentsSetupState<Self>,
+		client: Arc<FullClient<Self>>,
 	) -> Result<Option<Arc<dyn FinalityProofProvider<Self::Block>>>, error::Error>;
 
 	/// Build the Fork Choice algorithm for full client
@@ -465,7 +466,8 @@ pub trait Components: Sized + 'static {
 
 	/// Finality proof provider for serving network requests.
 	fn build_finality_proof_provider(
-		client: Arc<ComponentClient<Self>>
+		state: &mut ComponentsSetupState<Self>,
+		client: Arc<ComponentClient<Self>>,
 	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
 
 	/// Build fork choice selector
@@ -577,9 +579,10 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_finality_proof_provider(
-		client: Arc<ComponentClient<Self>>
+		state: &mut ComponentsSetupState<Self>,
+		client: Arc<ComponentClient<Self>>,
 	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
-		Factory::build_finality_proof_provider(client)
+		Factory::build_finality_proof_provider(state, client)
 	}
 }
 
@@ -670,7 +673,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	}
 
 	fn build_finality_proof_provider(
-		_client: Arc<ComponentClient<Self>>
+		_state: &mut ComponentsSetupState<Self>,
+		_client: Arc<ComponentClient<Self>>,
 	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
 		Ok(None)
 	}

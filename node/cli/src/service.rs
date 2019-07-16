@@ -80,8 +80,8 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>|
 				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, mut state: FullComponentsSetupState<Self>| {
-				let (block_import, link_half) = state.config.custom.grandpa_import_setup.take()
+			|service: Self::FullService, mut state: FullComponentsSetupState<Self>| {
+				let (block_import, link_half) = state.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				if let Some(aura_key) = service.authority_key::<AuraPair>() {
@@ -126,7 +126,7 @@ construct_service_factory! {
 				};
 
 				match config.local_key {
-					None if !service.config.grandpa_voter => {
+					None if !state.config.grandpa_voter => {
 						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
@@ -157,7 +157,7 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<Self::Block>
-			{ |state: &mut FullComponentsSetupState<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{ |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
@@ -202,8 +202,8 @@ construct_service_factory! {
 				Ok(LongestChain::new(state.backend.clone()))
 			}
 		},
-		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
-			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _))
+		FinalityProofProvider = { |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
+			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(state.backend.clone(), client)) as _))
 		}},
 	}
 }

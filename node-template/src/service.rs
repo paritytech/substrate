@@ -130,7 +130,7 @@ construct_service_factory! {
 				Ok(LongestChain::new(client.backend().clone()))
 			}
 		},
-		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
+		FinalityProofProvider =  { |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
 			Ok(None)
 		}},
 	}

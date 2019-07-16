@@ -215,7 +215,7 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?;
 		let import_queue = Box::new(import_queue);
-		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+		let finality_proof_provider = Components::build_finality_proof_provider(&mut state, client.clone())?;
 		let chain_info = client.info().chain;
 
 		let version = state.config.full_version();
@@ -267,8 +267,8 @@ impl<Components: components::Components> Service<Components> {
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
 		let keystore_authority_key = AuthorityKeyProvider {
-			roles: config.roles,
-			password: config.password.clone(),
+			roles: state.config.roles,
+			password: state.config.password.clone(),
 			keystore: keystore.map(Arc::new),
 		};
 
@@ -417,7 +417,7 @@ impl<Components: components::Components> Service<Components> {
 			)
 		};
 		let rpc_handlers = gen_handler();
-		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
+		let rpc = start_rpc_servers::<Components::Factory, _>(&state.config, gen_handler)?;
 
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
 			network_mut,
@@ -986,8 +986,8 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// 				#[allow(deprecated)]
 /// 				Ok(LongestChain::new(client.backend().clone()))
 /// 			}},
-/// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
-/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
+/// 		FinalityProofProvider = { |state| {
+/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(state.backend.clone(), client)) as _))
 /// 			}},
 /// 	}
 /// }
@@ -1083,9 +1083,10 @@ macro_rules! construct_service_factory {
 			}
 
 			fn build_finality_proof_provider(
+				state: &mut $crate::FullComponentsSetupState<Self>,
 				client: Arc<$crate::FullClient<Self>>
 			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
-				( $( $finality_proof_provider_init )* ) (client)
+				( $( $finality_proof_provider_init )* ) (state, client)
 			}
 
 			fn new_light(
