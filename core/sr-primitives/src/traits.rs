@@ -35,6 +35,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
+use crate::weights::CallDescriptor;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -825,27 +826,27 @@ pub trait SignedExtension:
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_weight: crate::weights::Weight,
+		_info: CallDescriptor,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a signed transaction.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> { self.validate(who, weight).map(|_| ()) }
+		info: CallDescriptor,
+	) -> Result<(), DispatchError> { self.validate(who, info).map(|_| ()) }
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
 	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
 	/// validating unsigned transactions.
 	fn validate_unsigned(
-		_weight: crate::weights::Weight,
+		_info: CallDescriptor,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> { Self::validate_unsigned(weight).map(|_| ()) }
+		info: CallDescriptor,
+	) -> Result<(), DispatchError> { Self::validate_unsigned(info).map(|_| ()) }
 }
 
 macro_rules! tuple_impl_indexed {
@@ -865,29 +866,29 @@ macro_rules! tuple_impl_indexed {
 			fn validate(
 				&self,
 				who: &Self::AccountId,
-				weight: crate::weights::Weight,
+				info: CallDescriptor,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, weight)?),+];
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch(
 				self,
 				who: &Self::AccountId,
-				weight: crate::weights::Weight,
+				info: CallDescriptor,
 			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, weight)?;)+
+				$(self.$index.pre_dispatch(who, info)?;)+
 				Ok(())
 			}
 			fn validate_unsigned(
-				weight: crate::weights::Weight,
+				info: CallDescriptor,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(weight)?),+];
+				let aggregator = vec![$($direct::validate_unsigned(info)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch_unsigned(
-				weight: crate::weights::Weight,
+				info: CallDescriptor,
 			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(weight)?;)+
+				$($direct::pre_dispatch_unsigned(info)?;)+
 				Ok(())
 			}
 		}
@@ -935,13 +936,13 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
-		weight: crate::weights::Weight
+		info: CallDescriptor
 	) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		weight: crate::weights::Weight
+		info: CallDescriptor
 	) -> Result<DispatchResult, DispatchError>;
 }
 

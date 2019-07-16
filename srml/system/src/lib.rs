@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use primitives::{
-	generic::{self, Era}, weights::Weight, traits::{
+	generic::{self, Era}, weights::{CallDescriptor, Weight}, traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
@@ -778,19 +778,27 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn pre_dispatch(
 		self,
 		_who: &Self::AccountId,
-		weight: Weight,
+		info: CallDescriptor,
 	) -> Result<(), DispatchError> {
-		Self::internal_check_weight(weight)
+		Self::internal_check_weight(info.0)
 	}
 
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_weight: Weight,
+		info: CallDescriptor,
 	) -> Result<ValidTransaction, DispatchError> {
-		// TODO: check for a maximum size and weight here as well.
-		// write priority based on tx weight type + tip.
-		Ok(ValidTransaction::default())
+		let (weight, priority) = info;
+		Self::internal_check_weight(weight)?;
+		Ok(ValidTransaction { priority, ..Default::default() })
+
+	}
+
+	fn validate_unsigned(
+		info: CallDescriptor
+	) -> Result<ValidTransaction, DispatchError> {
+		let (_, priority) = info;
+		Ok(ValidTransaction { priority, ..Default::default() })
 	}
 }
 
@@ -834,7 +842,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		_weight: Weight,
+		_info: CallDescriptor,
 	) -> Result<(), DispatchError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
@@ -849,7 +857,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		_weight: Weight,
+		info: CallDescriptor,
 	) -> Result<ValidTransaction, DispatchError> {
 		// check index
 		let expected = <AccountNonce<T>>::get(who);
@@ -865,7 +873,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		};
 
 		Ok(ValidTransaction {
-			priority: _weight as TransactionPriority,
+			priority: info.1 as TransactionPriority,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),
@@ -1120,16 +1128,17 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		with_externalities(&mut new_test_ext(), || {
+			let meta = (0, 0);
 			<AccountNonce<Test>>::insert(1, 1);
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, 0).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, 0).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, meta.clone()).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, meta.clone()).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, 0).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, 0).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, meta.clone()).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, meta.clone()).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, 0).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, 0).is_err());
+			assert!(CheckNonce::<Test>(5).validate(&1, meta.clone()).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, meta.clone()).is_err());
 		})
 	}
 
@@ -1138,13 +1147,13 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// small
 			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 100).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, (100, 0)).is_ok());
 			// almost
 			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 512).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, (512, 0)).is_ok());
 			// big
 			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 513).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, (513, 0)).is_err());
 
 		})
 	}

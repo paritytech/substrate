@@ -26,7 +26,7 @@ pub use srml_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::{
-	weights::{TransactionWeight, Weighable, Weight}, traits::{Dispatchable, DispatchResult}
+	weights::{WeightedTransaction, CallMetadata, CallDescriptor}, traits::{Dispatchable, DispatchResult}
 };
 
 /// A type that cannot be instantiated.
@@ -519,7 +519,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		#[weight = $weight:expr]
+		#[meta = $tx_info:expr]
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -540,7 +540,7 @@ macro_rules! decl_module {
 			[
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
-				#[weight = $weight]
+				#[meta = $tx_info]
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -549,7 +549,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// Add #[weight] if none is defined.
+	// Add #[meta] if none is defined.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -584,7 +584,7 @@ macro_rules! decl_module {
 			{ $( $constants )* }
 			[ $( $dispatchables )* ]
 			$(#[doc = $doc_attr])*
-			#[weight = $crate::dispatch::TransactionWeight::default()]
+			#[meta = $crate::dispatch::WeightedTransaction::default()]
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
@@ -604,7 +604,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$(#[weight = $weight:expr])?
+		$(#[meta = $tx_info:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -628,7 +628,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$(#[weight = $weight:expr])?
+		$(#[meta = $tx_info:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -652,7 +652,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$(#[weight = $weight:expr])?
+		$(#[meta = $tx_info:expr])?
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1016,7 +1016,7 @@ macro_rules! decl_module {
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
-				#[weight = $weight:expr]
+				#[meta = $tx_info:expr]
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1108,12 +1108,12 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weighable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::CallMetadata
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn weight(&self, _len: usize) -> $crate::dispatch::Weight {
+			fn info(&self, _len: usize) -> $crate::dispatch::CallDescriptor {
 				match self {
-					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::weight(&$weight, _len), )*
+					$( $call_type::$fn_name(..) => $crate::dispatch::CallMetadata::info(&$tx_info, _len), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
@@ -1260,10 +1260,10 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}
-		impl $crate::dispatch::Weighable for $call_type {
-			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
+		impl $crate::dispatch::CallMetadata for $call_type {
+			fn info(&self, len: usize) -> $crate::dispatch::CallDescriptor {
 				match self {
-					$( $call_type::$camelcase(call) => call.weight(len), )*
+					$( $call_type::$camelcase(call) => call.info(len), )*
 				}
 			}
 		}
@@ -1595,7 +1595,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = TransactionWeight::Basic(10, 100)]
+			#[meta = WeightedTransaction::Basic(10, 100)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1604,8 +1604,8 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = TransactionWeight::Max]
-			fn weighted(_origin) { unreachable!() }
+			#[meta = WeightedTransaction::Operational(0, 0)]
+			fn operational(_origin) { unreachable!() }
 		}
 	}
 
@@ -1671,7 +1671,7 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					name: DecodeDifferent::Encode("weighted"),
+					name: DecodeDifferent::Encode("operational"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -1744,12 +1744,12 @@ mod tests {
 	}
 
 	#[test]
-	fn weight_should_attach_to_call_enum() {
+	fn call_metadata_should_work() {
 		// max weight. not dependent on input.
-		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 3 * 1024 * 1024);
+		assert_eq!(Call::<TraitImpl>::operational().info(100), (0, u64::max_value()));
 		// default weight.
-		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
+		assert_eq!(Call::<TraitImpl>::aux_0().info(5), (5, 5));
 		// custom basic
-		assert_eq!(Call::<TraitImpl>::aux_3().weight(5), 10 + 100 * 5 );
+		assert_eq!(Call::<TraitImpl>::aux_3().info(5), (10 + 100 * 5, 10 + 100 * 5) );
 	}
 }

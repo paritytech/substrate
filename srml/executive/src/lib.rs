@@ -86,7 +86,7 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::Weighable;
+use primitives::weights::CallMetadata;
 
 mod internal {
 	use primitives::traits::DispatchError;
@@ -141,7 +141,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + CallMetadata,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -160,7 +160,7 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + CallMetadata,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -284,8 +284,8 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let weight = xt.weight(encoded_len);
-		let r = Applyable::dispatch(xt, weight)
+		let call_metadata = xt.info(encoded_len);
+		let r = Applyable::dispatch(xt, call_metadata)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -340,9 +340,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let weight = xt.weight(encoded_len);
-
-		xt.validate::<UnsignedValidator>(weight)
+		let call_metadata = xt.info(encoded_len);
+		xt.validate::<UnsignedValidator>(call_metadata)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

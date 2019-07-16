@@ -1153,7 +1153,7 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 use primitives::traits::{DispatchError, SaturatedConversion};
 use primitives::transaction_validity::ValidTransaction;
-use primitives::weights::Weight;
+use primitives::weights::CallDescriptor;
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
@@ -1162,9 +1162,9 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		weight: Weight,
+		info: CallDescriptor,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
-		let fee_x = T::Balance::from(weight);
+		let fee_x = T::Balance::from(info.0);
 		// TODO: should be weight_to_fee(weight)
 		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
 		let fee = fee + self.0.clone();

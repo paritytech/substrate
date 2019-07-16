@@ -119,7 +119,7 @@ fn lock_reasons_should_work() {
 		);
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 		// NOTE: this causes a fee payment.
-		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, (1, 0)).is_ok());
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -127,12 +127,12 @@ fn lock_reasons_should_work() {
 			<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 			"account liquidity restrictions prevent withdrawal"
 		);
-		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, (1, 0)).is_ok());
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 		assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_err());
+		assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, (1, 0)).is_err());
 	});
 }
 
@@ -668,9 +668,9 @@ fn signed_extension_take_fees_work() {
 			.monied(true)
 			.build(),
 		|| {
-			assert!(TakeFees::<Runtime>::from(0).validate(&1, 10).is_ok());
+			assert!(TakeFees::<Runtime>::from(0).validate(&1, (10, 0)).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20);
-			assert!(TakeFees::<Runtime>::from(5 /* tipped */).validate(&1, 10).is_ok());
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).validate(&1, (10, 0)).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
 		}
 	);

@@ -14,63 +14,68 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for transaction weighting.
+//! Primitives for call metadata.
 //!
-//! Each dispatch function within `decl_module!` can now have an optional
-//! `#[weight = $x]` attribute. $x can be any object that implements the
-//! `Weighable` trait. By default, All transactions are annotated by
-//! `#[weight = TransactionWeight::default()]`.
+//! Each dispatch function within `decl_module!` can have an optional
+//! `#[meta = $x]` attribute. $x can be any object that implements the
+//! `CallMetadata` trait. By default, All transactions are annotated by
+//! `#[weight = WeightedTransaction::default()]`.
 //!
-//! Note that the decl_module macro _cannot_ enforce this and will simply fail
+//! Note that the `decl_module` macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
 
-/// The final type that each `#[weight = $x:expr]`'s
-/// expression must evaluate to.
+use crate::traits::{Zero, Bounded};
+use crate::transaction_validity::TransactionPriority;
+
+/// The numeric representation of a transaction weight.
 pub type Weight = u32;
 
-/// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
-/// its dispatchable functions. Is implemented by default in the `decl_module!`.
+/// A bundle of the types that must be included in the call metadata.
+pub type CallDescriptor = (Weight, TransactionPriority);
+
+/// A `Call` enum (aka transaction) that can carry a set of static information to the executive and
+/// subsequent execution paths.
 ///
-/// Both the outer Call enum and the per-module individual ones will implement this.
-/// The outer enum simply calls the inner ones based on call type.
-pub trait Weighable {
+/// To be included, each `Call` function must include the `$[meta = $x]` attribute where `$x` can be
+/// any type that implements the `TransactionInfo` trait.
+pub trait CallMetadata {
 	/// Return the weight of this call.
 	/// The `len` argument is the encoded length of the transaction/call.
-	fn weight(&self, len: usize) -> Weight;
+	fn info(&self, len: usize) -> CallDescriptor;
 }
 
 /// Default type used as the weight representative in a `#[weight = x]` attribute.
 ///
-/// A user may pass in any other type that implements [`Weighable`]. If not, the `Default`
-/// implementation of [`TransactionWeight`] is used.
-pub enum TransactionWeight {
+/// A user may pass in any other type that implements [`CallMetadata`]. If not, the `Default`
+/// implementation of [`WeightedTransaction`] is used.
+pub enum WeightedTransaction {
 	/// Basic weight (base, byte).
 	/// The values contained are the base weight and byte weight respectively.
 	Basic(Weight, Weight),
-	/// Maximum fee. This implies that this transaction _might_ get included but
-	/// no more transaction can be added. This can be done by setting the
-	/// implementation to _maximum block weight_.
-	Max,
-	/// Free. The transaction does not increase the total weight
-	/// (i.e. is not included in weight calculation).
-	Free,
+	/// An operational transaction (sudo calls, runtime upgrades, democracy actions). These will
+	/// incur no additional weight and will always have maximum priority.
+	Operational(Weight, Weight)
 }
 
-impl Weighable for TransactionWeight {
-	fn weight(&self, len: usize) -> Weight {
-		match self {
-			TransactionWeight::Basic(base, byte) => base + byte * len as Weight,
-			TransactionWeight::Max => 3 * 1024 * 1024,
-			TransactionWeight::Free => 0,
-		}
+impl CallMetadata for WeightedTransaction {
+	fn info(&self, len: usize) -> CallDescriptor {
+		let weight = match self {
+			WeightedTransaction::Basic(base, byte) => base + byte * len as Weight,
+			WeightedTransaction::Operational(_, _) => Zero::zero(),
+		};
+		let priority: TransactionPriority = match self {
+			WeightedTransaction::Basic(_, _) => weight.into(),
+			WeightedTransaction::Operational(_, _) => Bounded::max_value()
+		};
+		(weight, priority)
 	}
 }
 
-impl Default for TransactionWeight {
+impl Default for WeightedTransaction {
 	fn default() -> Self {
 		// This implies that the weight is currently equal to tx-size, nothing more
 		// for all substrate transactions that do NOT explicitly annotate weight.
 		// TODO #2431 needs to be updated with proper max values.
-		TransactionWeight::Basic(0, 1)
+		WeightedTransaction::Basic(0, 1)
 	}
 }

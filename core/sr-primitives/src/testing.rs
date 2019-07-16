@@ -24,7 +24,7 @@ use crate::traits::{
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
-use crate::weights::{Weighable, Weight};
+use crate::weights::{CallDescriptor, CallMetadata};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -240,7 +240,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		_weight: Weight
+		_info: CallDescriptor
 	) -> TransactionValidity {
 		TransactionValidity::Valid(Default::default())
 	}
@@ -248,22 +248,21 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		weight: Weight
+		info: CallDescriptor
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some(who) = self.0 {
-			Extra::pre_dispatch(self.2, &who, weight)?;
+			Extra::pre_dispatch(self.2, &who, info)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(weight)?;
+			Extra::pre_dispatch_unsigned(info)?;
 			None
 		};
 		Ok(self.1.dispatch(maybe_who.into()))
 	}
 }
 
-impl<Call, Extra> Weighable for TestXt<Call, Extra> {
-	fn weight(&self, len: usize) -> Weight {
-		// for testing: weight == size.
-		len as Weight
+impl<Call, Extra> CallMetadata for TestXt<Call, Extra> {
+	fn info(&self, len: usize) -> CallDescriptor {
+		(len as u32, len as u64)
 	}
 }
