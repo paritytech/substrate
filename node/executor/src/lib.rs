@@ -83,7 +83,7 @@ mod tests {
 	// TODO: fix for being charged based on weight now.
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 		<TransactionBaseFee as Get<Balance>>::get() +
-		<TransactionByteFee as Get<Balance>>::get() *
+			<TransactionByteFee as Get<Balance>>::get() *
 		(extrinsic.encode().len() as Balance)
 	}
 
