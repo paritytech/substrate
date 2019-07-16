@@ -27,7 +27,6 @@ use primitives::testing::{Header, Block};
 use system;
 pub use balances::Call as balancesCall;
 pub use system::Call as systemCall;
-use node_runtime::impls::WeightMultiplierUpdateHandler;
 
 impl_outer_origin! {
     pub enum Origin for Runtime {
@@ -63,7 +62,7 @@ impl system::Trait for Runtime {
     type AccountId = u64;
     type Lookup = IdentityLookup<u64>;
     type Header = Header;
-    type WeightMultiplierUpdate = WeightMultiplierUpdateHandler;
+    type WeightMultiplierUpdate = ();
     type BlockHashCount = BlockHashCount;
     type Event = MetaEvent;
 }
@@ -71,6 +70,8 @@ parameter_types! {
     pub const ExistentialDeposit: u64 = 0;
     pub const TransferFee: u64 = 0;
     pub const CreationFee: u64 = 0;
+    pub const TransactionBaseFee: u64 = 0;
+    pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Runtime {
     type Balance = u64;
@@ -83,6 +84,8 @@ impl balances::Trait for Runtime {
     type ExistentialDeposit = ExistentialDeposit;
     type TransferFee = TransferFee;
     type CreationFee = CreationFee;
+    type TransactionBaseFee = TransactionBaseFee;
+    type TransactionByteFee = TransactionByteFee;
 }
 
 impl ValidateUnsigned for Runtime {

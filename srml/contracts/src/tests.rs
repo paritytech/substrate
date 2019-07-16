@@ -96,6 +96,8 @@ impl Get<u64> for BlockGasLimit {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const BalancesTransactionBaseFee: u64 = 0;
+	pub const BalancesTransactionByteFee: u64 = 0;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -121,6 +123,8 @@ impl balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+	type TransactionBaseFee = BalancesTransactionBaseFee;
+	type TransactionByteFee = BalancesTransactionByteFee;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;

@@ -104,6 +104,8 @@ impl system::Trait for Test {
 parameter_types! {
 	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
+	pub const TransactionBaseFee: u64 = 0;
+	pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = Balance;
@@ -116,6 +118,8 @@ impl balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;

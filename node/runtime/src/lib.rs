@@ -148,6 +148,8 @@ parameter_types! {
 	pub const ExistentialDeposit: Balance = 1 * DOLLARS;
 	pub const TransferFee: Balance = 1 * CENTS;
 	pub const CreationFee: Balance = 1 * CENTS;
+	pub const TransactionBaseFee: Balance = 1 * CENTS;
+	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 }
 
 impl balances::Trait for Runtime {
@@ -161,6 +163,8 @@ impl balances::Trait for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 
 parameter_types! {

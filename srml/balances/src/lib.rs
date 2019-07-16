@@ -199,6 +199,12 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee required to create an account.
 	type CreationFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the base.
+	type TransactionBaseFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the per-byte portion.
+	type TransactionByteFee: Get<Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
@@ -236,6 +242,12 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee required to create an account.
 	type CreationFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the base.
+	type TransactionBaseFee: Get<Self::Balance>;
+
+	/// The fee to be paid for making a transaction; the per-byte portion.
+	type TransactionByteFee: Get<Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -245,6 +257,8 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
 	type CreationFee = T::CreationFee;
+	type TransactionBaseFee = T::TransactionBaseFee;
+	type TransactionByteFee = T::TransactionByteFee;
 }
 
 decl_event!(
@@ -381,6 +395,13 @@ decl_module! {
 
 		/// The fee required to create an account.
 		const CreationFee: T::Balance = T::CreationFee::get();
+
+		/// The fee to be paid for making a transaction; the base.
+		const TransactionBaseFee: T::Balance = T::TransactionBaseFee::get();
+
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
+
 
 		fn deposit_event<T, I>() = default;
 
@@ -755,6 +776,8 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
 	type CreationFee = T::CreationFee;
+	type TransactionBaseFee = T::TransactionBaseFee;
+	type TransactionByteFee = T::TransactionByteFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
