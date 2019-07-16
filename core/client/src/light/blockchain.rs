@@ -18,7 +18,6 @@
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
 use std::{sync::{Weak, Arc}, collections::HashMap};
-use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
 use runtime_primitives::{Justification, generic::BlockId};
@@ -122,14 +121,15 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 					return Ok(None);
 				}
 
-				self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
-					.remote_header(RemoteHeaderRequest {
-						cht_root: self.storage.header_cht_root(cht::size(), number)?,
-						block: number,
-						retry_count: None,
+				futures::executor::block_on(
+					self.fetcher().upgrade()
+						.ok_or(ClientError::NotAvailableOnLightClient)?
+						.remote_header(RemoteHeaderRequest {
+							cht_root: self.storage.header_cht_root(cht::size(), number)?,
+							block: number,
+							retry_count: None,
 					})
-					.into_future().wait()
-					.map(Some)
+				).map(Some)
 			}
 		}
 	}
@@ -158,13 +158,13 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 			None => return Ok(None),
 		};
 
-		self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
-			.remote_body(RemoteBodyRequest {
-				header,
-				retry_count: None,
-			})
-			.into_future().wait()
-			.map(Some)
+		futures::executor::block_on(
+			self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
+				.remote_body(RemoteBodyRequest {
+					header,
+					retry_count: None,
+				})
+		).map(Some)
 	}
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
