@@ -795,9 +795,11 @@ pub fn check_justification<B: BlockT>(
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_prepare_justification<B: BlockT>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
-	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
-{
+pub fn check_prepare_justification<B: BlockT>(
+	authorities: &[AuthorityId],
+	parent: B::Hash,
+	just: UncheckedJustification<B::Hash>
+) -> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>> {
 	let vote: Action<B, B::Hash> = Action::Prepare(just.0.round_number as u32, just.0.digest.clone());
 	let message = localized_encode(parent, vote);
 
@@ -842,7 +844,11 @@ pub fn check_vote<B: BlockT>(
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
 
-fn check_action<B: BlockT>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
+fn check_action<B: BlockT>(
+	action: Action<B, B::Hash>,
+	parent_hash: &B::Hash,
+	sig: &LocalizedSignature
+) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
 	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
@@ -981,7 +987,8 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 
 		let id = BlockId::hash(parent_hash);
 		let random_seed = self.client.random_seed(&id)?;
-		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Hashing::hash(random_seed.as_ref());
+		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>
+			::Hashing::hash(random_seed.as_ref());
 
 		let validators = self.client.validators(&id)?;
 		self.offline.write().note_new_block(&validators[..]);
@@ -1225,7 +1232,10 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		proposer
 	}
 
-	fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
+	fn import_misbehavior(
+		&self,
+		_misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>
+	) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
