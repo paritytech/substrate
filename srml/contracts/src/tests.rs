@@ -148,6 +148,7 @@ parameter_types! {
 	pub const CallBaseFee: u64 = 135;
 	pub const CreateBaseFee: u64 = 175;
 	pub const MaxDepth: u32 = 100;
+	pub const MaxValueSize: u32 = 16_384;
 }
 impl Trait for Test {
 	type Currency = Balances;
@@ -171,6 +172,7 @@ impl Trait for Test {
 	type CallBaseFee = CallBaseFee;
 	type CreateBaseFee = CreateBaseFee;
 	type MaxDepth = MaxDepth;
+	type MaxValueSize = MaxValueSize;
 	type BlockGasLimit = BlockGasLimit;
 }
 

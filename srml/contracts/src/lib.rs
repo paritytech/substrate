@@ -393,6 +393,9 @@ pub trait Trait: timestamp::Trait {
 	/// The maximum nesting level of a call/create stack.
 	type MaxDepth: Get<u32>;
 
+	/// The maximum size of a storage value in bytes.
+	type MaxValueSize: Get<u32>;
+
 	/// The maximum amount of gas that could be expended per block.
 	type BlockGasLimit: Get<Gas>;
 }
@@ -491,6 +494,9 @@ decl_module! {
 		/// The maximum nesting level of a call/create stack. A reasonable default
 		/// value is 100.
 		const MaxDepth: u32 = T::MaxDepth::get();
+
+		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
+		const MaxValueSize: u32 = T::MaxValueSize::get();
 
 		/// The maximum amount of gas that could be expended per block. A reasonable
 		/// default value is 10_000_000.
@@ -833,6 +839,7 @@ pub struct Config<T: Trait> {
 	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
 	pub max_depth: u32,
+	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
 	pub transfer_fee: BalanceOf<T>,
@@ -844,6 +851,7 @@ impl<T: Trait> Config<T> {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
 			max_depth: T::MaxDepth::get(),
+			max_value_size: T::MaxValueSize::get(),
 			contract_account_instantiate_fee: T::ContractFee::get(),
 			account_create_fee: T::CreationFee::get(),
 			transfer_fee: T::TransferFee::get(),
