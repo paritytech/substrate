@@ -66,6 +66,8 @@ pub struct Epoch {
 	pub epoch_index: u64,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// The duration of this epoch
+	pub duration: SlotNumber,
 }
 
 /// An consensus log item for BABE.

@@ -526,6 +526,7 @@ cfg_if! {
 						authorities,
 						randomness: srml_babe::random::<Runtime>(),
 						epoch_index: 1,
+						duration: 20,
 					}
 				}
 			}
@@ -595,6 +596,10 @@ cfg_if! {
 				fn random_seed() -> <Block as BlockT>::Hash {
 					unimplemented!()
 				}
+			}
+
+			impl consensus_babe::Trait<Block> for Runtime {
+				fn babe_epoch_duration() -> u64 { 20 }
 			}
 
 			impl self::TestAPI<Block> for Runtime {

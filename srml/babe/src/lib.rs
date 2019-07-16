@@ -39,7 +39,6 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
 pub type InherentType = u64;
-
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
@@ -233,7 +232,11 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+pub trait Duration {
+	fn babe_epoch_duration() -> u64;
+}
+
+impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
@@ -257,6 +260,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			randomness,
 			authorities,
 			epoch_index,
+			duration: T::babe_epoch_duration(),
 		})
 	}
 

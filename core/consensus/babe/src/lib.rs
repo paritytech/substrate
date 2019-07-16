@@ -17,12 +17,6 @@
 //! # BABE consensus
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
-//!
-//! # Stability
-//!
-//! This crate is highly unstable and experimental.  Breaking changes may
-//! happen at any point.  This crate is also missing features, such as banning
-//! of malicious validators, that are essential for a production network.
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
 #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
@@ -80,6 +74,7 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
+mod aux_schema;
 pub use babe_primitives::AuthorityId;
 
 /// A slot duration. Create with `get_or_compute`.
@@ -268,7 +263,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
-		let Epoch { ref authorities, randomness, epoch_index } = epoch;
+		let Epoch { ref authorities, randomness, epoch_index, .. } = epoch;
 		if authorities.is_empty() {
 			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
 		}
@@ -456,7 +451,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let (_epoch, pre_digest) = find_pre_digest::<B>(&header)?;
+	let (epoch, pre_digest) = find_pre_digest::<B>(&header)?;
 
 	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output } = pre_digest;
 
@@ -502,7 +497,11 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					equivocation_proof.snd_header().hash(),
 				);
 			}
-
+			epoch
+				.as_ref()
+				.map(|e| aux_schema::check_epoch(client, slot_number, e))
+				.unwrap_or(Ok(()))
+				.map_err(|e| format!("{:?}", e))?;
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
 			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
@@ -610,7 +609,7 @@ impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let Epoch { authorities, randomness, epoch_index } =
+		let Epoch { authorities, randomness, epoch_index, .. } =
 			epoch(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
@@ -1069,6 +1068,7 @@ mod tests {
 			authorities: vec![(pair.public(), 0)],
 			randomness: [0; 32],
 			epoch_index: 1,
+			duration: 100,
 		};
 		loop {
 			match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
