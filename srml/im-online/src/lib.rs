@@ -21,8 +21,8 @@
 //! as a simple mechanism to signal that the node is online in the current era.
 //!
 //! Received heartbeats are tracked for one era and reset with each new era. The
-//! module exposes a public function `is_online_in_current_era(AuthorityId)` to query if a heartbeat
-//! has been received in the current era.
+//! module exposes two public functions to query if a heartbeat has been received
+//! in the current era or session.
 //!
 //! The heartbeat is a signed transaction, which was signed using the session key
 //! and includes the recent best block number of the local validators chain as well
@@ -37,7 +37,8 @@
 //!
 //! ### Public Functions
 //!
-//! - `is_online_in_current_era` - Find out if the validator has sent a heartbeat during the current era.
+//! - `is_online_in_current_era` - True if the validator sent a heartbeat in the current era.
+//! - `is_online_in_current_session` - True if the validator sent a heartbeat in the current session.
 //!
 //! ## Usage
 //!
@@ -87,11 +88,6 @@ use srml_support::{
 	traits::Get, StorageDoubleMap, print,
 };
 use system::ensure_none;
-
-// The `StorageMap` implementation currently doesn't provide an easy way to
-// clear the map, hence we use this workaround of a `double_map` with this
-// fixed `PREFIX` constant.
-const PREFIX: u32 = 0;
 
 // The local storage database key under which the worker progress status
 // is tracked.
@@ -185,14 +181,9 @@ decl_storage! {
 		// The session index when the last new era started.
 		LastNewEraStart get(last_new_era_start) config(): Option<session::SessionIndex>;
 
-		// Mapping of AuthorityId to `offchain::OpaqueNetworkState`.
-		// We currently don't provide the deserialized struct, since the contained types
-		// don't compile for wasm (and since there is currently no need).
-		//
-		// The `StorageMap` implementation currently doesn't provide an easy way to
-		// clear the map, hence we use this workaround of a `double_map` with the
-		// fixed `PREFIX` constant.
-		ReceivedHeartbeats get(received_heartbeats) config(): double_map u32,
+		// For each session index we keep a mapping of `AuthorityId` to
+		// `offchain::OpaqueNetworkState`.
+		ReceivedHeartbeats get(received_heartbeats) config(): double_map session::SessionIndex,
 			blake2_256(T::AuthorityId) => Vec<u8>;
 	}
 }
@@ -211,13 +202,14 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			let exists = <ReceivedHeartbeats<T>>::exists(PREFIX, &heartbeat.authority_id);
+			let current_session = <session::Module<T>>::current_index();
+			let exists = <ReceivedHeartbeats<T>>::exists(current_session, &heartbeat.authority_id);
 			if !exists {
 				let now = <system::Module<T>>::block_number();
 				Self::deposit_event(RawEvent::HeartbeatReceived(now, heartbeat.authority_id.clone()));
 
 				let network_state = heartbeat.network_state.encode();
-				<ReceivedHeartbeats<T>>::insert(PREFIX, &heartbeat.authority_id, network_state);
+				<ReceivedHeartbeats<T>>::insert(current_session, &heartbeat.authority_id, network_state);
 			}
 		}
 
@@ -322,7 +314,26 @@ impl<T: Trait> Module<T> {
 	/// Returns `true` if a heartbeat has been received for `AuthorityId`
 	/// during the current era. Otherwise `false`.
 	pub fn is_online_in_current_era(authority_id: &T::AuthorityId) -> bool {
-		<ReceivedHeartbeats<T>>::exists(PREFIX, authority_id)
+		let curr = <session::Module<T>>::current_index();
+		match LastNewEraStart::get() {
+			Some(start) => {
+				// iterate over every session
+				for index in start..curr  {
+					if <ReceivedHeartbeats<T>>::exists(index, authority_id) {
+						return true;
+					}
+				}
+				false
+			},
+			None => <ReceivedHeartbeats<T>>::exists(curr, authority_id),
+		}
+	}
+
+	/// Returns `true` if a heartbeat has been received for `AuthorityId`
+	/// during the current session. Otherwise `false`.
+	pub fn is_online_in_current_session(authority_id: &T::AuthorityId) -> bool {
+		let current_session = <session::Module<T>>::current_index();
+		<ReceivedHeartbeats<T>>::exists(current_session, authority_id)
 	}
 
 	/// Session has just changed.
@@ -339,11 +350,24 @@ impl<T: Trait> Module<T> {
 				let new_era = current_session - last_new_era_start > sessions_per_era;
 				if new_era {
 					LastNewEraStart::put(current_session);
-					<ReceivedHeartbeats<T>>::remove_prefix(PREFIX);
+					Self::remove_heartbeats();
 				}
 			},
 			None => LastNewEraStart::put(current_session),
 		};
+	}
+
+	// Remove all stored heartbeats.
+	fn remove_heartbeats() {
+		let curr = <session::Module<T>>::current_index();
+		match LastNewEraStart::get() {
+			Some(start) => {
+				for index in start..curr {
+					<ReceivedHeartbeats<T>>::remove_prefix(index);
+				}
+			},
+			None => <ReceivedHeartbeats<T>>::remove_prefix(curr),
+		}
 	}
 }
 
