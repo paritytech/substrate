@@ -370,6 +370,7 @@ impl contracts::Trait for Runtime {
 	type CallBaseFee = contracts::DefaultCallBaseFee;
 	type CreateBaseFee = contracts::DefaultCreateBaseFee;
 	type MaxDepth = contracts::DefaultMaxDepth;
+	type MaxValueSize = contracts::DefaultMaxValueSize;
 	type BlockGasLimit = contracts::DefaultBlockGasLimit;
 }
 
