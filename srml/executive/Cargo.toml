@@ -17,7 +17,6 @@ system = { package = "srml-system", path = "../system", default-features = false
 hex-literal = "0.2.0"
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
-node-runtime = { path = "../../node/runtime" }
 balances = { package = "srml-balances", path = "../balances" }
 
 [features]
