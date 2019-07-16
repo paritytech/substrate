@@ -43,7 +43,8 @@ use runtime_primitives::Justification;
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{
 	Block as BlockT, DigestFor,
-	Header as HeaderT, NumberFor, ProvideRuntimeApi
+	Header as HeaderT, NumberFor, ProvideRuntimeApi,
+	BlakeTwo256, Hash,
 };
 use substrate_primitives::{H256, Blake2Hasher, crypto::Pair as Pair, ed25519};
 use transaction_pool::txpool::{self, Pool as TransactionPool};
@@ -468,16 +469,90 @@ where
 		let digest = header.digest();
 
 		let api = self.api.runtime_api();
-		let maybe_challenge = api.grandpa_challenges(&at, digest);
+		let maybe_challenges = api.grandpa_challenges(&at, digest);
 
-		match maybe_challenge {
+		match maybe_challenges {
 			Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
-			Ok(Some(challenge)) => {
+			Ok(Some(challenges)) => {
+				let local_key = self.local_key.clone().expect("FIXME");
 
-				// let round_s = challenge.rejecting_set.round;
-				// let round_b = challenge.finalized_block_proof.round;
+				let challenge = challenges[0].clone(); // TODO: generalize to many.
 
-				// if round_b == round_s {
+				// Check that we are one of the suspects.
+				let public = local_key.public();
+				let mut suspected = false;
+
+				for suspect in challenge.suspects.iter() {
+					if &public == suspect {
+						suspected = true;
+					}
+				}
+
+				if !suspected {
+					return Ok(None)
+				}
+
+				let round_s = challenge.rejecting_set.round;
+				let finalized_block_proof = challenge.finalized_block_proof.clone().expect("FIXME");
+				let round_b = finalized_block_proof.round;
+
+				if round_b == round_s {
+					// We only need to answer if the votes are prevotes.
+					for challenged_vote in challenge.rejecting_set.votes.clone() {
+						if !challenged_vote.vote.is_prevote() {
+							return Ok(None)
+						}
+					}
+
+					// We answer with the set of prevotes seen.
+					let round = challenge.rejecting_set.round;
+					let votes = self.votes_seen_when_prevoted(round)
+						.into_iter()
+						.map(|signed_message| {
+							ChallengedVote {
+								vote: signed_message.message,
+								authority: signed_message.id,
+								signature: signed_message.signature,
+							}
+						})
+						.collect();
+
+					let headers = vec![];
+
+					let rejecting_set = RejectingVoteSet {
+						votes,
+						headers,
+						round,
+					};
+					let finalized_block = challenge.finalized_block;
+					let finalized_block_proof = None;
+					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
+
+					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+
+					let answer = Challenge::<Block> {
+						suspects: vec![], // TODO: Should we fill it from finalized_block_proof?
+						finalized_block,
+						finalized_block_proof,
+						rejecting_set,
+						previous_challenge,
+					};
+
+					self.api.runtime_api()
+					.construct_rejecting_prevotes_report_call(
+						&block_id,
+						answer,
+					)
+					.map(|call| {
+						self.transaction_pool.as_ref().map(|txpool| {
+							txpool.submit_report_call(self.inner.as_ref(), &local_key, call.unwrap().as_slice())
+						});
+						info!(target: "afg", "Unjustified prevotes report has been submitted")
+					}).unwrap_or_else(|err|
+						error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
+					);
+
+				}
 				// 	// Case 1: Rejecting set contains only precommits.
 				// 	let mut authority_vote_map = HashMap::new();
 				// 	let mut equivocators_set = HashSet::new();
@@ -514,7 +589,6 @@ where
 				// 	}
 				// }
 
-				// let votes_seen = self.votes_seen_when_prevoted(challenge.rejecting_votes.round);
 				// let votes_seen = vec![
 				// 	SignedMessage {
 				// 		message:, // Prevote, Precommit, PrimaryPropose.
@@ -553,21 +627,7 @@ where
 				// if challenged {
 				// 	let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 					
-				// 	self.api.runtime_api()
-				// 		.construct_report_unjustified_prevotes_call(
-				// 			&block_id,
-				// 			challenge,
-				// 		)
-				// 		.map(|call| {
-				// 			self.transaction_pool.as_ref().map(|txpool| {
-				// 				let pair = Pair::from_string("FIXME", None).expect("FIXME");
-				// 				txpool.submit_report_call(self.inner.as_ref(), pair, call.as_slice())
-				// 			});
-				// 			info!(target: "afg", "Unjustified prevotes report has been submitted")
-				// 		}).unwrap_or_else(|err|
-				// 			error!(target: "afg", "Error constructing unjustified prevotes report: {}", err)
-				// 		);
-				// }
+				
 
 				Ok(None)
 			},

@@ -299,14 +299,15 @@ decl_module! {
 			}
 
 			let round_s = challenge.rejecting_set.round;
-			let round_b = challenge.finalized_block_proof.round;
+			let finalized_block_proof = challenge.finalized_block_proof.clone().expect("FIXME");
+			let round_b = finalized_block_proof.round;
 
 			if round_s == round_b {
 				// Check that block proof contains supermajority of precommits for B.
 				// TODO: Check signatures.
 				{
-					let headers: &[T::Header] = challenge.finalized_block_proof.headers.as_slice();
-					let commit = challenge.finalized_block_proof.commit.clone();
+					let headers: &[T::Header] = finalized_block_proof.headers.as_slice();
+					let commit = finalized_block_proof.commit.clone();
 					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
 					let voters = <Module<T>>::grandpa_authorities();
 					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
@@ -397,7 +398,8 @@ decl_module! {
 
 			// TODO: Check these two guys.
 			let round_s = challenge.rejecting_set.round;
-			let round_b = challenge.finalized_block_proof.round;
+			let finalized_block_proof = challenge.finalized_block_proof.clone().expect("FIXME");
+			let round_b = finalized_block_proof.round;
 
 			if round_b == round_s {
 				// Case 1: Rejecting set contains only precommits.

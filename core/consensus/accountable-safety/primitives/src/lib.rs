@@ -83,7 +83,7 @@ pub struct GrandpaEquivocation<H, N> {
 pub struct Challenge<H, N, Header> {
 	pub suspects: Vec<AuthorityId>, // TODO: Optimize to bitset?
 	pub finalized_block: (H, N),
-	pub finalized_block_proof: FinalizedBlockProof<H, N, Header>,
+	pub finalized_block_proof: Option<FinalizedBlockProof<H, N, Header>>,
 	pub rejecting_set: RejectingVoteSet<H, N, Header>,
 	pub previous_challenge: Option<H>,
 }
