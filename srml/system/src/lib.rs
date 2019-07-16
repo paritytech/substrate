@@ -208,20 +208,20 @@ decl_module! {
 		/// Set the number of pages in the WebAssembly environment's heap.
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			storage::unhashed::put_raw(crate::child_key(), well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
 		pub fn set_code(origin, new: Vec<u8>) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+			storage::unhashed::put_raw(crate::child_key(), well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
-				storage::unhashed::put_raw(&i.0, &i.1);
+				storage::unhashed::put_raw(crate::child_key(), &i.0, &i.1);
 			}
 		}
 
@@ -229,7 +229,7 @@ decl_module! {
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
-				storage::unhashed::kill(&key);
+				storage::unhashed::kill(crate::child_key(), &key);
 			}
 		}
 	}
@@ -524,7 +524,7 @@ impl<T: Trait> Module<T> {
 
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
-		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
+		storage::unhashed::get(crate::child_key(), well_known_keys::EXTRINSIC_INDEX)
 	}
 
 	/// Gets extrinsics count.
@@ -545,7 +545,7 @@ impl<T: Trait> Module<T> {
 		digest: &DigestOf<T>,
 	) {
 		// populate environment
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+		storage::unhashed::put(crate::child_key(), well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
@@ -631,7 +631,7 @@ impl<T: Trait> Module<T> {
 	/// Sets the index of extrinsic that is currently executing.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)
+		storage::unhashed::put(crate::child_key(), well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
@@ -729,14 +729,14 @@ impl<T: Trait> Module<T> {
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		storage::unhashed::put(crate::child_key(), well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
 		AllExtrinsicsWeight::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(crate::child_key(), well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 

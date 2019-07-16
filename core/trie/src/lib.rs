@@ -145,7 +145,7 @@ where
 /// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
 pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 	use substrate_primitives::storage::well_known_keys;
-	let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
+	let has_right_prefix = storage_key.starts_with(b":child_storage:");
 	if has_right_prefix {
 		// This is an attempt to catch a change of `is_child_storage_key`, which
 		// just checks if the key has prefix `:child_storage:` at the moment of writing.

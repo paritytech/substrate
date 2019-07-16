@@ -126,6 +126,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			{
 				type Query = #value_type;
 
+				/// Get the child storage key.
+        fn child_key() -> &'static [u8] {
+          child_key()
+        }
+	
 				/// Get the storage key.
 				fn key() -> &'static [u8] {
 					#final_prefix
@@ -239,6 +244,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				type Hasher = #scrate::#hasher;
 
+				/// Get the child storage key.
+        fn child_key() -> &'static [u8] {
+          child_key()
+        }
+	
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
 					#final_prefix
@@ -565,6 +575,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				type Hasher = #scrate::#hasher;
 
+				/// Get the child storage key.
+        fn child_key() -> &'static [u8] {
+          child_key()
+        }
+	
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
 					#final_prefix
@@ -751,6 +766,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			{
 				type Query = #value_type;
 
+				/// Get the child storage key.
+        fn child_key() -> &'static [u8] {
+          child_key()
+        }
+	
 				fn prefix_for(k1: &#k1ty) -> Vec<u8> {
 					use #scrate::storage::hashed::generator::StorageHasher;
 

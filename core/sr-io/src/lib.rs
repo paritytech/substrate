@@ -139,6 +139,10 @@ export_api! {
 		/// Clear the storage entries with a key that starts with the given prefix.
 		fn clear_prefix(prefix: &[u8]);
 
+    /// For a child trie,
+		/// clear the storage entries with a key that starts with the given prefix.
+		fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]);
+
 		/// "Commit" all existing operations and compute the resultant storage root.
 		fn storage_root() -> [u8; 32];
 

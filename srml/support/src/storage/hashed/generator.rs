@@ -165,6 +165,9 @@ pub trait StorageValue<T: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Get the child storage key.
+	fn child_key() -> &'static [u8];
+
 	/// Get the storage key.
 	fn key() -> &'static [u8];
 
@@ -220,6 +223,9 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	type Query;
 
 	type Hasher: StorageHasher;
+
+	/// Get the prefix key in storage.
+	fn child_key() -> &'static [u8];
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
