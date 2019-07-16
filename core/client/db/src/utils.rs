@@ -330,3 +330,19 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 		genesis_hash,
 	})
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
+	#[test]
+	fn number_index_key_doesnt_panic() {
+		let id = BlockId::<Block>::Number(72340207214430721);
+		match id {
+			BlockId::Number(n) => assert!(number_index_key(n).is_err()),
+			_ => unreachable!()
+		};
+	}
+}
