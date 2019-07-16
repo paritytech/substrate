@@ -72,7 +72,7 @@ pub fn check_epoch<C>(
 			error!("BABE slot number overflow ― storage is corrupt!");
 			u64::MAX
 		});
-	if slot_now != expected_slot_number {
+	if slot_now < expected_slot_number {
 		return Err(ClientError::Backend(format!(
 			"Invalid BABE epoch: wrong slot for epoch change: expected {:?}, got {:?}",
 			expected_slot_number,

@@ -138,7 +138,7 @@ where
 }
 
 /// A header which has been checked
-pub enum CheckedHeader<H, I, S> {
+pub enum CheckedHeader<H, S> {
 	/// A header which has slot in the future. this is the full header (not stripped)
 	/// and the slot in which it should be processed.
 	Deferred(H, u64),
@@ -146,7 +146,7 @@ pub enum CheckedHeader<H, I, S> {
 	/// accompanied by the seal components.
 	///
 	/// Includes the digest item that encoded the seal.
-	Checked(I, S),
+	Checked(H, S),
 }
 
 /// A type from which a slot duration can be obtained.

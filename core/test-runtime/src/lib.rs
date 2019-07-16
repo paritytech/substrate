@@ -598,10 +598,6 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_babe::Trait<Block> for Runtime {
-				fn babe_epoch_duration() -> u64 { 20 }
-			}
-
 			impl self::TestAPI<Block> for Runtime {
 				fn balance_of(id: AccountId) -> u64 {
 					system::balance_of(id)
@@ -688,6 +684,7 @@ cfg_if! {
 						authorities,
 						randomness: srml_babe::random::<Runtime>(),
 						epoch_index: 1,
+						duration: 20,
 					}
 				}
 			}

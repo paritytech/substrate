@@ -438,7 +438,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	randomness: [u8; 32],
 	epoch_index: u64,
 	threshold: u64,
-) -> Result<CheckedHeader<B::Header, B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
+) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
