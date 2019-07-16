@@ -20,7 +20,8 @@
 use crate::changes_trie::{Configuration, BlockNumber};
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
-/// changes trie of given block.
+/// changes trie of given block. Blocks are guaranteed to be returned in
+/// ascending order.
 pub fn digest_build_iterator<Number: BlockNumber>(
 	config: &Configuration,
 	block: Number,
@@ -47,6 +48,8 @@ pub struct DigestBuildIterator<Number: BlockNumber> {
 	max_step: u32,
 	/// Step of current blocks range.
 	current_step: u32,
+	/// Reverse step of current blocks range.
+	current_step_reverse: u32,
 	/// Current blocks range.
 	current_range: Option<BlocksRange<Number>>,
 }
@@ -58,7 +61,8 @@ impl<Number: BlockNumber> DigestBuildIterator<Number> {
 			block,
 			digest_interval,
 			max_step,
-			current_step: 0,
+			current_step: max_step,
+			current_step_reverse: 0,
 			current_range: None,
 		}
 	}
@@ -81,17 +85,26 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 		// DigestBuildIterator is created only by internal function that is checking
 		// that all multiplications/subtractions are safe within max_step limit
 
-		let next_step = if self.current_step == 0 { 1 } else { self.current_step * self.digest_interval };
-		if next_step > self.max_step {
+		let next_step_reverse = if self.current_step_reverse == 0 {
+			1
+		} else {
+			self.current_step_reverse * self.digest_interval
+		};
+		if next_step_reverse > self.max_step {
 			return None;
 		}
 
-		self.current_step = next_step;
+		self.current_step_reverse = next_step_reverse;
 		self.current_range = Some(BlocksRange::new(
 			self.block.clone() - (self.current_step * self.digest_interval - self.current_step).into(),
 			self.block.clone(),
 			self.current_step.into(),
 		));
+
+		self.current_step = self.current_step / self.digest_interval;
+		if self.current_step == 0 {
+			self.current_step = 1;
+		}
 
 		Some(self.current_range.as_mut()
 			.expect("assigned one line above; qed")
@@ -203,18 +216,18 @@ mod tests {
 	fn digest_iterator_returns_level1_and_level2_blocks() {
 		assert_eq!(digest_build_iterator_blocks(16, 2, 256),
 			vec![
-				// level2 is a level1 digest of 16-1 previous blocks:
-				241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255,
 				// level2 points to previous 16-1 level1 digests:
 				16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240,
+				// level2 is a level1 digest of 16-1 previous blocks:
+				241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255,
 			],
 		);
 		assert_eq!(digest_build_iterator_blocks(16, 2, 4096),
 			vec![
-				// level2 is a level1 digest of 16-1 previous blocks:
-				4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
 				// level2 points to previous 16-1 level1 digests:
 				3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048, 4064, 4080,
+				// level2 is a level1 digest of 16-1 previous blocks:
+				4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
 			],
 		);
 	}
@@ -223,12 +236,12 @@ mod tests {
 	fn digest_iterator_returns_level1_and_level2_and_level3_blocks() {
 		assert_eq!(digest_build_iterator_blocks(16, 3, 4096),
 			vec![
-				// level3 is a level1 digest of 16-1 previous blocks:
-				4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
-				// level3 points to previous 16-1 level1 digests:
-				3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048, 4064, 4080,
 				// level3 points to previous 16-1 level2 digests:
 				256, 512, 768, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840,
+				// level3 points to previous 16-1 level1 digests:
+				3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048, 4064, 4080,
+				// level3 is a level1 digest of 16-1 previous blocks:
+				4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
 			],
 		);
 	}
