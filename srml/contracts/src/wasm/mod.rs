@@ -215,8 +215,11 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>)
+			-> Result<(), &'static str>
+		{
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -293,6 +296,8 @@ mod tests {
 		}
 
 		fn block_number(&self) -> u64 { 121 }
+
+		fn max_value_size(&self) -> u32 { 16_384 }
 	}
 
 	fn execute<E: Ext>(
