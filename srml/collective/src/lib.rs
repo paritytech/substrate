@@ -62,7 +62,7 @@ pub enum RawOrigin<AccountId, I> {
 }
 
 /// Origin for the collective module.
-pub type Origin<T, I> = RawOrigin<<T as system::Trait>::AccountId, I>;
+pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -97,7 +97,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T, I> where
+	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::Hash,
 		<T as system::Trait>::AccountId,
 		Phantom = rstd::marker::PhantomData<T>
@@ -420,6 +420,11 @@ mod tests {
 		type Proposal = Call;
 		type Event = Event;
 	}
+	impl Trait for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+	}
 
 	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = primitives::generic::UncheckedMortalCompactExtrinsic<u32, u64, Call, ()>;
@@ -432,6 +437,7 @@ mod tests {
 		{
 			System: system::{Module, Call, Event},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
 
@@ -441,6 +447,7 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
+			collective: None,
 		}.build_storage().unwrap().0.into()
 	}
 
