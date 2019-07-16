@@ -131,6 +131,51 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// Macro for implement static `base_severity` for your misconduct type
+#[macro_export]
+macro_rules! impl_base_severity {
+	// type with type parameters
+	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >, $t: ty : $seve: expr) => {
+		impl< $( $N $(: $b0 $(+$b)* )? ),* > $ty< $( $N ),* > {
+			fn base_severity() -> $t {
+				$seve
+			}
+		}
+	};
+
+	// type without type parameters
+	($ty:ident, $t: ty : $seve: expr) => {
+		impl $ty {
+			fn base_severity() -> $t {
+				$seve
+			}
+		}
+	};
+}
+
+/// Macro for implement static `kind of misconduct` for your misconduct type
+/// which includes the
+#[macro_export]
+macro_rules! impl_kind {
+	// type with type parameters
+	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >, $t: ty : $kind: expr) => {
+
+		impl< $( $N $(: $b0 $(+$b)* )? ),* > $ty< $( $N ),* > {
+			fn kind() -> $t {
+				$kind
+			}
+		}
+	};
+
+	// type without type parameters
+	($ty:ident, $t: ty : $kind: expr) => {
+		impl $ty {
+			fn kind() -> $t {
+				$kind
+			}
+		}
+	};
+}
 
 #[cfg(test)]
 mod tests {
@@ -230,5 +275,25 @@ mod tests {
 			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 5);
 			assert_eq!(RollingWindow::get_misbehaved_unique(Kind::Two), 1);
 		});
+	}
+
+
+	#[test]
+	fn macros() {
+		use rstd::marker::PhantomData;
+
+		struct Bar;
+
+		struct Foo<T, U>((PhantomData<T>, PhantomData<U>));
+
+		impl_base_severity!(Bar, usize: 1);
+		impl_base_severity!(Foo<T, U>, usize: 1337);
+		impl_kind!(Bar, Kind: Kind::One);
+		impl_kind!(Foo<T, U>, Kind: Kind::Two);
+
+		assert_eq!(Bar::base_severity(), 1);
+		assert_eq!(Foo::<u32, u64>::base_severity(), 1337);
+		assert_eq!(Bar::kind(), Kind::One);
+		assert_eq!(Foo::<u32, u64>::kind(), Kind::Two);
 	}
 }

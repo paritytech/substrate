@@ -60,7 +60,7 @@ impl Get<u64> for ExistentialDeposit {
 	}
 }
 
-#[derive(Debug, Copy, Clone, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Encode, Decode, Serialize, Deserialize, PartialEq)]
 pub enum Kind {
 	One,
 	Two,
