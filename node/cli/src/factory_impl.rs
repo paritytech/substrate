@@ -23,7 +23,7 @@ use rand::rngs::StdRng;
 
 use parity_codec::Decode;
 use keyring::sr25519::Keyring;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, Runtime};
+use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall};
 use primitives::{sr25519, crypto::Pair};
 use parity_codec::Encode;
 use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
@@ -52,7 +52,7 @@ pub struct FactoryState<N> {
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 
 impl<Number> FactoryState<Number> {
-	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra<Runtime> {
+	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
@@ -234,7 +234,7 @@ fn gen_seed_bytes(seed: u64) -> [u8; 32] {
 fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 	xt: CheckedExtrinsic,
 	key: &sr25519::Pair,
-	additional_signed: <SignedExtra<Runtime> as SignedExtension>::AdditionalSigned,
+	additional_signed: <SignedExtra as SignedExtension>::AdditionalSigned,
 ) -> <RA::Block as BlockT>::Extrinsic {
 	let s = match xt.signed {
 		Some((signed, extra)) => {

@@ -775,6 +775,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
 	type AdditionalSigned = ();
 
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
 	fn pre_dispatch(
 		self,
 		_who: &Self::AccountId,
@@ -838,6 +840,8 @@ impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
 	type AdditionalSigned = ();
+
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -1155,6 +1159,22 @@ mod tests {
 			AllExtrinsicsWeight::put(512);
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, (513, 0)).is_err());
 
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			// future
+			assert_eq!(
+				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				"transaction birth block ancient"
+			);
+
+			// correct
+			System::set_block_number(13);
+			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
+			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
 		})
 	}
 }

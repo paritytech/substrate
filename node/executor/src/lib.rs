@@ -139,7 +139,7 @@ mod tests {
 		}
 	}
 
-	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra<Runtime> {
+	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		(
 			system::CheckEra::from(Era::mortal(256, 0)),
 			system::CheckNonce::from(nonce),
