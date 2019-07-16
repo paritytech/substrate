@@ -34,7 +34,6 @@ pub use runtime_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
@@ -159,10 +158,14 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
 impl timestamp::Trait for Runtime {
 	/// A timestamp: seconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
+	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -211,7 +214,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
