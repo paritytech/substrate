@@ -96,6 +96,7 @@ impl Get<u64> for BlockGasLimit {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -108,6 +109,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
 }
 parameter_types! {
 	pub const BalancesTransactionBaseFee: u64 = 0;

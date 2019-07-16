@@ -87,7 +87,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
 	let extra = |i: Index, f: Balance| {
-		(system::CheckNonce::<Runtime>::from(i), balances::TakeFees::<Runtime>::from(f))
+		(
+			system::CheckEra::<Runtime>::from(Era::Immortal),
+			system::CheckNonce::<Runtime>::from(i),
+			system::CheckWeight::<Runtime>::from(),
+			balances::TakeFees::<Runtime>::from(f),
+		)
 	};
 	let password = matches.value_of("password");
 	match matches.subcommand() {
@@ -155,9 +160,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
-			let era = Era::immortal();
-
-			let raw_payload = (function, era, genesis_hash, extra(index, 0));
+			let raw_payload = (function, extra(index, 0), genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
@@ -168,7 +171,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
-				era,
 				extra(index, 0),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
@@ -209,7 +211,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
-				era,
 				extra(index, 0),
 			);
 

@@ -87,6 +87,7 @@ impl_outer_origin!{
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -99,6 +100,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
 }
 parameter_types! {
 	pub const TransferFee: u64 = 0;

@@ -76,6 +76,7 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
+use rstd::marker::PhantomData;
 use primitives::{
 	generic::{self, Era}, weights::Weight, traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
@@ -190,6 +191,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
+
+	/// The maximum weight of a block.
+	type MaximumBlockWeight: Get<Weight>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -725,17 +729,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, _encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = encoded_len.saturating_add(Self::all_extrinsics_weight());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		AllExtrinsicsWeight::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -750,6 +752,61 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+/// Weight limit check and increment.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
+
+impl<T: Trait + Send + Sync> CheckWeight<T> {
+	fn internal_check_weight(weight: Weight) -> Result<(), DispatchError> {
+		let current_weight = Module::<T>::all_extrinsics_weight();
+		let next_weight = current_weight.saturating_add(weight);
+		if next_weight > T::MaximumBlockWeight::get() {
+			return Err(DispatchError::Payment)
+		}
+		AllExtrinsicsWeight::put(next_weight);
+		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
+	fn pre_dispatch(
+		self,
+		_who: &Self::AccountId,
+		weight: Weight,
+	) -> Result<(), DispatchError> {
+		Self::internal_check_weight(weight)
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_weight: Weight,
+	) -> Result<ValidTransaction, DispatchError> {
+		// TODO: check for a maximum size and weight here as well.
+		// write priority based on tx weight type + tip.
+		Ok(ValidTransaction::default())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckWeight<T> {
+	pub fn from() -> Self {
+		Self(PhantomData)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		write!(f, "CheckWeight<T>")
 	}
 }
 
@@ -775,7 +832,9 @@ impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
 	type AdditionalSigned = ();
-	fn additional_signed(&self) -> Result<(), &'static str> { Ok(()) }
+
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -819,7 +878,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	}
 }
 
-
 /// Nonce check and increment to give replay protection for transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
@@ -849,7 +907,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		Ok(<Module<T>>::block_hash(n))
 	}
 }
-
 
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
@@ -898,6 +955,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
+		pub const MaximumBlockWeight: Weight = 1024;
 	}
 
 	impl Trait for Test {
@@ -911,6 +969,7 @@ mod tests {
 		type Header = Header;
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
 	}
 
 	impl From<Event> for u16 {
@@ -1059,6 +1118,54 @@ mod tests {
 					[n as u8; 32].into(),
 				);
 			}
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_nonce_works() {
+		with_externalities(&mut new_test_ext(), || {
+			<AccountNonce<Test>>::insert(1, 1);
+			// stale
+			assert!(CheckNonce::<Test>(0).validate(&1, 0).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, 0).is_err());
+			// correct
+			assert!(CheckNonce::<Test>(1).validate(&1, 0).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, 0).is_ok());
+			// future
+			assert!(CheckNonce::<Test>(5).validate(&1, 0).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, 0).is_err());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_works() {
+		with_externalities(&mut new_test_ext(), || {
+			// small
+			AllExtrinsicsWeight::put(512);
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 100).is_ok());
+			// almost
+			AllExtrinsicsWeight::put(512);
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 512).is_ok());
+			// big
+			AllExtrinsicsWeight::put(512);
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 513).is_err());
+
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			// future
+			assert_eq!(
+				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				"transaction birth block ancient"
+			);
+
+			// correct
+			System::set_block_number(13);
+			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
+			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
 		})
 	}
 }
