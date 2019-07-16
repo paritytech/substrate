@@ -397,7 +397,7 @@ decl_module! {
 		// If you don't respect these rules, it is likely that your chain will be attackable.
 		//
 		// Each transaction can optionally indicate a weight. The weight is passed in as a
-		// custom attribute and the value can be anything that implements the `Weighable`
+		// custom attribute and the value can be anything that implements the `Weigh`
 		// trait. Most often using substrate's default `TransactionWeight` is enough for you.
 		//
 		// A basic weight is a tuple of `(base_weight, byte_weight)`. Upon including each transaction

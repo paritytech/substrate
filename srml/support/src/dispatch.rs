@@ -26,7 +26,7 @@ pub use srml_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
 pub use sr_primitives::{
-	weights::{TransactionWeight, Weighable, Weight}, traits::{Dispatchable, DispatchResult}
+	weights::{TransactionWeight, Weigh, Weight, WeighData}, traits::{Dispatchable, DispatchResult}
 };
 
 /// A type that cannot be instantiated.
@@ -1108,12 +1108,13 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weighable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Weigh
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn weight(&self, _len: usize) -> $crate::dispatch::Weight {
+			fn weigh(&self) -> $crate::dispatch::Weight {
 				match self {
-					$( $call_type::$fn_name(..) => $crate::dispatch::Weighable::weight(&$weight, _len), )*
+					$( $call_type::$fn_name($( ref $param_name ),*) =>
+						<$crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
@@ -1260,10 +1261,10 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}
-		impl $crate::dispatch::Weighable for $call_type {
-			fn weight(&self, len: usize) -> $crate::dispatch::Weight {
+		impl $crate::dispatch::Weigh for $call_type {
+			fn weigh(&self) -> $crate::dispatch::Weight {
 				match self {
-					$( $call_type::$camelcase(call) => call.weight(len), )*
+					$( $call_type::$camelcase(call) => call.weigh(), )*
 				}
 			}
 		}

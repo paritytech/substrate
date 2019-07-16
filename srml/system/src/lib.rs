@@ -781,6 +781,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		self,
 		_who: &Self::AccountId,
 		weight: Weight,
+		_len: usize,
 	) -> Result<(), DispatchError> {
 		Self::internal_check_weight(weight)
 	}
@@ -789,6 +790,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		&self,
 		_who: &Self::AccountId,
 		_weight: Weight,
+		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		// TODO: check for a maximum size and weight here as well.
 		// write priority based on tx weight type + tip.
@@ -839,6 +841,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		self,
 		who: &Self::AccountId,
 		_weight: Weight,
+		_len: usize,
 	) -> Result<(), DispatchError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
@@ -854,6 +857,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		&self,
 		who: &Self::AccountId,
 		_weight: Weight,
+		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		// check index
 		let expected = <AccountNonce<T>>::get(who);

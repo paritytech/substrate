@@ -86,7 +86,7 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::Weighable;
+use primitives::weights::Weigh;
 
 mod internal {
 	use primitives::traits::DispatchError;
@@ -141,7 +141,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weigh,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -160,7 +160,7 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weigh,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -284,8 +284,8 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let weight = xt.weight(encoded_len);
-		let r = Applyable::dispatch(xt, weight)
+		let weight = xt.weigh();
+		let r = Applyable::dispatch(xt, weight, encoded_len)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -327,8 +327,7 @@ where
 		const UNKNOWN_ERROR: i8 = -127;
 		const INVALID_INDEX: i8 = -10;
 
-		let encoded_len = uxt.encode().len();
-
+		let encoded_len = uxt.using_encoded(|d| d.len());
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -340,9 +339,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let weight = xt.weight(encoded_len);
-
-		xt.validate::<UnsignedValidator>(weight)
+		let weight = xt.weigh();
+		xt.validate::<UnsignedValidator>(weight, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

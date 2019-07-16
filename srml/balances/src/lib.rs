@@ -1178,9 +1178,10 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		&self,
 		who: &Self::AccountId,
 		weight: Weight,
+		_len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
 		let fee_x = T::Balance::from(weight);
-		// TODO: should be weight_to_fee(weight)
+		// TODO: should be weight_and_size_to_fee(weight, _len)
 		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
 		let fee = fee + self.0.clone();
 		let imbalance = <Module<T, I>>::withdraw(
