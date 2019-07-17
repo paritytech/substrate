@@ -66,7 +66,7 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService| {
+			|service: Self::FullService, state: &mut FullComponentsSetupState<Self>| {
 				if let Some(key) = service.authority_key::<Pair>() {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
@@ -84,8 +84,8 @@ construct_service_factory! {
 						client,
 						proposer,
 						service.network(),
-						service.config.custom.inherent_data_providers.clone(),
-						service.config.force_authoring,
+						state.custom.inherent_data_providers.clone(),
+						state.config.force_authoring,
 					)?;
 					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
@@ -98,21 +98,21 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
+			{ ||state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,
 						None,
 						client,
-						config.custom.inherent_data_providers.clone(),
+						state.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}
 			},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+			{ |state: &mut FullComponentsSetupState<Self>, client: Arc<LightClient<Self>>| {
 					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
@@ -120,14 +120,13 @@ construct_service_factory! {
 						None,
 						None,
 						client,
-						config.custom.inherent_data_providers.clone(),
+						state.custom.inherent_data_providers.clone(),
 					).map(|q| (q, fprb)).map_err(Into::into)
 				}
 			},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
-			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-				#[allow(deprecated)]
-				Ok(LongestChain::new(client.backend().clone()))
+			{ ||state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
+				Ok(LongestChain::new(state.backend.clone()))
 			}
 		},
 		FinalityProofProvider =  { |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
