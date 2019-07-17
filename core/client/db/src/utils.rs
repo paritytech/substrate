@@ -31,8 +31,8 @@ use parity_codec::Decode;
 use trie::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, UniqueSaturatedFrom,
-	UniqueSaturatedInto, CheckedConversion
+	Block as BlockT, Header as HeaderT, Zero,
+	UniqueSaturatedFrom, UniqueSaturatedInto,
 };
 #[cfg(feature = "kvdb-rocksdb")]
 use crate::DatabaseSettings;
@@ -85,11 +85,9 @@ pub type NumberIndexKey = [u8; 4];
 /// In the current database schema, this kind of key is only used for
 /// lookups into an index, NOT for storing header data or others.
 pub fn number_index_key<N: TryInto<u32>>(n: N) -> client::error::Result<NumberIndexKey> {
-	let n = if let Some(n) = n.checked_into::<u32>() {
-		n
-	} else {
-		return Err(client::error::Error::Backend("Block number cannot be converted to u32".into()))?;
-	};
+	let n = n.try_into().map_err(|_|
+		client::error::Error::Backend("Block number cannot be converted to u32".into())
+	)?;
 
 	Ok([
 		(n >> 24) as u8,
@@ -341,8 +339,8 @@ mod tests {
 	fn number_index_key_doesnt_panic() {
 		let id = BlockId::<Block>::Number(72340207214430721);
 		match id {
-			BlockId::Number(n) => assert!(number_index_key(n).is_err()),
-			_ => unreachable!()
+			BlockId::Number(n) => number_index_key(n).expect_err("number should overflow u32"),
+			_ => unreachable!(),
 		};
 	}
 }
