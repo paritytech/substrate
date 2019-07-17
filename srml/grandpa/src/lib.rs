@@ -229,14 +229,14 @@ decl_module! {
 
 			// TODO: Hmm, probably I need another struct for `answer`.
 			for (idx, proof) in proofs.iter().enumerate() {
-				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::ED25519, answer.suspects[idx].encode()),
+				let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::ED25519, answer.targets[idx].encode()),
 					proof.clone(),
 				);
-				if maybe_suspects.is_none() {
+				if maybe_targets.is_none() {
 					return Err("Bad session key proof")
 				}
-				to_punish.push(maybe_suspects.expect("already checked; qed"));
+				to_punish.push(maybe_targets.expect("already checked; qed"));
 			}
 
 			// Check that prevotes set has supermajority for B.
@@ -280,7 +280,7 @@ decl_module! {
 		}
 
 		/// Report rejecting set of prevotes.
-		fn report_rejecting_prevotes(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
+		fn report_rejecting_set(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
 			ensure_signed(origin)?;
 
 			let (challenge, proofs) = proved_challenge;
@@ -288,14 +288,14 @@ decl_module! {
 			let mut to_punish = Vec::new();
 
 			for (idx, proof) in proofs.iter().enumerate() {
-				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::ED25519, challenge.suspects[idx].encode()),
+				let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::ED25519, challenge.targets[idx].encode()),
 					proof.clone(),
 				);
-				if maybe_suspects.is_none() {
+				if maybe_targets.is_none() {
 					return Err("Bad session key proof")
 				}
-				to_punish.push(maybe_suspects.expect("already checked; qed"));
+				to_punish.push(maybe_targets.expect("already checked; qed"));
 			}
 
 			let round_s = challenge.rejecting_set.round;
@@ -390,72 +390,72 @@ decl_module! {
 		}
 
 		/// Report rejecting set of precommits.
-		fn report_rejecting_precommits(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
-			ensure_signed(origin)?;
-			// TODO: Check that is a *new* challenge?
+		// fn report_rejecting_precommits(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
+		// 	ensure_signed(origin)?;
+		// 	// TODO: Check that is a *new* challenge?
 			
-			let (challenge, proofs) = proved_challenge;
+		// 	let (challenge, proofs) = proved_challenge;
 
-			let mut to_punish = Vec::new();
+		// 	let mut to_punish = Vec::new();
 
-			for (idx, proof) in proofs.iter().enumerate() {
-				let maybe_suspects = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::ED25519, challenge.suspects[idx].encode()),
-					proof.clone(),
-				);
-				if maybe_suspects.is_none() {
-					return Err("Bad session key proof")
-				}
-				to_punish.push(maybe_suspects.expect("already checked; qed"));
-			}
+		// 	for (idx, proof) in proofs.iter().enumerate() {
+		// 		let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
+		// 			(key_types::ED25519, challenge.targets[idx].encode()),
+		// 			proof.clone(),
+		// 		);
+		// 		if maybe_targets.is_none() {
+		// 			return Err("Bad session key proof")
+		// 		}
+		// 		to_punish.push(maybe_targets.expect("already checked; qed"));
+		// 	}
 
-			// TODO: Check these two guys.
-			let round_s = challenge.rejecting_set.round;
-			let finalized_block_proof = challenge.finalized_block_proof.clone();
-			let round_b = finalized_block_proof.round;
+		// 	// TODO: Check these two guys.
+		// 	let round_s = challenge.rejecting_set.round;
+		// 	let finalized_block_proof = challenge.finalized_block_proof.clone();
+		// 	let round_b = finalized_block_proof.round;
 
-			if round_b == round_s {
-				// Case 1: Rejecting set contains only precommits.
-				let mut authority_vote_map = BTreeMap::new();
-				let mut equivocators_set = BTreeSet::new();
+		// 	if round_b == round_s {
+		// 		// Case 1: Rejecting set contains only precommits.
+		// 		let mut authority_vote_map = BTreeMap::new();
+		// 		let mut equivocators_set = BTreeSet::new();
 
-				for challenged_vote in challenge.rejecting_set.votes.clone() {
-					// TODO: Check signature.
-					let ChallengedVote { vote, authority, signature } = challenged_vote;
-					match authority_vote_map.get(&authority) {
-						Some(previous_vote) => {
-							if &vote != previous_vote {
-								equivocators_set.insert(authority);
-							}
-						},
-						None => {
-							authority_vote_map.insert(authority, vote);
-						},
-					}
-				}
+		// 		for challenged_vote in challenge.rejecting_set.votes.clone() {
+		// 			// TODO: Check signature.
+		// 			let ChallengedVote { vote, authority, signature } = challenged_vote;
+		// 			match authority_vote_map.get(&authority) {
+		// 				Some(previous_vote) => {
+		// 					if &vote != previous_vote {
+		// 						equivocators_set.insert(authority);
+		// 					}
+		// 				},
+		// 				None => {
+		// 					authority_vote_map.insert(authority, vote);
+		// 				},
+		// 			}
+		// 		}
 
-				// TODO: Slash the equivocators in `equivocators_set`.
-			}
+		// 		// TODO: Slash the equivocators in `equivocators_set`.
+		// 	}
 
-			if round_s > round_b {
-				// Iterate by attaching a digest.
+		// 	if round_s > round_b {
+		// 		// Iterate by attaching a digest.
 
-				// Push new session.
-				let parent_hash = <system::Module<T>>::parent_hash();
-				let current_height = <system::ChainContext::<T>>::default().current_height();
+		// 		// Push new session.
+		// 		let parent_hash = <system::Module<T>>::parent_hash();
+		// 		let current_height = <system::ChainContext::<T>>::default().current_height();
 
-				let challenge_session = StoredPendingChallenge::<T> {
-					scheduled_at: current_height,
-					delay: CHALLENGE_SESSION_LENGTH.into(),
-					parent_hash,
-					challenge: challenge.clone(),
-				};
+		// 		let challenge_session = StoredPendingChallenge::<T> {
+		// 			scheduled_at: current_height,
+		// 			delay: CHALLENGE_SESSION_LENGTH.into(),
+		// 			parent_hash,
+		// 			challenge: challenge.clone(),
+		// 		};
 
-				let mut pending_challenges = Self::pending_challenges();
-				pending_challenges.push(challenge_session);
-				<PendingChallenges<T>>::put(pending_challenges);
-			}
-		}
+		// 		let mut pending_challenges = Self::pending_challenges();
+		// 		pending_challenges.push(challenge_session);
+		// 		<PendingChallenges<T>>::put(pending_challenges);
+		// 	}
+		// }
 
 		fn on_finalize(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {

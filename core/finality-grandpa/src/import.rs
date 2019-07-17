@@ -484,16 +484,13 @@ where
 				let challenge = challenges[0].clone(); // TODO: generalize to many.
 
 				// Check if we are one of the suspects.
-				let public = local_key.public();
-				if challenge.suspects.iter().any(|s| s == &local_key.public()) {
+				if challenge.targets.iter().any(|s| s == &local_key.public()) {
 					// We don't respond to challenges if we are not suspected of misbeaviour.
 					return Ok(None)
 				}
 
-				let finalized_block_proof = challenge.finalized_block_proof.clone();
-
 				let round_s = challenge.rejecting_set.round;
-				let round_b = finalized_block_proof.round;
+				let round_b = challenge.finalized_block_proof.round;
 
 				if round_b == round_s {
 					// We answer with the prevotes seen.
@@ -528,25 +525,20 @@ where
 						round: round_s,
 					};
 
-					let finalized_block = challenge.finalized_block;
 					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
-					let rejecting_set = challenge.rejecting_set;
-					
-					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 
 					let answer = Challenge::<Block> {
-						suspects: vec![],
-						finalized_block,
+						targets: vec![],
+						finalized_block: challenge.finalized_block,
 						finalized_block_proof,
-						rejecting_set,
+						rejecting_set: challenge.rejecting_set,
 						previous_challenge,
 					};
 
+					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+
 					self.api.runtime_api()
-					.construct_rejecting_prevotes_report_call(
-						&block_id,
-						answer,
-					)
+					.construct_rejecting_set_report_call(&block_id, answer)
 					.map(|call| {
 						self.transaction_pool.as_ref().map(|txpool| {
 							txpool.submit_report_call(

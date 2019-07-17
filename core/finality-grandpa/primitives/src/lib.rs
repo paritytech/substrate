@@ -232,13 +232,8 @@ decl_runtime_apis! {
 			proof: GrandpaEquivocation<Block>
 		) -> Option<Vec<u8>>;
 
-		/// Construct a call to report the rejecting set of prevotes.
-		fn construct_rejecting_prevotes_report_call(
-			challenge: Challenge<Block>
-		) -> Option<Vec<u8>>;
-
-		/// Construct a call to report the rejecting set of precommits.
-		fn construct_rejecting_precommits_report_call(
+		/// Construct a call to report the rejecting set of votes.
+		fn construct_rejecting_set_report_call(
 			challenge: Challenge<Block>
 		) -> Option<Vec<u8>>;
 	}

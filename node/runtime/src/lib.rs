@@ -556,34 +556,18 @@ impl_runtime_apis! {
 			Some(call.encode())
 		}
 
-		fn construct_rejecting_prevotes_report_call(
+		fn construct_rejecting_set_report_call(
 			challenge: Challenge<Block>
 		) -> Option<Vec<u8>> {
-			let mut proofs = Vec::with_capacity(challenge.suspects.len());
-			for suspect in challenge.suspects.as_slice() {
+			let mut proofs = Vec::with_capacity(challenge.targets.len());
+			for suspect in challenge.targets.as_slice() {
 				let proof = Historical::prove((
 					key_types::ED25519,
 					suspect.encode(),
 				))?;
 				proofs.push(proof);
 			}
-			let grandpa_call = GrandpaCall::report_rejecting_prevotes((challenge, proofs));
-			let call = Call::Grandpa(grandpa_call);
-			Some(call.encode())
-		}
-
-		fn construct_rejecting_precommits_report_call(
-			challenge: Challenge<Block>
-		) -> Option<Vec<u8>> {
-			let mut proofs = Vec::with_capacity(challenge.suspects.len());
-			for suspect in challenge.suspects.as_slice() {
-				let proof = Historical::prove((
-					key_types::ED25519,
-					suspect.encode(),
-				))?;
-				proofs.push(proof);
-			}
-			let grandpa_call = GrandpaCall::report_rejecting_precommits((challenge, proofs));
+			let grandpa_call = GrandpaCall::report_rejecting_set((challenge, proofs));
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
 		}

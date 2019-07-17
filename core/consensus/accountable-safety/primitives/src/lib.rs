@@ -81,7 +81,7 @@ pub struct GrandpaEquivocation<H, N> {
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Challenge<H, N, Header> {
-	pub suspects: Vec<AuthorityId>, // TODO: Optimize to bitset?
+	pub targets: Vec<AuthorityId>, // TODO: Optimize to bitset?
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: VoteSet<H, N, Header>,
 	pub rejecting_set: VoteSet<H, N, Header>,
