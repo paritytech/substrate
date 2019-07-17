@@ -53,7 +53,7 @@ impl From<&TransactionWeight> for DispatchClass {
 	}
 }
 
-/// A bundle of static meta information collected from the `#[weight = $x]` meta tags.
+/// A bundle of static meta information collected from the `#[weight = $x]` tags.
 #[derive(Clone, Copy, Default)]
 pub struct TransactionInfo {
 	/// Weight of this transaction.
@@ -70,7 +70,9 @@ pub struct TransactionInfo {
 // TODO: rename this to sth that says: this traits returns a bunch of static meta-information about
 // the tx, including but NOT only weight. Also rename #[weight] to #[meta]?
 pub trait Weigh {
-	/// Return the (weight, priority) of this call. This is done independently of its encoded size.
+	/// Return the `TransactionInfo` static information of this call.
+	///
+	/// This is done independently of its encoded size.
 	fn weigh(&self) -> TransactionInfo;
 }
 
