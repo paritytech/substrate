@@ -82,6 +82,56 @@ pub struct ForkTree<H, N, V> {
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
+	H: PartialEq + Clone,
+	N: Ord + Clone,
+	V: Clone,
+{
+	pub fn prune<F, E>(
+		&mut self,
+		hash: &H,
+		number: N,
+		is_descendent_of: &F
+	) -> Result<(), Error<E>>
+		where E: std::error::Error,
+			  F: Fn(&H, &H) -> Result<bool, E>
+	{
+		let mut new_root = None;
+		for node in self.node_iter() {
+			// if the node has a lower number than the one being finalized then
+			// we only keep if it has no children and the finalized block is a
+			// descendent of this node
+			if node.number < number  {
+				if !node.children.is_empty() || !is_descendent_of(&node.hash, hash)? {
+					continue;
+				}
+			}
+
+			// if the node has the same number as the finalized block then it
+			// must have the same hash
+			if node.number == number && node.hash != *hash {
+				continue;
+			}
+
+			// if the node has a higher number then we keep it if it is a
+			// descendent of the finalized block
+			if node.number > number && !is_descendent_of(hash, &node.hash)? {
+				continue;
+			}
+
+			new_root = Some(node);
+			break;
+		}
+
+		if let Some(root) = new_root {
+			self.roots = vec![root.clone()];
+		}
+
+		Ok(())
+	}
+
+}
+
+impl<H, N, V> ForkTree<H, N, V> where
 	H: PartialEq,
 	N: Ord,
 {
