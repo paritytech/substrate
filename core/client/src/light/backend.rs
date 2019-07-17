@@ -381,6 +381,15 @@ where
 		// whole state is not available on light node
 	}
 
+	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
+		&self,
+		_storage_key: &[u8],
+		_prefix: &[u8],
+		_action: A,
+	) {
+		// whole state is not available on light node
+	}
+
 	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
@@ -455,6 +464,21 @@ where
 			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
 		}
 	}
+
+	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		action: A,
+	) {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::for_child_keys_with_prefix(state, storage_key, prefix, action),
+			OnDemandOrGenesisState::Genesis(ref state)
+				=> state.for_child_keys_with_prefix(storage_key, prefix, action),
+		}
+	}
+
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where

@@ -212,6 +212,12 @@ pub mod ext {
 		fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 		/// Remove storage entries which key starts with given prefix.
 		fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+		fn ext_clear_child_prefix(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			prefix_data: *const u8,
+			prefix_len: u32
+		);
 		/// Gets the value of the given key from storage.
 		///
 		/// The host allocates the memory for storing the value.
