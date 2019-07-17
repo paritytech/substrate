@@ -332,12 +332,7 @@ decl_module! {
 				let parent_hash = <system::Module<T>>::parent_hash();
 				let current_height = <system::ChainContext::<T>>::default().current_height();
 
-				let challenge_session = StoredPendingChallenge::<T> {
-					scheduled_at: current_height,
-					delay: CHALLENGE_SESSION_LENGTH.into(),
-					parent_hash,
-					challenge,
-				};
+				let challenge_session = StoredPendingChallenge::<T> { challenge };
 
 				let mut pending_challenges = Self::pending_challenges();
 				pending_challenges.push(challenge_session);
@@ -375,11 +370,41 @@ decl_module! {
 				}
 			}
 
+			// Process pending challenges.
 			let pending_challenges = Self::pending_challenges();
 
-			// if let Some(pending_challenge) = <PendingChallenge<T>>::get() {
-				// Self::deposit_log(Signal::Challenge(Challenge { phantom_data: core::marker::PhantomData }))
-			// }
+			if pending_challenges.len() > 0 {
+
+				let challenges = pending_challenges.iter()
+					.map(|p| p.challenge.clone()).collect();
+
+				// Push a digest item with the challenges.
+				Self::deposit_log(ConsensusLog::Challenges(challenges));
+
+				// Store challenge sessions.
+				for pending_challenge in pending_challenges {
+
+					let parent_hash = <system::Module<T>>::parent_hash();
+					let scheduled_at = <system::ChainContext::<T>>::default().current_height();
+					let delay = CHALLENGE_SESSION_LENGTH.into();
+
+					// (TODO: Is the block hash enough for an id?)
+					let challenge_hash = pending_challenge.challenge.finalized_block.0;
+					let reference_block = pending_challenge.challenge.finalized_block; 
+
+					let challenge_session = StoredChallengeSession::<T> {
+						challenge_hash,
+						reference_block,
+						parent_hash,
+						scheduled_at,
+						delay,
+						answered: false,
+					};
+
+					<ChallengeSessions<T>>::insert(challenge_hash, challenge_session);
+				}
+				<PendingChallenges<T>>::kill();
+			}
 		}
 	}
 }

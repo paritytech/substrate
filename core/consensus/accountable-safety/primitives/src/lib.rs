@@ -116,12 +116,6 @@ pub struct ChallengedVote<H, N> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct StoredPendingChallenge<H, N, Header> {
-	/// Parent block hash.
-	pub parent_hash: H,
-	/// The block number this was scheduled at.
-	pub scheduled_at: N,
-	/// The delay in blocks until it will expire.
-	pub delay: N,
 	/// The challenge submitted.
 	pub challenge: Challenge<H, N, Header>,
 }
@@ -130,12 +124,14 @@ pub struct StoredPendingChallenge<H, N, Header> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct StoredChallengeSession<H, N> {
+	/// Reference block.
+	pub reference_block: (H, N),
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
-	/// The delay in blocks until it will expire.
-	pub delay: N,
 	/// The hash of the parent of block that created this challenge.
 	pub parent_hash: H,
+	/// The delay in blocks until it will expire.
+	pub delay: N,
 	/// The hash of the challenge.
 	pub challenge_hash: H,
 	/// If the challenge has been answered.
