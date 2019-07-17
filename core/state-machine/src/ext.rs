@@ -259,6 +259,18 @@ where
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::new(true);
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
+
+
 	fn chain_id(&self) -> u64 {
 		42
 	}

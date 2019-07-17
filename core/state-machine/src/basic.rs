@@ -148,6 +148,13 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
+			child.retain(|key, _| !key.starts_with(prefix));
+		}
+	}
+
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {

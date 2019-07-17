@@ -119,14 +119,6 @@ impl StorageApi for () {
 		});
 	}
 
-	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
-		ext::with(|ext| {
-			let storage_key = child_storage_key_or_panic(storage_key);
-      unimplemented!("TODO EMCH");
-			//ext.clear_child_prefix(storage_key, prefix)
-		});
-	}
-
 	fn kill_child_storage(storage_key: &[u8]) {
 		ext::with(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
@@ -151,6 +143,13 @@ impl StorageApi for () {
 		ext::with(|ext|
 			ext.clear_prefix(prefix)
 		);
+	}
+
+	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+		ext::with(|ext| {
+			let storage_key = child_storage_key_or_panic(storage_key);
+			ext.clear_child_prefix(storage_key, prefix)
+		});
 	}
 
 	fn storage_root() -> [u8; 32] {

@@ -222,6 +222,18 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+
+		let backend = &self.backend;
+		let overlay = &mut self.overlay;
+		backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {

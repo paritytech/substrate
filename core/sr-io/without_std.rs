@@ -720,6 +720,16 @@ impl StorageApi for () {
 		}
 	}
 
+	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+		unsafe {
+			ext_clear_child_prefix.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				prefix.as_ptr(), prefix.len() as u32
+			);
+		}
+	}
+
+
 	fn kill_child_storage(storage_key: &[u8]) {
 		unsafe {
 			ext_kill_child_storage.get()(
