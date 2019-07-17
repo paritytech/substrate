@@ -105,27 +105,17 @@ where
 	}
 
 	#[allow(deprecated)]
-	fn votes_seen_when_prevoted(&self, round: u64) -> Self::Messages {
-		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+	fn precommits_seen(&self, round: u64) -> Self::Messages {
+		crate::aux_schema::read_historical_votes::<Block, _>(
 			&**self.inner.backend(),
 			self.authority_set.set_id(),
 			round
-		).unwrap_or(HistoricalVotes::<Block>::new());
-
-		let len = historical_votes.prevote_index().unwrap_or(0);
-		historical_votes.seen().split_at(len as usize).0.to_vec()
-	}
-
-	#[allow(deprecated)]
-	fn votes_seen_when_precommited(&self, round: u64) -> Self::Messages {
-		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
-			&**self.inner.backend(),
-			self.authority_set.set_id(),
-			round
-		).unwrap_or(HistoricalVotes::<Block>::new());
-
-		let len = historical_votes.precommit_index().unwrap_or(0);
-		historical_votes.seen().split_at(len as usize).0.to_vec()
+		)
+		.map(|historical_votes| historical_votes.seen().clone())
+		.unwrap_or(Vec::new())
+		.into_iter()
+		.filter(|sig_msg| sig_msg.message.is_precommit())
+		.collect()
 	}
 }
 
@@ -492,7 +482,12 @@ where
 				let round_s = challenge.rejecting_set.round;
 				let round_b = challenge.finalized_block_proof.round;
 
-				if round_b == round_s {
+				if round_b > round_s {
+					// Invalid challenge.
+					return Ok(None)
+				}
+
+				let answer = if round_b == round_s {
 					// We answer with the prevotes seen.
 					let votes_seen = self.prevotes_seen(round_s);
 
@@ -527,110 +522,76 @@ where
 
 					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
 
-					let answer = Challenge::<Block> {
+					Challenge::<Block> {
 						targets: vec![],
 						finalized_block: challenge.finalized_block,
 						finalized_block_proof,
 						rejecting_set: challenge.rejecting_set,
 						previous_challenge,
+					}
+				} else  {
+					// TODO: Implement some kind fo search for the round.
+					let round = round_b;
+
+					// We answer with the precommits seen, because life is short.
+					let votes_seen = self.precommits_seen(round_s);
+
+					let mut headers = Vec::new();
+					let mut challenged_votes = Vec::new();
+
+					for signed_message in votes_seen.into_iter() {
+						let hash = signed_message.message.target().0.clone();
+
+						if let Ok(Some(header)) = self.api.header(BlockId::Hash(hash)) {
+							headers.push(header);
+
+							let vote = ChallengedVote {
+								vote: signed_message.message,
+								authority: signed_message.id,
+								signature: signed_message.signature,
+							};
+
+							challenged_votes.push(vote);
+						} else {
+							return Err(ConsensusError::ClientImport(
+								"Could not get header".to_string()
+							).into())
+						}
+					}
+
+					let rejecting_set = VoteSet {
+						votes: challenged_votes,
+						headers,
+						round,
 					};
 
-					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
 
-					self.api.runtime_api()
-					.construct_rejecting_set_report_call(&block_id, answer)
-					.map(|call| {
-						self.transaction_pool.as_ref().map(|txpool| {
-							txpool.submit_report_call(
-								self.inner.as_ref(),
-								&local_key,
-								call.expect("FIXME").as_slice()
-							)
-						});
-						info!(target: "afg", "Prevotes answer to challenge has been submitted")
-					}).unwrap_or_else(|err|
-						error!(target: "afg", "Error constructing prevotes answer to challenge: {}", err)
-					);
-				}
+					Challenge::<Block> {
+						targets: challenge.targets,
+						finalized_block: challenge.finalized_block,
+						finalized_block_proof: challenge.finalized_block_proof,
+						rejecting_set: challenge.rejecting_set,
+						previous_challenge,
+					}
+				};
 
-				if round_b < round_s {
+				let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 
-				}
-				// 	// Case 1: Rejecting set contains only precommits.
-				// 	let mut authority_vote_map = HashMap::new();
-				// 	let mut equivocators_set = HashSet::new();
-
-				// 	for challenged_vote in challenge.rejecting_set.votes {
-				// 		let ChallengedVote { vote, authority, signature } = challenged_vote;
-				// 		match authority_vote_map.get(&authority) {
-				// 			Some(previous_vote) => {
-				// 				if &vote != previous_vote {
-				// 					equivocators_set.insert(authority);
-				// 				}
-				// 			},
-				// 			None => {
-				// 				authority_vote_map.insert(authority, vote);
-				// 			},
-				// 		}
-				// 	}
-
-				// 	let equivocators = equivocators_set.drain().collect();
-
-				// 	return Ok(Some(equivocators))
-				// }
-
-				// let rejecting_set = challenge.rejecting_set.votes.clone();
-				// let prevote_challenged = false;
-				// let precommit_challenged = false;
-
-				// for ChallengedVote { vote, authority, signature } in challenged_votes {
-				// 	if true { //me == authority {
-				// 		match vote {
-				// 			Prevote { target_hash, target_number } => prevote_challenged = true,
-				// 			Precommit { target_hash, target_number } => precommit_challenged = true,
-				// 		}
-				// 	}
-				// }
-
-				// let votes_seen = vec![
-				// 	SignedMessage {
-				// 		message:, // Prevote, Precommit, PrimaryPropose.
-				// 		signature:,
-				// 		id:,
-				// 	}
-				// ];
-				// let challenge = Challenge {
-				// 	finalized_block: (H, N),
-				// 	finalized_block_proof: FinalizedBlockProof {
-				// 		commit: Commit {
-				// 			target_hash:,
-				// 			target_number:,
-				// 			precommits: vec![
-				// 				SignedPrecommit {
-				// 					precommit:,
-				// 					signature:,
-				// 					id:,
-				// 				},
-				// 			],
-				// 		},
-				// 		headers: vec![],
-				// 	},
-				// 	challenged_vote_set: ChallengedVoteSet {
-				// 		challenged_votes: vec![
-				// 			ChallengedVote {
-				// 			}
-				// 		],
-				// 		set_id: u64,
-				// 		round: u64,
-				// 	},
-				// 	previous_challenge: Option<H>,
-				// };
-
-
-				// if challenged {
-				// 	let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
-					
-				
+				self.api.runtime_api()
+				.construct_rejecting_set_report_call(&block_id, answer)
+				.map(|call| {
+					self.transaction_pool.as_ref().map(|txpool| {
+						txpool.submit_report_call(
+							self.inner.as_ref(),
+							&local_key,
+							call.expect("FIXME").as_slice()
+						)
+					});
+					info!(target: "afg", "Prevotes answer to challenge has been submitted")
+				}).unwrap_or_else(|err|
+					error!(target: "afg", "Error constructing prevotes answer to challenge: {}", err)
+				);
 
 				Ok(None)
 			},
