@@ -129,13 +129,15 @@ pub struct StoredPendingChallenge<H, N, Header> {
 /// A stored pending change.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredChallengeSession<H, N, Header> {
+pub struct StoredChallengeSession<H, N> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will expire.
 	pub delay: N,
-
+	/// The hash of the parent of block that created this challenge.
 	pub parent_hash: H,
-	
-	pub challenge: Challenge<H, N, Header>,
+	/// The hash of the challenge.
+	pub challenge_hash: H,
+	/// If the challenge has been answered.
+	pub answered: bool,
 }

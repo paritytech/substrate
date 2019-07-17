@@ -42,7 +42,7 @@ use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId, Block},
 	traits::{
 		CurrentHeight, MaybeSerializeDebug, ValidateUnsigned, Verify, Header as HeaderT,
-		Block as BlockT, Member, TypedKey,
+		Block as BlockT, Member, TypedKey, BlakeTwo256, Hash as HashT,
 	},
 	transaction_validity::TransactionValidity, key_types,
 };
@@ -70,7 +70,7 @@ type Number<T> = <T as system::Trait>::BlockNumber;
 type Header<T> = <T as system::Trait>::Header;
 
 type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
-type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>, Header<T>>;
+type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>>;
 
 type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
 type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
@@ -219,66 +219,6 @@ decl_module! {
 			return Err("Votes are the same")
 		}
 
-		/// Answer a previous challenge by providing a set of prevotes.
-		fn report_prevotes_answer(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
-			ensure_signed(origin)?;
-
-			let (answer, proofs) = proved_challenge;
-
-			let mut to_punish = Vec::new();
-
-			// TODO: Hmm, probably I need another struct for `answer`.
-			for (idx, proof) in proofs.iter().enumerate() {
-				let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::ED25519, answer.targets[idx].encode()),
-					proof.clone(),
-				);
-				if maybe_targets.is_none() {
-					return Err("Bad session key proof")
-				}
-				to_punish.push(maybe_targets.expect("already checked; qed"));
-			}
-
-			// Check that prevotes set has supermajority for B.
-			{
-				let previous_challenge = <ChallengeSessions<T>>::take(answer.previous_challenge.expect("FIXME")).expect("FIXME");
-				let challenge = previous_challenge.challenge;
-				let headers: &[T::Header] = answer.rejecting_set.headers.as_slice();
-				let votes = answer.rejecting_set.votes; // TODO: Check signatures.
-				let commit = Commit::<_, _, Option<()>, _> {
-					target_hash: challenge.finalized_block.0,
-					target_number: challenge.finalized_block.1,
-					precommits: votes.into_iter().map(|challenged_vote| {
-						SignedPrecommit {
-							precommit: Precommit::<T> {
-								target_hash: *challenged_vote.vote.target().0,
-								target_number: challenged_vote.vote.target().1,
-							},
-							signature: None, // TODO: Check it doesn't matter.
-							id: challenged_vote.authority,
-						}
-					}).collect(),
-				};
-
-				let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-				let voters = <Module<T>>::grandpa_authorities();
-				let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
-
-				if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
-					if let Some(ghost) = validation_result.ghost() {
-						// TODO: I think this should check that ghost is ancestor of B.
-						if *ghost == answer.finalized_block {
-							// TODO: get culprits
-							// let culprits = get_culprits(previous_challenge.finalized_block_proof);
-							// Slash culprits
-						}
-					}
-				}
-			}
-
-			return Err("Invalid answer to challenge")
-		}
-
 		/// Report rejecting set of prevotes.
 		fn report_rejecting_set(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
 			ensure_signed(origin)?;
@@ -299,21 +239,21 @@ decl_module! {
 			}
 
 			let round_s = challenge.rejecting_set.round;
-			let finalized_block_proof = challenge.finalized_block_proof.clone();
-			let round_b = finalized_block_proof.round;
+			let round_b = challenge.finalized_block_proof.round;
 
 			if round_s == round_b {
-				// Check that block proof contains supermajority of precommits for B.
+				// Check that block proof contains supermajority for B.
 				// TODO: Check signatures.
 				{
-					let headers: &[T::Header] = finalized_block_proof.headers.as_slice();
+					let voters = <Module<T>>::grandpa_authorities(); // TODO: this is wrong.
+					let headers: &[T::Header] = challenge.finalized_block_proof.headers.as_slice();
 					let commit = Commit {
 						target_hash: challenge.finalized_block.0,
 						target_number: challenge.finalized_block.1,
-						precommits: finalized_block_proof.votes.into_iter().map(|cv| {
+						precommits: challenge.finalized_block_proof.votes.clone().into_iter().map(|cv| {
 							SignedPrecommit {
 								precommit: Precommit::<T> {
-									target_hash: cv.vote.target().0.clone(),
+									target_hash: *cv.vote.target().0,
 									target_number: cv.vote.target().1,
 								},
 								signature: cv.signature,
@@ -322,10 +262,13 @@ decl_module! {
 						}).collect(),
 					};
 					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-					let voters = <Module<T>>::grandpa_authorities();
 					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
 
-					if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
+					if let Ok(validation_result) = validate_commit(
+						&commit,
+						&voter_set,
+						&ancestry_chain,
+					) {
 						if let Some(ghost) = validation_result.ghost() {
 							// TODO: I think this should check that ghost is ancestor of B.
 							if *ghost != challenge.finalized_block {
@@ -335,9 +278,10 @@ decl_module! {
 					}
 				}
 
-				// Check that rejecting vote doesn't have supermajority for B.
+				// Check that rejecting set doesn't have supermajority for B.
 				// TODO: check signatures.
 				{
+					let voters = <Module<T>>::grandpa_authorities(); // TODO: this is wrong.
 					let headers: &[T::Header] = challenge.rejecting_set.headers.as_slice();
 					let votes = challenge.rejecting_set.votes.clone();
 					let commit = Commit {
@@ -349,13 +293,14 @@ decl_module! {
 									target_hash: *challenged_vote.vote.target().0,
 									target_number: challenged_vote.vote.target().1,
 								},
-								signature: challenged_vote.signature, // TODO: It doesn't matter
+								// TODO: This signature is OK because is not going 
+								// to be checked. Maybe I can even pass None.
+								signature: challenged_vote.signature,
 								id: challenged_vote.authority,
 							}
 						}).collect(),
 					};
 					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
-					let voters = <Module<T>>::grandpa_authorities();
 					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
 
 					if let Ok(validation_result) = validate_commit(&commit, &voter_set, &ancestry_chain) {
@@ -367,12 +312,23 @@ decl_module! {
 						}
 					}
 				}
+
+				// TODO: Punish bad guys.
 			} 
 			
 			if round_s > round_b {
-				// Iterate by attaching a digest.
+				// TODO: make same checks as above.
 
-				// Push new session.
+				// Mark previous challenge as answered.
+				if let Some(challenge_hash) = challenge.previous_challenge {
+					<ChallengeSessions<T>>::mutate(challenge_hash, |maybe_challenge| {
+						if let Some(challenge) = maybe_challenge {
+							challenge.answered = true;
+						}
+					});
+				}
+				
+				// Push a new pending challenge session.
 				let parent_hash = <system::Module<T>>::parent_hash();
 				let current_height = <system::ChainContext::<T>>::default().current_height();
 
@@ -380,7 +336,7 @@ decl_module! {
 					scheduled_at: current_height,
 					delay: CHALLENGE_SESSION_LENGTH.into(),
 					parent_hash,
-					challenge: challenge.clone(),
+					challenge,
 				};
 
 				let mut pending_challenges = Self::pending_challenges();
@@ -388,74 +344,6 @@ decl_module! {
 				<PendingChallenges<T>>::put(pending_challenges);
 			}
 		}
-
-		/// Report rejecting set of precommits.
-		// fn report_rejecting_precommits(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
-		// 	ensure_signed(origin)?;
-		// 	// TODO: Check that is a *new* challenge?
-			
-		// 	let (challenge, proofs) = proved_challenge;
-
-		// 	let mut to_punish = Vec::new();
-
-		// 	for (idx, proof) in proofs.iter().enumerate() {
-		// 		let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
-		// 			(key_types::ED25519, challenge.targets[idx].encode()),
-		// 			proof.clone(),
-		// 		);
-		// 		if maybe_targets.is_none() {
-		// 			return Err("Bad session key proof")
-		// 		}
-		// 		to_punish.push(maybe_targets.expect("already checked; qed"));
-		// 	}
-
-		// 	// TODO: Check these two guys.
-		// 	let round_s = challenge.rejecting_set.round;
-		// 	let finalized_block_proof = challenge.finalized_block_proof.clone();
-		// 	let round_b = finalized_block_proof.round;
-
-		// 	if round_b == round_s {
-		// 		// Case 1: Rejecting set contains only precommits.
-		// 		let mut authority_vote_map = BTreeMap::new();
-		// 		let mut equivocators_set = BTreeSet::new();
-
-		// 		for challenged_vote in challenge.rejecting_set.votes.clone() {
-		// 			// TODO: Check signature.
-		// 			let ChallengedVote { vote, authority, signature } = challenged_vote;
-		// 			match authority_vote_map.get(&authority) {
-		// 				Some(previous_vote) => {
-		// 					if &vote != previous_vote {
-		// 						equivocators_set.insert(authority);
-		// 					}
-		// 				},
-		// 				None => {
-		// 					authority_vote_map.insert(authority, vote);
-		// 				},
-		// 			}
-		// 		}
-
-		// 		// TODO: Slash the equivocators in `equivocators_set`.
-		// 	}
-
-		// 	if round_s > round_b {
-		// 		// Iterate by attaching a digest.
-
-		// 		// Push new session.
-		// 		let parent_hash = <system::Module<T>>::parent_hash();
-		// 		let current_height = <system::ChainContext::<T>>::default().current_height();
-
-		// 		let challenge_session = StoredPendingChallenge::<T> {
-		// 			scheduled_at: current_height,
-		// 			delay: CHALLENGE_SESSION_LENGTH.into(),
-		// 			parent_hash,
-		// 			challenge: challenge.clone(),
-		// 		};
-
-		// 		let mut pending_challenges = Self::pending_challenges();
-		// 		pending_challenges.push(challenge_session);
-		// 		<PendingChallenges<T>>::put(pending_challenges);
-		// 	}
-		// }
 
 		fn on_finalize(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
