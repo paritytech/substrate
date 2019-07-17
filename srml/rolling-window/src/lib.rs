@@ -67,6 +67,7 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Remove items that doesn't fit into the rolling window
+	/// Must be called when a session ends
 	pub fn on_session_end() {
 		let session = SessionIndex::get().wrapping_add(1);
 
@@ -84,7 +85,7 @@ impl<T: Trait> Module<T> {
 		SessionIndex::put(session);
 	}
 
-	/// Report misbehaviour for a kind
+	/// Report misbehavior for a kind
 	pub fn report_misbehavior(kind: T::Kind, footprint: T::Hash) {
 		let session = SessionIndex::get();
 
@@ -95,15 +96,15 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Return number of misbehaviors in the current window which
-	/// may include duplicated misbehaviours
+	/// Return number of misbehavior's in the current window which
+	/// may include duplicated misbehaviour's
 	pub fn get_misbehaved(kind: T::Kind) -> u64 {
 		<MisconductReports<T>>::get(kind).len() as u64
 	}
 
 
-	/// Return number of misbehaviors in the current window which
-	/// ignores duplicated misbehaviours in each session
+	/// Return number of misbehavior's in the current window which
+	/// ignores duplicated misbehavior's in each session
 	pub fn get_misbehaved_unique(kind: T::Kind) -> u64 {
 		let window = <MisconductReports<T>>::get(kind);
 
