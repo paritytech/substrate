@@ -152,6 +152,30 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
+	pub fn find_node_where<F, E, P>(
+		&self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
+	) -> Result<Option<&Node<H, N, V>>, Error<E>>
+		where E: std::error::Error,
+			  F: Fn(&H, &H) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
+	{
+		// search for node starting from all roots
+		for root in self.roots.iter() {
+			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
+
+			// found the node, early exit
+			if node.is_some() {
+				return Ok(node);
+			}
+		}
+
+		Ok(None)
+	}
+
 	/// Finalize a root in the tree and return it, return `None` in case no root
 	/// with the given hash exists. All other roots are pruned, and the children
 	/// of the finalized node become the new roots.
@@ -167,7 +191,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 	}
 
 	/// Finalize a node in the tree. This method will make sure that the node
-	/// being finalized is either an existing root (an return its data), or a
+	/// being finalized is either an existing root (and return its data), or a
 	/// node from a competing branch (not in the tree), tree pruning is done
 	/// accordingly. The given function `is_descendent_of` should return `true`
 	/// if the second hash (target) is a descendent of the first hash (base).
@@ -398,6 +422,47 @@ mod node_implementation {
 				Ok(None)
 			} else {
 				Ok(Some((hash, number, data)))
+			}
+		}
+
+		/// Find a node in the tree that is the lowest ancestor of the given
+		/// block hash and which passes the given predicate.
+		// FIXME: it would be useful if this returned a mutable reference but
+		// rustc can't deal with lifetimes properly. an option would be to try
+		// an iterative definition instead.
+		pub fn find_node_where<F, P, E>(
+			&self,
+			hash: &H,
+			number: &N,
+			is_descendent_of: &F,
+			predicate: &P,
+		) -> Result<Option<&Node<H, N, V>>, Error<E>>
+			where E: std::error::Error,
+				  F: Fn(&H, &H) -> Result<bool, E>,
+				  P: Fn(&V) -> bool,
+		{
+			// stop searching this branch
+			if *number < self.number {
+				return Ok(None);
+			}
+
+			// continue depth-first search through all children
+			for node in self.children.iter() {
+				let node = node.find_node_where(hash, number, is_descendent_of, predicate)?;
+
+				// found node, early exit
+				if node.is_some() {
+					return Ok(node);
+				}
+			}
+
+			// node not found in any of the descendents, if the node we're
+			// searching for is a descendent of this node and it passes the
+			// predicate, then it is this one.
+			if predicate(&self.data) && is_descendent_of(&self.hash, hash)? {
+				Ok(Some(self))
+			} else {
+				Ok(None)
 			}
 		}
 	}
