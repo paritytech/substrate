@@ -651,13 +651,13 @@ impl<T> ChangeMembers<T> for () {
 }
 
 /// A generic trait for reporting slashing violations.
-pub trait ReportSlash<Identification, Hash> {
-    fn slash(identfication: Identification, footprint: Hash);
+pub trait ReportSlash<VictimId, RewardId, Hash> {
+    fn slash(victim: VictimId, rewarder: RewardId, footprint: Hash) -> Result<(), ()>;
 }
 
 /// A generic trait for enacting slashes.
-pub trait DoSlash<Identification, Severity> {
-    fn do_slash(identification: Identification, severity: Severity);
+pub trait DoSlash<VictimId, RewardId, Severity> {
+    fn do_slash(victim: VictimId, rewarder: RewardId, severity: Severity);
 }
 
 /// Trait for representing window length
