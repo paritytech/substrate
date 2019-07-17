@@ -208,6 +208,9 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
 
+	/// Get child key in storage.
+	fn child_key() -> &'static [u8];
+
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
@@ -239,6 +242,10 @@ pub trait StorageMap<K: Codec, V: Codec> {
 
 impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
+
+	fn child_key() -> &'static [u8] {
+		<U as hashed::generator::StorageMap<K, V>>::child_key()
+	}
 
 	fn prefix() -> &'static [u8] {
 		<U as hashed::generator::StorageMap<K, V>>::prefix()
