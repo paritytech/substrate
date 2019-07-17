@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use primitives::{
-	generic::{self, Era}, weights::{Weight, TransactionInfo} , traits::{
+	generic::{self, Era}, weights::{Weight, TransactionInfo, DispatchClass} , traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
@@ -762,11 +762,21 @@ pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn internal_check_weight(info: TransactionInfo) -> Result<(), DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
-		if !info.will_cause_full_block(current_weight, T::MaximumBlockWeight::get()) {
-			// TODO: better error description.
-			Err(DispatchError::Payment)
-		} else {
-			Ok(())
+		let next_weight = current_weight.saturating_add(current_weight);
+		let limit = match info.class {
+			DispatchClass::Operational => T::MaximumBlockWeight::get(),
+			DispatchClass::User => T::MaximumBlockWeight::get() / 4
+		};
+		if next_weight > limit {
+			return Err(DispatchError::Payment)
+		}
+		Ok(())
+	}
+
+	fn internal_get_priority(info: TransactionInfo) -> TransactionPriority {
+		match info.class {
+			DispatchClass::User => info.weight.into(),
+			DispatchClass::Operational => Bounded::max_value()
 		}
 	}
 }
@@ -793,7 +803,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		Self::internal_check_weight(info)?;
-		Ok(ValidTransaction { priority: info.priority, ..Default::default() })
+		Ok(ValidTransaction { priority: Self::internal_get_priority(info), ..Default::default() })
 	}
 }
 

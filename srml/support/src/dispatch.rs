@@ -25,11 +25,11 @@ pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
-pub use sr_primitives::{
-	weights::{TransactionWeight, Weigh, TransactionInfo, WeighData, PrioritizeData,
-		TransactionPriority, IsOperational},
-	traits::{Dispatchable, DispatchResult}
+pub use sr_primitives::weights::{TransactionWeight, Weigh, TransactionInfo, WeighData,
+	ClassifyDispatch,
+	TransactionPriority
 };
+pub use sr_primitives::traits::{Dispatchable, DispatchResult};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -1119,17 +1119,12 @@ macro_rules! decl_module {
 						<$crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				};
-				let priority = match self {
+				let class = match self {
 					$( $call_type::$fn_name($( ref $param_name ),*) =>
-						<$crate::dispatch::PrioritizeData<( $( & $param, )* )>>::prioritize(&$weight, ($( $param_name, )*)), )*
+						<$crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::class(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				};
-				let is_operational = match self {
-					$( $call_type::$fn_name($( ref $param_name ),*) =>
-						<$crate::dispatch::IsOperational<( $( & $param, )* )>>::is_operational(&$weight, ($( $param_name, )*)), )*
-					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
-				};
-				$crate::dispatch::TransactionInfo { weight, priority, is_operational }
+				$crate::dispatch::TransactionInfo { weight, class }
 			}
 		}
 
