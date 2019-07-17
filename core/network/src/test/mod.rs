@@ -150,13 +150,6 @@ impl PeersClient {
 		}
 	}
 
-	pub fn as_in_memory_backend(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		match *self {
-			PeersClient::Full(ref client) => client.backend_as_in_memory(),
-			PeersClient::Light(_) => unimplemented!("TODO"),
-		}
-	}
-
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			PeersClient::Full(ref client) => client.get_aux(key),

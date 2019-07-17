@@ -357,11 +357,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self.backend
 	}
 	
-	/// Returns in-memory blockchain that contains the same set of blocks that the
-	/// backend hold by this client.
+	/// Test helper to compare the blockchain state of multiple (networked)
+	/// clients.
+	/// Potentially costly, as creates in-memory copies of both blockchains in order
+	/// to compare them. If you have easier/softer checks that are sufficient, e.g. 
+	/// by using .info(), you should probably use it instead of this.
 	#[cfg(feature = "test-helpers")]
-	pub fn backend_as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		self.backend.as_in_memory()
+	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
+		self.backend.as_in_memory().blockchain()
+			.canon_equals_to(other.backend.as_in_memory().blockchain())
 	}
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
@@ -2497,26 +2501,23 @@ pub(crate) mod tests {
 		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		assert_eq!(
-			blockchain.last_finalized().unwrap(),
+			client.info().chain.last_finalized,
 			a3.hash(),
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a3.hash())).unwrap(),
+			client.justification(BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a1.hash())).unwrap(),
+			client.justification(BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a2.hash())).unwrap(),
+			client.justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
 	}
@@ -2547,12 +2548,9 @@ pub(crate) mod tests {
 		// create but don't import B1 just yet
 		let b1 = b1.bake().unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			a2.hash(),
 		);
 
@@ -2561,12 +2559,12 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b1.hash(),
 		);
 
 		assert_eq!(
-			blockchain.info().finalized_hash,
+			client.info().chain.finalized_hash,
 			b1.hash(),
 		);
 	}
@@ -2600,12 +2598,9 @@ pub(crate) mod tests {
 		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			a2.hash(),
 		);
 
@@ -2615,14 +2610,14 @@ pub(crate) mod tests {
 
 		// B1 should now be the latest finalized
 		assert_eq!(
-			blockchain.info().finalized_hash,
+			client.info().chain.finalized_hash,
 			b1.hash(),
 		);
 
 		// and B1 should be the new best block (`finalize_block` as no way of
 		// knowing about B2)
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b1.hash(),
 		);
 
@@ -2641,7 +2636,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b3.hash(),
 		);
 	}
