@@ -1712,69 +1712,45 @@ fn bond_with_no_staked_value() {
 	// Particularly when she votes and the candidate is elected.
 	with_externalities(&mut ExtBuilder::default()
 	.validator_count(3)
+	.existential_deposit(5)
 	.nominate(false)
 	.minimum_validator_count(1)
 	.build(), || {
-		// setup
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-		let _ = Balances::deposit_creating(&3, 1000);
-		let init_balance_2 = Balances::free_balance(&2);
-		let init_balance_4 = Balances::free_balance(&4);
+				// Can't bond with 1
+		assert_noop!(
+			Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
+			"can not bond with value less than minimum balance"
+		);
+		// bonded with absolute minimum value possible.
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
+		assert_eq!(Balances::locks(&1)[0].amount, 5);
 
-		// Stingy validator.
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+		// unbonding even 1 will cause all to be unbonded.
+		assert_ok!(Staking::unbond(Origin::signed(2), 1));
+		assert_eq!(
+			Staking::ledger(2),
+			Some(StakingLedger {
+				stash: 1,
+				active: 0,
+				total: 5,
+				unlocking: vec![UnlockChunk {value: 5, era: 3}]
+			})
+		);
 
-		let total_payout_0 = current_total_payout_for_duration(3);
-		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 11, 20).unwrap();
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 21, 20).unwrap();
-		// We don't reward 30 that much so it gets replaced by 1
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 31, 1).unwrap();
 		start_era(1);
-
-		assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
-
-		// make the stingy one elected.
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), init_balance_2);
-		assert_eq!(Balances::free_balance(&4), init_balance_4);
-
-		let total_payout_1 = current_total_payout_for_duration(3);
-		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 11, 20).unwrap();
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 21, 20).unwrap();
-		// We don't reward 30 that much so it gets replaced by 1
-		<Module<Test>>::add_reward_points_to_validator(RawOrigin::Root.into(), 31, 1).unwrap();
 		start_era(2);
 
-		// Stingy one is selected
-		assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
-		assert_eq!(Staking::stakers(1), Exposure {
-			own: 1,
-			total: 501,
-			others: vec![IndividualExposure { who: 3, value: 500}],
-		});
-		// New slot stake.
-		assert_eq!(Staking::slot_stake(), 501);
+		// not yet removed.
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+		assert!(Staking::ledger(2).is_some());
+		assert_eq!(Balances::locks(&1)[0].amount, 5);
 
-		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), init_balance_2);
-		assert_eq!(Balances::free_balance(&4), init_balance_4);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_2 = current_total_payout_for_duration(3);
-		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
-		add_reward_points_to_all_elected();
 		start_era(3);
 
-		// 2 will not get a reward of only 1
-		// 4 will get the rest
-		assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_2/3/501);
-		assert_eq!(Balances::free_balance(&4), init_balance_4 + 500*total_payout_2/3/501);
+		// poof. Account 1 is removed from the staking system.
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+		assert!(Staking::ledger(2).is_none());
+		assert_eq!(Balances::locks(&1).len(), 0);
 	});
 }
 

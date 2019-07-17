@@ -19,7 +19,6 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use futures::{Future, IntoFuture};
 use parking_lot::{RwLock, Mutex};
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
@@ -359,14 +358,15 @@ where
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
-			.remote_read(RemoteReadRequest {
-				block: self.block,
-				header: header.expect("if block above guarantees that header is_some(); qed"),
-				key: key.to_vec(),
-				retry_count: None,
-			})
-			.into_future().wait()
+		futures::executor::block_on(
+			self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
+				.remote_read(RemoteReadRequest {
+					block: self.block,
+					header: header.expect("if block above guarantees that header is_some(); qed"),
+					key: key.to_vec(),
+					retry_count: None,
+				})
+		)
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {

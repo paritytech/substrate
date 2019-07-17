@@ -376,7 +376,7 @@ where
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
 	if cli.interactive_password {
-		config.password = input_keystore_password()?
+		config.password = input_keystore_password()?.into()
 	}
 
 	config.impl_name = impl_name;
@@ -424,12 +424,13 @@ where
 		};
 
 	let exec = cli.execution_strategies;
+	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
-		syncing: exec.syncing_execution.into(),
-		importing: exec.importing_execution.into(),
-		block_construction: exec.block_construction_execution.into(),
-		offchain_worker: exec.offchain_worker_execution.into(),
-		other: exec.other_execution.into(),
+		syncing: exec_all_or(exec.execution_syncing),
+		importing: exec_all_or(exec.execution_import_block),
+		block_construction: exec_all_or(exec.execution_block_construction),
+		offchain_worker: exec_all_or(exec.execution_offchain_worker),
+		other: exec_all_or(exec.execution_other),
 	};
 
 	config.offchain_worker = match (cli.offchain_worker, role) {
@@ -441,6 +442,8 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
+	config.grandpa_voter = cli.grandpa_voter;
+
 
 	let is_dev = cli.shared_params.dev;
 

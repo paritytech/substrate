@@ -30,7 +30,7 @@ use runtime_primitives::{Justification, traits::{Block as BlockT, Header as _, N
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, JustificationImport, ImportResult,
-	FinalityProofImport, FinalityProofRequestBuilder,
+	FinalityProofImport,
 };
 
 pub use basic_queue::BasicQueue;
@@ -39,16 +39,13 @@ mod basic_queue;
 pub mod buffered_link;
 
 /// Shared block import struct used by the queue.
-pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
+pub type BoxBlockImport<B> = Box<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Shared justification import struct used by the queue.
-pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
+pub type BoxJustificationImport<B> = Box<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Shared finality proof import struct used by the queue.
-pub type SharedFinalityProofImport<B> = Arc<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
-
-/// Shared finality proof request builder struct used by the queue.
-pub type SharedFinalityProofRequestBuilder<B> = Arc<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
+pub type BoxFinalityProofImport<B> = Box<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = libp2p::PeerId;
@@ -116,14 +113,15 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
-	/// Block imported.
-	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Batch of blocks imported, with or without error.
-	fn blocks_processed(&mut self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
+	fn blocks_processed(
+		&mut self,
+		_imported: usize,
+		_count: usize,
+		_results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {}
 	/// Justification import result.
 	fn justification_imported(&mut self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
-	/// Clear all pending justification requests.
-	fn clear_justification_requests(&mut self) {}
 	/// Request a justification for the given block.
 	fn request_justification(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
@@ -139,12 +137,6 @@ pub trait Link<B: BlockT>: Send {
 	) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
-	/// Remember finality proof request builder on start.
-	fn set_finality_proof_request_builder(&mut self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
-	/// Adjusts the reputation of the given peer.
-	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
-	/// Restart sync.
-	fn restart(&mut self) {}
 }
 
 /// Block import successful result.
@@ -157,7 +149,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 }
 
 /// Block import error.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<Origin>),
@@ -167,13 +159,15 @@ pub enum BlockImportError {
 	BadBlock(Option<Origin>),
 	/// Block has an unknown parent
 	UnknownParent,
-	/// Other Error.
-	Error,
+	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
+	Cancelled,
+	/// Other error.
+	Other(ConsensusError),
 }
 
 /// Single block import function.
 pub fn import_single_block<B: BlockT, V: Verifier<B>>(
-	import_handle: &dyn BlockImport<B, Error = ConsensusError>,
+	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: Arc<V>,
@@ -215,7 +209,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			},
 			Err(e) => {
 				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-				Err(BlockImportError::Error)
+				Err(BlockImportError::Other(e))
 			}
 		}
 	};

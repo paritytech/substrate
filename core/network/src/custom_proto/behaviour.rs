@@ -19,11 +19,12 @@ use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOu
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
@@ -942,7 +943,10 @@ where
 		// Poll for instructions from the peerset.
 		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
 		loop {
-			match self.peerset.poll() {
+			let mut peerset01 = futures03::stream::poll_fn(|cx|
+				futures03::Stream::poll_next(Pin::new(&mut self.peerset), cx)
+			).map(|v| Ok::<_, ()>(v)).compat();
+			match peerset01.poll() {
 				Ok(Async::Ready(Some(peerset::Message::Accept(index)))) => {
 					self.peerset_report_accept(index);
 				}

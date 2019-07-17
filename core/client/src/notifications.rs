@@ -22,7 +22,7 @@ use std::{
 };
 
 use fnv::{FnvHashSet, FnvHashMap};
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::traits::Block as BlockT;
 
@@ -309,7 +309,6 @@ impl<Block: BlockT> StorageNotifications<Block> {
 mod tests {
 	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
-	use futures::Stream;
 	use std::iter::{empty, Empty};
 
 	type TestChangeSet = (
@@ -348,7 +347,9 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		let child_filter = [(StorageKey(vec![4]), None)];
-		let mut recv = notifications.listen(None, Some(&child_filter[..])).wait();
+		let mut recv = futures::executor::block_on_stream(
+			notifications.listen(None, Some(&child_filter[..]))
+		);
 
 		// when
 		let changeset = vec![
@@ -367,13 +368,13 @@ mod tests {
 		);
 
 		// then
-		assert_eq!(recv.next().unwrap(), Ok((Hash::from_low_u64_be(1), (vec![
+		assert_eq!(recv.next().unwrap(), (Hash::from_low_u64_be(1), (vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 			(StorageKey(vec![3]), None),
 		], vec![(StorageKey(vec![4]), vec![
 			(StorageKey(vec![5]), Some(StorageData(vec![4]))),
 			(StorageKey(vec![6]), None),
-		])]).into())));
+		])]).into()));
 	}
 
 	#[test]
@@ -381,9 +382,15 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
-		let mut recv1 = notifications.listen(Some(&[StorageKey(vec![1])]), None).wait();
-		let mut recv2 = notifications.listen(Some(&[StorageKey(vec![2])]), None).wait();
-		let mut recv3 = notifications.listen(Some(&[]), Some(&child_filter)).wait();
+		let mut recv1 = futures::executor::block_on_stream(
+			notifications.listen(Some(&[StorageKey(vec![1])]), None)
+		);
+		let mut recv2 = futures::executor::block_on_stream(
+			notifications.listen(Some(&[StorageKey(vec![2])]), None)
+		);
+		let mut recv3 = futures::executor::block_on_stream(
+			notifications.listen(Some(&[]), Some(&child_filter))
+		);
 
 		// when
 		let changeset = vec![
@@ -403,16 +410,16 @@ mod tests {
 		);
 
 		// then
-		assert_eq!(recv1.next().unwrap(), Ok((Hash::from_low_u64_be(1), (vec![
+		assert_eq!(recv1.next().unwrap(), (Hash::from_low_u64_be(1), (vec![
 			(StorageKey(vec![1]), None),
-		], vec![]).into())));
-		assert_eq!(recv2.next().unwrap(), Ok((Hash::from_low_u64_be(1), (vec![
+		], vec![]).into()));
+		assert_eq!(recv2.next().unwrap(), (Hash::from_low_u64_be(1), (vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
-		], vec![]).into())));
-		assert_eq!(recv3.next().unwrap(), Ok((Hash::from_low_u64_be(1), (vec![],
+		], vec![]).into()));
+		assert_eq!(recv3.next().unwrap(), (Hash::from_low_u64_be(1), (vec![],
 		vec![
 			(StorageKey(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
-		]).into())));
+		]).into()));
 
 	}
 
@@ -422,10 +429,18 @@ mod tests {
 		let mut notifications = StorageNotifications::<Block>::default();
 		{
 			let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
-			let _recv1 = notifications.listen(Some(&[StorageKey(vec![1])]), None).wait();
-			let _recv2 = notifications.listen(Some(&[StorageKey(vec![2])]), None).wait();
-			let _recv3 = notifications.listen(None, None).wait();
-			let _recv4 = notifications.listen(None, Some(&child_filter)).wait();
+			let _recv1 = futures::executor::block_on_stream(
+				notifications.listen(Some(&[StorageKey(vec![1])]), None)
+			);
+			let _recv2 = futures::executor::block_on_stream(
+				notifications.listen(Some(&[StorageKey(vec![2])]), None)
+			);
+			let _recv3 = futures::executor::block_on_stream(
+				notifications.listen(None, None)
+			);
+			let _recv4 = futures::executor::block_on_stream(
+				notifications.listen(None, Some(&child_filter))
+			);
 			assert_eq!(notifications.listeners.len(), 2);
 			assert_eq!(notifications.wildcard_listeners.len(), 2);
 			assert_eq!(notifications.child_listeners.len(), 1);
@@ -450,7 +465,7 @@ mod tests {
 		// given
 		let mut recv = {
 			let mut notifications = StorageNotifications::<Block>::default();
-			let recv = notifications.listen(None, None).wait();
+			let recv = futures::executor::block_on_stream(notifications.listen(None, None));
 
 			// when
 			let changeset = vec![];

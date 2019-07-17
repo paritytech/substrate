@@ -154,20 +154,29 @@ test-linux-stable-int:
   <<:                              *test-linux
   except:
     refs:
-      - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
   script:
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - echo "___Logs will be partly shown at the end in case of failure.___"
+    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
-  allow_failure:                   true
+  after_script:
+    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    when:                          on_failure
+    expire_in:                     24 hrs
+    paths:
+      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
 
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  allow_failure:                   true
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
@@ -231,6 +240,28 @@ build-linux-release:
     - cp -r scripts/docker/* ./artifacts
     - sccache -s
 
+build-linux-subkey:
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  # <<:                              *build-only
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd ./subkey
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - cd ..
+    # - time cargo build --release
+    - sccache -s
+    - mkdir -p ./artifacts
+    - mv ./target/release/subkey ./artifacts/.
+    - echo -n "Subkey version = "
+    - ./artifacts/subkey --version |
+        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
+        tee ./artifacts/SUBKEY-VERSION;
+    - sha256sum ./artifacts/subkey | tee ./artifacts/subkey.sha256
+
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
@@ -255,6 +286,7 @@ build-rust-doc-release:
   stage:                           publish
   dependencies:
     - build-linux-release
+    - build-linux-subkey
   <<:                              *build-only
   <<:                              *kubernetes-build
 
@@ -312,6 +344,7 @@ publish-s3-release:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
+
 
 publish-s3-doc:
   stage:                           publish
