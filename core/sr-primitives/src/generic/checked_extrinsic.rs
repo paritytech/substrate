@@ -22,7 +22,7 @@ use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
 	ValidateUnsigned
 };
-use crate::weights::{Weigh, TransactionInfo};
+use crate::weights::{DispatchInfo, TransactionInfo};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -89,11 +89,11 @@ where
 	}
 }
 
-impl<AccountId, Call, Extra> Weigh for CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra> DispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
 where
-	Call: Weigh,
+	Call: DispatchInfo,
 {
-	fn weigh(&self) -> TransactionInfo {
-		self.function.weigh()
+	fn dispatch_info(&self) -> TransactionInfo {
+		self.function.dispatch_info()
 	}
 }

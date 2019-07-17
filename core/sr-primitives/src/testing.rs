@@ -24,7 +24,7 @@ use crate::traits::{
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
-use crate::weights::{Weigh, TransactionInfo};
+use crate::weights::{DispatchInfo, TransactionInfo};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -263,8 +263,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	}
 }
 
-impl<Call: Encode, Extra: Encode> Weigh for TestXt<Call, Extra> {
-	fn weigh(&self) -> TransactionInfo {
+impl<Call: Encode, Extra: Encode> DispatchInfo for TestXt<Call, Extra> {
+	fn dispatch_info(&self) -> TransactionInfo {
 		// for testing: weight == size.
 		TransactionInfo {
 			weight: self.encode().len() as u32,

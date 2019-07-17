@@ -18,7 +18,7 @@
 //!
 //! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute. $x
 //! can be any object that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
-//! default, All transactions are annotated by `#[weight = TransactionWeight::default()]`.
+//! default, All transactions are annotated by `#[weight = WeightedTransaction::default()]`.
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
@@ -45,11 +45,11 @@ impl Default for DispatchClass {
 	}
 }
 
-impl From<&TransactionWeight> for DispatchClass {
-	fn from(tx: &TransactionWeight) -> Self {
+impl From<&WeightedTransaction> for DispatchClass {
+	fn from(tx: &WeightedTransaction) -> Self {
 		match *tx {
-			TransactionWeight::Operational(_) => DispatchClass::Operational,
-			TransactionWeight::Fixed(_) => DispatchClass::User,
+			WeightedTransaction::Operational(_) => DispatchClass::Operational,
+			WeightedTransaction::Fixed(_) => DispatchClass::User,
 		}
 	}
 }
@@ -64,18 +64,13 @@ pub struct TransactionInfo {
 	pub class: DispatchClass,
 }
 
-/// A `Call` enum (aka transaction) that can be weighted using the custom weight attribute of
-/// its dispatchable functions. Is implemented by default in the `decl_module!`.
-///
-/// Both the outer Call enum and the per-module individual ones will implement this.
-/// The outer enum simply calls the inner ones based on call type.
-// TODO: rename this to sth that says: this traits returns a bunch of static meta-information about
-// the tx, including but NOT only weight. Also rename #[weight] to #[meta]?
-pub trait Weigh {
-	/// Return the `TransactionInfo` static information of this call.
+/// A `Call` enum (aka transaction) that can be carry some static information along with it using
+/// the `#[weight]` tag.
+pub trait DispatchInfo {
+	/// Return a `TransactionInfo`, containing relevant information of this call.
 	///
 	/// This is done independently of its encoded size.
-	fn weigh(&self) -> TransactionInfo;
+	fn dispatch_info(&self) -> TransactionInfo;
 }
 
 /// Means of weighing some particular kind of data (`T`).
@@ -87,40 +82,40 @@ pub trait WeighData<T> {
 /// Means of classifying a transaction.
 pub trait ClassifyDispatch<T> {
 	/// Classify transaction based on input data `target`.
-	fn class(&self, target: T) -> DispatchClass;
+	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
 /// Default type used as the weight representative in a `#[weight = x]` attribute.
 ///
 /// A user may pass in any other type that implements the correct traits. If not, the `Default`
-/// implementation of [`TransactionWeight`] is used.
-pub enum TransactionWeight {
+/// implementation of [`WeightedTransaction`] is used.
+pub enum WeightedTransaction {
 	/// A fixed-weight transaction. No dependency on state or input.
 	Fixed(Weight),
 	/// An operational transaction.
 	Operational(Weight),
 }
 
-impl<T> WeighData<T> for TransactionWeight {
+impl<T> WeighData<T> for WeightedTransaction {
 	fn weigh_data(&self, _: T) -> Weight {
 		match self {
-			TransactionWeight::Fixed(w) => *w,
-			TransactionWeight::Operational(w) => *w,
+			WeightedTransaction::Fixed(w) => *w,
+			WeightedTransaction::Operational(w) => *w,
 		}
 	}
 }
 
-impl<T> ClassifyDispatch<T> for TransactionWeight {
-	fn class(&self, _: T) -> DispatchClass {
+impl<T> ClassifyDispatch<T> for WeightedTransaction {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::from(self)
 	}
 }
 
-impl Default for TransactionWeight {
+impl Default for WeightedTransaction {
 	fn default() -> Self {
 		// This implies that the weight is currently equal to 100, nothing more
 		// for all substrate transactions that do NOT explicitly annotate weight.
 		// TODO #2431 needs to be updated with proper max values.
-		TransactionWeight::Fixed(1)
+		WeightedTransaction::Fixed(1)
 	}
 }

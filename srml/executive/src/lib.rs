@@ -86,7 +86,7 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::Weigh;
+use primitives::weights::DispatchInfo;
 
 mod internal {
 	use primitives::traits::DispatchError;
@@ -141,7 +141,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weigh,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + DispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -160,7 +160,7 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weigh,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + DispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -284,8 +284,8 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let transaction_info = xt.weigh();
-		let r = Applyable::dispatch(xt, transaction_info, encoded_len)
+		let dispatch_info = xt.dispatch_info();
+		let r = Applyable::dispatch(xt, dispatch_info, encoded_len)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -339,8 +339,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let transaction_info = xt.weigh();
-		xt.validate::<UnsignedValidator>(transaction_info, encoded_len)
+		let dispatch_info = xt.dispatch_info();
+		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

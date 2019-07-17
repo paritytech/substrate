@@ -255,7 +255,7 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
-use sr_primitives::weights::TransactionWeight;
+use sr_primitives::weights::WeightedTransaction;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -396,8 +396,18 @@ decl_module! {
 		//
 		// If you don't respect these rules, it is likely that your chain will be attackable.
 		//
-		// TODO: update weight doc.
-		#[weight = TransactionWeight::Fixed(0)]
+		// Each transaction can define an optional `#[weight]` attribute to convey a set of static
+		// information about its dispatch. The `system` and `executive` module then use this
+		// information to properly execute the transaction, whilst keeping the total load of the
+		// chain in a moderate rate.
+		//
+		// the _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
+		// a set of traits, namely [`WeighData`] and [`ClassifyDispatch`]. The former conveys the
+		// weight (a numeric representation of pure execution time and difficulty) of the
+		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
+		//  means a larger transaction (less of which can be placed in a single block). See the
+		// `CheckWeight` signed extension struct in the `system` module for more information.
+		#[weight = WeightedTransaction::Fixed(10)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
