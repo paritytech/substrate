@@ -53,7 +53,7 @@ use fg_primitives::{
 };
 pub use fg_primitives::{
 	AuthorityId, AuthorityWeight, AuthoritySignature, CHALLENGE_SESSION_LENGTH,
-	Commit, safety::{self, ChallengedVote, RejectingVoteSet},
+	Commit, safety::{self, ChallengedVote},
 };
 
 use substrate_primitives::crypto::KeyTypeId;
@@ -299,7 +299,7 @@ decl_module! {
 			}
 
 			let round_s = challenge.rejecting_set.round;
-			let finalized_block_proof = challenge.finalized_block_proof.clone().expect("FIXME");
+			let finalized_block_proof = challenge.finalized_block_proof.clone();
 			let round_b = finalized_block_proof.round;
 
 			if round_s == round_b {
@@ -307,7 +307,20 @@ decl_module! {
 				// TODO: Check signatures.
 				{
 					let headers: &[T::Header] = finalized_block_proof.headers.as_slice();
-					let commit = finalized_block_proof.commit.clone();
+					let commit = Commit {
+						target_hash: challenge.finalized_block.0,
+						target_number: challenge.finalized_block.1,
+						precommits: finalized_block_proof.votes.into_iter().map(|cv| {
+							SignedPrecommit {
+								precommit: Precommit::<T> {
+									target_hash: cv.vote.target().0.clone(),
+									target_number: cv.vote.target().1,
+								},
+								signature: cv.signature,
+								id: cv.authority,
+							}
+						}).collect(),
+					};
 					let ancestry_chain = AncestryChain::<T::Block>::new(headers);
 					let voters = <Module<T>>::grandpa_authorities();
 					let voter_set = VoterSet::<AuthorityId>::from_iter(voters);
@@ -398,7 +411,7 @@ decl_module! {
 
 			// TODO: Check these two guys.
 			let round_s = challenge.rejecting_set.round;
-			let finalized_block_proof = challenge.finalized_block_proof.clone().expect("FIXME");
+			let finalized_block_proof = challenge.finalized_block_proof.clone();
 			let round_b = finalized_block_proof.round;
 
 			if round_b == round_s {

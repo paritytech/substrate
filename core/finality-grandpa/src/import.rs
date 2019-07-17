@@ -33,7 +33,7 @@ use consensus_common::{
 };
 use consensus_accountable_safety::SubmitReport;
 use consensus_accountable_safety_primitives::{
-	RejectingVoteSet, FinalizedBlockProof, ChallengedVote
+	ChallengedVote, VoteSet,
 };
 use fg_primitives::{
 	GrandpaApi, AncestryChain, GRANDPA_ENGINE_ID, AuthoritySignature,
@@ -490,58 +490,52 @@ where
 					return Ok(None)
 				}
 
-				if challenge.finalized_block_proof.is_none() {
-					// A challenge without a proof is actually just an answer
-					// to a previous challenge. Therefore, we don't need to answer.
-					return Ok(None)
-				}
+				let finalized_block_proof = challenge.finalized_block_proof.clone();
 
-				let finalized_block_proof = challenge.finalized_block_proof.clone()
-					.expect("checked in previous line; qed");
-				
 				let round_s = challenge.rejecting_set.round;
 				let round_b = finalized_block_proof.round;
 
 				if round_b == round_s {
-					// We answer with the set of votes seen when prevoted.
-					let votes_seen = self.votes_seen_when_prevoted(round_s);
+					// We answer with the prevotes seen.
+					let votes_seen = self.prevotes_seen(round_s);
 
 					let mut headers = Vec::new();
 					let mut challenged_votes = Vec::new();
 
 					for signed_message in votes_seen.into_iter() {
 						let hash = signed_message.message.target().0.clone();
-						let header = self.api.header(BlockId::Hash(hash))
-							.expect("FIXME") // Throw an error or continue (we are going to get slashed!)?
-							.expect("FIXME");
 
-						headers.push(header);
+						if let Ok(Some(header)) = self.api.header(BlockId::Hash(hash)) {
+							headers.push(header);
 
-						let vote = ChallengedVote {
-							vote: signed_message.message,
-							authority: signed_message.id,
-							signature: signed_message.signature,
-						};
+							let vote = ChallengedVote {
+								vote: signed_message.message,
+								authority: signed_message.id,
+								signature: signed_message.signature,
+							};
 
-						challenged_votes.push(vote);
+							challenged_votes.push(vote);
+						} else {
+							return Err(ConsensusError::ClientImport(
+								"Could not get header".to_string()
+							).into())
+						}
 					}
 
-					let rejecting_set = RejectingVoteSet {
+					let finalized_block_proof = VoteSet {
 						votes: challenged_votes,
 						headers,
 						round: round_s,
 					};
 
-					// Prevotes should support this block.
 					let finalized_block = challenge.finalized_block;
-
-					let finalized_block_proof = None;
 					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
-
+					let rejecting_set = challenge.rejecting_set;
+					
 					let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 
 					let answer = Challenge::<Block> {
-						suspects: vec![], // TODO: Should we fill it with voters from finalized_block_proof?
+						suspects: vec![],
 						finalized_block,
 						finalized_block_proof,
 						rejecting_set,
@@ -555,7 +549,11 @@ where
 					)
 					.map(|call| {
 						self.transaction_pool.as_ref().map(|txpool| {
-							txpool.submit_report_call(self.inner.as_ref(), &local_key, call.unwrap().as_slice())
+							txpool.submit_report_call(
+								self.inner.as_ref(),
+								&local_key,
+								call.expect("FIXME").as_slice()
+							)
 						});
 						info!(target: "afg", "Prevotes answer to challenge has been submitted")
 					}).unwrap_or_else(|err|
@@ -564,7 +562,7 @@ where
 				}
 
 				if round_b < round_s {
-					
+
 				}
 				// 	// Case 1: Rejecting set contains only precommits.
 				// 	let mut authority_vote_map = HashMap::new();
