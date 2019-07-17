@@ -1075,8 +1075,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
-			// FIXME: #1442 reorganize best block to be the best chain containing
-			// `block`.
+			// NOTE: we're setting the finalized block as best block, this might
+			// be slightly innacurate since we might have a "better" block
+			// further along this chain, but since best chain selection logic is
+			// pluggable we cannot make a better choice here. usages that need
+			// an accurate "best" block need to go through `SelectChain`
+			// instead.
+			operation.op.mark_head(BlockId::Hash(block))?;
 		}
 
 		let enacted = route_from_finalized.enacted();
@@ -1188,6 +1193,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Mark all blocks up to given as finalized in operation. If a
 	/// justification is provided it is stored with the given finalized
 	/// block (any other finalized blocks are left unjustified).
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
 	pub fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
@@ -1202,6 +1212,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
 	///
 	/// Pass a flag to indicate whether finality notifications should be propagated.
 	/// This is usually tied to some synchronization state, where we don't send notifications
@@ -1589,9 +1604,12 @@ where
 	}
 
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info : ChainInfo<Block> = self.backend.blockchain().info();
-		Ok(self.backend.blockchain().header(BlockId::Hash(info.best_hash))?
-			.expect("Best block header must always exist"))
+		let info = self.backend.blockchain().info();
+		let best_hash = self.best_containing(info.best_hash, None)?
+			.unwrap_or(info.best_hash);
+
+		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
+			.expect("given block hash was fetched from block in db; qed"))
 	}
 
 	/// Get the most recent block hash of the best (longest) chains
@@ -1625,7 +1643,7 @@ where
 			}
 		}
 
-		let (leaves, best_already_checked) = {
+		let leaves = {
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
@@ -1637,29 +1655,24 @@ where
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
 			if canon_hash == target_hash {
-				// if no block at the given max depth exists fallback to the best block
+				// if a `max_number` is given we try to fetch the block at the
+				// given depth, if it doesn't exist or `max_number` is not
+				// provided, we continue to search from all leaves below.
 				if let Some(max_number) = maybe_max_number {
 					if let Some(header) = self.backend.blockchain().hash(max_number)? {
 						return Ok(Some(header));
 					}
 				}
-
-				return Ok(Some(info.best_hash));
 			} else if info.finalized_number >= *target_header.number() {
 				// header is on a dead fork.
 				return Ok(None);
 			}
 
-			(self.backend.blockchain().leaves()?, info.best_hash)
+			self.backend.blockchain().leaves()?
 		};
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in leaves {
-			// ignore canonical chain which we already checked above
-			if leaf_hash == best_already_checked {
-				continue;
-			}
-
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 
@@ -2493,6 +2506,131 @@ pub(crate) mod tests {
 		assert_eq!(
 			blockchain.justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
+		);
+	}
+
+	#[test]
+	fn importing_diverged_finalized_block_should_trigger_reorg() {
+		use test_client::blockchain::HeaderBackend;
+
+		let client = test_client::new();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		// create but don't import B1 just yet
+		let b1 = b1.bake().unwrap();
+
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
+		// A2 is the current best since it's the longest chain
+		assert_eq!(
+			blockchain.info().best_hash,
+			a2.hash(),
+		);
+
+		// importing B1 as finalized should trigger a re-org and set it as new best
+		let justification = vec![1, 2, 3];
+		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			b1.hash(),
+		);
+
+		assert_eq!(
+			blockchain.info().finalized_hash,
+			b1.hash(),
+		);
+	}
+
+	#[test]
+	fn finalizing_diverged_block_should_trigger_reorg() {
+		use test_client::blockchain::HeaderBackend;
+
+		let (client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1 -> B2
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+
+		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default()).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b2.clone()).unwrap();
+
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
+		// A2 is the current best since it's the longest chain
+		assert_eq!(
+			blockchain.info().best_hash,
+			a2.hash(),
+		);
+
+		// we finalize block B1 which is on a different branch from current best
+		// which should trigger a re-org.
+		client.finalize_block(BlockId::Hash(b1.hash()), None, false).unwrap();
+
+		// B1 should now be the latest finalized
+		assert_eq!(
+			blockchain.info().finalized_hash,
+			b1.hash(),
+		);
+
+		// and B1 should be the new best block (`finalize_block` as no way of
+		// knowing about B2)
+		assert_eq!(
+			blockchain.info().best_hash,
+			b1.hash(),
+		);
+
+		// `SelectChain` should report B2 as best block though
+		assert_eq!(
+			select_chain.best_chain().unwrap().hash(),
+			b2.hash(),
+		);
+
+		// after we build B3 on top of B2 and import it
+		// it should be the new best block,
+		let b3 = client.new_block_at(
+			&BlockId::Hash(b2.hash()),
+			Default::default(),
+		).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b3.clone()).unwrap();
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			b3.hash(),
 		);
 	}
 }
