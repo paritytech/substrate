@@ -32,7 +32,7 @@ pub type BlockNumber = u64;
 pub type Severity = u64;
 pub type Balance = u64;
 pub type Balances = balances::Module<Test>;
-pub type Session = session::Module<Test>;
+pub type Session = srml_session::Module<Test>;
 pub type Staking = srml_staking::Module<Test>;
 pub type BalanceOf<T> = <<T as srml_staking::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 pub type ExtendedBalance = u128;
@@ -124,11 +124,11 @@ impl srml_staking::Trait for Test {
 	type SessionInterface = Self;
 }
 
-impl session::Trait for Test {
+impl srml_session::Trait for Test {
 	type SelectInitialValidators = Staking;
 	type OnSessionEnding = Staking;
 	type Keys = UintAuthorityId;
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = srml_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = ();
 	type Event = ();
 	type ValidatorId = AccountId;
@@ -145,7 +145,7 @@ impl Trait for Test {
 	type Kind = Kind;
 }
 
-impl session::historical::Trait for Test {
+impl srml_session::historical::Trait for Test {
 	type FullIdentification = srml_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = srml_staking::ExposureOf<Test>;
 }
@@ -155,7 +155,7 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: session::SessionIndex = 3;
+	pub const SessionsPerEra: srml_session::SessionIndex = 3;
 	pub const BondingDuration: srml_staking::EraIndex = 3;
 }
 
@@ -294,7 +294,7 @@ impl ExtBuilder {
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 
-		let _ = session::GenesisConfig::<Test> {
+		let _ = srml_session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut t, &mut c);
 
