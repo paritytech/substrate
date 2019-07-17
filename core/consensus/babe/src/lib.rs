@@ -18,23 +18,25 @@
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
+// #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
+use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::traits::{
 	Block, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
+use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::Mutex;
-use primitives::{Pair, Public, sr25519};
+use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -62,11 +64,13 @@ use consensus_common::{SelectChain, well_known_cache_keys};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
-	blockchain::ProvideCache,
+	blockchain::{self, HeaderBackend, ProvideCache},
+	CallExecutor, Client,
 	runtime_api::ApiExt,
 	error::Result as CResult,
-	backend::AuxStore,
+	backend::{AuxStore, Backend},
 };
+use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
 use tokio_timer::Timeout;
@@ -813,6 +817,119 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_epoch = epoch(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_epoch.encode())
 		.map_err(map_err)
+}
+
+struct BabeBlockImport<B, E, Block: BlockT, RA> {
+	inner: BoxBlockImport<Block>,
+	client: Arc<Client<B, E, Block, RA>>,
+	// data stored in tree is the hash of the block signaling the epoch change,
+	// slot number of the block, and the minimum slot number where the next
+	// epoch starts (i.e. slot number begin + duration).
+	epoch_changes: ForkTree<Block::Hash, SlotNumber, SlotNumber>,
+}
+
+impl<B, E, Block: BlockT, RA> BabeBlockImport<B, E, Block, RA> {
+	fn new(client: Arc<Client<B, E, Block, RA>>, block_import: BoxBlockImport<Block>) -> Self {
+		BabeBlockImport {
+			client,
+			inner: block_import,
+			epoch_changes: ForkTree::new(),
+		}
+	}
+}
+
+impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> where
+	Block: BlockT<Hash=H256>,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+{
+	type Error = ConsensusError;
+
+	fn import_block(
+		&mut self,
+		block: ImportBlock<Block>,
+		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		let hash = block.post_header().hash();
+
+		// early exit if block already in chain, otherwise the check for
+		// epoch changes will error when trying to re-import an epoch change
+		#[allow(deprecated)]
+		match self.client.backend().blockchain().status(BlockId::Hash(hash)) {
+			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(blockchain::BlockStatus::Unknown) => {},
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+		}
+
+		let slot_number = 3u64;
+		let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, Self::Error> { Ok(true) };
+
+		let epoch_change = self.epoch_changes.find_node_where(
+			&hash,
+			&slot_number,
+			&is_descendent_of,
+			&|expected_epoch_change_slot| {
+				*expected_epoch_change_slot <= slot_number
+			}
+		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+
+		let check_roots = || -> Result<bool, ConsensusError> {
+			// this can only happen when the chain starts, since there's no epoch change at genesis.
+			// afterwards every time we expect an epoch change it means we will import another one.
+			for (root, _, _) in self.epoch_changes.roots() {
+				if is_descendent_of(root, &hash)? {
+					return Ok(false);
+				}
+			}
+
+			Ok(true)
+		};
+
+		let expected_epoch_change = epoch_change.is_some();
+
+		match (expected_epoch_change, new_cache.contains_key(&well_known_cache_keys::AUTHORITIES)) {
+			(true, true) => {},
+			(false, false) => {},
+			(true, false) => {
+				return Err(
+					ConsensusError::ClientImport("Expected epoch change to happen by this block".into())
+				);
+			},
+			(false, true) => {
+				if !check_roots()? {
+					return Err(ConsensusError::ClientImport("Unexpected epoch change".into()));
+				}
+			},
+		}
+
+		// FIXME: validate epoch index, store last epoch index in forktree
+		if let Some(entry) = new_cache.get(&well_known_cache_keys::AUTHORITIES) {
+			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
+				// track the epoch change in the fork tree
+				self.epoch_changes.import(
+					hash,
+					slot_number,
+					slot_number + epoch.duration,
+					&is_descendent_of,
+				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+			} else {
+				return Err(
+					ConsensusError::ClientImport("Failed to decode epoch change digest".into())
+				);
+			}
+		}
+
+		self.inner.import_block(block, new_cache)
+	}
+
+	fn check_block(
+		&mut self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(hash, parent_hash)
+	}
 }
 
 /// Start an import queue for the Babe consensus algorithm.
