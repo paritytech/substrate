@@ -16,9 +16,9 @@
 
 //! Primitives for transaction weighting.
 //!
-//! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute. $x
-//! can be any object that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
-//! default, All transactions are annotated by `#[weight = WeightedTransaction::default()]`.
+//! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute.
+//! `$x` can be any type that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
+//! default, All transactions are annotated with `#[weight = WeightedTransaction::default()]`.
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
@@ -45,9 +45,9 @@ impl Default for DispatchClass {
 	}
 }
 
-impl From<&WeightedTransaction> for DispatchClass {
-	fn from(tx: &WeightedTransaction) -> Self {
-		match *tx {
+impl From<WeightedTransaction> for DispatchClass {
+	fn from(tx: WeightedTransaction) -> Self {
+		match tx {
 			WeightedTransaction::Operational(_) => DispatchClass::Operational,
 			WeightedTransaction::Fixed(_) => DispatchClass::User,
 		}
@@ -64,10 +64,10 @@ pub struct TransactionInfo {
 	pub class: DispatchClass,
 }
 
-/// A `Call` enum (aka transaction) that can be carry some static information along with it using
-/// the `#[weight]` tag.
+/// A `Call` (aka transaction) that can carry some static information along with it, using the
+/// `#[weight]` attribute.
 pub trait DispatchInfo {
-	/// Return a `TransactionInfo`, containing relevant information of this call.
+	/// Return a `TransactionInfo`, containing relevant information of this dispatch.
 	///
 	/// This is done independently of its encoded size.
 	fn dispatch_info(&self) -> TransactionInfo;
@@ -81,14 +81,15 @@ pub trait WeighData<T> {
 
 /// Means of classifying a transaction.
 pub trait ClassifyDispatch<T> {
-	/// Classify transaction based on input data `target`.
+	/// Classify the transaction based on input data `target`.
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
-/// Default type used as the weight representative in a `#[weight = x]` attribute.
+/// Default type used with the `#[weight = x]` attribute in a substrate chain.
 ///
 /// A user may pass in any other type that implements the correct traits. If not, the `Default`
 /// implementation of [`WeightedTransaction`] is used.
+#[derive(Clone, Copy)]
 pub enum WeightedTransaction {
 	/// A fixed-weight transaction. No dependency on state or input.
 	Fixed(Weight),
@@ -107,7 +108,7 @@ impl<T> WeighData<T> for WeightedTransaction {
 
 impl<T> ClassifyDispatch<T> for WeightedTransaction {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::from(self)
+		DispatchClass::from(*self)
 	}
 }
 
