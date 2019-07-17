@@ -170,8 +170,8 @@ mod tests {
 	struct MockNetworkStateInfo();
 
 	impl NetworkStateInfo for MockNetworkStateInfo {
-		fn external_addresses(&self) -> HashSet<Multiaddr> {
-			HashSet::new()
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
 		}
 
 		fn peer_id(&self) -> PeerId {

@@ -454,8 +454,8 @@ mod tests {
 	struct MockNetworkStateInfo();
 
 	impl NetworkStateInfo for MockNetworkStateInfo {
-		fn external_addresses(&self) -> HashSet<Multiaddr> {
-			HashSet::new()
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
 		}
 
 		fn peer_id(&self) -> PeerId {
@@ -575,7 +575,7 @@ mod tests {
 
 		// when
 		let opaque_state = OpaqueNetworkState::from(state.clone());
-		let converted_back_state = NetworkState::from(opaque_state);
+		let converted_back_state = NetworkState::try_from(opaque_state).unwrap();
 
 		// then
 		assert_eq!(state, converted_back_state);
