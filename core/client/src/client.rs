@@ -81,6 +81,8 @@ use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
 
+#[cfg(feature = "test-helpers")]
+use client::in_mem::Backend as InMemoryBackend;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -353,6 +355,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	will be removed once that is in place.")]
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
+	}
+	
+	/// Returns in-memory blockchain that contains the same set of blocks that the
+	/// backend hold by this client.
+	#[cfg(feature = "test-helpers")]
+	pub fn backend_as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
+		self.backend.as_in_memory()
 	}
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
