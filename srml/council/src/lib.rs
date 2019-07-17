@@ -260,7 +260,7 @@ mod tests {
 				presentation_duration: 2,
 				term_duration: 5,
 			}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-			runtime_io::TestExternalities::new_with_children(t)
+			runtime_io::TestExternalities::new(t)
 		}
 	}
 

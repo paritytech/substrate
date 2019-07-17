@@ -441,7 +441,7 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
-		}.build_storage().unwrap().0.into()
+		}.build_storage().unwrap().into()
 	}
 
 	#[test]

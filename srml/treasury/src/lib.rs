@@ -357,6 +357,8 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
+
+	use runtime_primitives::extend_storage_overlays;
 	use runtime_io::with_externalities;
 	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -426,11 +428,11 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		extend_storage_overlays(&mut t, balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap().0);
+		}.build_storage().unwrap());
 		t.into()
 	}
 

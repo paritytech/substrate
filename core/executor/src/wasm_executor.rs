@@ -1477,11 +1477,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
+		let expected = TestExternalities::new((map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
-		]);
+		], map![]));
 		assert_eq!(ext, expected);
 	}
 
@@ -1500,11 +1500,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
+		let expected = TestExternalities::new((map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
-		];
+		], map![]));
 		assert_eq!(expected, ext);
 	}
 

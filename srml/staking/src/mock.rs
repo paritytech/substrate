@@ -287,7 +287,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut t, &mut c);
 
-		let mut ext = t.into();
+		let mut ext = (t, c).into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|

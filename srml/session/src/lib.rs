@@ -298,10 +298,10 @@ decl_storage! {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
 			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
+			children_storage: &mut primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>
 		| {
-			runtime_io::with_storage(storage, || {
+			runtime_io::with_storage(storage, children_storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
 					assert!(
 						<Module<T>>::load_keys(&who).is_none(),
@@ -570,7 +570,7 @@ mod tests {
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
+		runtime_io::TestExternalities::new(t)
 	}
 
 	fn initialize_block(block: u64) {

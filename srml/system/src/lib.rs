@@ -614,11 +614,13 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new(map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-		])
+		TestExternalities::new((map![], map![
+      crate::child_key().to_vec() => map![
+        twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+        twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
+        twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
+      ]
+		]))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -822,7 +824,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	#[test]

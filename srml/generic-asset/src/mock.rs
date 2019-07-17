@@ -23,6 +23,7 @@
 use primitives::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	extend_storage_overlays,
 };
 use substrate_primitives::{Blake2Hasher, H256};
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
@@ -109,9 +110,9 @@ impl ExtBuilder {
 
 	// builds genesis config
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-		t.extend(
+		extend_storage_overlays(&mut t,
 			GenesisConfig::<Test> {
 				assets: vec![self.asset_id],
 				endowed_accounts: self.accounts,
@@ -122,7 +123,6 @@ impl ExtBuilder {
 			}
 			.build_storage()
 			.unwrap()
-			.0,
 		);
 
 		t.into()
@@ -135,6 +135,5 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	system::GenesisConfig::default()
 		.build_storage::<Test>()
 		.unwrap()
-		.0
 		.into()
 }

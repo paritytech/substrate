@@ -295,7 +295,7 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		}),
 		module2_Instance2: None,
 		module2_Instance3: None,
-	}.build_storage().unwrap().0.into()
+	}.build_storage().unwrap().into()
 }
 
 #[test]

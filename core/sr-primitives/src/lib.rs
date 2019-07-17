@@ -134,21 +134,6 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for StorageOverlay {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		Ok((self, Default::default()))
-	}
-	fn assimilate_storage(
-		self,
-		storage: &mut StorageOverlay,
-		_child_storage: &mut ChildrenStorageOverlay
-	) -> Result<(), String> {
-		storage.extend(self);
-		Ok(())
-	}
-}
-
-#[cfg(feature = "std")]
 impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok(self)
@@ -159,8 +144,30 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 		child_storage: &mut ChildrenStorageOverlay
 	)-> Result<(), String> {
 		storage.extend(self.0);
-		child_storage.extend(self.1);
+		for (k, other_map) in self.1.into_iter() {
+			if let Some(map) = child_storage.get_mut(&k) {
+				map.extend(other_map);
+			} else {
+				child_storage.insert(k, other_map);
+			}
+		}
 		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+/// Extend storage overlays
+pub fn extend_storage_overlays(
+		from: &mut (StorageOverlay, ChildrenStorageOverlay),
+		with: (StorageOverlay, ChildrenStorageOverlay),
+	) {
+	from.0.extend(with.0);
+	for (k, other_map) in with.1.into_iter() {
+		if let Some(map) = from.1.get_mut(&k) {
+			map.extend(other_map);
+		} else {
+			from.1.insert(k, other_map);
+		}
 	}
 }
 

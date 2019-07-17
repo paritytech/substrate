@@ -561,11 +561,14 @@ fn decl_store_extra_genesis(
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> #fn_where_clause {
-					let storage = r;
+					{
+						let storage_entry = c.entry(child_key().to_vec()).or_insert_with(|| Default::default());
+						let storage = &mut *storage_entry;
 
-					#builders
+						#builders
+					}
 
-					#scall(storage, c, &self);
+					#scall(r, c, &self);
 
 					Ok(())
 				}

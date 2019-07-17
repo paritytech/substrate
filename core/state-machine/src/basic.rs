@@ -35,13 +35,9 @@ pub struct BasicExternalities {
 }
 
 impl BasicExternalities {
-	/// Create a new instance of `BasicExternalities`
-	pub fn new(top: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_children(top, Default::default())
-	}
 
-	/// Create a new instance of `BasicExternalities` with children
-	pub fn new_with_children(
+	/// Create a new instance of `BasicExternalities`
+	pub fn new(
 		mut top: HashMap<Vec<u8>, Vec<u8>>,
 		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
@@ -81,7 +77,7 @@ impl FromIterator<(Vec<u8>, Vec<u8>)> for BasicExternalities {
 }
 
 impl Default for BasicExternalities {
-	fn default() -> Self { Self::new(Default::default()) }
+	fn default() -> Self { Self::new(Default::default(), Default::default()) }
 }
 
 impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
@@ -214,7 +210,7 @@ mod tests {
 	fn children_works() {
 		let child_storage = b":child_storage:default:test".to_vec();
 
-		let mut ext = BasicExternalities::new_with_children(
+		let mut ext = BasicExternalities::new(
 			Default::default(),
 			map![
 				child_storage.clone() => map![

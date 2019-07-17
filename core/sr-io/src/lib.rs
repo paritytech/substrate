@@ -398,7 +398,7 @@ mod imp {
 
 #[cfg(feature = "std")]
 pub use self::imp::{
-	StorageOverlay, ChildrenStorageOverlay, with_storage, with_storage_and_children,
+	StorageOverlay, ChildrenStorageOverlay, with_storage,
 	with_externalities
 };
 #[cfg(not(feature = "std"))]
