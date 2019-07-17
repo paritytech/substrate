@@ -244,7 +244,7 @@ export_api! {
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
 
 		/// Returns the currently configured authority public key, if available.
-		// TODO [ToDr] change into crypto_pubkey(&self, key: Option<CryptoKeyId>, kind: CryptoKind)
+		// TODO [#3139] change into crypto_pubkey(&self, key: Option<CryptoKeyId>, kind: CryptoKind)
 		fn authority_pubkey(crypto: CryptoKind) -> Result<Vec<u8>, ()>;
 
 		/// Create new key(pair) for signing/encryption/decryption.

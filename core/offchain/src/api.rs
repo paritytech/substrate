@@ -163,17 +163,13 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 	}
 
 	fn authority_pubkey(&self, kind: CryptoKind) -> Result<Vec<u8>, ()> {
-		match self.read_key(None, kind) {
-			Ok(key) => {
-				let public = match key {
-					Key::Sr25519(pair) => pair.public().encode(),
-					Key::Ed25519(pair) => pair.public().encode(),
-				};
+		let key = self.read_key(None, kind)?;
+		let public = match key {
+			Key::Sr25519(pair) => pair.public().encode(),
+			Key::Ed25519(pair) => pair.public().encode(),
+		};
 
-				Ok(public)
-			},
-			Err(e) => Err(e),
-		}
+		Ok(public)
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
@@ -334,7 +330,7 @@ impl NetworkState {
 
 impl From<NetworkState> for OpaqueNetworkState {
 	fn from(state: NetworkState) -> OpaqueNetworkState {
-		let enc = Encode::encode(&state.peer_id.as_bytes().to_vec());
+		let enc = Encode::encode(&state.peer_id.into_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
 		let external_addresses: Vec<OpaqueMultiaddr> = state
@@ -357,7 +353,7 @@ impl From<OpaqueNetworkState> for NetworkState {
 	fn from(state: OpaqueNetworkState) -> NetworkState {
 		let inner_vec = state.peer_id.0;
 
-		let bytes: Vec<u8> = <Vec<u8>>::decode(&mut &inner_vec[..])
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..])
 			.expect("It's always a valid Vec<u8> which is encoded; qed");
 		let peer_id = PeerId::from_bytes(bytes)
 			.expect("These bytes were exported from a valid PeerId; qed");
