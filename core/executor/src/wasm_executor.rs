@@ -301,9 +301,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_storage")?;
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(|| "ext_exists_child_storage: child storage key is not valid")?;
 		let prefix = this.memory.get(prefix_data, prefix_len as usize)
 			.map_err(|_| "Invalid attempt to determine prefix in ext_clear_clear_prefix")?;
-		this.ext.clear_child_prefix(&storage_key, &prefix);
+		this.ext.clear_child_prefix(storage_key, &prefix);
 		Ok(())
 	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
