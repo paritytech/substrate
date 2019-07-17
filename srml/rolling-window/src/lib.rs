@@ -57,8 +57,19 @@ decl_storage! {
 
 		/// Bonding guard
 		///
-		/// Keeps track of unique reported misconducts
-		BondingGuard get(uniq): linked_map (T::Kind, T::Hash) => ();
+		/// Keeps track of uniquely reported misconducts in during the `Bonding Duration`
+		///
+		/// (niklasad1):
+		/// how to keep track of the bonding duration?!
+		///
+		///	Do we need to store `EraIndex` and detect when `staking::BondingDuration` has been reached?!
+		///	If so, we need dependency to the staking module too.
+		///
+		/// Additionally, it may `unbond` a portion or all funds and it may be invalidate potential candidates
+		/// to be slashed but it shouldn't have any impact on the already reported misbehaviors in the rolling window
+		///
+		/// For now, we have a function `on_bonding_duration` which should be called when the BondingDuration expires.
+		BondingGuard get(uniq): linked_map T::Hash => SessionIndex;
 	}
 }
 
@@ -73,11 +84,11 @@ impl<T: Trait> Module<T> {
 	/// If the misbehavior is not unique `Err` is returned otherwise the number of misbehaviors for the kind
 	/// is returned
 	pub fn report_misbehavior(kind: T::Kind, footprint: T::Hash, current_session: SessionIndex) -> Result<u64, ()> {
-		if <BondingGuard<T>>::exists((kind, footprint)) {
+		if <BondingGuard<T>>::exists(footprint) {
 			return Err(());
 		}
 
-		<BondingGuard<T>>::insert((kind, footprint), ());
+		<BondingGuard<T>>::insert(footprint, current_session);
 
 		if <MisconductReports<T>>::exists(kind) {
 			<MisconductReports<T>>::mutate(kind, |entry| entry.push(current_session));
@@ -95,6 +106,20 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// An event handler for when `BondingDuration` has expired
+pub trait OnBondingDurationEnd {
+	/// Take action when `BondingDuration` expired
+	fn on_bonding_duration_end();
+}
+
+
+impl<T: Trait> OnBondingDurationEnd for Module<T> {
+	fn on_bonding_duration_end() {
+		for (id, _) in <BondingGuard<T>>::enumerate() {
+			<BondingGuard<T>>::remove(id);
+		}
+	}
+}
 
 impl<T: Trait> srml_session::OnSessionEnding<T::AccountId> for Module<T> {
 	fn on_session_ending(ending: SessionIndex, _applied_at: SessionIndex) -> Option<Vec<T::AccountId>> {
@@ -176,6 +201,7 @@ mod tests {
 
 			let zero = H256::zero();
 			let one: H256 = [1_u8; 32].into();
+			let two: H256 = [2_u8; 32].into();
 
 			let mut current_session = 0;
 
@@ -185,30 +211,24 @@ mod tests {
 			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).unwrap(), 2);
 			assert!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).is_err());
 
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Three, one, current_session).unwrap(), 1);
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 2);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Three), 1);
+
+			current_session += 1;
+
+			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, two, current_session).unwrap(), 3);
+			RollingWindow::on_session_ending(current_session, current_session + 1);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 3);
 
 			current_session += 1;
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 2);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Three), 1);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 3);
 
 			current_session += 1;
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 2);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Three), 0);
-
-			current_session += 1;
-
-			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 0);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Three), 0);
-
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 1);
 		});
 	}
 
