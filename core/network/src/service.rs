@@ -25,9 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{
-	collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path,
-};
+use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
@@ -90,7 +88,7 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: E
 	/// Number of peers we're connected to.
 	num_connected: Arc<AtomicUsize>,
 	/// The local external addresses.
-	external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
@@ -222,7 +220,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		let service = Arc::new(NetworkService {
 			bandwidth,
-			external_addresses: Arc::new(Mutex::new(HashSet::new())),
+			external_addresses: Arc::new(Mutex::new(Vec::new())),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
@@ -232,7 +230,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		});
 
 		Ok(NetworkWorker {
-			external_addresses: Arc::new(Mutex::new(HashSet::new())),
+			external_addresses: Arc::new(Mutex::new(Vec::new())),
 			num_connected,
 			is_major_syncing,
 			network_service: swarm,
@@ -259,7 +257,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> HashSet<Multiaddr> {
+	pub fn external_addresses(&self) -> Vec<Multiaddr> {
 		let swarm = &self.network_service;
 		Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect()
 	}
@@ -502,7 +500,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> HashSet<Multiaddr> {
+	pub fn external_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.lock().clone()
 	}
 }
@@ -521,7 +519,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 /// Trait for providing information about the local network state
 pub trait NetworkStateInfo {
 	/// Returns the local external addresses.
-	fn external_addresses(&self) -> HashSet<Multiaddr>;
+	fn external_addresses(&self) -> Vec<Multiaddr>;
 
 	/// Returns the local Peer ID.
 	fn peer_id(&self) -> PeerId;
@@ -534,7 +532,7 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 		H: ExHashT,
 {
 	/// Returns the local external addresses.
-	fn external_addresses(&self) -> HashSet<Multiaddr> {
+	fn external_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.lock().clone()
 	}
 
@@ -565,7 +563,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
 pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.

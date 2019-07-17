@@ -173,10 +173,7 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		let external_addresses = self.network_state
-			.external_addresses()
-			.into_iter()
-			.collect();
+		let external_addresses = self.network_state.external_addresses();
 
 		let state = NetworkState::new(
 			self.network_state.peer_id(),
