@@ -300,7 +300,7 @@ use primitives::traits::{
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
-use system::{ensure_signed, ensure_root, RawOrigin};
+use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
@@ -984,25 +984,6 @@ decl_module! {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
-
-		/// Add reward points to validator.
-		///
-		/// At the end of the era each the total payout will be distributed among validator
-		/// relatively to their points.
-		fn add_reward_points_to_validator(origin, validator: T::AccountId, points: u32) {
-			ensure_root(origin)?;
-			<Module<T>>::current_elected().iter()
-				.position(|elected| *elected == validator)
-				.map(|index| {
-					CurrentEraRewards::mutate(|rewards| {
-						if let Some(new_total) = rewards.total.checked_add(points) {
-							rewards.total = new_total;
-							rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
-							rewards.rewards[index] += points; // Addition is less than total
-						}
-					});
-				});
-		}
 	}
 }
 
@@ -1395,6 +1376,24 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(event);
 		}
 	}
+
+	/// Add reward points to validator.
+	///
+	/// At the end of the era each the total payout will be distributed among validator
+	/// relatively to their points.
+	fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
+		<Module<T>>::current_elected().iter()
+			.position(|elected| *elected == validator)
+			.map(|index| {
+				CurrentEraRewards::mutate(|rewards| {
+					if let Some(new_total) = rewards.total.checked_add(points) {
+						rewards.total = new_total;
+						rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
+						rewards.rewards[index] += points; // Addition is less than total
+					}
+				});
+			});
+	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1423,11 +1422,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 1 point to the producer of each referenced uncle block.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), author, 20);
+		Self::add_reward_points_to_validator(author, 20);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), <authorship::Module<T>>::author(), 2);
-		let _ = Self::add_reward_points_to_validator(RawOrigin::Root.into(), author, 1);
+		Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
+		Self::add_reward_points_to_validator(author, 1);
 	}
 }
 

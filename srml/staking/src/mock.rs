@@ -411,7 +411,7 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 
 pub fn add_reward_points_to_all_elected() {
 	for v in <Module<Test>>::current_elected() {
-		<Module<Test>>::add_reward_points_to_validator(super::RawOrigin::Root.into(), v, 1).unwrap();
+		<Module<Test>>::add_reward_points_to_validator(v, 1);
 	}
 }
 
