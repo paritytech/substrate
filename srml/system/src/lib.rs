@@ -760,9 +760,10 @@ impl<T: Trait> Module<T> {
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> {
-	fn internal_check_weight(info: TransactionInfo) -> Result<(), DispatchError> {
+	fn internal_check_weight(info: TransactionInfo) -> Result<Weight, DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
-		let next_weight = current_weight.saturating_add(current_weight);
+		let added_weight = info.weight;
+		let next_weight = current_weight.saturating_add(added_weight);
 		let limit = match info.class {
 			DispatchClass::Operational => T::MaximumBlockWeight::get(),
 			DispatchClass::User => T::MaximumBlockWeight::get() / 4
@@ -770,7 +771,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		if next_weight > limit {
 			return Err(DispatchError::Payment)
 		}
-		Ok(())
+		Ok(next_weight)
 	}
 
 	fn internal_get_priority(info: TransactionInfo) -> TransactionPriority {
@@ -793,7 +794,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: TransactionInfo,
 		_len: usize,
 	) -> Result<(), DispatchError> {
-		Self::internal_check_weight(info)
+		let next_weight = Self::internal_check_weight(info)?;
+		AllExtrinsicsWeight::put(next_weight);
+		Ok(())
 	}
 
 	fn validate(
@@ -802,7 +805,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: TransactionInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
-		Self::internal_check_weight(info)?;
+		let next_weight = Self::internal_check_weight(info)?;
+		AllExtrinsicsWeight::put(next_weight);
 		Ok(ValidTransaction { priority: Self::internal_get_priority(info), ..Default::default() })
 	}
 }
@@ -1138,31 +1142,53 @@ mod tests {
 	fn signed_ext_check_nonce_works() {
 		with_externalities(&mut new_test_ext(), || {
 			<AccountNonce<Test>>::insert(1, 1);
+			let info = TransactionInfo::default();
+			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, 0).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, 0).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, info, len).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, info, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, 0).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, 0).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, info, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, 0).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, 0).is_err());
+			assert!(CheckNonce::<Test>(5).validate(&1, info, len).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, info, len).is_err());
 		})
 	}
 
 	#[test]
-	fn signed_ext_check_weight_works() {
+	fn signed_ext_check_weight_works_user_tx() {
 		with_externalities(&mut new_test_ext(), || {
-			// small
-			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 100).is_ok());
-			// almost
-			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 512).is_ok());
-			// big
-			AllExtrinsicsWeight::put(512);
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, 513).is_err());
+			let small = TransactionInfo { weight: 100, ..Default::default() };
+			let medium = TransactionInfo { weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 - 1, ..Default::default() };
+			let big = TransactionInfo { weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 + 1, ..Default::default() };
+			let len = 0_usize;
 
+			let reset_check_weight = |i, f| {
+				AllExtrinsicsWeight::put(0);
+				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, i, len);
+				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
+			};
+
+			reset_check_weight(small, false);
+			reset_check_weight(medium, false);
+			reset_check_weight(big, true);
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_works_operational_tx() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = TransactionInfo { weight: 100, ..Default::default() };
+			let op = TransactionInfo { weight: 100, class: DispatchClass::Operational };
+			let len = 0_usize;
+
+			// given almost full block
+			AllExtrinsicsWeight::put(<MaximumBlockWeight as Get<Weight>>::get() / 4);
+			// will not fit.
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, normal, len).is_err());
+			// will fit.
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, op, len).is_ok());
 		})
 	}
 

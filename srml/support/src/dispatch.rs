@@ -1116,12 +1116,12 @@ macro_rules! decl_module {
 			fn weigh(&self) -> $crate::dispatch::TransactionInfo {
 				let weight = match self {
 					$( $call_type::$fn_name($( ref $param_name ),*) =>
-						<$crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(&$weight, ($( $param_name, )*)), )*
+						<dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				};
 				let class = match self {
 					$( $call_type::$fn_name($( ref $param_name ),*) =>
-						<$crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::class(&$weight, ($( $param_name, )*)), )*
+						<dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::class(&$weight, ($( $param_name, )*)), )*
 					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				};
 				$crate::dispatch::TransactionInfo { weight, class }
@@ -1579,6 +1579,7 @@ macro_rules! __check_reserved_fn_name {
 mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
+	use sr_primitives::weights::{TransactionInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;
@@ -1604,7 +1605,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = TransactionWeight::Basic(10, 100)]
+			#[weight = TransactionWeight::Fixed(10)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1613,8 +1614,8 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = TransactionWeight::Max]
-			fn weighted(_origin) { unreachable!() }
+			#[weight = TransactionWeight::Operational(5)]
+			fn operational(_origin) { unreachable!() }
 		}
 	}
 
@@ -1680,7 +1681,7 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					name: DecodeDifferent::Encode("weighted"),
+					name: DecodeDifferent::Encode("operational"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -1755,10 +1756,19 @@ mod tests {
 	#[test]
 	fn weight_should_attach_to_call_enum() {
 		// max weight. not dependent on input.
-		assert_eq!(Call::<TraitImpl>::weighted().weight(100), 3 * 1024 * 1024);
+		assert_eq!(
+			Call::<TraitImpl>::operational().weigh(),
+			TransactionInfo { weight: 5, class: DispatchClass::Operational },
+		);
 		// default weight.
-		assert_eq!(Call::<TraitImpl>::aux_0().weight(5), 5 /*tx-len*/);
+		assert_eq!(
+			Call::<TraitImpl>::aux_0().weigh(),
+			TransactionInfo { weight: 1, class: DispatchClass::User },
+		);
 		// custom basic
-		assert_eq!(Call::<TraitImpl>::aux_3().weight(5), 10 + 100 * 5 );
+		assert_eq!(
+			Call::<TraitImpl>::aux_3().weigh(),
+			TransactionInfo { weight: 10, class: DispatchClass::User },
+		);
 	}
 }

@@ -30,7 +30,8 @@ pub type Weight = u32;
 
 /// A broad range of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// and anything beyond which serves a higher purpose to the system (`Operational`).
-#[derive(Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	User,
@@ -54,6 +55,7 @@ impl From<&TransactionWeight> for DispatchClass {
 }
 
 /// A bundle of static meta information collected from the `#[weight = $x]` tags.
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
 #[derive(Clone, Copy, Default)]
 pub struct TransactionInfo {
 	/// Weight of this transaction.

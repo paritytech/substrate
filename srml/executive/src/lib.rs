@@ -548,40 +548,35 @@ mod tests {
 
 	#[test]
 	fn block_weight_limit_enforced() {
-		let run_test = |should_fail: bool| {
-			let mut t = new_test_ext();
-			let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(0, 0));
-			let xt2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(1, 0));
-			let encoded = xt2.encode();
-			let len = if should_fail { ( <Runtime as system::Trait>::MaximumBlockWeight::get() - 1) as usize } else { encoded.len() };
-			let encoded_len = encoded.len() as u32;
-			with_externalities(&mut t, || {
-				Executive::initialize_block(&Header::new(
-					1,
-					H256::default(),
-					H256::default(),
-					[69u8; 32].into(),
-					Digest::default(),
-				));
-				assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+		let mut t = new_test_ext();
+		// given: TestXt uses the encoded len as fixed Len:
+		let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(0, 0));
+		let encoded = xt.encode();
+		let encoded_len = encoded.len() as u32;
+		let limit = <MaximumBlockWeight as Get<u32>>::get() / 4;
+		let num_to_exhaust_block = limit / encoded_len;
+		with_externalities(&mut t, || {
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
-				Executive::apply_extrinsic(xt).unwrap();
-				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
-
-				if should_fail {
-					assert!(res.is_err());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+			for nonce in 0..=num_to_exhaust_block {
+				let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(nonce.into(), 0));
+				let res = Executive::apply_extrinsic(xt);
+				if nonce != num_to_exhaust_block {
+					assert_eq!(res.unwrap(), ApplyOutcome::Success);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce + 1));
 				} else {
-					assert!(res.is_ok());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * 2);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+					assert_eq!(res, Err(ApplyError::CantPay));
 				}
-			});
-		};
-
-		run_test(false);
-		run_test(true);
+			}
+		});
 	}
 
 	#[test]
@@ -592,9 +587,9 @@ mod tests {
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext();
 		with_externalities(&mut t, || {
-			Executive::apply_extrinsic(xt.clone()).unwrap();
-			Executive::apply_extrinsic(x1.clone()).unwrap();
-			Executive::apply_extrinsic(x2.clone()).unwrap();
+			assert_eq!(Executive::apply_extrinsic(xt.clone()).unwrap(), ApplyOutcome::Success);
+			assert_eq!(Executive::apply_extrinsic(x1.clone()).unwrap(), ApplyOutcome::Success);
+			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
 			assert_eq!(
 				<system::Module<Runtime>>::all_extrinsics_weight(),
 				3 * (0 /*base*/ + len /*len*/ * 1 /*byte*/)

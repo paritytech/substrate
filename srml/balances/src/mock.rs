@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::{IdentityLookup}, testing::Header};
+use primitives::{traits::{IdentityLookup}, testing::Header, weights::{TransactionInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types, traits::Get};
@@ -34,7 +34,7 @@ thread_local! {
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
-	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
@@ -187,3 +187,7 @@ impl ExtBuilder {
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
+
+pub fn info_from_weight(w: Weight) -> TransactionInfo {
+	TransactionInfo { weight: w, ..Default::default() }
+}

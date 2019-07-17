@@ -263,11 +263,11 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	}
 }
 
-impl<Call, Extra> Weigh for TestXt<Call, Extra> {
+impl<Call: Encode, Extra: Encode> Weigh for TestXt<Call, Extra> {
 	fn weigh(&self) -> TransactionInfo {
 		// for testing: weight == size.
 		TransactionInfo {
-			weight: self.0.using_encoded(|d| d.len() as u32),
+			weight: self.encode().len() as u32,
 			..Default::default()
 		}
 	}
