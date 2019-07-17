@@ -194,6 +194,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
+
+	/// The maximum size of a block (in bytes).
+	type MaximumBlockSize: Get<u32>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -324,7 +327,9 @@ decl_storage! {
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
-		AllExtrinsicsWeight: Option<u32>;
+		AllExtrinsicsWeight: Option<Weight>;
+		/// Total length (in bytes) for all extrinsics put together, for the current block.
+		AllExtrinsicsLen: Option<u32>;
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -546,6 +551,11 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
+	/// Gets a total length of all executed extrinsics.
+	pub fn all_extrinsics_len() -> u32 {
+		AllExtrinsicsLen::get().unwrap_or_default()
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -575,6 +585,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
+		AllExtrinsicsLen::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -769,9 +780,19 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 			DispatchClass::User => T::MaximumBlockWeight::get() / 4
 		};
 		if next_weight > limit {
-			return Err(DispatchError::Payment)
+			return Err(DispatchError::BadState)
 		}
 		Ok(next_weight)
+	}
+
+	fn internal_check_block_size(_info: TransactionInfo, len: usize) -> Result<u32, DispatchError> {
+		let current_len = Module::<T>::all_extrinsics_len();
+		let added_len = len as u32;
+		let next_len = current_len.saturating_add(added_len);
+		if next_len > T::MaximumBlockSize::get() {
+			return Err(DispatchError::BadState)
+		}
+		Ok(next_len)
 	}
 
 	fn internal_get_priority(info: TransactionInfo) -> TransactionPriority {
@@ -792,8 +813,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		self,
 		_who: &Self::AccountId,
 		info: TransactionInfo,
-		_len: usize,
+		len: usize,
 	) -> Result<(), DispatchError> {
+		let next_len = Self::internal_check_block_size(info, len)?;
+		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::internal_check_weight(info)?;
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
@@ -803,8 +826,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		&self,
 		_who: &Self::AccountId,
 		info: TransactionInfo,
-		_len: usize,
+		len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
+		let next_size = Self::internal_check_block_size(info, len)?;
+		AllExtrinsicsLen::put(next_size);
 		let next_weight = Self::internal_check_weight(info)?;
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(ValidTransaction { priority: Self::internal_get_priority(info), ..Default::default() })
@@ -973,6 +998,7 @@ mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
 		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockSize: u32 = 2 * 1024;
 	}
 
 	impl Trait for Test {
@@ -987,6 +1013,7 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockSize = MaximumBlockSize;
 	}
 
 	impl From<Event> for u16 {
@@ -1160,8 +1187,14 @@ mod tests {
 	fn signed_ext_check_weight_works_user_tx() {
 		with_externalities(&mut new_test_ext(), || {
 			let small = TransactionInfo { weight: 100, ..Default::default() };
-			let medium = TransactionInfo { weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 - 1, ..Default::default() };
-			let big = TransactionInfo { weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 + 1, ..Default::default() };
+			let medium = TransactionInfo {
+				weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 - 1,
+				..Default::default()
+			};
+			let big = TransactionInfo {
+				weight: <MaximumBlockWeight as Get<Weight>>::get() / 4 + 1,
+				..Default::default()
+			};
 			let len = 0_usize;
 
 			let reset_check_weight = |i, f| {
@@ -1189,6 +1222,41 @@ mod tests {
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, normal, len).is_err());
 			// will fit.
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, op, len).is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_priority_works() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = TransactionInfo { weight: 100, class: DispatchClass::User };
+			let op = TransactionInfo { weight: 100, class: DispatchClass::Operational };
+			let len = 0_usize;
+
+			assert_eq!(
+				CheckWeight::<Test>(PhantomData).validate(&1, normal, len).unwrap().priority,
+				100,
+			);
+			assert_eq!(
+				CheckWeight::<Test>(PhantomData).validate(&1, op, len).unwrap().priority,
+				Bounded::max_value(),
+			);
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_block_size_works() {
+		with_externalities(&mut new_test_ext(), || {
+			let tx = TransactionInfo::default();
+
+			let reset_check_weight = |s, f| {
+				AllExtrinsicsLen::put(0);
+				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, tx, s);
+				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
+			};
+
+			reset_check_weight(512, false);
+			reset_check_weight(2 * 1024, false);
+			reset_check_weight(3 * 1024, true);
 		})
 	}
 

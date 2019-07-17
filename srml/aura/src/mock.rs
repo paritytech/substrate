@@ -38,6 +38,7 @@ pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockSize: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 1;
 }
 
@@ -53,6 +54,7 @@ impl system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockSize = MaximumBlockSize;
 }
 
 impl timestamp::Trait for Test {

@@ -762,6 +762,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type MaximumBlockSize = T::MaximumBlockSize;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
