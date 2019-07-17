@@ -100,10 +100,7 @@ decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::Hash,
 		<T as system::Trait>::AccountId,
-		Phantom = rstd::marker::PhantomData<T>
 	{
-		/// Dummy to manage the fact we have instancing.
-		_Phantom(Phantom),
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
