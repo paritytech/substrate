@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, convert::TryFrom};
 use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
@@ -349,32 +349,31 @@ impl From<NetworkState> for OpaqueNetworkState {
 	}
 }
 
-impl From<OpaqueNetworkState> for NetworkState {
-	fn from(state: OpaqueNetworkState) -> NetworkState {
+impl TryFrom<OpaqueNetworkState> for NetworkState {
+	type Error = ();
+
+	fn try_from(state: OpaqueNetworkState) -> Result<Self, Self::Error> {
 		let inner_vec = state.peer_id.0;
 
-		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..])
-			.expect("It's always a valid Vec<u8> which is encoded; qed");
-		let peer_id = PeerId::from_bytes(bytes)
-			.expect("These bytes were exported from a valid PeerId; qed");
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).ok_or(())?;
+		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
 
-		let multiaddr: Vec<Multiaddr> = state.external_addresses
+		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()
-			.map(|enc_multiaddr| {
+			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
 				let inner_vec = &enc_multiaddr.0;
-				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..])
-					.expect("It's always a valid Vec<u8> which is encoded; qed");
-				let multiaddr_str = &String::from_utf8(bytes)
-					.expect("A valid String was originally encoded; qed");
-				Multiaddr::from_str(multiaddr_str)
-					.expect("The String was exported from a valid Multiaddr; qed")
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).ok_or(())?;
+				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
+				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
+				Ok(multiaddr)
 			})
 			.collect();
+		let external_addresses = external_addresses?;
 
-		NetworkState {
+		Ok(NetworkState {
 			peer_id,
-			external_addresses: multiaddr,
-		}
+			external_addresses,
+		})
 	}
 }
 
