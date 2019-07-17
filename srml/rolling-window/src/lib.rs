@@ -52,7 +52,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
 		/// Misbehavior reports
 		///
-		/// It maps each kind into a hash (identity of reporter), session number when it occurred
+		/// It maps each kind into a hash (identity of reporter) and session number when it occurred
 		MisconductReports get(kind): linked_map T::Kind => Vec<(Session, T::Hash)>;
 
 		/// Session index
@@ -72,9 +72,9 @@ impl<T: Trait> Module<T> {
 
 		for (kind, _) in <MisconductReports<T>>::enumerate() {
 			let window_length = kind.window_length();
-			<MisconductReports<T>>::mutate(kind, |window| {
+			<MisconductReports<T>>::mutate(kind, |reports| {
 				// it is guaranteed that `reported_session` happened before `session`
-				window.retain(|(reported_session, _)| {
+				reports.retain(|(reported_session, _)| {
 					let diff = session.wrapping_sub(*reported_session);
 					diff < *window_length
 				});
@@ -109,12 +109,11 @@ impl<T: Trait> Module<T> {
 
 		let mut seen_ids = rstd::vec::Vec::new();
 		let mut unique = 0_u64;
-		// session can never be smaller than 0
-		let mut last_session = 0;
+		let mut last_seen_session = 0;
 
 		for (session, id) in window {
 			// new session reset `seen_ids`
-			if session > last_session {
+			if session > last_seen_session {
 				seen_ids.clear();
 			}
 
@@ -124,14 +123,14 @@ impl<T: Trait> Module<T> {
 				seen_ids.push(id);
 			}
 
-			last_session = session;
+			last_seen_session = session;
 		}
 
 		unique
 	}
 }
 
-/// Macro for implement static `base_severity` for your misconduct type
+/// Macro for implement static `base_severity` which may be used for misconducts implementations
 #[macro_export]
 macro_rules! impl_base_severity {
 	// type with type parameters
@@ -142,7 +141,6 @@ macro_rules! impl_base_severity {
 			}
 		}
 	};
-
 	// type without type parameters
 	($ty:ident, $t: ty : $seve: expr) => {
 		impl $ty {
@@ -153,8 +151,8 @@ macro_rules! impl_base_severity {
 	};
 }
 
-/// Macro for implement static `kind of misconduct` for your misconduct type
-/// which includes the
+/// Macro for implement static `misconduct kind` which may be used for misconducts implementations
+/// Note, that the kind need to implement the `WindowLength` trait to work
 #[macro_export]
 macro_rules! impl_kind {
 	// type with type parameters
@@ -166,7 +164,6 @@ macro_rules! impl_kind {
 			}
 		}
 	};
-
 	// type without type parameters
 	($ty:ident, $t: ty : $kind: expr) => {
 		impl $ty {
