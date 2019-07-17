@@ -316,9 +316,8 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
 	}
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-    unimplemented!()
-    // TODO EMCH will need an adapter owning runtime storage
-//		<U as hashed::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage(U::child_key()))
+		<U as hashed::generator::EnumerableStorageMap<K, V>>
+			::enumerate(Box::new(RuntimeStorage(U::child_key())))
 	}
 }
 

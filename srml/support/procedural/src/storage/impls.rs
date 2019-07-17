@@ -421,14 +421,14 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// A key-value pair iterator for enumerable map.
-				pub(crate) struct Enumerator<'a, S, K, V> {
-					pub storage: &'a S,
+				pub(crate) struct Enumerator<'a, S, R, K, V> {
+					pub storage: R,
 					pub next: Option<K>,
-					pub _data: #phantom_data<V>,
+					pub _data: #phantom_data<(V, &'a S)>,
 				}
 
-				impl<'a, S: #scrate::HashedStorage<#scrate::#hasher>, #impl_trait> Iterator
-					for Enumerator<'a, S, #kty, (#typ, #trait_and_instance)> #where_clause
+				impl<'a, S: #scrate::HashedStorage<#scrate::#hasher> + 'a, R: AsRef<S> + 'a, #impl_trait> Iterator
+					for Enumerator<'a, S, R, #kty, (#typ, #trait_and_instance)> #where_clause
 				{
 					type Item = (#kty, #typ);
 
@@ -437,7 +437,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 						let key_for = <super::#name<#trait_and_instance>
 							as #scrate::storage::hashed::generator::StorageMap<#kty, #typ>>::key_for(&next);
 
-						let (val, linkage): (#typ, Linkage<#kty>) = self.storage.get(&*key_for)
+						let (val, linkage): (#typ, Linkage<#kty>) = self.storage.as_ref().get(&*key_for)
 							.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
 						self.next = linkage.next;
 						Some((next, val))
@@ -658,20 +658,21 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S>(
-					storage: &'a S
+				fn enumerate<'a, S, R>(
+					storage: R
 				) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a>
 					where
-						S: #scrate::HashedStorage<#scrate::#hasher>,
+						S: #scrate::HashedStorage<#scrate::#hasher> + 'a,
+						R: AsRef<S> + 'a,
 						#kty: 'a,
 						#typ: 'a,
 				{
 					use self::#inner_module::{Utils, Enumerator};
 
 					#scrate::rstd::boxed::Box::new(Enumerator {
-						next: Self::read_head(storage),
+						next: Self::read_head(storage.as_ref()),
 						storage,
-						_data: #phantom_data::<(#typ, #trait_and_instance)>::default(),
+						_data: #phantom_data::<((#typ, #trait_and_instance), _)>::default(),
 					})
 				}
 			}

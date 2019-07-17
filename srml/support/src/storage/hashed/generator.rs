@@ -275,8 +275,8 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	fn head<S: HashedStorage<Self::Hasher>>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: HashedStorage<Self::Hasher>>(
-		storage: &'a S
+	fn enumerate<'a, S: HashedStorage<Self::Hasher> + 'a, R: AsRef<S> + 'a>(
+		storage: R
 	) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }
 
