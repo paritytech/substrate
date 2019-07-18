@@ -415,8 +415,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
-			.expect("None is returned if there's no value stored for the given key;\
+		Ok(self.child_storage(
+				id,
+				&StorageKey(well_known_keys::CODE.0.to_vec()),
+				&StorageKey(well_known_keys::CODE.1.to_vec()),
+		)?.expect("None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed").0)
 	}
 
@@ -1326,7 +1329,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
-			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
+			.child_storage(well_known_keys::CHANGES_TRIE_CONFIG.0, well_known_keys::CHANGES_TRIE_CONFIG.1)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c)))
 	}

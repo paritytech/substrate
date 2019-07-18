@@ -9,6 +9,8 @@ generic-test-client = { package = "substrate-test-client", path = "../../test-cl
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime = { package = "substrate-test-runtime", path = "../../test-runtime", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+# TODO EMCH this could be removed when using child trie struct.
+parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 
 [features]
 default = [

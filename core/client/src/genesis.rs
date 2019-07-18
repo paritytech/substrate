@@ -45,9 +45,9 @@ mod tests {
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client::{
-		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis},
+		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
-		AccountKeyring, AuthorityKeyring
+		AccountKeyring, AuthorityKeyring,
 	};
 	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
@@ -151,10 +151,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
-		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
-		let block = construct_genesis_block::<Block>(state_root);
-		let genesis_hash = block.header.hash();
-		storage.extend(additional_storage_with_genesis(&block).into_iter());
+		let genesis_hash = insert_genesis_block(&mut storage);
 
 		let backend = InMemory::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
@@ -180,10 +177,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
-		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
-		let block = construct_genesis_block::<Block>(state_root);
-		let genesis_hash = block.header.hash();
-		storage.extend(additional_storage_with_genesis(&block).into_iter());
+		let genesis_hash = insert_genesis_block(&mut storage);
 
 		let backend = InMemory::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
@@ -209,10 +203,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68
 		).genesis_map();
-		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
-		let block = construct_genesis_block::<Block>(state_root);
-		let genesis_hash = block.header.hash();
-		storage.extend(additional_storage_with_genesis(&block).into_iter());
+		let genesis_hash = insert_genesis_block(&mut storage);
 
 		let backend = InMemory::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);

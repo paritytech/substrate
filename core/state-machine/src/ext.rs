@@ -200,6 +200,22 @@ where
 			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
 		match self.overlay.storage(key) {
@@ -345,7 +361,7 @@ where
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 }
-
+/*
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
@@ -420,4 +436,4 @@ mod tests {
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
 	}
-}
+}*/

@@ -247,6 +247,25 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 	}
 }
 
+impl<H: Hasher> From<(
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)> for InMemory<H> {
+	fn from(inners: (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)) -> Self {
+		let mut inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>
+			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
+		inner.insert(None, inners.0);
+		InMemory {
+			inner: inner,
+			trie: None,
+			_hasher: PhantomData,
+		}
+	}
+}
+
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut expanded = HashMap::new();

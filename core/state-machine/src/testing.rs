@@ -55,14 +55,18 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
 
+		let change_trie_config = storage.1.get(CHANGES_TRIE_CONFIG.0)
+			.and_then(|s| s.get(CHANGES_TRIE_CONFIG.1)).cloned();
 		super::set_changes_trie_config(
 			&mut overlay,
-			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
+			change_trie_config,
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
-		storage.0.insert(CODE.to_vec(), code.to_vec());
+		storage.1.entry(HEAP_PAGES.0.to_vec()).or_insert_with(Default::default)
+			.insert(HEAP_PAGES.1.to_vec(), 8u64.encode());
+		storage.1.entry(CODE.0.to_vec()).or_insert_with(Default::default)
+			.insert(CODE.1.to_vec(), code.to_vec());
 
 		let backend: HashMap<_, _> = storage.1.into_iter()
 			.map(|(keyspace, map)| (Some(keyspace), map))
@@ -157,6 +161,13 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 				.child_storage(storage_key.as_ref(), key)
 				.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			)
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		self.backend
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -261,6 +272,10 @@ mod tests {
 	use primitives::{Blake2Hasher, H256};
 	use hex_literal::hex;
 
+	fn child_slice(i: &'static [u8]) -> ChildStorageKey<Blake2Hasher> {
+		ChildStorageKey::from_slice(i).expect("Static child storage slice is valid; qed")
+	}
+
 	#[test]
 	fn commit_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
@@ -276,8 +291,8 @@ mod tests {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 
 		let code = vec![1, 2, 3];
-		ext.set_storage(CODE.to_vec(), code.clone());
+		ext.set_child_storage(child_slice(CODE.0), CODE.1.to_vec(), code.clone());
 
-		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+		assert_eq!(&ext.child_storage(child_slice(CODE.0), CODE.1).unwrap(), &code);
 	}
 }

@@ -152,13 +152,31 @@ pub trait Externalities<H: Hasher> {
 		self.storage(key).map(|v| H::hash(&v))
 	}
 
+	/// Get child storage value hash. This may be optimized for large values.
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		self.child_storage(storage_key, key).map(|v| H::hash(&v))
+	}
+
 	/// Read original runtime storage, ignoring any overlayed changes.
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Read original runtime child storage, ignoring any overlayed changes.
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get original storage value hash, ignoring any overlayed changes.
 	/// This may be optimized for large values.
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		self.original_storage(key).map(|v| H::hash(&v))
+	}
+
+	/// Get original child storage value hash, ignoring any overlayed changes.
+	/// This may be optimized for large values.
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey<H>,
+		key: &[u8],
+	) -> Option<H::Out> {
+		self.original_child_storage(storage_key, key).map(|v| H::hash(&v))
 	}
 
 	/// Read child runtime storage.
@@ -654,10 +672,11 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 
 		let backend = self.backend.clone();
 		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
-			let changes_trie_config = try_read_overlay_value(
+			let changes_trie_config = try_child_read_overlay_value(
 				overlay,
 				backend,
-				well_known_keys::CHANGES_TRIE_CONFIG
+				well_known_keys::CHANGES_TRIE_CONFIG.0,
+				well_known_keys::CHANGES_TRIE_CONFIG.1,
 			)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
@@ -962,6 +981,26 @@ where
 	}
 }
 
+/// Reads child storage value from overlay or from the backend.
+fn try_child_read_overlay_value<H, B>(
+	overlay: &OverlayedChanges,
+	backend: &B,
+	storage_key: &[u8],
+	key: &[u8],
+)	-> Result<Option<Vec<u8>>, Box<dyn Error>>
+where
+	H: Hasher,
+	B: Backend<H>,
+{
+	match overlay.child_storage(storage_key, key).map(|x| x.map(|x| x.to_vec())) {
+		Some(value) => Ok(value),
+		None => backend
+			.storage(key)
+			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<dyn Error>),
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
@@ -995,8 +1034,10 @@ mod tests {
 			_native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_storage(
-					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+				ext.place_child_storage(
+					ChildStorageKey::from_slice(well_known_keys::CHANGES_TRIE_CONFIG.0)
+						.expect("Static value for child storage key is always valid; qed"),
+					well_known_keys::CHANGES_TRIE_CONFIG.1.to_vec(),
 					Some(
 						ChangesTrieConfig {
 							digest_interval: 777,

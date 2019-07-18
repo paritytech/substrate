@@ -21,7 +21,7 @@ use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
-use runtime_primitives::traits::Block;
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -47,24 +47,56 @@ impl GenesisConfig {
 		}
 	}
 
-	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
+	pub fn genesis_map(&self) -> (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	) {
 		let wasm_runtime = WASM_BINARY.to_vec();
-		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
+		let balance_map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
-			.chain(vec![
-				(well_known_keys::CODE.into(), wasm_runtime),
-				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
-			].into_iter())
 			.collect();
+
+		let mut system_map: HashMap<Vec<u8>, Vec<u8>> = vec![
+			(well_known_keys::CODE.1.into(), wasm_runtime),
+			(well_known_keys::HEAP_PAGES.1.into(), vec![].and(&(16 as u64))),
+		].into_iter().collect();
+
 		if let Some(ref changes_trie_config) = self.changes_trie_config {
-			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
+			system_map.insert(well_known_keys::CHANGES_TRIE_CONFIG.1.to_vec(), changes_trie_config.encode());
 		}
-		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		map
+		let mut map_storage_item: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+		map_storage_item.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
+		let mut map = HashMap::new();
+		map.insert(b":child_storage:modules:Balance:".to_vec(), balance_map);
+		map.insert(b":child_storage:modules:System:".to_vec(), system_map);
+		map.insert(b":child_storage:other:".to_vec(), map_storage_item);
+		(Default::default(), map)
 	}
 }
 
+pub fn insert_genesis_block(
+	storage: &mut (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)
+) -> primitives::hash::H256 {
+
+	let child_roots =	storage.1.iter().map(|(sk, child_map)| {
+		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+			child_map.clone().into_iter()
+		);
+		(sk.clone(), state_root.encode())
+	});
+	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+		storage.0.clone().into_iter().chain(child_roots)
+	);
+	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
+	let genesis_hash = block.header.hash();
+	storage.0.extend(additional_storage_with_genesis(&block));
+  genesis_hash
+}
+	
 pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
 		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()

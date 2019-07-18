@@ -564,10 +564,17 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
-			.unwrap()
+		let heap_pages = remote_client.child_storage(
+			&remote_block_id,
+			&StorageKey(well_known_keys::HEAP_PAGES.0.to_vec()),
+			&StorageKey(well_known_keys::HEAP_PAGES.1.to_vec()),
+		).unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
+		let remote_read_proof = remote_client.read_child_proof(
+			&remote_block_id,
+			well_known_keys::HEAP_PAGES.0,
+			well_known_keys::HEAP_PAGES.1,
+		).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -620,10 +627,12 @@ pub mod tests {
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
 		let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>)
+			.check_read_child_proof(&RemoteReadChildRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: well_known_keys::HEAP_PAGES.to_vec(),
+			storage_key: well_known_keys::HEAP_PAGES.0.to_vec(),
+			key: well_known_keys::HEAP_PAGES.1.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
 	}

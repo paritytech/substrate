@@ -38,10 +38,11 @@ impl BasicExternalities {
 
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(
-		mut top: HashMap<Vec<u8>, Vec<u8>>,
-		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		top: HashMap<Vec<u8>, Vec<u8>>,
+		mut children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
-		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		children.entry(HEAP_PAGES.0.to_vec()).or_insert_with(Default::default)
+			.insert(HEAP_PAGES.1.to_vec(), 8u64.encode());
 		BasicExternalities {
 			top,
 			children,
@@ -100,6 +101,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
 		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		Externalities::<H>::child_storage(self, storage_key, key)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -184,6 +189,10 @@ mod tests {
 	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
+	fn child_slice(i: &'static [u8]) -> ChildStorageKey<Blake2Hasher> {
+		ChildStorageKey::from_slice(i).expect("Static child storage slice is valid; qed")
+	}
+
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
@@ -201,9 +210,9 @@ mod tests {
 		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 
 		let code = vec![1, 2, 3];
-		ext.set_storage(CODE.to_vec(), code.clone());
+		ext.set_child_storage(child_slice(CODE.0), CODE.1.to_vec(), code.clone());
 
-		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+		assert_eq!(&ext.child_storage(child_slice(CODE.0), CODE.1).unwrap(), &code);
 	}
 
 	#[test]

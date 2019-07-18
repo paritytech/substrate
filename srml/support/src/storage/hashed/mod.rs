@@ -226,7 +226,7 @@ mod tests {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities, with_externalities};
 
-	const CHILD_MODULE: &'static [u8] = b":child_storage:modules:test";
+	const CHILD_MODULE: &'static [u8] = b":child_storage:modules:Test:";
 
 	#[test]
 	fn integers_can_be_stored() {
