@@ -46,6 +46,8 @@
 //!
 
 use futures::prelude::*;
+use futures_timer::Delay;
+use futures03::{compat::Compat, TryFutureExt as _};
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::PollParameters;
@@ -59,7 +61,6 @@ use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, clock::Clock};
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {
@@ -72,13 +73,11 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Delay,
+	next_kad_random_query: Compat<Delay>,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
 	/// Discovered nodes to return.
 	discoveries: VecDeque<PeerId>,
-	/// `Clock` instance that uses the current execution context's source of time.
-	clock: Clock,
 	/// Identity of our local node.
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
@@ -104,14 +103,12 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			kademlia.add_address(peer_id, addr.clone());
 		}
 
-		let clock = Clock::new();
 		DiscoveryBehaviour {
 			user_defined,
 			kademlia,
-			next_kad_random_query: Delay::new(clock.now()),
+			next_kad_random_query: Delay::new(Duration::new(0, 0)).compat(),
 			duration_to_next_kad: Duration::from_secs(1),
 			discoveries: VecDeque::new(),
-			clock,
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
 			#[cfg(not(target_os = "unknown"))]
@@ -276,7 +273,7 @@ where
 					self.kademlia.find_node(random_peer_id);
 
 					// Reset the `Delay` to the next random.
-					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
+					self.next_kad_random_query = Delay::new(self.duration_to_next_kad).compat();
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},
