@@ -18,7 +18,7 @@
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-// #![cfg_attr(not(test), forbid(dead_code))]
+#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
@@ -28,13 +28,13 @@ use consensus_common::import_queue::{
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
+	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
 use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
@@ -64,6 +64,7 @@ use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache},
+	BlockchainEvents,
 	CallExecutor, Client,
 	runtime_api::ApiExt,
 	error::Result as CResult,
@@ -71,7 +72,8 @@ use client::{
 };
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
-use futures::{Future, IntoFuture, future};
+use futures::{Future, IntoFuture, future, stream::Stream};
+use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
@@ -519,7 +521,7 @@ pub struct BabeLink(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
 
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<C> {
-	client: Arc<C>,
+	api: Arc<C>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	time_source: BabeLink,
@@ -534,7 +536,7 @@ impl<C> BabeVerifier<C> {
 	) -> Result<(), String>
 		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
-		let inherent_res = self.client.runtime_api().check_inherents(
+		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
 			block,
 			inherent_data,
@@ -585,7 +587,6 @@ fn median_algorithm(
 impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem,
 {
 	fn verify(
 		&self,
@@ -613,14 +614,14 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let Epoch { authorities, randomness, epoch_index, .. } =
-			epoch(self.client.as_ref(), &BlockId::Hash(parent_hash))
+			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
 		let checked_header = check_header::<B, C>(
-			&self.client,
+			&self.api,
 			slot_now + 1,
 			header,
 			hash,
@@ -818,21 +819,48 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		.map_err(map_err)
 }
 
+// data stored in tree is the hash and block number of the block signaling
+// the epoch change, and the minimum *slot number* when the next epoch
+// should start (i.e. slot number begin + duration).
+type EpochChanges<Block> = ForkTree<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	SlotNumber,
+>;
+
+#[derive(Clone)]
+struct SharedEpochChanges<Block: BlockT> {
+	inner: Arc<Mutex<EpochChanges<Block>>>,
+}
+
+impl<Block: BlockT> SharedEpochChanges<Block> {
+	fn new() -> Self {
+		SharedEpochChanges {
+			inner: Arc::new(Mutex::new(EpochChanges::<Block>::new()))
+		}
+	}
+
+	fn lock(&self) -> MutexGuard<EpochChanges<Block>> {
+		self.inner.lock()
+	}
+}
+
 struct BabeBlockImport<B, E, Block: BlockT, RA> {
 	inner: BoxBlockImport<Block>,
 	client: Arc<Client<B, E, Block, RA>>,
-	// data stored in tree is the hash of the block signaling the epoch change,
-	// slot number of the block, and the minimum slot number where the next
-	// epoch starts (i.e. slot number begin + duration).
-	epoch_changes: ForkTree<Block::Hash, SlotNumber, SlotNumber>,
+	epoch_changes: SharedEpochChanges<Block>,
 }
 
 impl<B, E, Block: BlockT, RA> BabeBlockImport<B, E, Block, RA> {
-	fn new(client: Arc<Client<B, E, Block, RA>>, block_import: BoxBlockImport<Block>) -> Self {
+	fn new(
+		client: Arc<Client<B, E, Block, RA>>,
+		epoch_changes: SharedEpochChanges<Block>,
+		block_import: BoxBlockImport<Block>,
+	) -> Self {
 		BabeBlockImport {
 			client,
 			inner: block_import,
-			epoch_changes: ForkTree::new(),
+			epoch_changes,
 		}
 	}
 }
@@ -851,6 +879,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
+		let number = block.header.number().clone();
 
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
@@ -864,9 +893,10 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		let slot_number = 3u64;
 		let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, Self::Error> { Ok(true) };
 
-		let epoch_change = self.epoch_changes.find_node_where(
+		let mut epoch_changes = self.epoch_changes.lock();
+		let epoch_change = epoch_changes.find_node_where(
 			&hash,
-			&slot_number,
+			&number,
 			&is_descendent_of,
 			&|expected_epoch_change_slot| {
 				*expected_epoch_change_slot <= slot_number
@@ -876,7 +906,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		let check_roots = || -> Result<bool, ConsensusError> {
 			// this can only happen when the chain starts, since there's no epoch change at genesis.
 			// afterwards every time we expect an epoch change it means we will import another one.
-			for (root, _, _) in self.epoch_changes.roots() {
+			for (root, _, _) in epoch_changes.roots() {
 				if is_descendent_of(root, &hash)? {
 					return Ok(false);
 				}
@@ -906,9 +936,9 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		if let Some(entry) = new_cache.get(&well_known_cache_keys::AUTHORITIES) {
 			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
 				// track the epoch change in the fork tree
-				self.epoch_changes.import(
+				epoch_changes.import(
 					hash,
-					slot_number,
+					number,
 					slot_number + epoch.duration,
 					&is_descendent_of,
 				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
@@ -932,36 +962,66 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 }
 
 /// Start an import queue for the Babe consensus algorithm.
-pub fn import_queue<B, C, E>(
+pub fn import_queue<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	config: Config,
-	block_import: BoxBlockImport<B>,
-	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	client: Arc<C>,
+	block_import: BoxBlockImport<Block>,
+	justification_import: Option<BoxJustificationImport<Block>>,
+	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
+	client: Arc<Client<B, E, Block, RA>>,
+	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
-	B: BlockT,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem,
-	E: 'static,
+) -> Result<
+		(BabeImportQueue<Block>, BabeLink, impl Future<Item = (), Error = ()>),
+		consensus_common::Error,
+	>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
+	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
-	initialize_authorities_cache(&*client)?;
+	initialize_authorities_cache(&*api)?;
 
 	let verifier = BabeVerifier {
-		client: client,
+		api,
 		inherent_data_providers,
 		time_source: Default::default(),
 		config,
 	};
+
+	// FIXME: load persisted
+	let epoch_changes = SharedEpochChanges::new();
+	let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, ConsensusError> { Ok(true) };
+
+	let block_import = Box::new(BabeBlockImport::new(
+		client.clone(),
+		epoch_changes.clone(),
+		block_import,
+	));
+
+	let pruning_task = client.finality_notification_stream()
+		.map(|v| Ok::<_, ()>(v)).compat()
+		.for_each(move |notification| {
+			epoch_changes.lock().prune(
+				&notification.hash,
+				*notification.header.number(),
+				&is_descendent_of,
+			).map_err(|e| debug!(target: "babe", "Error pruning epoch changes fork tree: {:?}", e))?;
+
+			Ok(())
+		});
+
 	let timestamp_core = verifier.time_source.clone();
-	Ok((BasicQueue::new(
+	let queue = BasicQueue::new(
 		Arc::new(verifier),
 		block_import,
 		justification_import,
 		finality_proof_import,
-	), timestamp_core))
+	);
+
+	Ok((queue, timestamp_core, pruning_task))
 }
 
 // FIXME #2532: need to allow deprecated until refactor is done
