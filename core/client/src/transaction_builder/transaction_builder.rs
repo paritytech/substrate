@@ -16,16 +16,18 @@
 
 //! The runtime api for building transactions.
 
-use runtime_primitives::AnySignature;
 use sr_api_macros::decl_runtime_apis;
+use runtime_primitives::KeyTypeId;
 
 decl_runtime_apis! {
 	/// The `TransactionBuilder` trait that provides required functions
 	/// for building a transaction from a Call for the runtime.
 	pub trait TransactionBuilder {
 		/// Construct the payload.
-		fn signing_payload(encoded_call: &[u8], account_id: &[u8]) -> Vec<u8>;
+		fn signing_payload(encoded_call: Vec<u8>, account_id: Vec<u8>) -> Vec<u8>;
 		/// Build the transaction.
-		fn build_transaction(signing_payload: &[u8], signature: AnySignature) -> Vec<u8>;
+		fn build_transaction(signing_payload: Vec<u8>, signature: Vec<u8>) -> Vec<u8>;
+		/// Get list of supported crypto types.
+		fn possible_crypto() -> Vec<KeyTypeId>;
 	}
 }
