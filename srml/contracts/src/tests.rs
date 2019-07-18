@@ -30,7 +30,7 @@ use parity_codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
+use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
@@ -137,9 +137,13 @@ impl balances::Trait for Test {
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
 }
+parameter_types! {
+	pub const MinimumPeriod: u64 = 1;
+}
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -154,6 +158,7 @@ parameter_types! {
 	pub const CallBaseFee: u64 = 135;
 	pub const CreateBaseFee: u64 = 175;
 	pub const MaxDepth: u32 = 100;
+	pub const MaxValueSize: u32 = 16_384;
 }
 impl Trait for Test {
 	type Currency = Balances;
@@ -177,6 +182,7 @@ impl Trait for Test {
 	type CallBaseFee = CallBaseFee;
 	type CreateBaseFee = CreateBaseFee;
 	type MaxDepth = MaxDepth;
+	type MaxValueSize = MaxValueSize;
 	type BlockGasLimit = BlockGasLimit;
 }
 
@@ -281,6 +287,16 @@ impl ExtBuilder {
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		runtime_io::TestExternalities::new_with_children(t)
 	}
+}
+
+/// Generate Wasm binary and code hash from wabt source.
+fn compile_module<T>(wabt_module: &str)
+	-> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
+	where T: system::Trait
+{
+	let wasm = wabt::wat2wasm(wabt_module)?;
+	let code_hash = T::Hashing::hash(&wasm);
+	Ok((wasm, code_hash))
 }
 
 // Perform a simple transfer to a non-existent account supplying way more gas than needed.
@@ -394,11 +410,10 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("66c45bd7c473a1746e1d241176166ef53b1f207f56c5e87d1b6650140704181b");
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
-	let wasm = wabt::wat2wasm(CODE_RETURN_FROM_START_FN).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_RETURN_FROM_START_FN).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
@@ -412,7 +427,7 @@ fn instantiate_and_call_and_deposit_event() {
 				Origin::signed(ALICE),
 				100,
 				100_000,
-				HASH_RETURN_FROM_START_FN.into(),
+				code_hash.into(),
 				vec![],
 			);
 
@@ -424,7 +439,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -473,7 +488,6 @@ const CODE_DISPATCH_CALL: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_DISPATCH_CALL: [u8; 32] = hex!("49dfdcaf9c1553be10634467e95b8e71a3bc15a4f8bf5563c0312b0902e0afb9");
 
 #[test]
 fn dispatch_call() {
@@ -482,7 +496,7 @@ fn dispatch_call() {
 	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -501,7 +515,7 @@ fn dispatch_call() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -510,7 +524,7 @@ fn dispatch_call() {
 				Origin::signed(ALICE),
 				100,
 				100_000,
-				HASH_DISPATCH_CALL.into(),
+				code_hash.into(),
 				vec![],
 			));
 
@@ -530,7 +544,7 @@ fn dispatch_call() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -595,7 +609,6 @@ const CODE_DISPATCH_CALL_THEN_TRAP: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_DISPATCH_CALL_THEN_TRAP: [u8; 32] = hex!("55fe5c142dfe2519ca76c7c9b9f05012bd2624b7dcc128d2ce5a7af9d2da1846");
 
 #[test]
 fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
@@ -604,7 +617,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -623,7 +636,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -632,7 +645,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				Origin::signed(ALICE),
 				100,
 				100_000,
-				HASH_DISPATCH_CALL_THEN_TRAP.into(),
+				code_hash.into(),
 				vec![],
 			));
 
@@ -656,7 +669,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL_THEN_TRAP.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -790,9 +803,6 @@ const CODE_SET_RENT: &str = r#"
 )
 "#;
 
-// Use test_hash_and_code test to get the actual hash if the code changed.
-const HASH_SET_RENT: [u8; 32] = hex!("69aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf");
-
 /// Input data for each call in set_rent code
 mod call {
 	pub fn set_storage_4_byte() -> Vec<u8> { vec![] }
@@ -810,7 +820,7 @@ fn test_set_rent_code_and_hash() {
 	let encoded = Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -828,7 +838,7 @@ fn test_set_rent_code_and_hash() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -838,7 +848,7 @@ fn test_set_rent_code_and_hash() {
 
 #[test]
 fn storage_size() {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Storage size
 	with_externalities(
@@ -850,7 +860,7 @@ fn storage_size() {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				30_000,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
@@ -869,7 +879,7 @@ fn storage_size() {
 
 #[test]
 fn deduct_blocks() {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -880,7 +890,7 @@ fn deduct_blocks() {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				30_000,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
@@ -966,7 +976,7 @@ fn claim_surcharge_malus() {
 /// Claim surcharge with the given trigger_call at the given blocks.
 /// if removes is true then assert that the contract is a tombstonedead
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -977,7 +987,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				100,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
@@ -1001,7 +1011,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 /// * if allowance is exceeded
 /// * if balance is reached and balance < subsistence threshold
 fn removals(trigger_call: impl Fn() -> bool) {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Balance reached and superior to subsistence threshold
 	with_externalities(
@@ -1013,7 +1023,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				100,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
@@ -1052,7 +1062,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				1_000,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(100u32).encode() // rent allowance
 			));
 
@@ -1090,7 +1100,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				50+Balances::minimum_balance(),
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
@@ -1125,7 +1135,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 
 #[test]
 fn call_removed_contract() {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Balance reached and superior to subsistence threshold
 	with_externalities(
@@ -1137,7 +1147,7 @@ fn call_removed_contract() {
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				100,
-				100_000, HASH_SET_RENT.into(),
+				100_000, code_hash.into(),
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
@@ -1211,12 +1221,10 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 	)
 )
 "#;
-const HASH_CHECK_DEFAULT_RENT_ALLOWANCE: [u8; 32] =
-	hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
 
 #[test]
 fn default_rent_allowance_on_create() {
-	let wasm = wabt::wat2wasm(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -1228,7 +1236,7 @@ fn default_rent_allowance_on_create() {
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
-				HASH_CHECK_DEFAULT_RENT_ALLOWANCE.into(),
+				code_hash.into(),
 				vec![],
 			));
 
@@ -1299,7 +1307,6 @@ const CODE_RESTORATION: &str = r#"
 	)
 )
 "#;
-const HASH_RESTORATION: [u8; 32] = hex!("02988182efba70fe605031f5c55bfa59e47f72c0a4707f22b6b74fffbf7803dc");
 
 #[test]
 fn restorations_dirty_storage_and_different_storage() {
@@ -1322,6 +1329,10 @@ fn restoration_success() {
 }
 
 fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage: bool) {
+	let (restoration_wasm, restoration_code_hash) =
+		compile_module::<Test>(CODE_RESTORATION).unwrap();
+	let (set_rent_wasm, set_rent_code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
+
 	let acl_key = {
 		let mut s = [0u8; 32];
 		s[0] = 1;
@@ -1332,7 +1343,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
 	let encoded = hex::encode(Encode::encode(&Call::Contract(super::Call::restore_to(
 		BOB,
-		HASH_SET_RENT.into(),
+		set_rent_code_hash.into(),
 		<Test as balances::Trait>::Balance::from(50u32),
 		vec![acl_key, acl_key],
 	))));
@@ -1357,8 +1368,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		"The size of the literal was changed and requires updating in `CODE_RESTORATION`",
 	);
 
-	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
-	let set_rent_wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -1377,23 +1386,23 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RESTORATION.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(restoration_code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					event: MetaEvent::contract(RawEvent::CodeStored(set_rent_code_hash.into())),
 					topics: vec![],
 				},
 			]);
 
-			// Create an account with address `BOB` with code `HASH_SET_RENT`.
+			// Create an account with address `BOB` with code `CODE_SET_RENT`.
 			// The input parameter sets the rent allowance to 0.
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
-				HASH_SET_RENT.into(),
+				set_rent_code_hash.into(),
 				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
@@ -1430,7 +1439,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				Origin::signed(CHARLIE),
 				30_000,
 				100_000,
-				HASH_RESTORATION.into(),
+				restoration_code_hash.into(),
 				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
@@ -1473,6 +1482,116 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(bob_contract.deduct_block, System::block_number());
 				assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
 			}
+		}
+	);
+}
+
+const CODE_STORAGE_SIZE: &str = r#"
+(module
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 16 16))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 4)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 32)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 4)		;; Count of bytes to copy.
+		)
+
+		;; place a garbage value in storage, the size of which is specified by the call input.
+		(call $ext_set_storage
+			(i32.const 0)		;; Pointer to storage key
+			(i32.const 1)		;; Value is not null
+			(i32.const 0)		;; Pointer to value
+			(i32.load (i32.const 32))	;; Size of value
+		)
+
+		(call $assert
+			(i32.eq
+				(call $ext_get_storage
+					(i32.const 0)		;; Pointer to storage key
+				)
+				(i32.const 0)
+			)
+		)
+
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
+			)
+		)
+	)
+
+	(func (export "deploy"))
+
+	(data (i32.const 0) "\01")	;; Storage key (32 B)
+)
+"#;
+
+#[test]
+fn storage_max_value_limit() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_STORAGE_SIZE).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000,
+				code_hash.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Call contract with allowed storage value.
+			assert_ok!(Contract::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				Encode::encode(&self::MaxValueSize::get()),
+			));
+
+			// Call contract with too large a storage value.
+			assert_err!(
+				Contract::call(
+					Origin::signed(ALICE),
+					BOB,
+					0,
+					100_000,
+					Encode::encode(&(self::MaxValueSize::get() + 1)),
+				),
+				"during execution"
+			);
 		}
 	);
 }

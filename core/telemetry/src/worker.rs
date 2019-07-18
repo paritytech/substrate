@@ -27,12 +27,11 @@
 //!
 
 use bytes::BytesMut;
-use futures::prelude::*;
+use futures::compat::Compat01As03Sink;
 use libp2p::{core::transport::OptionalTransport, core::ConnectedPoint, Multiaddr, Transport, wasm_ext};
 use log::{trace, warn, error};
 use slog::Drain;
-use std::{io, time};
-use tokio_io::AsyncWrite;
+use std::{io, pin::Pin, task::Context, task::Poll, time};
 
 mod node;
 
@@ -58,19 +57,29 @@ pub struct TelemetryWorker {
 /// The pile of libp2p transports.
 #[cfg(not(target_os = "unknown"))]
 type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
-	libp2p::core::transport::OrTransport<
-		libp2p::core::transport::map::Map<
-			OptionalTransport<wasm_ext::ExtTransport>,
-			fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
+	libp2p::core::transport::map::Map<
+		libp2p::core::transport::OrTransport<
+			libp2p::core::transport::map::Map<
+				OptionalTransport<wasm_ext::ExtTransport>,
+				fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
+			>,
+			libp2p::websocket::framed::WsConfig<libp2p::dns::DnsConfig<libp2p::tcp::TcpConfig>>
 		>,
-		libp2p::websocket::framed::WsConfig<libp2p::dns::DnsConfig<libp2p::tcp::TcpConfig>>
+		fn(libp2p::core::either::EitherOutput<StreamSink<wasm_ext::Connection>,
+			libp2p::websocket::framed::BytesConnection<libp2p::tcp::TcpTransStream>>, ConnectedPoint)
+			-> Compat01As03Sink<libp2p::core::either::EitherOutput<StreamSink<wasm_ext::Connection>,
+			libp2p::websocket::framed::BytesConnection<libp2p::tcp::TcpTransStream>>, BytesMut>
 	>
 >;
 #[cfg(target_os = "unknown")]
 type WsTrans = libp2p::core::transport::timeout::TransportTimeout<
 	libp2p::core::transport::map::Map<
-		OptionalTransport<wasm_ext::ExtTransport>,
-		fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
+		libp2p::core::transport::map::Map<
+			OptionalTransport<wasm_ext::ExtTransport>,
+			fn(wasm_ext::Connection, ConnectedPoint) -> StreamSink<wasm_ext::Connection>
+		>,
+		fn(StreamSink<wasm_ext::Connection>, ConnectedPoint)
+			-> Compat01As03Sink<StreamSink<wasm_ext::Connection>, BytesMut>
 	>
 >;
 
@@ -98,7 +107,9 @@ impl TelemetryWorker {
 			libp2p::websocket::framed::WsConfig::new(inner)
 		});
 
-		let transport = transport.with_timeout(CONNECT_TIMEOUT);
+		let transport = transport
+			.map((|inner, _| Compat01As03Sink::new(inner)) as fn(_, _) -> _)
+			.with_timeout(CONNECT_TIMEOUT);
 
 		TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
@@ -109,19 +120,19 @@ impl TelemetryWorker {
 	}
 
 	/// Polls the worker for events that happened.
-	pub fn poll(&mut self) -> Async<TelemetryWorkerEvent> {
+	pub fn poll(&mut self, cx: &mut Context) -> Poll<TelemetryWorkerEvent> {
 		for (node, _) in &mut self.nodes {
 			loop {
-				match node.poll() {
-					Async::Ready(node::NodeEvent::Connected) =>
-						return Async::Ready(TelemetryWorkerEvent::Connected),
-					Async::Ready(node::NodeEvent::Disconnected(_)) => continue,
-					Async::NotReady => break,
+				match node::Node::poll(Pin::new(node), cx) {
+					Poll::Ready(node::NodeEvent::Connected) =>
+						return Poll::Ready(TelemetryWorkerEvent::Connected),
+					Poll::Ready(node::NodeEvent::Disconnected(_)) => continue,
+					Poll::Pending => break,
 				}
 			}
 		}
 
-		Async::NotReady
+		Poll::Pending
 	}
 
 	/// Equivalent to `slog::Drain::log`, but takes `self` by `&mut` instead, which is more convenient.
@@ -132,7 +143,7 @@ impl TelemetryWorker {
 		let msg_verbosity = match record.tag().parse::<u8>() {
 			Ok(v) => v,
 			Err(err) => {
-				warn!(target: "telemetry", "Failed to parse telemetry tag {:?}: {:?}", 
+				warn!(target: "telemetry", "Failed to parse telemetry tag {:?}: {:?}",
 					record.tag(), err);
 				return Err(())
 			}
@@ -176,27 +187,29 @@ impl TelemetryWorker {
 /// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
 /// that each telemetry message maps to one single call to `write` in the WASM FFI.
 struct StreamSink<T>(T);
-impl<T: AsyncWrite> Sink for StreamSink<T> {
+impl<T: tokio_io::AsyncWrite> futures01::Sink for StreamSink<T> {
 	type SinkItem = BytesMut;
 	type SinkError = io::Error;
 
-	fn start_send(&mut self, item: Self::SinkItem) -> Result<AsyncSink<Self::SinkItem>, io::Error> {
+	fn start_send(&mut self, item: Self::SinkItem)
+		-> Result<futures01::AsyncSink<Self::SinkItem>, io::Error> {
 		match self.0.write(&item[..]) {
-			Ok(n) if n == item.len() => Ok(AsyncSink::Ready),
+			Ok(n) if n == item.len() => Ok(futures01::AsyncSink::Ready),
 			Ok(_) => {
 				error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				Err(io::Error::new(io::ErrorKind::Other, "Internal buffering detected"))
 			},
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(AsyncSink::NotReady(item)),
+			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock =>
+				Ok(futures01::AsyncSink::NotReady(item)),
 			Err(err) => Err(err),
 		}
 	}
 
-	fn poll_complete(&mut self) -> Poll<(), io::Error> {
+	fn poll_complete(&mut self) -> futures01::Poll<(), io::Error> {
 		match self.0.flush() {
-			Ok(()) => Ok(Async::Ready(())),
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(Async::NotReady),
+			Ok(()) => Ok(futures01::Async::Ready(())),
+			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(futures01::Async::NotReady),
 			Err(err) => Err(err),
 		}
 	}
