@@ -16,7 +16,5 @@
 
 //! Utility struct to build a transaction.
 
-#[cfg(feature = "std")]
 mod transaction_builder;
-#[cfg(feature = "std")]
 pub use transaction_builder::*;
