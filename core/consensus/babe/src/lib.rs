@@ -819,13 +819,13 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		.map_err(map_err)
 }
 
-// data stored in tree is the hash and block number of the block signaling
-// the epoch change, and the minimum *slot number* when the next epoch
-// should start (i.e. slot number begin + duration).
+// data stored in tree is the hash and block number of the block signaling the
+// epoch change, the new epoch index and the minimum *slot number* when the next
+// epoch should start (i.e. slot number begin + duration).
 type EpochChanges<Block> = ForkTree<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	SlotNumber,
+	(u64, SlotNumber),
 >;
 
 #[derive(Clone)]
@@ -898,7 +898,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			&hash,
 			&number,
 			&is_descendent_of,
-			&|expected_epoch_change_slot| {
+			&|(_, expected_epoch_change_slot)| {
 				*expected_epoch_change_slot <= slot_number
 			}
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
@@ -932,14 +932,24 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			},
 		}
 
-		// FIXME: validate epoch index, store last epoch index in forktree
 		if let Some(entry) = new_cache.get(&well_known_cache_keys::AUTHORITIES) {
 			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
+				if let Some(last_epoch_change) = epoch_change {
+					let last_epoch_index = last_epoch_change.data.0;
+					if last_epoch_index.checked_sub(epoch.epoch_index) != Some(1) {
+						return Err(ConsensusError::ClientImport(format!(
+							"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
+							last_epoch_index.saturating_add(1),
+							epoch.epoch_index,
+						)));
+					}
+				}
+
 				// track the epoch change in the fork tree
 				epoch_changes.import(
 					hash,
 					number,
-					slot_number + epoch.duration,
+					(epoch.epoch_index, slot_number + epoch.duration),
 					&is_descendent_of,
 				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 			} else {
