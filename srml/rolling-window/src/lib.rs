@@ -89,8 +89,7 @@ impl<T: Trait> Module<T> {
 		Ok(<MisconductReports<T>>::get(kind).len() as u64)
 	}
 
-	/// Return number of misbehavior's in the current window which
-	/// may include duplicated misbehaviour's
+	/// Return number of misbehavior's in the current window
 	pub fn get_misbehaved(kind: T::Kind) -> u64 {
 		<MisconductReports<T>>::get(kind).len() as u64
 	}
@@ -237,7 +236,7 @@ mod tests {
 
 		struct Bar;
 
-		struct Foo<T, U>((PhantomData<T>, PhantomData<U>));
+		struct Foo<T, U>(PhantomData<(T, U)>);
 
 		impl_base_severity!(Bar, usize: 1);
 		impl_base_severity!(Foo<T, U>, usize: 1337);
