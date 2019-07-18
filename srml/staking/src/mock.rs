@@ -52,10 +52,9 @@ thread_local! {
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(_changed: bool, validators: &[(AccountId, Ks)]) {
-		SESSION.with(|x| {
-			let v = validators.iter().map(|(ref a, _)| a).cloned().collect::<Vec<_>>();
+		SESSION.with(|x|
 			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
-		});
+		);
 	}
 
 	fn on_disabled(validator_index: usize) {
@@ -86,6 +85,9 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -96,6 +98,7 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
 	pub const TransferFee: u64 = 0;
@@ -137,9 +140,13 @@ impl session::historical::Trait for Test {
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SessionsPerEra: session::SessionIndex = 3;
@@ -274,10 +281,6 @@ impl ExtBuilder {
 			current_session_reward: self.reward,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
-
-		let _ = timestamp::GenesisConfig::<Test>{
-			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 
 		let _ = session::GenesisConfig::<Test> {

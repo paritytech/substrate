@@ -57,7 +57,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
 		B: client::backend::Backend<Block, Blake2Hasher>,
 		E: client::CallExecutor<Block, Blake2Hasher>,
-		Self: BlockImport<Block, Error=ConsensusError>,
+		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
 	fn import(&self, origin: BlockOrigin, block: Block)
@@ -75,7 +75,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_justified(
@@ -96,7 +96,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
 	fn finalize_block(

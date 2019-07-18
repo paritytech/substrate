@@ -32,13 +32,12 @@ pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::import_queue::{
-	SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block, Header, DigestItemFor, ProvideRuntimeApi,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
@@ -96,7 +95,7 @@ pub struct Config(slots::SlotDuration<BabeConfiguration>);
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<B: BlockT, C>(client: &C) -> CResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
@@ -152,7 +151,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub select_chain: SC,
 
 	/// A block importer
-	pub block_import: Arc<I>,
+	pub block_import: I,
 
 	/// The environment
 	pub env: Arc<E>,
@@ -186,7 +185,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: Block<Header=H>,
+	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B>,
@@ -200,7 +199,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 {
 	let worker = BabeWorker {
 		client: client.clone(),
-		block_import,
+		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		local_key,
 		sync_oracle: sync_oracle.clone(),
@@ -220,7 +219,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 
 struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
-	block_import: Arc<I>,
+	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
@@ -229,7 +228,7 @@ struct BabeWorker<C, E, I, SO> {
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
-	B: Block<Header=H, Hash=Hash>,
+	B: BlockT<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
@@ -397,7 +396,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "babe", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
@@ -419,7 +418,7 @@ macro_rules! babe_err {
 	};
 }
 
-fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String>
+fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut pre_digest: Option<_> = None;
@@ -444,7 +443,7 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block + Sized, C: AuxStore>(
+fn check_header<B: BlockT + Sized, C: AuxStore>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
@@ -532,7 +531,7 @@ pub struct BabeVerifier<C> {
 }
 
 impl<C> BabeVerifier<C> {
-	fn check_inherents<B: Block>(
+	fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -588,7 +587,7 @@ fn median_algorithm(
 	}
 }
 
-impl<B: Block, C> Verifier<B> for BabeVerifier<C> where
+impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem,
@@ -702,7 +701,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 	Vec<AuthorityId>,
 	ConsensusError,
 > where
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
@@ -797,7 +796,7 @@ fn claim_slot(
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
@@ -829,14 +828,13 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 /// Start an import queue for the Babe consensus algorithm.
 pub fn import_queue<B, C, E>(
 	config: Config,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
-	B: Block,
+	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem,
@@ -857,7 +855,6 @@ pub fn import_queue<B, C, E>(
 		block_import,
 		justification_import,
 		finality_proof_import,
-		finality_proof_request_builder,
 	), timestamp_core))
 }
 
@@ -881,6 +878,7 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 	use futures::{Async, stream::Stream as _};
+	use futures03::{StreamExt as _, TryStreamExt as _};
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -1008,6 +1006,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);

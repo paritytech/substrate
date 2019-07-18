@@ -21,7 +21,7 @@
 use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types, traits::Get};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -65,6 +65,9 @@ impl Get<u64> for TransactionByteFee {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+}
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
@@ -75,6 +78,7 @@ impl system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
+	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {
 	type Balance = u64;
@@ -155,12 +159,22 @@ impl ExtBuilder {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
-				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
+				vec![
+					(1, 10 * self.existential_deposit),
+					(2, 20 * self.existential_deposit),
+					(3, 30 * self.existential_deposit),
+					(4, 40 * self.existential_deposit),
+					(12, 10 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},
 			vesting: if self.vesting && self.monied {
-				vec![(1, 0, 10), (2, 10, 20)]
+				vec![
+					(1, 0, 10, 5 * self.existential_deposit),
+					(2, 10, 20, 0),
+					(12, 10, 20, 5 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},
