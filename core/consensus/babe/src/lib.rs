@@ -69,6 +69,7 @@ use client::{
 	runtime_api::ApiExt,
 	error::Result as ClientResult,
 	backend::{AuxStore, Backend},
+	utils::is_descendent_of,
 };
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
@@ -895,7 +896,11 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		}
 
 		let slot_number = 3u64;
-		let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, Self::Error> { Ok(true) };
+
+		// returns a function for checking whether a block is a descendent of another
+		// consistent with querying client directly after importing the block.
+		let parent_hash = *block.header.parent_hash();
+		let is_descendent_of = is_descendent_of(&self.client, Some((&hash, &parent_hash)));
 
 		let mut epoch_changes = self.epoch_changes.lock();
 		let epoch_change = epoch_changes.find_node_where(
@@ -911,7 +916,10 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			// this can only happen when the chain starts, since there's no epoch change at genesis.
 			// afterwards every time we expect an epoch change it means we will import another one.
 			for (root, _, _) in epoch_changes.roots() {
-				if is_descendent_of(root, &hash)? {
+				let is_descendent_of = is_descendent_of(root, &hash)
+					.map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+
+				if is_descendent_of {
 					return Ok(false);
 				}
 			}
@@ -1016,8 +1024,6 @@ where
 	#[allow(deprecated)]
 	let epoch_changes = aux_schema::load_epoch_changes(&**client.backend())?;
 
-	let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, ConsensusError> { Ok(true) };
-
 	let block_import = Box::new(BabeBlockImport::new(
 		client.clone(),
 		epoch_changes.clone(),
@@ -1027,6 +1033,7 @@ where
 	let pruning_task = client.finality_notification_stream()
 		.map(|v| Ok::<_, ()>(v)).compat()
 		.for_each(move |notification| {
+			let is_descendent_of = is_descendent_of(&client, None);
 			epoch_changes.lock().prune(
 				&notification.hash,
 				*notification.header.number(),
