@@ -119,13 +119,13 @@ enum OffchainErr {
 impl Printable for OffchainErr {
 	fn print(self) {
 		match self {
-			OffchainErr::DecodeAuthorityId => print("Off-chain error: decoding AuthorityId failed!"),
-			OffchainErr::DecodeWorkerStatus => print("Off-chain error: decoding WorkerStatus failed!"),
-			OffchainErr::ExtrinsicCreation => print("Off-chain error: extrinsic creation failed!"),
-			OffchainErr::FailedSigning => print("Off-chain error: signing failed!"),
-			OffchainErr::NetworkState => print("Off-chain error: fetching network state failed!"),
-			OffchainErr::SubmitTransaction => print("Off-chain error: submitting transaction failed!"),
-			OffchainErr::UnknownCryptoKind => print("Off-chain error: the CryptoKind is unknown!"),
+			OffchainErr::DecodeAuthorityId => print("Offchain error: decoding AuthorityId failed!"),
+			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
+			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
+			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
+			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
+			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
+			OffchainErr::UnknownCryptoKind => print("Offchain error: the CryptoKind is unknown!"),
 		}
 	}
 }
