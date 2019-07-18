@@ -31,7 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::traits::{Block, DigestFor};
+use runtime_primitives::traits::{Block as BlockT, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -53,7 +53,7 @@ pub use block_import::{
 pub use select_chain::SelectChain;
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
-pub trait Environment<B: Block> {
+pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B>;
 	/// Error which can occur upon creation.
@@ -71,7 +71,7 @@ pub trait Environment<B: Block> {
 /// block.
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
-pub trait Proposer<B: Block> {
+pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.

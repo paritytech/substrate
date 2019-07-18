@@ -27,14 +27,14 @@
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
-//! tx.blocks_processed(vec![], false);
-//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(vec![], false)`
+//! tx.blocks_processed(0, 0, vec![]);
+//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(0, 0, vec![])`
 //! ```
 //!
 
 use futures::{prelude::*, sync::mpsc};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::import_queue::{Origin, Link};
+use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -51,26 +51,32 @@ pub struct BufferedLinkSender<B: BlockT> {
 	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
 }
 
+impl<B: BlockT> BufferedLinkSender<B> {
+	/// Returns true if the sender points to nowhere.
+	///
+	/// Once `true` is returned, it is pointless to use the sender anymore.
+	pub fn is_closed(&self) -> bool {
+		self.tx.is_closed()
+	}
+}
+
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
-	BlockImported(B::Hash, NumberFor<B>),
-	BlocksProcessed(Vec<B::Hash>, bool),
+	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
-	ClearJustificationRequests,
 	RequestJustification(B::Hash, NumberFor<B>),
 	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	RequestFinalityProof(B::Hash, NumberFor<B>),
-	ReportPeer(Origin, i32),
-	Restart,
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlockImported(hash.clone(), number));
-	}
-
-	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -82,10 +88,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	) {
 		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
 		let _ = self.tx.unbounded_send(msg);
-	}
-
-	fn clear_justification_requests(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ClearJustificationRequests);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -104,14 +106,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
-	}
-
-	fn report_peer(&mut self, who: Origin, reputation_change: i32) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ReportPeer(who, reputation_change));
-	}
-
-	fn restart(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
 	}
 }
 
@@ -136,25 +130,30 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			};
 
 			match msg {
-				BlockImportWorkerMsg::BlockImported(hash, number) =>
-					link.block_imported(&hash, number),
-				BlockImportWorkerMsg::BlocksProcessed(blocks, has_error) =>
-					link.blocks_processed(blocks, has_error),
+				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
+					link.blocks_processed(imported, count, results),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
 					link.justification_imported(who, &hash, number, success),
-				BlockImportWorkerMsg::ClearJustificationRequests =>
-					link.clear_justification_requests(),
 				BlockImportWorkerMsg::RequestJustification(hash, number) =>
 					link.request_justification(&hash, number),
 				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
 					link.finality_proof_imported(who, block, result),
 				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
 					link.request_finality_proof(&hash, number),
-				BlockImportWorkerMsg::ReportPeer(who, reput) =>
-					link.report_peer(who, reput),
-				BlockImportWorkerMsg::Restart =>
-					link.restart(),
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use test_client::runtime::Block;
+
+	#[test]
+	fn is_closed() {
+		let (tx, rx) = super::buffered_link::<Block>();
+		assert!(!tx.is_closed());
+		drop(rx);
+		assert!(tx.is_closed());
 	}
 }

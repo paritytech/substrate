@@ -26,10 +26,6 @@ use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::core::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::multihash::Multihash;
-#[cfg(not(target_os = "unknown"))]
-use libp2p::core::swarm::toggle::Toggle;
-#[cfg(not(target_os = "unknown"))]
-use libp2p::mdns::{Mdns, MdnsEvent};
 use log::warn;
 use runtime_primitives::traits::Block as BlockT;
 use std::iter;
@@ -44,11 +40,8 @@ pub struct Behaviour<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	debug_info: debug_info::DebugInfoBehaviour<Substream<StreamMuxerBox>>,
-	/// Discovers nodes of the network. Defined below.
+	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour<Substream<StreamMuxerBox>>,
-	/// Discovers nodes on the local network.
-	#[cfg(not(target_os = "unknown"))]
-	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
@@ -70,29 +63,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 	) -> Self {
-		let debug_info = debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone());
-
-		if enable_mdns {
-			#[cfg(target_os = "unknown")]
-			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
-		}
-
 		Behaviour {
 			substrate,
-			debug_info,
-			discovery: DiscoveryBehaviour::new(local_public_key, known_addresses),
-			#[cfg(not(target_os = "unknown"))]
-			mdns: if enable_mdns {
-				match Mdns::new() {
-					Ok(mdns) => Some(mdns).into(),
-					Err(err) => {
-						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						None.into()
-					}
-				}
-			} else {
-				None.into()
-			},
+			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
+			discovery: DiscoveryBehaviour::new(local_public_key, known_addresses, enable_mdns),
 			events: Vec::new(),
 		}
 	}
@@ -191,19 +165,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 			DiscoveryOut::ValuePutFailed(key) => {
 				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePutFailed(key)));
 			}
-		}
-	}
-}
-
-#[cfg(not(target_os = "unknown"))]
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<MdnsEvent> for
-	Behaviour<B, S, H> {
-	fn inject_event(&mut self, event: MdnsEvent) {
-		match event {
-			MdnsEvent::Discovered(list) => {
-				self.substrate.add_discovered_nodes(list.into_iter().map(|(peer_id, _)| peer_id));
-			},
-			MdnsEvent::Expired(_) => {}
 		}
 	}
 }
