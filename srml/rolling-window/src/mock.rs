@@ -145,6 +145,7 @@ impl timestamp::Trait for Test {
 
 impl Trait for Test {
 	type Kind = Kind;
+	type BondingDuration = BondingDuration;
 }
 
 impl srml_session::historical::Trait for Test {
