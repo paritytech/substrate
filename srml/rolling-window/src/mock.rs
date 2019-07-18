@@ -128,7 +128,7 @@ impl srml_staking::Trait for Test {
 
 impl srml_session::Trait for Test {
 	type SelectInitialValidators = Staking;
-	type OnSessionEnding = Staking;
+	type OnSessionEnding = super::Module<Test>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = srml_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = ();

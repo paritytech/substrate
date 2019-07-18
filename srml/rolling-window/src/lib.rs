@@ -57,18 +57,8 @@ decl_storage! {
 
 		/// Bonding guard
 		///
-		/// Keeps track of uniquely reported misconducts in during the `Bonding Duration`
-		///
-		/// (niklasad1):
-		/// how to keep track of the bonding duration?!
-		///
-		///	Do we need to store `EraIndex` and detect when `staking::BondingDuration` has been reached?!
-		///	If so, we need dependency to the staking module too.
-		///
-		/// Additionally, it may `unbond` a portion or all funds and it may be invalidate potential candidates
-		/// to be slashed but it shouldn't have any impact on the already reported misbehaviors in the rolling window
-		///
-		/// For now, we have a function `on_bonding_duration` which should be called when the BondingDuration expires.
+		/// Keeps track of uniquely reported misconducts in during entire bonding duration
+		/// It will be unbounded
 		BondingGuard get(uniq): linked_map T::Hash => SessionIndex;
 	}
 }
@@ -103,21 +93,6 @@ impl<T: Trait> Module<T> {
 	/// may include duplicated misbehaviour's
 	pub fn get_misbehaved(kind: T::Kind) -> u64 {
 		<MisconductReports<T>>::get(kind).len() as u64
-	}
-}
-
-/// An event handler for when `BondingDuration` has expired
-pub trait OnBondingDurationEnd {
-	/// Take action when `BondingDuration` expired
-	fn on_bonding_duration_end();
-}
-
-
-impl<T: Trait> OnBondingDurationEnd for Module<T> {
-	fn on_bonding_duration_end() {
-		for (id, _) in <BondingGuard<T>>::enumerate() {
-			<BondingGuard<T>>::remove(id);
-		}
 	}
 }
 
@@ -253,25 +228,6 @@ mod tests {
 			// `u32::max_value` sessions have been executed should removed from the window
 			RollingWindow::on_session_ending(24, 25);
 			assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 0);
-		});
-	}
-
-	#[test]
-	fn bonding_period_expire_decoupled_from_rolling_window() {
-		with_externalities(&mut ExtBuilder::default()
-			.build(),
-		|| {
-
-			let mut current_session = 0;
-
-			assert_eq!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).unwrap(), 1);
-			assert!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).is_err());
-
-			RollingWindow::on_session_ending(current_session, current_session + 1);
-			current_session += 1;
-
-			RollingWindow::on_bonding_duration_end();
-			assert_eq!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).unwrap(), 2);
 		});
 	}
 
