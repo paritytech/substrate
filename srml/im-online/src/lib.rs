@@ -396,7 +396,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
 
-			if <Module<T>>::is_online_in_current_era(&heartbeat.authority_id) {
+			if <Module<T>>::is_online_in_current_session(&heartbeat.authority_id) {
 				// we already received a heartbeat for this authority
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
