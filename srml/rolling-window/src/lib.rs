@@ -47,7 +47,7 @@ pub trait Trait: system::Trait {
 	/// Kind to report with window length
 	type Kind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
 
-	/// Number of eras that staked funds must remain bonded for.
+	/// Number of eras that the bonding duration consist of
 	type BondingDuration: Get<EraIndex>;
 }
 
@@ -59,14 +59,13 @@ decl_storage! {
 		// TODO(niklasad1): optimize how to shrink the window when sessions expire
 		MisconductReports get(kind): linked_map T::Kind => Vec<SessionIndex>;
 
-		/// EraData which have mapping from `EraIndex` to a unique Hash
+		/// EraData which have mapping from `EraIndex` to a list of unique hashes
 		///
 		EraData get(idx): linked_map EraIndex => Vec<T::Hash>;
 
 		/// Bonding guard
 		///
 		/// Keeps track of uniquely reported misconducts in the entire bonding duration
-		/// It will be unbounded
 		BondingUniqueness get(uniq): linked_map T::Hash => SessionIndex;
 	}
 }
@@ -103,7 +102,7 @@ impl<T: Trait> Module<T> {
 		Ok(<MisconductReports<T>>::get(kind).len() as u64)
 	}
 
-	// TODO(niklasad1): get bonding duration from Staking
+	// TODO(niklasad1): optimize
 	fn refresh(current_era: EraIndex) {
 		let bonding_duration = T::BondingDuration::get();
 
