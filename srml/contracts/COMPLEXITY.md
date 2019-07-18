@@ -174,14 +174,18 @@ Assuming marshaled size of a balance value is of the constant size we can neglec
 
 ## Initialization
 
-Before a call or create can be performed the execution context must be initialized. This involves
-two calls:
+Before a call or create can be performed the execution context must be initialized.
+
+For the first call or instantiation in the handling of an extrinsic, this involves two calls:
 
 1. `<timestamp::Module<T>>::now()`
 2. `<system::Module<T>>::block_number()`
 
-the complexity of initialization depends on the complexity of these functions. In the current
+The complexity of initialization depends on the complexity of these functions. In the current
 implementation they just involve a DB read.
+
+For subsequent calls and instantiations during contract execution, the initialization requires no
+expensive operations.
 
 ## Call
 
