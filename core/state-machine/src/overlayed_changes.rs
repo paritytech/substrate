@@ -17,7 +17,7 @@
 //! The overlayed changes to state.
 
 #[cfg(test)] use std::iter::FromIterator;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, BTreeSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
@@ -46,7 +46,7 @@ pub struct OverlayedValue {
 	pub value: Option<Vec<u8>>,
 	/// The set of extinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
-	pub extrinsics: Option<HashSet<u32>>,
+	pub extrinsics: Option<BTreeSet<u32>>,
 }
 
 /// All changes related to a child trie.
@@ -55,7 +55,7 @@ pub struct OverlayedValue {
 pub struct ChildOverlayChangeSet {
 	/// Currently change trie are not manage for child trie value
 	/// and we only keep trace of extrinsic index globally.
-	pub extrinsics: Option<HashSet<u32>>,
+	pub extrinsics: Option<BTreeSet<u32>>,
 	/// Mapping of key with optional value, if value is `None` that is a removal.
 	pub values: HashMap<Vec<u8>, Option<Vec<u8>>>,
 	/// Child trie value.

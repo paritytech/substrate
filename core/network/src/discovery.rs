@@ -24,8 +24,7 @@
 //! - Bootstrap nodes. These are hard-coded node identities and addresses passed in the constructor
 //! of the `DiscoveryBehaviour`. You can also call `add_known_address` later to add an entry.
 //!
-//! - mDNS. As of the writing of this documentation, mDNS is handled somewhere else. It is planned
-//! to be moved here.
+//! - mDNS. Discovers nodes on the local network by broadcasting UDP packets.
 //!
 //! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
 //! order for nodes to propagate to us their view of the network. This is performed automatically
@@ -50,7 +49,11 @@ use futures::prelude::*;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::PollParameters;
+#[cfg(not(target_os = "unknown"))]
+use libp2p::core::{swarm::toggle::Toggle, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
+#[cfg(not(target_os = "unknown"))]
+use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
@@ -65,6 +68,9 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	/// Kademlia requests and answers.
 	kademlia: Kademlia<TSubstream>,
+	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
+	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
@@ -83,7 +89,16 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Builds a new `DiscoveryBehaviour`.
 	///
 	/// `user_defined` is a list of known address for nodes that never expire.
-	pub fn new(local_public_key: PublicKey, user_defined: Vec<(PeerId, Multiaddr)>) -> Self {
+	pub fn new(
+		local_public_key: PublicKey,
+		user_defined: Vec<(PeerId, Multiaddr)>,
+		enable_mdns: bool
+	) -> Self {
+		if enable_mdns {
+			#[cfg(target_os = "unknown")]
+			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
+		}
+
 		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
 		for (peer_id, addr) in &user_defined {
 			kademlia.add_address(peer_id, addr.clone());
@@ -99,6 +114,18 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			clock,
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
+			#[cfg(not(target_os = "unknown"))]
+			mdns: if enable_mdns {
+				match Mdns::new() {
+					Ok(mdns) => Some(mdns).into(),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						None.into()
+					}
+				}
+			} else {
+				None.into()
+			},
 		}
 	}
 
@@ -321,6 +348,34 @@ where
 			}
 		}
 
+		// Poll mDNS.
+		#[cfg(not(target_os = "unknown"))]
+		loop {
+			match self.mdns.poll(params) {
+				Async::NotReady => break,
+				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+					match event {
+						MdnsEvent::Discovered(list) => {
+							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
+							if let Some(peer_id) = self.discoveries.pop_front() {
+								let ev = DiscoveryOut::Discovered(peer_id);
+								return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+							}
+						},
+						MdnsEvent::Expired(_) => {}
+					}
+				},
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Async::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
+					match event {},		// `event` is an enum with no variant
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			}
+		}
+
 		Async::NotReady
 	}
 }
@@ -355,7 +410,7 @@ mod tests {
 					upgrade::apply(out.stream, upgrade, endpoint)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone());
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

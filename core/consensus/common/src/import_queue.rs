@@ -113,14 +113,15 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
-	/// Block imported.
-	fn block_imported(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Batch of blocks imported, with or without error.
-	fn blocks_processed(&mut self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
+	fn blocks_processed(
+		&mut self,
+		_imported: usize,
+		_count: usize,
+		_results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {}
 	/// Justification import result.
 	fn justification_imported(&mut self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
-	/// Clear all pending justification requests.
-	fn clear_justification_requests(&mut self) {}
 	/// Request a justification for the given block.
 	fn request_justification(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
@@ -136,10 +137,6 @@ pub trait Link<B: BlockT>: Send {
 	) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
-	/// Adjusts the reputation of the given peer.
-	fn report_peer(&mut self, _who: Origin, _reputation_change: i32) {}
-	/// Restart sync.
-	fn restart(&mut self) {}
 }
 
 /// Block import successful result.
@@ -152,7 +149,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 }
 
 /// Block import error.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<Origin>),
@@ -162,8 +159,10 @@ pub enum BlockImportError {
 	BadBlock(Option<Origin>),
 	/// Block has an unknown parent
 	UnknownParent,
-	/// Other Error.
-	Error,
+	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
+	Cancelled,
+	/// Other error.
+	Other(ConsensusError),
 }
 
 /// Single block import function.
@@ -210,7 +209,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			},
 			Err(e) => {
 				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-				Err(BlockImportError::Error)
+				Err(BlockImportError::Other(e))
 			}
 		}
 	};
