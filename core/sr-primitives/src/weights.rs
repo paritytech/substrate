@@ -54,7 +54,7 @@ impl From<WeightedTransaction> for DispatchClass {
 	}
 }
 
-/// A bundle of static meta information collected from the `#[weight = $x]` tags.
+/// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
 #[derive(Clone, Copy, Default)]
 pub struct TransactionInfo {
@@ -64,7 +64,7 @@ pub struct TransactionInfo {
 	pub class: DispatchClass,
 }
 
-/// A `Call` (aka transaction) that can carry some static information along with it, using the
+/// A `Dispatchable` function (aka transaction) that can carry some static information along with it, using the
 /// `#[weight]` attribute.
 pub trait DispatchInfo {
 	/// Return a `TransactionInfo`, containing relevant information of this dispatch.
@@ -79,9 +79,9 @@ pub trait WeighData<T> {
 	fn weigh_data(&self, target: T) -> Weight;
 }
 
-/// Means of classifying a transaction.
+/// Means of classifying a dispatchable function.
 pub trait ClassifyDispatch<T> {
-	/// Classify the transaction based on input data `target`.
+	/// Classify the dispatch function based on input data `target` of type `T`.
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
@@ -93,7 +93,7 @@ pub trait ClassifyDispatch<T> {
 pub enum WeightedTransaction {
 	/// A fixed-weight transaction. No dependency on state or input.
 	Fixed(Weight),
-	/// An operational transaction.
+	/// An operational transaction. Still incurs a weight-fee but typically has a higher priority.
 	Operational(Weight),
 }
 

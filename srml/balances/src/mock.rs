@@ -21,7 +21,8 @@
 use primitives::{traits::{IdentityLookup}, testing::Header, weights::{TransactionInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types};
+use srml_support::traits::Get;
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -190,6 +191,7 @@ impl ExtBuilder {
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
 
+/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> TransactionInfo {
 	TransactionInfo { weight: w, ..Default::default() }
 }

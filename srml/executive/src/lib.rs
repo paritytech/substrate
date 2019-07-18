@@ -582,20 +582,28 @@ mod tests {
 	}
 
 	#[test]
-	fn default_block_weight_is_stored() {
+	fn block_weight_and_size_is_stored_per_tx() {
 		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(0, 0));
 		let x1 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(1, 0));
 		let x2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(2, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext();
 		with_externalities(&mut t, || {
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+
 			assert_eq!(Executive::apply_extrinsic(xt.clone()).unwrap(), ApplyOutcome::Success);
 			assert_eq!(Executive::apply_extrinsic(x1.clone()).unwrap(), ApplyOutcome::Success);
 			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
-			assert_eq!(
-				<system::Module<Runtime>>::all_extrinsics_weight(),
-				3 * (0 /*base*/ + len /*len*/ * 1 /*byte*/)
-			);
+
+			// default weight for `TestXt` == encoded length.
+			assert_eq!( <system::Module<Runtime>>::all_extrinsics_weight(), 3 * len);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
+
+			let _ = <system::Module<Runtime>>::finalize();
+
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 		});
 	}
 

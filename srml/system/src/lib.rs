@@ -771,7 +771,10 @@ impl<T: Trait> Module<T> {
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> {
-	fn internal_check_weight(info: TransactionInfo) -> Result<Weight, DispatchError> {
+	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
+	///
+	/// Upon successes, it returns the new block weight as a `Result`.
+	fn check_weight(info: TransactionInfo) -> Result<Weight, DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let added_weight = info.weight;
 		let next_weight = current_weight.saturating_add(added_weight);
@@ -785,7 +788,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		Ok(next_weight)
 	}
 
-	fn internal_check_block_size(_info: TransactionInfo, len: usize) -> Result<u32, DispatchError> {
+	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
+	///
+	/// Upon successes, it returns the new block length as a `Result`.
+	fn check_block_length(_info: TransactionInfo, len: usize) -> Result<u32, DispatchError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
@@ -795,11 +801,18 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		Ok(next_len)
 	}
 
-	fn internal_get_priority(info: TransactionInfo) -> TransactionPriority {
+	/// get the priority of an extrinsic denoted by `info`.
+	fn get_priority(info: TransactionInfo) -> TransactionPriority {
 		match info.class {
 			DispatchClass::User => info.weight.into(),
 			DispatchClass::Operational => Bounded::max_value()
 		}
+	}
+
+	/// Utility constructor for tests and client code.
+	#[cfg(feature = "std")]
+	pub fn from() -> Self {
+		Self(PhantomData)
 	}
 }
 
@@ -815,9 +828,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: TransactionInfo,
 		len: usize,
 	) -> Result<(), DispatchError> {
-		let next_len = Self::internal_check_block_size(info, len)?;
+		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
-		let next_weight = Self::internal_check_weight(info)?;
+		let next_weight = Self::check_weight(info)?;
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
 	}
@@ -828,18 +841,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: TransactionInfo,
 		len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
-		let next_size = Self::internal_check_block_size(info, len)?;
-		AllExtrinsicsLen::put(next_size);
-		let next_weight = Self::internal_check_weight(info)?;
-		AllExtrinsicsWeight::put(next_weight);
-		Ok(ValidTransaction { priority: Self::internal_get_priority(info), ..Default::default() })
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> CheckWeight<T> {
-	pub fn from() -> Self {
-		Self(PhantomData)
+		// There is no point in writing to storage here since changes are discarded. This basically
+		// discards any transaction which is bigger than the length or weight limit alone, which is
+		// a guarantee that it will fail in the pre-dispatch phase.
+		let _ = Self::check_block_length(info, len)?;
+		let _ = Self::check_weight(info)?;
+		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
 	}
 }
 

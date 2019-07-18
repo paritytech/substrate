@@ -57,7 +57,7 @@ where
 	}
 
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		info: crate::weights::TransactionInfo,
+		info: TransactionInfo,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
@@ -75,7 +75,7 @@ where
 	}
 
 	fn dispatch(self,
-		info: crate::weights::TransactionInfo,
+		info: TransactionInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((id, extra)) = self.signed {
