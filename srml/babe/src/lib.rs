@@ -238,7 +238,7 @@ pub trait Duration {
 
 impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		use staking::BalanceOf;
@@ -249,8 +249,8 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 		EpochIndex::put(epoch_index);
 
-		// *This* epoch’s authorities.
-		let authorities = validators.map(|(account, k)| {
+		// *Next* epoch’s authorities.
+		let authorities = queued_validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
 

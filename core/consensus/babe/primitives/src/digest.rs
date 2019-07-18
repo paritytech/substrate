@@ -31,7 +31,7 @@ use parity_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use parity_codec::{Codec, Input};
 #[cfg(feature = "std")]
-use schnorrkel::{vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}};
+use schnorrkel::vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 
 /// A BABE pre-digest
 #[cfg(feature = "std")]

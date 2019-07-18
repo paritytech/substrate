@@ -27,7 +27,6 @@ use consensus_common::import_queue::{
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
@@ -404,7 +403,7 @@ macro_rules! babe_err {
 	};
 }
 
-fn find_pre_digest<B: Block>(header: &B::Header) -> Result<(Option<Epoch>, BabePreDigest), String>
+fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<(Option<Epoch>, BabePreDigest), String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	fn check_log<T>(query: Option<T>, target: &mut Option<T>) -> Result<(), String> {
@@ -697,7 +696,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 }
 
 fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
