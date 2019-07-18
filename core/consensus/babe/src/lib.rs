@@ -343,7 +343,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
-			if 1==2 && slot_after_building != slot_num {
+			if slot_after_building != slot_num {
 				info!(
 					target: "babe",
 					"Discarding proposal for slot {}; block production took too long",
