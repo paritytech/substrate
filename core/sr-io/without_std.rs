@@ -531,7 +531,7 @@ pub mod ext {
 		/// - Otherwise, pointer to the value in memory. `value_len` contains the length of the value.
 		fn ext_local_storage_get(kind: u32, key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
-		/// Initiaties a http request.
+		/// Initiates a http request.
 		///
 		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
 		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently

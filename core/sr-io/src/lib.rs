@@ -321,7 +321,7 @@ export_api! {
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
 		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Initiaties a http request given HTTP verb and the URL.
+		/// Initiates a http request given HTTP verb and the URL.
 		///
 		/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
 		/// Returns the id of newly started request.
