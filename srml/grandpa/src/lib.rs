@@ -97,14 +97,14 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 #[derive(Decode, Encode)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum StoredState<N> {
-	/// The current authority set is live and GRANDPA is enabled.
+	/// The current authority set is live, and GRANDPA is enabled.
 	Live,
 	/// There is a pending pause event which will be enacted at the given block
 	/// height.
 	PendingPause {
 		/// Block at which the intention to pause was scheduled.
 		scheduled_at: N,
-		/// Number of blocks after which the change is enacted.
+		/// Number of blocks after which the change will be enacted.
 		delay: N
 	},
 	/// The current GRANDPA authority set is paused.
@@ -114,7 +114,7 @@ pub enum StoredState<N> {
 	PendingResume {
 		/// Block at which the intention to resume was scheduled.
 		scheduled_at: N,
-		/// Number of blocks after which the change is enacted.
+		/// Number of blocks after which the change will be enacted.
 		delay: N,
 	},
 }
