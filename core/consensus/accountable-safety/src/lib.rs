@@ -51,7 +51,7 @@ where
 		let signing_payload = client.runtime_api()
 			.signing_payload(&block_id, encoded_account_id.clone(), encoded_call.to_vec())
 			.expect("Signing payload for report call should work; qed");
-		let signature = AnySignature::from(pair.sign(signing_payload.as_slice()));
+		let signature = pair.sign(signing_payload.as_slice()).encode();
 
 		let encoded_extrinsic = client.runtime_api()
 			.build_transaction(&block_id, signing_payload, encoded_account_id, signature)

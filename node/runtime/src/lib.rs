@@ -42,7 +42,7 @@ use client::{
 };
 use runtime_primitives::{
 	ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types,
-	AnySignature, generic::{UncheckedMortalExtrinsic, Era},
+	AnySignature, generic::{UncheckedMortalExtrinsic, Era}, KeyTypeId,
 	traits::BlockNumberToHash
 };
 use runtime_primitives::transaction_validity::TransactionValidity;
@@ -604,7 +604,7 @@ impl_runtime_apis! {
 			payload.encode()
 		}
 
-		fn build_transaction(signing_payload: Vec<u8>, encoded_account_id: Vec<u8>, signature: AnySignature) -> Vec<u8> {
+		fn build_transaction(signing_payload: Vec<u8>, encoded_account_id: Vec<u8>, signature: Vec<u8>) -> Vec<u8> {
 			let account_id: AccountId = Decode::decode(&mut encoded_account_id.as_slice())
 				.expect("we provide it so it should be possible to decode; qed");
 			let (nonce, call, era, genesis_hash): (u64, Call, Era, Hash) = Decode::decode(&mut signing_payload.as_slice())
@@ -613,10 +613,15 @@ impl_runtime_apis! {
 				nonce,
 				call,
 				Address::from(account_id),
-				signature,
+				signature.as_slice(),
 				era,
 			);
 			tx.encode()
+		}
+
+		fn possible_crypto() -> Vec<KeyTypeId> {
+			// TODO: implement
+			vec![]
 		}
 	}
 }
