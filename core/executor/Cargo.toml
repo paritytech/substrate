@@ -4,6 +4,10 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
+[[bench]]
+name = "bench"
+harness = false
+
 [dependencies]
 derive_more = "0.14.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
@@ -25,11 +29,15 @@ tiny-keccak = "1.4.2"
 
 [dev-dependencies]
 assert_matches = "1.1"
+criterion = "0.2"
 wabt = "~0.7.4"
 hex-literal = "0.2.0"
 runtime-test = { package = "substrate-runtime-test", path = "runtime-test" }
 substrate-client = { path = "../client" }
 substrate-offchain = { path = "../offchain/" }
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
+runtime-primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
+consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 
 [features]
 default = []
