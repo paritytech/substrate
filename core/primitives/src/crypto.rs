@@ -304,7 +304,7 @@ pub enum Ss58AddressFormat {
 	PolkadotAccountDirect,
 	/// Kusama Relay-chain, direct checksum, standard account (*25519).
 	KusamaAccountDirect,
-	/// Override
+	/// Override with a manually provided numeric value.
 	Override(u8),
 }
 
