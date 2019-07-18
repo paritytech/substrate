@@ -16,19 +16,20 @@
 
 //! Schema for slots in the aux-db.
 
-use super::{Encode, Decode};
+use log::info;
+use parity_codec::{Decode, Encode};
+
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use super::{Epoch, SlotNumber};
-use log::error;
-use std::u64;
-const BABE_CURRENT_EPOCH: &[u8] = b"babe current epoch";
-const BABE_NEXT_EPOCH: &[u8] = b"babe next epoch";
-const BABE_SLOT_NUMBER: &[u8] = b"babe slot number";
+use runtime_primitives::traits::Block as BlockT;
 
-fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
+use super::{EpochChanges, SharedEpochChanges};
+
+const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
+
+fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 	where
-		C: AuxStore,
+		B: AuxStore,
 		T: Decode,
 {
 	let corrupt = || ClientError::Backend(format!("BABE DB is corrupted.")).into();
@@ -38,56 +39,29 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Checks if an epoch is valid.
-pub fn check_epoch<C>(
-	backend: &C,
-	slot_now: u64,
-	epoch_under_test: &Epoch,
-) -> ClientResult<()> where	C: AuxStore,
-{
-	if slot_now == 0 {
-		// Genesis is trusted
-		return backend.insert_aux(
-			&[
-				(BABE_NEXT_EPOCH, epoch_under_test.encode().as_slice()),
-				(BABE_CURRENT_EPOCH, epoch_under_test.encode().as_slice()),
-				(BABE_SLOT_NUMBER, 0.encode().as_slice()),
-			],
-			&[],
-		)
-	}
-	let this_epoch: Epoch = load_decode(backend, BABE_CURRENT_EPOCH)?
-		.expect("we will always have a current epoch; qed");
-	let last_epoch_change: SlotNumber = load_decode(backend, BABE_SLOT_NUMBER)?.unwrap_or(0);
-	if epoch_under_test.epoch_index.checked_sub(this_epoch.epoch_index) != Some(1) {
-		return Err(ClientError::Backend(format!(
-			"Invalid BABE epoch: expected next epoch to be {:?}, got {:?}",
-			this_epoch.epoch_index.saturating_add(1),
-			epoch_under_test.epoch_index,
-		)))
-	}
-
-	let expected_slot_number =
-		this_epoch.duration.checked_add(last_epoch_change).unwrap_or_else(|| {
-			error!("BABE slot number overflow ― storage is corrupt!");
-			u64::MAX
+pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
+	backend: &B,
+) -> ClientResult<SharedEpochChanges<Block>> {
+	let epoch_changes = load_decode::<_, EpochChanges<Block>>(backend, BABE_EPOCH_CHANGES)?
+		.map(Into::into)
+		.unwrap_or_else(|| {
+			info!(target: "afg",
+				"Creating empty BABE epoch changes on what appears to be first startup."
+			);
+			SharedEpochChanges::new()
 		});
-	if slot_now < expected_slot_number {
-		return Err(ClientError::Backend(format!(
-			"Invalid BABE epoch: wrong slot for epoch change: expected {:?}, got {:?}",
-			expected_slot_number,
-			slot_now,
-		)))
-	}
-	// The first two epochs are identical by design.  Most clients will hardcode
-	// the state of the DB after this point.
-	let next_epoch = load_decode(backend, BABE_NEXT_EPOCH)?.unwrap_or_else(|| this_epoch.clone());
-	backend.insert_aux(
-		&[
-			(BABE_NEXT_EPOCH, epoch_under_test.encode().as_slice()),
-			(BABE_CURRENT_EPOCH, next_epoch.encode().as_slice()),
-			(BABE_SLOT_NUMBER, slot_now.encode().as_slice()),
-		],
-		&[],
+
+	Ok(epoch_changes)
+}
+
+pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
+	epoch_changes: &EpochChanges<Block>,
+	write_aux: F,
+) -> R where
+	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
+{
+	let encoded_epoch_changes = epoch_changes.encode();
+	write_aux(
+		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
 	)
 }

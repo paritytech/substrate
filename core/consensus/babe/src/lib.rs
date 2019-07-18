@@ -67,7 +67,7 @@ use client::{
 	BlockchainEvents,
 	CallExecutor, Client,
 	runtime_api::ApiExt,
-	error::Result as CResult,
+	error::Result as ClientResult,
 	backend::{AuxStore, Backend},
 };
 use fork_tree::ForkTree;
@@ -91,7 +91,7 @@ pub struct Config(slots::SlotDuration<BabeConfiguration>);
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<B: BlockT, C>(client: &C) -> CResult<Self>
+	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
@@ -456,7 +456,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let (epoch, pre_digest) = find_pre_digest::<B>(&header)?;
+	let (_, pre_digest) = find_pre_digest::<B>(&header)?;
 
 	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output } = pre_digest;
 
@@ -502,11 +502,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 					equivocation_proof.snd_header().hash(),
 				);
 			}
-			epoch
-				.as_ref()
-				.map(|e| aux_schema::check_epoch(client, slot_number, e))
-				.unwrap_or(Ok(()))
-				.map_err(|e| format!("{:?}", e))?;
+
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
 			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
@@ -845,6 +841,14 @@ impl<Block: BlockT> SharedEpochChanges<Block> {
 	}
 }
 
+impl<Block: BlockT> From<EpochChanges<Block>> for SharedEpochChanges<Block> {
+	fn from(epoch_changes: EpochChanges<Block>) -> Self {
+		SharedEpochChanges {
+			inner: Arc::new(Mutex::new(epoch_changes))
+		}
+	}
+}
+
 struct BabeBlockImport<B, E, Block: BlockT, RA> {
 	inner: BoxBlockImport<Block>,
 	client: Arc<Client<B, E, Block, RA>>,
@@ -875,7 +879,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 
 	fn import_block(
 		&mut self,
-		block: ImportBlock<Block>,
+		mut block: ImportBlock<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
@@ -946,12 +950,21 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 				}
 
 				// track the epoch change in the fork tree
+				// FIXME: handle reverts in case the block import below fails
 				epoch_changes.import(
 					hash,
 					number,
 					(epoch.epoch_index, slot_number + epoch.duration),
 					&is_descendent_of,
 				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+
+				crate::aux_schema::write_epoch_changes::<Block, _, _>(
+					&*epoch_changes,
+					|insert| block.auxiliary.extend(
+						insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+					)
+				);
+
 			} else {
 				return Err(
 					ConsensusError::ClientImport("Failed to decode epoch change digest".into())
@@ -980,9 +993,8 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<
+) -> ClientResult<
 		(BabeImportQueue<Block>, BabeLink, impl Future<Item = (), Error = ()>),
-		consensus_common::Error,
 	>
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -1001,8 +1013,9 @@ where
 		config,
 	};
 
-	// FIXME: load persisted
-	let epoch_changes = SharedEpochChanges::new();
+	#[allow(deprecated)]
+	let epoch_changes = aux_schema::load_epoch_changes(&**client.backend())?;
+
 	let is_descendent_of = |_: &H256, _: &H256| -> Result<bool, ConsensusError> { Ok(true) };
 
 	let block_import = Box::new(BabeBlockImport::new(
