@@ -1119,6 +1119,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
+		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
@@ -1133,6 +1134,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = Event;
+		type Error = Error;
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
@@ -1220,7 +1222,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>},
+			Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
 			Elections: elections::{Module, Call, Event<T>, Config<T>},
 		}
 	);

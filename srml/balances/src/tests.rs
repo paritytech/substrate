@@ -652,7 +652,7 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 2, 56),
-				mock::Error::system(system::Error::Other("vesting balance too high to send value")
+				mock::Error::system(system::Error::Other("vesting balance too high to send value"))
 			); // Account 1 cannot send more than vested amount
 		}
 	);

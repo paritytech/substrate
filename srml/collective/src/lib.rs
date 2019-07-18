@@ -414,6 +414,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
+		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	impl Trait<Instance1> for Test {

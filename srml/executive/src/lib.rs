@@ -682,7 +682,11 @@ mod tests {
 				));
 
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
-					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail);
+					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail(DispatchError {
+						module: 0,
+						error: 0,
+						message: Some("account liquidity restrictions prevent withdrawal")
+					}));
 					// but tx fee has been deducted. the transaction failed on transfer, not on fee.
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10);
 				} else {
