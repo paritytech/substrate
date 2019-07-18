@@ -233,6 +233,49 @@ mod tests {
 	}
 
 	#[test]
+	fn rolling_window_wrapped() {
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
+		|| {
+
+			// window length is u32::max_value should expire at session 24
+			assert_eq!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25).unwrap(), 1);
+
+			// `u32::max_value() - 25` sessions have been executed
+			RollingWindow::on_session_ending(u32::max_value(), 0);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 1);
+
+			for session in 0..24 {
+				RollingWindow::on_session_ending(session, session + 1);
+				assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 1);
+			}
+
+			// `u32::max_value` sessions have been executed should removed from the window
+			RollingWindow::on_session_ending(24, 25);
+			assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 0);
+		});
+	}
+
+	#[test]
+	fn bonding_period_expire_decoupled_from_rolling_window() {
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
+		|| {
+
+			let mut current_session = 0;
+
+			assert_eq!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).unwrap(), 1);
+			assert!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).is_err());
+
+			RollingWindow::on_session_ending(current_session, current_session + 1);
+			current_session += 1;
+
+			RollingWindow::on_bonding_duration_end();
+			assert_eq!(RollingWindow::report_misbehavior(Kind::One, H256::zero(), current_session).unwrap(), 2);
+		});
+	}
+
+	#[test]
 	fn macros() {
 		use rstd::marker::PhantomData;
 

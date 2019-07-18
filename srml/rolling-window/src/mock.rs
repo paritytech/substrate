@@ -65,6 +65,7 @@ pub enum Kind {
 	One,
 	Two,
 	Three,
+	Four,
 }
 
 impl WindowLength<u32> for Kind {
@@ -73,6 +74,7 @@ impl WindowLength<u32> for Kind {
 			Kind::One => &4,
 			Kind::Two => &3,
 			Kind::Three => &2,
+			Kind::Four => &u32::max_value(),
 		}
 	}
 }
