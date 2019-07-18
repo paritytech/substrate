@@ -2633,4 +2633,14 @@ pub(crate) mod tests {
 			b3.hash(),
 		);
 	}
+
+	#[test]
+	fn get_header_by_block_number_doesnt_panic() {
+		let client = test_client::new();
+
+		// backend uses u32 for block numbers, make sure we don't panic when
+		// trying to convert
+		let id = BlockId::<Block>::Number(72340207214430721);
+		client.header(&id).expect_err("invalid block number overflows u32");
+	}
 }
