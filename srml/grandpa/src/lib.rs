@@ -35,8 +35,9 @@ use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use parity_codec::{self as codec, Encode, Decode, Codec};
 
 use srml_support::{
-	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
-	Parameter, storage::StorageMap, traits::KeyOwnerProofSystem,
+	decl_event, decl_storage, decl_module, dispatch::Result, Parameter,
+	traits::KeyOwnerProofSystem,
+	storage::{StorageValue, StorageMap, EnumerableStorageMap}
 };
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId, Block},
@@ -151,8 +152,11 @@ decl_storage! {
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
+		/// A window of previous (closed) challenge sessions.
+		HistoricalChallengeSessions get(historical_challenge_sessions): map T::Hash => Option<()>;
+
 		/// Open challenge sessions.
-		ChallengeSessions get(challenge_sessions): map T::Hash => Option<StoredChallengeSession<T>>;
+		ChallengeSessions get(challenge_sessions): linked_map T::Hash => Option<StoredChallengeSession<T>>;
 
 		/// Pending challenges.
 		PendingChallenges get(pending_challenges): Vec<StoredPendingChallenge<T>>;
@@ -321,11 +325,13 @@ decl_module! {
 
 				// Mark previous challenge as answered.
 				if let Some(challenge_hash) = challenge.previous_challenge {
-					<ChallengeSessions<T>>::mutate(challenge_hash, |maybe_challenge| {
-						if let Some(challenge) = maybe_challenge {
-							challenge.answered = true;
+					if let Some(challenge_session) = <ChallengeSessions<T>>::get(challenge_hash) {
+						if challenge_session.rejecting_set_round >= round_s {
+							return Err("Answer to challenge must have lower round")
 						}
-					});
+					}
+
+					<ChallengeSessions<T>>::remove(challenge_hash);
 				}
 				
 				// Push a new pending challenge session.
@@ -336,6 +342,7 @@ decl_module! {
 
 				let mut pending_challenges = Self::pending_challenges();
 				pending_challenges.push(challenge_session);
+
 				<PendingChallenges<T>>::put(pending_challenges);
 			}
 		}
@@ -370,6 +377,16 @@ decl_module! {
 				}
 			}
 
+			// Clean expired challenges (and maybe slash).
+			for (block_hash, challenge_session) in <ChallengeSessions<T>>::enumerate() {
+				if block_number == challenge_session.scheduled_at + challenge_session.delay {
+
+					// TODO: Slash
+
+					<ChallengeSessions<T>>::remove(block_hash);
+				}
+			}
+
 			// Process pending challenges.
 			let pending_challenges = Self::pending_challenges();
 
@@ -391,14 +408,15 @@ decl_module! {
 					// (TODO: Is the block hash enough for an id?)
 					let challenge_hash = pending_challenge.challenge.finalized_block.0;
 					let reference_block = pending_challenge.challenge.finalized_block; 
+					let rejecting_set_round = pending_challenge.challenge.rejecting_set.round;
 
 					let challenge_session = StoredChallengeSession::<T> {
+						rejecting_set_round,
 						challenge_hash,
 						reference_block,
 						parent_hash,
 						scheduled_at,
 						delay,
-						answered: false,
 					};
 
 					<ChallengeSessions<T>>::insert(challenge_hash, challenge_session);

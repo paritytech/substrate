@@ -124,6 +124,8 @@ pub struct StoredPendingChallenge<H, N, Header> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct StoredChallengeSession<H, N> {
+	/// The round of the rejecting set votes.
+	pub rejecting_set_round: u64,
 	/// Reference block.
 	pub reference_block: (H, N),
 	/// The block number this was scheduled at.
@@ -134,6 +136,4 @@ pub struct StoredChallengeSession<H, N> {
 	pub delay: N,
 	/// The hash of the challenge.
 	pub challenge_hash: H,
-	/// If the challenge has been answered.
-	pub answered: bool,
 }
