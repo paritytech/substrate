@@ -895,7 +895,13 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		let slot_number = 3u64;
+		let slot_number = {
+			let (_, pre_digest) = find_pre_digest::<Block>(&block.header)
+				.expect("valid babe headers must contain a predigest; \
+						 header has been already verified; qed");
+			let BabePreDigest { slot_number, .. } = pre_digest;
+			slot_number
+		};
 
 		// returns a function for checking whether a block is a descendent of another
 		// consistent with querying client directly after importing the block.
