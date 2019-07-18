@@ -53,7 +53,7 @@ pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
-		validators: &[(AccountId, Ks)]
+		validators: &[(AccountId, Ks)],
 		_queued_validators: &[(AccountId, Ks)],
 	) {
 		SESSION.with(|x|
