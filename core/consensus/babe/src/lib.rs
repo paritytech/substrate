@@ -1124,7 +1124,7 @@ mod tests {
 		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{
-			let client = client.as_full().expect("only full clients are used in test");
+			let api = client.as_full().expect("only full clients are used in test");
 			trace!(target: "babe", "Creating a verifier");
 			let config = Config::get_or_compute(&*client)
 				.expect("slot duration available");
@@ -1136,7 +1136,7 @@ mod tests {
 			trace!(target: "babe", "Provider registered");
 
 			Arc::new(BabeVerifier {
-				client,
+				api,
 				inherent_data_providers,
 				config,
 				time_source: Default::default(),
