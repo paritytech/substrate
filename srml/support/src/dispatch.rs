@@ -1114,27 +1114,34 @@ macro_rules! decl_module {
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn dispatch_info(&self) -> $crate::dispatch::TransactionInfo {
-				let _weight = match self {
-					$(
-						$call_type::$fn_name($( ref $param_name ),*) =>
-							<dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&$weight,
-								($( $param_name, )*)
-							),
-					)*
-					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
-				};
-				let _class = match self {
-					$(
-						$call_type::$fn_name($( ref $param_name ),*) =>
-							<dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&$weight,
-								($( $param_name, )*)
-							),
-					)*
-					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
-				};
-				$crate::dispatch::TransactionInfo { weight: _weight, class: _class }
+				$(
+					if let $call_type::$fn_name($( ref $param_name ),*) = self {
+						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
+							&$weight,
+							($( $param_name, )*)
+						);
+						let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
+							&$weight,
+							($( $param_name, )*)
+						);
+						return $crate::dispatch::TransactionInfo { weight, class };
+					}
+					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
+				)*
+				// Defensive only: this function must have already returned at this point.
+				// all dispatchable function will have a weight which has the `::default`
+				// implementation of `WeightedTransaction`. Nonetheless, we create one if it does
+				// not exist.
+				let weight = <dyn $crate::dispatch::WeighData<_>>::weigh_data(
+					&$crate::dispatch::WeightedTransaction::default(),
+					()
+				);
+				let class = <dyn $crate::dispatch::ClassifyDispatch<_>>::classify_dispatch(
+					&$crate::dispatch::WeightedTransaction::default(),
+					()
+				);
+				$crate::dispatch::TransactionInfo { weight, class }
+
 			}
 		}
 

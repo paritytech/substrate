@@ -401,7 +401,7 @@ decl_module! {
 		// information to properly execute the transaction, whilst keeping the total load of the
 		// chain in a moderate rate.
 		//
-		// the _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
+		// The _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
 		// a set of traits, namely [`WeighData`] and [`ClassifyDispatch`]. The former conveys the
 		// weight (a numeric representation of pure execution time and difficulty) of the
 		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
