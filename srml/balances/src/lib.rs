@@ -164,7 +164,7 @@ use primitives::traits::{
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
 };
 use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::{TransactionInfo, Weight};
+use primitives::weights::{DispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -1197,7 +1197,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		info: TransactionInfo,
+		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<(), DispatchError> {
 		// pay any fees.
@@ -1215,7 +1215,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		info: TransactionInfo,
+		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
 		// check that they can pay all their fees.

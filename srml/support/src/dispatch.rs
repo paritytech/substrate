@@ -25,7 +25,7 @@ pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
-pub use sr_primitives::weights::{WeightedTransaction, DispatchInfo, TransactionInfo, WeighData,
+pub use sr_primitives::weights::{SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData,
 	ClassifyDispatch,
 	TransactionPriority
 };
@@ -586,7 +586,7 @@ macro_rules! decl_module {
 			{ $( $constants )* }
 			[ $( $dispatchables )* ]
 			$(#[doc = $doc_attr])*
-			#[weight = $crate::dispatch::WeightedTransaction::default()]
+			#[weight = $crate::dispatch::SimpleDispatchInfo::default()]
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
@@ -1110,10 +1110,10 @@ macro_rules! decl_module {
 		}
 
 		// Implement weight calculation function for Call
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::DispatchInfo
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetDispatchInfo
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn dispatch_info(&self) -> $crate::dispatch::TransactionInfo {
+			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				$(
 					if let $call_type::$fn_name($( ref $param_name ),*) = self {
 						let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
@@ -1124,23 +1124,23 @@ macro_rules! decl_module {
 							&$weight,
 							($( $param_name, )*)
 						);
-						return $crate::dispatch::TransactionInfo { weight, class };
+						return $crate::dispatch::DispatchInfo { weight, class };
 					}
 					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
 				)*
 				// Defensive only: this function must have already returned at this point.
 				// all dispatchable function will have a weight which has the `::default`
-				// implementation of `WeightedTransaction`. Nonetheless, we create one if it does
+				// implementation of `SimpleDispatchInfo`. Nonetheless, we create one if it does
 				// not exist.
 				let weight = <dyn $crate::dispatch::WeighData<_>>::weigh_data(
-					&$crate::dispatch::WeightedTransaction::default(),
+					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
 				let class = <dyn $crate::dispatch::ClassifyDispatch<_>>::classify_dispatch(
-					&$crate::dispatch::WeightedTransaction::default(),
+					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
-				$crate::dispatch::TransactionInfo { weight, class }
+				$crate::dispatch::DispatchInfo { weight, class }
 
 			}
 		}
@@ -1286,10 +1286,10 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}
-		impl $crate::dispatch::DispatchInfo for $call_type {
-			fn dispatch_info(&self) -> $crate::dispatch::TransactionInfo {
+		impl $crate::dispatch::GetDispatchInfo for $call_type {
+			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match self {
-					$( $call_type::$camelcase(call) => call.dispatch_info(), )*
+					$( $call_type::$camelcase(call) => call.get_dispatch_info(), )*
 				}
 			}
 		}
@@ -1596,7 +1596,7 @@ macro_rules! __check_reserved_fn_name {
 mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
-	use sr_primitives::weights::{TransactionInfo, DispatchClass};
+	use sr_primitives::weights::{DispatchInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;
@@ -1622,7 +1622,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = WeightedTransaction::Fixed(10)]
+			#[weight = SimpleDispatchInfo::FixedNormal(10)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1631,7 +1631,7 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = WeightedTransaction::Operational(5)]
+			#[weight = SimpleDispatchInfo::OperationalNormal(5)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
@@ -1774,18 +1774,18 @@ mod tests {
 	fn weight_should_attach_to_call_enum() {
 		// max weight. not dependent on input.
 		assert_eq!(
-			Call::<TraitImpl>::operational().dispatch_info(),
-			TransactionInfo { weight: 5, class: DispatchClass::Operational },
+			Call::<TraitImpl>::operational().get_dispatch_info(),
+			DispatchInfo { weight: 5, class: DispatchClass::OperationalNormal },
 		);
 		// default weight.
 		assert_eq!(
-			Call::<TraitImpl>::aux_0().dispatch_info(),
-			TransactionInfo { weight: 1, class: DispatchClass::User },
+			Call::<TraitImpl>::aux_0().get_dispatch_info(),
+			DispatchInfo { weight: 1, class: DispatchClass::User },
 		);
 		// custom basic
 		assert_eq!(
-			Call::<TraitImpl>::aux_3().dispatch_info(),
-			TransactionInfo { weight: 10, class: DispatchClass::User },
+			Call::<TraitImpl>::aux_3().get_dispatch_info(),
+			DispatchInfo { weight: 10, class: DispatchClass::User },
 		);
 	}
 }

@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::{IdentityLookup}, testing::Header, weights::{TransactionInfo, Weight}};
+use primitives::{traits::{IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
@@ -192,6 +192,6 @@ pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: Weight) -> TransactionInfo {
-	TransactionInfo { weight: w, ..Default::default() }
+pub fn info_from_weight(w: Weight) -> DispatchInfo {
+	DispatchInfo { weight: w, ..Default::default() }
 }

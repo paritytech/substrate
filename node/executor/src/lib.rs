@@ -82,8 +82,8 @@ mod tests {
 
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 		<TransactionBaseFee as Get<Balance>>::get() +
-		<TransactionByteFee as Get<Balance>>::get() *
-		(extrinsic.encode().len() as Balance)
+			<TransactionByteFee as Get<Balance>>::get() *
+			(extrinsic.encode().len() as Balance)
 	}
 
 	fn creation_fee() -> Balance {

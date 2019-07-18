@@ -22,7 +22,7 @@ use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
 	ValidateUnsigned
 };
-use crate::weights::{DispatchInfo, TransactionInfo};
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -57,7 +57,7 @@ where
 	}
 
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		info: TransactionInfo,
+		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
@@ -75,7 +75,7 @@ where
 	}
 
 	fn dispatch(self,
-		info: TransactionInfo,
+		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((id, extra)) = self.signed {
@@ -89,11 +89,11 @@ where
 	}
 }
 
-impl<AccountId, Call, Extra> DispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
 where
-	Call: DispatchInfo,
+	Call: GetDispatchInfo,
 {
-	fn dispatch_info(&self) -> TransactionInfo {
-		self.function.dispatch_info()
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
 	}
 }

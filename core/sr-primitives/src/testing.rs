@@ -24,7 +24,7 @@ use crate::traits::{
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
-use crate::weights::{DispatchInfo, TransactionInfo};
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -240,7 +240,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		_info: TransactionInfo,
+		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		TransactionValidity::Valid(Default::default())
@@ -249,7 +249,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		info: TransactionInfo,
+		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some(who) = self.0 {
@@ -263,10 +263,10 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	}
 }
 
-impl<Call: Encode, Extra: Encode> DispatchInfo for TestXt<Call, Extra> {
-	fn dispatch_info(&self) -> TransactionInfo {
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		TransactionInfo {
+		DispatchInfo {
 			weight: self.encode().len() as u32,
 			..Default::default()
 		}

@@ -18,18 +18,19 @@
 //!
 //! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute.
 //! `$x` can be any type that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
-//! default, All transactions are annotated with `#[weight = WeightedTransaction::default()]`.
+//! default, All transactions are annotated with `#[weight = SimpleDispatchInfo::default()]`.
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail
 //! if an invalid struct is passed in.
 
 pub use crate::transaction_validity::TransactionPriority;
+use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
 /// A broad range of dispatch types. This is only distinguishing normal, user-triggered transactions
-/// and anything beyond which serves a higher purpose to the system (`Operational`).
+/// and anything beyond which serves a higher purpose to the system (`OperationalNormal`).
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DispatchClass {
@@ -45,11 +46,13 @@ impl Default for DispatchClass {
 	}
 }
 
-impl From<WeightedTransaction> for DispatchClass {
-	fn from(tx: WeightedTransaction) -> Self {
+impl From<SimpleDispatchInfo> for DispatchClass {
+	fn from(tx: SimpleDispatchInfo) -> Self {
 		match tx {
-			WeightedTransaction::Operational(_) => DispatchClass::Operational,
-			WeightedTransaction::Fixed(_) => DispatchClass::User,
+			SimpleDispatchInfo::OperationalNormal(_) => DispatchClass::Operational,
+			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::User,
+			SimpleDispatchInfo::MaxNormal => DispatchClass::User,
+			SimpleDispatchInfo::FreeNormal => DispatchClass::User,
 		}
 	}
 }
@@ -57,7 +60,7 @@ impl From<WeightedTransaction> for DispatchClass {
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
 #[derive(Clone, Copy, Default)]
-pub struct TransactionInfo {
+pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,
 	/// Class of this transaction.
@@ -66,11 +69,11 @@ pub struct TransactionInfo {
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with it, using the
 /// `#[weight]` attribute.
-pub trait DispatchInfo {
-	/// Return a `TransactionInfo`, containing relevant information of this dispatch.
+pub trait GetDispatchInfo {
+	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
 	///
 	/// This is done independently of its encoded size.
-	fn dispatch_info(&self) -> TransactionInfo;
+	fn get_dispatch_info(&self) -> DispatchInfo;
 }
 
 /// Means of weighing some particular kind of data (`T`).
@@ -88,35 +91,48 @@ pub trait ClassifyDispatch<T> {
 /// Default type used with the `#[weight = x]` attribute in a substrate chain.
 ///
 /// A user may pass in any other type that implements the correct traits. If not, the `Default`
-/// implementation of [`WeightedTransaction`] is used.
+/// implementation of [`SimpleDispatchInfo`] is used.
 #[derive(Clone, Copy)]
-pub enum WeightedTransaction {
-	/// A fixed-weight transaction. No dependency on state or input.
-	Fixed(Weight),
-	/// An operational transaction. Still incurs a weight-fee but typically has a higher priority.
-	Operational(Weight),
+pub enum SimpleDispatchInfo {
+	/// A fixed-weight dispatch function. No dependency on state or input.
+	FixedNormal(Weight),
+	/// An operational dispatch function. Still incurs a weight-fee but typically has a higher
+	/// priority.
+	OperationalNormal(Weight),
+	/// A dispatch function with the maximum possible weight. This means:
+	///   - The weight-fee will be maximum possible, based on the system state.
+	///   - This transaction will also have a high priority (but not guaranteed to be included.)
+	///   - If included, no more _normal_ dispatches will be permitted in that block. Operational
+	///       dispatches might be included nonetheless.
+	MaxNormal,
+	/// Free. The transaction does not increase the total weight. This means:
+	///   - No weight-fee is charged.
+	///   - Block weight is not increased (very likely to be included, but not guaranteed).
+	FreeNormal,
 }
 
-impl<T> WeighData<T> for WeightedTransaction {
+impl<T> WeighData<T> for SimpleDispatchInfo {
 	fn weigh_data(&self, _: T) -> Weight {
 		match self {
-			WeightedTransaction::Fixed(w) => *w,
-			WeightedTransaction::Operational(w) => *w,
+			SimpleDispatchInfo::FixedNormal(w) => *w,
+			SimpleDispatchInfo::OperationalNormal(w) => *w,
+			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
+			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
 		}
 	}
 }
 
-impl<T> ClassifyDispatch<T> for WeightedTransaction {
+impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::from(*self)
 	}
 }
 
-impl Default for WeightedTransaction {
+impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// This implies that the weight is currently equal to 100, nothing more
 		// for all substrate transactions that do NOT explicitly annotate weight.
 		// TODO #2431 needs to be updated with proper max values.
-		WeightedTransaction::Fixed(1)
+		SimpleDispatchInfo::FixedNormal(1)
 	}
 }

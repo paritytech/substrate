@@ -255,7 +255,7 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
-use sr_primitives::weights::WeightedTransaction;
+use sr_primitives::weights::SimpleDispatchInfo;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -407,7 +407,7 @@ decl_module! {
 		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
 		//  means a larger transaction (less of which can be placed in a single block). See the
 		// `CheckWeight` signed extension struct in the `system` module for more information.
-		#[weight = WeightedTransaction::Fixed(10)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
