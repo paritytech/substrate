@@ -1066,8 +1066,7 @@ mod tests {
 	use super::generic::DigestItem;
 	use client::BlockchainEvents;
 	use test_client;
-	use futures::{Async, stream::Stream as _};
-	use futures03::{StreamExt as _, TryStreamExt as _};
+	use futures::Async;
 	use log::debug;
 	use std::time::Duration;
 	type Item = generic::DigestItem<Hash>;
@@ -1126,7 +1125,7 @@ mod tests {
 		{
 			let api = client.as_full().expect("only full clients are used in test");
 			trace!(target: "babe", "Creating a verifier");
-			let config = Config::get_or_compute(&*client)
+			let config = Config::get_or_compute(&*api)
 				.expect("slot duration available");
 			let inherent_data_providers = InherentDataProviders::new();
 			register_babe_inherent_data_provider(
