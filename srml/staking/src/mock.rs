@@ -54,7 +54,7 @@ impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
 		validators: &[(AccountId, Ks)]
-		_queued_validators: &[(u64, T)],
+		_queued_validators: &[(AccountId, Ks)],
 	) {
 		SESSION.with(|x|
 			*x.borrow_mut() = (validators.iter().map(|x| x.0.clone()).collect(), HashSet::new())
