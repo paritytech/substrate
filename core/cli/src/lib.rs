@@ -77,6 +77,7 @@ const NODE_KEY_SECP256K1_FILE: &str = "secret";
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
 pub struct VersionInfo {
 	/// Implemtation name.
 	pub name: &'static str,
@@ -194,7 +195,7 @@ pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
 	args: I,
 	exit: E,
 	run_service: RS,
-) -> error::Result<Option<CC>>
+) -> error::Result<Option<(CC, S, E, VersionInfo)>>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
@@ -240,9 +241,11 @@ where
 			purge_chain::<F, _>(params, spec_factory, version).map(|_| None),
 		params::CoreParams::Revert(params) =>
 			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreParams::Custom(params) => Ok(Some(params)),
+		params::CoreParams::Custom(params) => Ok(Some((params, spec_factory, exit, version.to_owned()))),
 	}
 }
+
+//pub struct Custom
 
 /// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
 /// of an optional network config storage directory.
