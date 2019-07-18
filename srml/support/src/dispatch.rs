@@ -1775,7 +1775,7 @@ mod tests {
 		// max weight. not dependent on input.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::OperationalNormal },
+			DispatchInfo { weight: 5, class: DispatchClass::Operational },
 		);
 		// default weight.
 		assert_eq!(
