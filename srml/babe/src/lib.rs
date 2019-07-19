@@ -188,7 +188,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	}
 }
 
-impl IsMember<T::AuthorityId> for Module<T> {
+impl<T> IsMember<T::AuthorityId> for Module<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()
 			.iter()
