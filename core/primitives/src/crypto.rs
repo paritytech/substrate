@@ -304,8 +304,8 @@ pub enum Ss58AddressFormat {
 	PolkadotAccountDirect,
 	/// Kusama Relay-chain, direct checksum, standard account (*25519).
 	KusamaAccountDirect,
-	/// Override with a manually provided numeric value.
-	Override(u8),
+	/// Use a manually provided numeric value.
+	Custom(u8),
 }
 
 #[cfg(feature = "std")]
@@ -314,8 +314,8 @@ impl From<Ss58AddressFormat> for u8 {
 		match x {
 			Ss58AddressFormat::SubstrateAccountDirect => 42,
 			Ss58AddressFormat::PolkadotAccountDirect => 0,
-			Ss58AddressFormat::KusamaAccountDirect => 4,
-			Ss58AddressFormat::Override(n) => n,
+			Ss58AddressFormat::KusamaAccountDirect => 2,
+			Ss58AddressFormat::Custom(n) => n,
 		}
 	}
 }
@@ -341,19 +341,19 @@ impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
 			"substrate" => Ok(Ss58AddressFormat::SubstrateAccountDirect),
 			"polkadot" => Ok(Ss58AddressFormat::PolkadotAccountDirect),
 			"kusama" => Ok(Ss58AddressFormat::KusamaAccountDirect),
-			a => a.parse::<u8>().map(Ss58AddressFormat::Override).map_err(|_| ()),
+			a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
 		}
 	}
 }
 
 #[cfg(feature = "std")]
-impl From<Ss58AddressFormat> for &'static str {
-	fn from(x: Ss58AddressFormat) -> &'static str {
+impl From<Ss58AddressFormat> for String {
+	fn from(x: Ss58AddressFormat) -> String {
 		match x {
-			Ss58AddressFormat::SubstrateAccountDirect => "substrate",
-			Ss58AddressFormat::PolkadotAccountDirect => "polkadot",
-			Ss58AddressFormat::KusamaAccountDirect => "kusama",
-			Ss58AddressFormat::Override(_) => "(override)",
+			Ss58AddressFormat::SubstrateAccountDirect => "substrate".into(),
+			Ss58AddressFormat::PolkadotAccountDirect => "polkadot".into(),
+			Ss58AddressFormat::KusamaAccountDirect => "kusama".into(),
+			Ss58AddressFormat::Custom(x) => x.to_string(),
 		}
 	}
 }
