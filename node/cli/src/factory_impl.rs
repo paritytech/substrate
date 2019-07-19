@@ -35,7 +35,7 @@ use inherents::InherentData;
 use timestamp;
 use finality_tracker;
 
-// TODO get via api: <timestamp::Module<T>>::minimum_period(). See #2587.
+// TODO get via api: <T as timestamp::Trait>::MinimumPeriod::get(). See #2587.
 const MINIMUM_PERIOD: u64 = 99;
 
 pub struct FactoryState<N> {
@@ -50,6 +50,17 @@ pub struct FactoryState<N> {
 }
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
+
+impl<Number> FactoryState<Number> {
+	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
+		(
+			system::CheckEra::from(Era::mortal(256, phase)),
+			system::CheckNonce::from(index),
+			system::CheckWeight::from(),
+			balances::TakeFees::from(0)
+		)
+	}
+}
 
 impl RuntimeAdapter for FactoryState<Number> {
 	type AccountId = node_primitives::AccountId;
@@ -127,19 +138,16 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-		let era = system::CheckEra::from(Era::mortal(256, phase));
-		let check_nonce = system::CheckNonce::from(index);
-		let take_fees = balances::TakeFees::from(0);
 
 		sign::<service::Factory, Self>(CheckedExtrinsic {
-			signed: Some((sender.clone(), (era, (check_nonce, take_fees)))),
+			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
 				BalancesCall::transfer(
 					indices::address::Address::Id(destination.clone().into()),
 					(*amount).into()
 				)
 			)
-		}, key, (prior_block_hash.clone(), ((), ())))
+		}, key, (prior_block_hash.clone(), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {

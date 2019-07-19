@@ -254,6 +254,7 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Change the value at the given key in the storage or remove the entry.
+	// The value length must not exceed the maximum defined by the Contracts module parameters.
 	//
 	// - key_ptr: pointer into the linear
 	//   memory where the location of the requested value is placed.
@@ -263,6 +264,9 @@ define_env!(Env, <E: Ext>,
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
+		if value_non_null != 0 && ctx.ext.max_value_size() < value_len {
+			return Err(sandbox::HostError);
+		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value =
@@ -271,7 +275,7 @@ define_env!(Env, <E: Ext>,
 			} else {
 				None
 			};
-		ctx.ext.set_storage(key, value);
+		ctx.ext.set_storage(key, value).map_err(|_| sandbox::HostError)?;
 
 		Ok(())
 	},

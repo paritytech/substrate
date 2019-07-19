@@ -73,6 +73,7 @@ mod tests {
 	use primitives::{H256, Blake2Hasher};
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use runtime_primitives::weights::Weight;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -85,6 +86,8 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -97,6 +100,8 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	impl Trait for Test {
 		type Event = ();

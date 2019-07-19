@@ -87,6 +87,8 @@ impl_outer_origin!{
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -99,6 +101,8 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 parameter_types! {
 	pub const TransferFee: u64 = 0;
@@ -140,9 +144,13 @@ impl session::historical::Trait for Test {
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SessionsPerEra: session::SessionIndex = 3;
@@ -277,10 +285,6 @@ impl ExtBuilder {
 			current_session_reward: self.reward,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
-
-		let _ = timestamp::GenesisConfig::<Test>{
-			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 
 		let _ = session::GenesisConfig::<Test> {

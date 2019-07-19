@@ -25,6 +25,7 @@ use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
+use crate::weights::DispatchInfo;
 pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -752,6 +753,7 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 /// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
 /// cannot be more concrete because it's designed to work reasonably well over a broad range of
 /// possible transaction types.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum DispatchError {
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
@@ -825,81 +827,105 @@ pub trait SignedExtension:
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_weight: crate::weights::Weight,
+		_info: DispatchInfo,
+		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a signed transaction.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> { self.validate(who, weight).map(|_| ()) }
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<(), DispatchError> { self.validate(who, info, len).map(|_| ()) }
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
 	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
 	/// validating unsigned transactions.
 	fn validate_unsigned(
-		_weight: crate::weights::Weight,
+		_info: DispatchInfo,
+		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> { Self::validate_unsigned(weight).map(|_| ()) }
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
 }
 
-impl<
-	AccountId,
-	A: SignedExtension<AccountId=AccountId>,
-	B: SignedExtension<AccountId=AccountId>,
-> SignedExtension for (A, B) {
-	type AccountId = AccountId;
-	type AdditionalSigned = (A::AdditionalSigned, B::AdditionalSigned);
+macro_rules! tuple_impl_indexed {
+	($first:ident, $($rest:ident,)+ ; $first_index:tt, $($rest_index:tt,)+) => {
+		tuple_impl_indexed!([$first] [$($rest)+] ; [$first_index,] [$($rest_index,)+]);
+	};
+	([$($direct:ident)+] ; [$($index:tt,)+]) => {
+		impl<
+			AccountId,
+			$($direct: SignedExtension<AccountId=AccountId>),+
+		> SignedExtension for ($($direct),+,) {
+			type AccountId = AccountId;
+			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+				Ok(( $(self.$index.additional_signed()?,)+ ))
+			}
+			fn validate(
+				&self,
+				who: &Self::AccountId,
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info, len)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch(
+				self,
+				who: &Self::AccountId,
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<(), DispatchError> {
+				$(self.$index.pre_dispatch(who, info, len)?;)+
+				Ok(())
+			}
+			fn validate_unsigned(
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$($direct::validate_unsigned(info, len)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch_unsigned(
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<(), DispatchError> {
+				$($direct::pre_dispatch_unsigned(info, len)?;)+
+				Ok(())
+			}
+		}
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
-		Ok((self.0.additional_signed()?, self.1.additional_signed()?))
-	}
-
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<ValidTransaction, DispatchError> {
-		let a = self.0.validate(who, weight)?;
-		let b = self.1.validate(who, weight)?;
-		Ok(a.combine_with(b))
-	}
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> {
-		self.0.pre_dispatch(who, weight)?;
-		self.1.pre_dispatch(who, weight)?;
-		Ok(())
-	}
-	fn validate_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<ValidTransaction, DispatchError> {
-		let a = A::validate_unsigned(weight)?;
-		let b = B::validate_unsigned(weight)?;
-		Ok(a.combine_with(b))
-	}
-	fn pre_dispatch_unsigned(
-		weight: crate::weights::Weight,
-	) -> Result<(), DispatchError> {
-		A::pre_dispatch_unsigned(weight)?;
-		B::pre_dispatch_unsigned(weight)?;
-		Ok(())
-	}
+	};
+	([$($direct:ident)+] [] ; [$($index:tt,)+] []) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+	};
+	(
+		[$($direct:ident)+] [$first:ident $($rest:ident)*]
+		;
+		[$($index:tt,)+] [$first_index:tt, $($rest_index:tt,)*]
+	) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+		tuple_impl_indexed!([$($direct)+ $first] [$($rest)*] ; [$($index,)+ $first_index,] [$($rest_index,)*]);
+	};
 }
 
-/// To be used only for testing.
+// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths.
+#[allow(non_snake_case)]
+tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
+
+/// Only for base bone testing when you don't care about signed extensions at all.\
 #[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
-	fn additional_signed(&self) -> result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -920,13 +946,15 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
-		weight: crate::weights::Weight
+		info: DispatchInfo,
+		len: usize,
 	) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		weight: crate::weights::Weight
+		info: DispatchInfo,
+		len: usize,
 	) -> Result<DispatchResult, DispatchError>;
 }
 

@@ -9,7 +9,7 @@ client = { package = "substrate-client", path = "../client" }
 client-db = { package = "substrate-client-db", path = "../client/db", features = ["test-helpers"] }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 executor = { package = "substrate-executor", path = "../executor" }
-futures = { version = "0.1.27" }
+futures-preview = "0.3.0-alpha.17"
 hash-db = "0.14.0"
 keyring = { package = "substrate-keyring", path = "../keyring" }
 parity-codec = "4.1.1"

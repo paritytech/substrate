@@ -18,7 +18,7 @@ use futures::prelude::*;
 use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
 use rand::seq::IteratorRandom;
-use std::{collections::HashMap, collections::HashSet, iter};
+use std::{collections::HashMap, collections::HashSet, iter, pin::Pin, task::Poll};
 use substrate_peerset::{IncomingIndex, Message, PeersetConfig, Peerset};
 
 #[test]
@@ -54,7 +54,7 @@ fn test_once() {
 		out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 	});
 
-	tokio::runtime::current_thread::Runtime::new().unwrap().block_on(futures::future::poll_fn(move || -> Result<_, ()> {
+	futures::executor::block_on(futures::future::poll_fn(move |cx| {
 		// List of nodes the user of `peerset` assumes it's connected to. Always a subset of
 		// `known_nodes`.
 		let mut connected_nodes = HashSet::<PeerId>::new();
@@ -71,20 +71,20 @@ fn test_once() {
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
 			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
 				// If we generate 0, poll the peerset.
-				0 => match peerset.poll().unwrap() {
-					Async::Ready(Some(Message::Connect(id))) => {
+				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
+					Poll::Ready(Some(Message::Connect(id))) => {
 						if let Some(id) = incoming_nodes.iter().find(|(_, v)| **v == id).map(|(&id, _)| id) {
 							incoming_nodes.remove(&id);
 						}
 						assert!(connected_nodes.insert(id));
 					}
-					Async::Ready(Some(Message::Drop(id))) => { connected_nodes.remove(&id); }
-					Async::Ready(Some(Message::Accept(n))) =>
+					Poll::Ready(Some(Message::Drop(id))) => { connected_nodes.remove(&id); }
+					Poll::Ready(Some(Message::Accept(n))) =>
 						assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap())),
-					Async::Ready(Some(Message::Reject(n))) =>
+					Poll::Ready(Some(Message::Reject(n))) =>
 						assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap())),
-					Async::Ready(None) => panic!(),
-					Async::NotReady => {}
+					Poll::Ready(None) => panic!(),
+					Poll::Pending => {}
 				}
 
 				// If we generate 1, discover a new node.
@@ -133,6 +133,6 @@ fn test_once() {
 			}
 		}
 
-		Ok(Async::Ready(()))
-	})).unwrap();
+		Poll::Ready(())
+	}));
 }

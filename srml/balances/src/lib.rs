@@ -156,13 +156,15 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance, ReservableCurrency
+	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
-use srml_support::{dispatch::Result, traits::Get};
-use primitives::{transaction_validity::TransactionPriority, traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating, Bounded, SignedExtension
-}};
+use srml_support::dispatch::Result;
+use primitives::traits::{
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
+	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
+};
+use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
+use primitives::weights::DispatchInfo;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -277,20 +279,26 @@ decl_event!(
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct VestingSchedule<Balance> {
+pub struct VestingSchedule<Balance, BlockNumber> {
 	/// Locked amount at genesis.
-	pub offset: Balance,
-	/// Amount that gets unlocked every block from genesis.
+	pub locked: Balance,
+	/// Amount that gets unlocked every block after `starting_block`.
 	pub per_block: Balance,
+	/// Starting block for unlocking(vesting).
+	pub starting_block: BlockNumber,
 }
 
-impl<Balance: SimpleArithmetic + Copy> VestingSchedule<Balance> {
+impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> VestingSchedule<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
-	pub fn locked_at<BlockNumber>(&self, n: BlockNumber) -> Balance
+	pub fn locked_at(&self, n: BlockNumber) -> Balance
 		where Balance: From<BlockNumber>
 	{
-		if let Some(x) = Balance::from(n).checked_mul(&self.per_block) {
-			self.offset.max(x) - x
+		// Number of blocks that count toward vesting
+		// Saturating to 0 when n < starting_block
+		let vested_block_count = n.saturating_sub(self.starting_block);
+		// Return amount that is still locked in vesting
+		if let Some(x) = Balance::from(vested_block_count).checked_mul(&self.per_block) {
+			self.locked.max(x) - x
 		} else {
 			Zero::zero()
 		}
@@ -315,23 +323,30 @@ decl_storage! {
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
-			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
-				let begin = <T::Balance as From<T::BlockNumber>>::from(begin);
+			// Generate initial vesting configuration
+			// * who - Account which we are generating vesting configuration for
+			// * begin - Block when the account will start to vest
+			// * length - Number of blocks from `begin` until fully vested
+			// * liquid - Number of units which can be spent before vesting begins
+			config.vesting.iter().filter_map(|&(ref who, begin, length, liquid)| {
 				let length = <T::Balance as From<T::BlockNumber>>::from(length);
 
 				config.balances.iter()
 					.find(|&&(ref w, _)| w == who)
 					.map(|&(_, balance)| {
-						// <= begin it should be >= balance
-						// >= begin+length it should be <= 0
+						// Total genesis `balance` minus `liquid` equals funds locked for vesting
+						let locked = balance.saturating_sub(liquid);
+						// Number of units unlocked per block after `begin`
+						let per_block = locked / length.max(primitives::traits::One::one());
 
-						let per_block = balance / length.max(primitives::traits::One::one());
-						let offset = begin * per_block + balance;
-
-						(who.clone(), VestingSchedule { offset, per_block })
+						(who.clone(), VestingSchedule {
+							locked: locked,
+							per_block: per_block,
+							starting_block: begin
+						})
 					})
 			}).collect::<Vec<_>>()
-		}): map T::AccountId => Option<VestingSchedule<T::Balance>>;
+		}): map T::AccountId => Option<VestingSchedule<T::Balance, T::BlockNumber>>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -366,7 +381,8 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
+		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, T::Balance)>;
+		// ^^ begin, length, amount liquid at genesis
 	}
 }
 
@@ -471,7 +487,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
 			Self::free_balance(who)
-				.min(v.locked_at::<T::BlockNumber>(<system::Module<T>>::block_number()))
+				.min(v.locked_at(<system::Module<T>>::block_number()))
 		} else {
 			Zero::zero()
 		}
@@ -747,6 +763,8 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Header = T::Header;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
+	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type MaximumBlockLength = T::MaximumBlockLength;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -1135,11 +1153,37 @@ where
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)] T::Balance);
 
-#[cfg(feature = "std")]
 impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	/// utility constructor. Used only in client/factory code.
+	#[cfg(feature = "std")]
 	pub fn from(fee: T::Balance) -> Self {
 		Self(fee)
+	}
+
+	/// Compute the final fee value for a particular transaction.
+	///
+	/// The final fee is composed of:
+	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
+	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
+	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
+	///      and the time it consumes.
+	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
+	///      transactions can have a tip.
+	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
+		// length fee
+		let len_fee = if info.pay_length_fee() {
+			let len = T::Balance::from(len as u32);
+			let base = T::TransactionBaseFee::get();
+			let byte = T::TransactionByteFee::get();
+			base.saturating_add(byte.saturating_mul(len))
+		} else {
+			Zero::zero()
+		};
+
+		// weight fee
+		let _weight_fee = T::Balance::from(0); // TODO: should be weight_and_size_to_fee(weight, _len) #2854
+
+		len_fee.saturating_add(_weight_fee).saturating_add(tip)
 	}
 }
 
@@ -1150,34 +1194,30 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 	}
 }
 
-use primitives::traits::{DispatchError, SaturatedConversion};
-use primitives::transaction_validity::ValidTransaction;
-use primitives::weights::Weight;
-
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
-
 	type AdditionalSigned = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		weight: Weight,
+		info: DispatchInfo,
+		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
-		let fee_x = T::Balance::from(weight);
-		// TODO: should be weight_to_fee(weight)
-		let fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * fee_x;
-		let fee = fee + self.0.clone();
+		// pay any fees.
+		let fee = Self::compute_fee(len, info, self.0);
 		let imbalance = <Module<T, I>>::withdraw(
 			who,
-			fee.clone(),
+			fee,
 			WithdrawReason::TransactionPayment,
-			ExistenceRequirement::KeepAlive
+			ExistenceRequirement::KeepAlive,
 		).map_err(|_| DispatchError::Payment)?;
 		T::TransactionPayment::on_unbalanced(imbalance);
 
 		let mut r = ValidTransaction::default();
+		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
+		// will be a bit more than setting the priority to tip. For now, this is enough.
 		r.priority = fee.saturated_into::<TransactionPriority>();
 		Ok(r)
 	}

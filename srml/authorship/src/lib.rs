@@ -337,6 +337,8 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 
 	impl system::Trait for Test {
@@ -350,6 +352,8 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 
 	impl Trait for Test {
@@ -543,7 +547,6 @@ mod tests {
 			// old uncles can't get in.
 			{
 				assert_eq!(System::block_number(), 8);
-				assert_eq!(<Test as Trait>::UncleGenerations::get(), 5);
 
 				let gen_2 = seal_header(
 					create_header(2, canon_chain.canon_hash(1), [3; 32].into()),

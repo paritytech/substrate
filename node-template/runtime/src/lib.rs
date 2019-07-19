@@ -17,7 +17,7 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -33,7 +33,6 @@ pub use runtime_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
@@ -113,6 +112,8 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
+	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -136,6 +137,10 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
+	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
+	type MaximumBlockWeight = MaximumBlockWeight;
+	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl aura::Trait for Runtime {
@@ -155,10 +160,14 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
 impl timestamp::Trait for Runtime {
 	/// A timestamp: seconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
+	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -207,7 +216,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
@@ -228,7 +237,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
-pub type SignedExtra = (system::CheckNonce<Runtime>, balances::TakeFees<Runtime>);
+pub type SignedExtra = (system::CheckNonce<Runtime>, system::CheckWeight<Runtime>, balances::TakeFees<Runtime>);
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, AccountSignature, SignedExtra>;
 /// Extrinsic type that has already been checked.

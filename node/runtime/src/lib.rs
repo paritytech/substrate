@@ -36,6 +36,7 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use runtime_primitives::transaction_validity::TransactionValidity;
+use runtime_primitives::weights::Weight;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
 };
@@ -69,8 +70,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 109,
-	impl_version: 110,
+	spec_version: 113,
+	impl_version: 114,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -111,6 +112,8 @@ pub const DAYS: Moment = HOURS * 24;
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
+	pub const MaximumBlockWeight: Weight = 4 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -124,6 +127,8 @@ impl system::Trait for Runtime {
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl aura::Trait for Runtime {
@@ -161,9 +166,13 @@ impl balances::Trait for Runtime {
 	type TransactionByteFee = TransactionByteFee;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = SECS_PER_BLOCK / 2;
+}
 impl timestamp::Trait for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = Aura;
+	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -337,21 +346,11 @@ impl treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const SignedClaimHandicap: BlockNumber = 2;
-	pub const TombstoneDeposit: Balance = 16;
-	pub const StorageSizeOffset: u32 = 8;
-	pub const RentByteFee: Balance = 4;
-	pub const RentDepositOffset: Balance = 1000;
-	pub const SurchargeReward: Balance = 150;
 	pub const ContractTransferFee: Balance = 1 * CENTS;
 	pub const ContractCreationFee: Balance = 1 * CENTS;
 	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
 	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const ContractFee: Balance = 1 * CENTS;
-	pub const CallBaseFee: Gas = 1000;
-	pub const CreateBaseFee: Gas = 1000;
-	pub const MaxDepth: u32 = 1024;
-	pub const BlockGasLimit: Gas = 10_000_000;
 }
 
 impl contracts::Trait for Runtime {
@@ -362,21 +361,22 @@ impl contracts::Trait for Runtime {
 	type ComputeDispatchFee = contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
-	type SignedClaimHandicap = SignedClaimHandicap;
-	type TombstoneDeposit = TombstoneDeposit;
-	type StorageSizeOffset = StorageSizeOffset;
-	type RentByteFee = RentByteFee;
-	type RentDepositOffset = RentDepositOffset;
-	type SurchargeReward = SurchargeReward;
+	type SignedClaimHandicap = contracts::DefaultSignedClaimHandicap;
+	type TombstoneDeposit = contracts::DefaultTombstoneDeposit;
+	type StorageSizeOffset = contracts::DefaultStorageSizeOffset;
+	type RentByteFee = contracts::DefaultRentByteFee;
+	type RentDepositOffset = contracts::DefaultRentDepositOffset;
+	type SurchargeReward = contracts::DefaultSurchargeReward;
 	type TransferFee = ContractTransferFee;
 	type CreationFee = ContractCreationFee;
 	type TransactionBaseFee = ContractTransactionBaseFee;
 	type TransactionByteFee = ContractTransactionByteFee;
 	type ContractFee = ContractFee;
-	type CallBaseFee = CallBaseFee;
-	type CreateBaseFee = CreateBaseFee;
-	type MaxDepth = MaxDepth;
-	type BlockGasLimit = BlockGasLimit;
+	type CallBaseFee = contracts::DefaultCallBaseFee;
+	type CreateBaseFee = contracts::DefaultCreateBaseFee;
+	type MaxDepth = contracts::DefaultMaxDepth;
+	type MaxValueSize = contracts::DefaultMaxValueSize;
+	type BlockGasLimit = contracts::DefaultBlockGasLimit;
 }
 
 impl sudo::Trait for Runtime {
@@ -407,7 +407,7 @@ construct_runtime!(
 	{
 		System: system::{Module, Call, Storage, Config, Event},
 		Aura: aura::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
-		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
 		Balances: balances,
@@ -436,7 +436,12 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
-pub type SignedExtra = (system::CheckEra<Runtime>, (system::CheckNonce<Runtime>, balances::TakeFees<Runtime>));
+pub type SignedExtra = (
+	system::CheckEra<Runtime>,
+	system::CheckNonce<Runtime>,
+	system::CheckWeight<Runtime>,
+	balances::TakeFees<Runtime>
+);
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// Extrinsic type that has already been checked.

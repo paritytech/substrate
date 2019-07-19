@@ -171,7 +171,6 @@ construct_service_factory! {
 					Box::new(block_import),
 					Some(Box::new(justification_import)),
 					None,
-					None,
 					client,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
@@ -194,10 +193,9 @@ construct_service_factory! {
 					Box::new(block_import),
 					None,
 					Some(Box::new(finality_proof_import)),
-					Some(finality_proof_request_builder),
 					client,
 					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+				).map(|q| (q, finality_proof_request_builder)).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
@@ -218,7 +216,7 @@ mod tests {
 	use aura::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
-	use node_runtime::{BalancesCall, Call, CENTS, UncheckedExtrinsic};
+	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
 	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
@@ -304,7 +302,7 @@ mod tests {
 				.create_inherent_data()
 				.expect("Creates inherent data.");
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
-			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
+			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
@@ -314,7 +312,7 @@ mod tests {
 			});
 
 			let mut digest = Digest::<H256>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
+			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
@@ -357,12 +355,14 @@ mod tests {
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-			let era = Era::immortal();
-			let check_nonce = system::CheckNonce::from(index);
-			let take_fees = balances::TakeFees::from(0);
-			let extra = (check_nonce, take_fees);
 
-			let raw_payload = (function, era, genesis_hash, extra.clone());
+			let check_era = system::CheckEra::from(Era::Immortal);
+			let check_nonce = system::CheckNonce::from(index);
+			let check_weight = system::CheckWeight::from();
+			let take_fees = balances::TakeFees::from(0);
+			let extra = (check_era, check_nonce, check_weight, take_fees);
+
+			let raw_payload = (function, extra.clone(), genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
@@ -372,7 +372,6 @@ mod tests {
 				raw_payload.0,
 				from.into(),
 				signature.into(),
-				era,
 				extra,
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();

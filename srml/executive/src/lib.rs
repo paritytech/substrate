@@ -86,12 +86,10 @@ use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::Weighable;
+use primitives::weights::GetDispatchInfo;
 
 mod internal {
 	use primitives::traits::DispatchError;
-
-	pub const MAX_TRANSACTIONS_WEIGHT: u32 = 4 * 1024 * 1024;
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -143,7 +141,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -162,7 +160,7 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + Weighable,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -283,18 +281,11 @@ where
 			<system::Module<System>>::note_extrinsic(encoded);
 		}
 
-		// Check the weight of the block if that extrinsic is applied.
-		let weight = xt.weight(encoded_len);
-
-		// TODO: Consider placing into a transaction extension.
-		if <system::Module<System>>::all_extrinsics_weight() + weight > internal::MAX_TRANSACTIONS_WEIGHT {
-			return Err(internal::ApplyError::FullBlock);
-		}
-
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let r = Applyable::dispatch(xt, weight)
+		let dispatch_info = xt.get_dispatch_info();
+		let r = Applyable::dispatch(xt, dispatch_info, encoded_len)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -336,8 +327,7 @@ where
 		const UNKNOWN_ERROR: i8 = -127;
 		const INVALID_INDEX: i8 = -10;
 
-		let encoded_len = uxt.encode().len();
-
+		let encoded_len = uxt.using_encoded(|d| d.len());
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -349,9 +339,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let weight = xt.weight(encoded_len);
-
-		xt.validate::<UnsignedValidator>(weight)
+		let dispatch_info = xt.get_dispatch_info();
+		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -366,10 +355,11 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::generic::Era;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
+	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason, Get};
 	use system;
 	use hex_literal::hex;
 
@@ -389,6 +379,8 @@ mod tests {
 	pub struct Runtime;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -401,6 +393,8 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -435,12 +429,22 @@ mod tests {
 		}
 	}
 
-	type SignedExtra = (system::CheckNonce<Runtime>, balances::TakeFees<Runtime>);
+	type SignedExtra = (
+		system::CheckEra<Runtime>,
+		system::CheckNonce<Runtime>,
+		system::CheckWeight<Runtime>,
+		balances::TakeFees<Runtime>
+	);
 	type TestXt = primitives::testing::TestXt<Call<Runtime>, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
-		(system::CheckNonce::from(nonce), balances::TakeFees::from(fee))
+		(
+			system::CheckEra::from(Era::Immortal),
+			system::CheckNonce::from(nonce),
+			system::CheckWeight::from(),
+			balances::TakeFees::from(fee)
+		)
 	}
 
 	#[test]
@@ -546,55 +550,60 @@ mod tests {
 
 	#[test]
 	fn block_weight_limit_enforced() {
-		let run_test = |should_fail: bool| {
-			let mut t = new_test_ext();
-			let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(0, 0));
-			let xt2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(1, 0));
-			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_WEIGHT - 1) as usize } else { encoded.len() };
-			let encoded_len = encoded.len() as u32;
-			with_externalities(&mut t, || {
-				Executive::initialize_block(&Header::new(
-					1,
-					H256::default(),
-					H256::default(),
-					[69u8; 32].into(),
-					Digest::default(),
-				));
-				assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+		let mut t = new_test_ext();
+		// given: TestXt uses the encoded len as fixed Len:
+		let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(0, 0));
+		let encoded = xt.encode();
+		let encoded_len = encoded.len() as u32;
+		let limit = <MaximumBlockWeight as Get<u32>>::get() / 4;
+		let num_to_exhaust_block = limit / encoded_len;
+		with_externalities(&mut t, || {
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
-				Executive::apply_extrinsic(xt).unwrap();
-				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
-
-				if should_fail {
-					assert!(res.is_err());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+			for nonce in 0..=num_to_exhaust_block {
+				let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(nonce.into(), 0));
+				let res = Executive::apply_extrinsic(xt);
+				if nonce != num_to_exhaust_block {
+					assert_eq!(res.unwrap(), ApplyOutcome::Success);
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce + 1));
 				} else {
-					assert!(res.is_ok());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * 2);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+					assert_eq!(res, Err(ApplyError::CantPay));
 				}
-			});
-		};
-
-		run_test(false);
-		run_test(true);
+			}
+		});
 	}
 
 	#[test]
-	fn default_block_weight() {
-		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69), extra(0, 0));
+	fn block_weight_and_size_is_stored_per_tx() {
+		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(0, 0));
+		let x1 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(1, 0));
+		let x2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(2, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext();
 		with_externalities(&mut t, || {
-			Executive::apply_extrinsic(xt.clone()).unwrap();
-			Executive::apply_extrinsic(xt.clone()).unwrap();
-			Executive::apply_extrinsic(xt.clone()).unwrap();
-			assert_eq!(
-				<system::Module<Runtime>>::all_extrinsics_weight(),
-				3 * (0 /*base*/ + len /*len*/ * 1 /*byte*/)
-			);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+
+			assert_eq!(Executive::apply_extrinsic(xt.clone()).unwrap(), ApplyOutcome::Success);
+			assert_eq!(Executive::apply_extrinsic(x1.clone()).unwrap(), ApplyOutcome::Success);
+			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
+
+			// default weight for `TestXt` == encoded length.
+			assert_eq!( <system::Module<Runtime>>::all_extrinsics_weight(), 3 * len);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
+
+			let _ = <system::Module<Runtime>>::finalize();
+
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 		});
 	}
 

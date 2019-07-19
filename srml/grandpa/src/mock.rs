@@ -43,6 +43,8 @@ impl Trait for Test {
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -55,6 +57,8 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 mod grandpa {

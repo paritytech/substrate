@@ -62,7 +62,7 @@ pub enum RawOrigin<AccountId, I> {
 }
 
 /// Origin for the collective module.
-pub type Origin<T, I> = RawOrigin<<T as system::Trait>::AccountId, I>;
+pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -97,13 +97,10 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T, I> where
+	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::Hash,
 		<T as system::Trait>::AccountId,
-		Phantom = rstd::marker::PhantomData<T>
 	{
-		/// Dummy to manage the fact we have instancing.
-		_Phantom(Phantom),
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
@@ -402,6 +399,8 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -414,8 +413,15 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	impl Trait<Instance1> for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+	}
+	impl Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
@@ -432,6 +438,7 @@ mod tests {
 		{
 			System: system::{Module, Call, Event},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
 
@@ -441,6 +448,7 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
+			collective: None,
 		}.build_storage().unwrap().0.into()
 	}
 
