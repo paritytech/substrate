@@ -22,7 +22,6 @@ mod error;
 mod node_header;
 mod node_codec;
 mod trie_stream;
-mod legacy;
 
 use rstd::boxed::Box;
 use rstd::vec::Vec;
@@ -31,21 +30,14 @@ use hash_db::Hasher;
 pub use error::Error;
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
-/// Legacy format implementation of `TrieStream`.
-pub use legacy::trie_stream::TrieStream as LegacyTrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-/// Legacy format implementation of `NodeCodec`.
-pub use legacy::node_codec::NodeCodec as LegacyNodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, CError,
 	Query, TrieLayOut, TrieOps, NibbleHalf, Cache16, NibbleOps};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
-#[cfg(not(feature = "legacy-trie"))]
 pub use memory_db::prefixed_key;
-#[cfg(feature = "legacy-trie")]
-pub use memory_db::legacy_prefixed_key as prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
@@ -84,40 +76,6 @@ impl<H: Hasher> TrieOps for Layout<H> {
 	}
 }
 
-#[derive(Default)]
-/// substrate trie layout
-pub struct LegacyLayout<H>(rstd::marker::PhantomData<H>);
-
-impl<H: Hasher> TrieLayOut for LegacyLayout<H> {
-	const USE_EXTENSION: bool = true;
-	type H = H;
-	type C = LegacyNodeCodec<Self::H, Self::N, node_codec::BitMap16>;
-	type N = NibbleHalf;
-	type CB = Cache16;
-}
-
-impl<H: Hasher> TrieOps for LegacyLayout<H> {
-	fn trie_root<I, A, B>(input: I) -> <Self::H as Hasher>::Out where
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
-	{
-		trie_root::trie_root::<H, LegacyTrieStream, _, _, _>(input)
-	}
-	
-	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8> where
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
-	{
-		trie_root::unhashed_trie::<H, LegacyTrieStream, _, _, _>(input)
-	}
-	
-	fn encode_index(input: u32) -> Vec<u8> {
-		codec::Encode::encode(&codec::Compact(input))
-	}
-}
-
 /// `trie_db`, error type.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// As in `hash_db`, but less generic, trait exposed.
@@ -128,10 +86,7 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
-#[cfg(not(feature = "legacy-trie"))]
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
-#[cfg(feature = "legacy-trie")]
-pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::LegacyPrefixedKey<H>, trie_db::DBValue>;
 /// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
@@ -149,10 +104,7 @@ pub type TrieHash<L> = <<L as TrieLayOut>::H as Hasher>::Out;
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` is generic in this case.
 pub mod trie_types {
-	#[cfg(not(feature = "legacy-trie"))]
 	pub type LayOut<H> = super::Layout<H>;
-	#[cfg(feature = "legacy-trie")]
-	pub type LayOut<H> = super::LegacyLayout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, LayOut<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
@@ -367,7 +319,6 @@ mod tests {
 	use hex_literal::hex;
 
 	type Layout = super::Layout<Blake2Hasher>;
-	type LayoutLegagacy = super::LegacyLayout<Blake2Hasher>;
 
 	fn hashed_null_node<T: TrieOps>() -> TrieHash<T> {
 		<T::C as NodeCodecT<_, _>>::hashed_null_node()
@@ -411,19 +362,12 @@ mod tests {
 
 	#[test]
 	fn default_trie_root() {
-		default_trie_root_inner::<Layout>()
-	}
-	#[test]
-	fn default_trie_root_legacy() {
-		default_trie_root_inner::<LayoutLegagacy>()
-	}
-	fn default_trie_root_inner<T: TrieOps>() {
 		let mut db = MemoryDB::default();
-		let mut root = TrieHash::<T>::default();
-		let mut empty = TrieDBMut::<T>::new(&mut db, &mut root);
+		let mut root = TrieHash::<Layout>::default();
+		let mut empty = TrieDBMut::<Layout>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = T::trie_root::<_, Vec<u8>, Vec<u8>>(
+		let root2: Vec<u8> = Layout::trie_root::<_, Vec<u8>, Vec<u8>>(
 			std::iter::empty(),
 		).as_ref().iter().cloned().collect();
 
@@ -432,69 +376,34 @@ mod tests {
 
 	#[test]
 	fn empty_is_equivalent() {
-		empty_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn empty_is_equivalent_legacy() {
-		empty_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn empty_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn leaf_is_equivalent() {
-		leaf_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn leaf_is_equivalent_legacy() {
-		leaf_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn leaf_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![(&[0xaa][..], &[0xbb][..])];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn branch_is_equivalent() {
-		branch_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn branch_is_equivalent_legacy() {
-		branch_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn branch_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![(&[0xaa][..], &[0x10][..]), (&[0xba][..], &[0x11][..])];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn extension_and_branch_is_equivalent() {
-		extension_and_branch_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn extension_and_branch_is_equivalent_legacy() {
-		extension_and_branch_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn extension_and_branch_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![(&[0xaa][..], &[0x10][..]), (&[0xab][..], &[0x11][..])];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn standard_is_equivalent() {
-		standard_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn standard_is_equivalent_legacy() {
-		standard_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn standard_is_equivalent_inner<T: TrieOps>() {
 		let st = StandardMap {
 			alphabet: Alphabet::All,
 			min_key: 32,
@@ -505,37 +414,23 @@ mod tests {
 		let mut d = st.make();
 		d.sort_unstable_by(|&(ref a, _), &(ref b, _)| a.cmp(b));
 		let dr = d.iter().map(|v| (&v.0[..], &v.1[..])).collect();
-		check_equivalent::<T>(&dr);
-		check_iteration::<T>(&dr);
+		check_equivalent::<Layout>(&dr);
+		check_iteration::<Layout>(&dr);
 	}
 
 	#[test]
 	fn extension_and_branch_with_value_is_equivalent() {
-		extension_and_branch_with_value_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn extension_and_branch_with_value_is_equivalent_legacy() {
-		extension_and_branch_with_value_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn extension_and_branch_with_value_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![
 			(&[0xaa][..], &[0xa0][..]),
 			(&[0xaa, 0xaa][..], &[0xaa][..]),
 			(&[0xaa, 0xbb][..], &[0xab][..])
 		];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn bigger_extension_and_branch_with_value_is_equivalent() {
-		bigger_extension_and_branch_with_value_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn bigger_extension_and_branch_with_value_is_equivalent_legacy() {
-		bigger_extension_and_branch_with_value_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn bigger_extension_and_branch_with_value_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![
 			(&[0xaa][..], &[0xa0][..]),
 			(&[0xaa, 0xaa][..], &[0xaa][..]),
@@ -544,42 +439,28 @@ mod tests {
 			(&[0xbb, 0xbb][..], &[0xbb][..]),
 			(&[0xbb, 0xcc][..], &[0xbc][..]),
 		];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn single_long_leaf_is_equivalent() {
-		single_long_leaf_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn single_long_leaf_is_equivalent_legacy() {
-		single_long_leaf_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn single_long_leaf_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![
 			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
 			(&[0xba][..], &[0x11][..]),
 		];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn two_long_leaves_is_equivalent() {
-		two_long_leaves_is_equivalent_inner::<Layout>()
-	}
-	#[test]
-	fn two_long_leaves_is_equivalent_legacy() {
-		two_long_leaves_is_equivalent_inner::<LayoutLegagacy>()
-	}
-	fn two_long_leaves_is_equivalent_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![
 			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
 			(&[0xba][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..])
 		];
-		check_equivalent::<T>(&input);
-		check_iteration::<T>(&input);
+		check_equivalent::<Layout>(&input);
+		check_iteration::<Layout>(&input);
 	}
 
 	fn populate_trie<'db, T: TrieOps>(
@@ -605,14 +486,6 @@ mod tests {
 
 	#[test]
 	fn random_should_work() {
-		random_should_work_inner::<Layout>()
-	}
-	#[test]
-	fn random_should_work_legacy() {
-		random_should_work_inner::<LayoutLegagacy>()
-	}
-
-	fn random_should_work_inner<T: TrieOps>() {
 		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
 		//for test_i in 0..10000 {
 		for test_i in 0..1000 {
@@ -627,10 +500,10 @@ mod tests {
 				count: 100,
 			}.make_with(seed.as_fixed_bytes_mut());
 
-			let real = T::trie_root(x.clone());
+			let real = Layout::trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
-			let mut memtrie = populate_trie::<T>(&mut memdb, &mut root, &x);
+			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x);
 
 			memtrie.commit();
 			if *memtrie.root() != real {
@@ -642,9 +515,9 @@ mod tests {
 				}
 			}
 			assert_eq!(*memtrie.root(), real);
-			unpopulate_trie::<T>(&mut memtrie, &x);
+			unpopulate_trie::<Layout>(&mut memtrie, &x);
 			memtrie.commit();
-			let hashed_null_node = hashed_null_node::<T>();
+			let hashed_null_node = hashed_null_node::<Layout>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
 				println!("");
@@ -663,15 +536,8 @@ mod tests {
 
 	#[test]
 	fn codec_trie_empty() {
-		codec_trie_empty_inner::<Layout>()
-	}
-	#[test]
-	fn codec_trie_empty_legacy() {
-		codec_trie_empty_inner::<LayoutLegagacy>()
-	}
-	fn codec_trie_empty_inner<T: TrieOps>() {
 		let input: Vec<(&[u8], &[u8])> = vec![];
-		let trie = T::trie_root_unhashed::<_, _, _>(input);
+		let trie = Layout::trie_root_unhashed::<_, _, _>(input);
 		println!("trie: {:#x?}", trie);
 		assert_eq!(trie, vec![0x0]);
 	}
@@ -718,13 +584,6 @@ mod tests {
 
 	#[test]
 	fn iterator_works() {
-		iterator_works_inner::<Layout>()
-	}
-	#[test]
-	fn iterator_works_legacy() {
-		iterator_works_inner::<LayoutLegagacy>()
-	}
-	fn iterator_works_inner<T: TrieOps>() {
 		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
@@ -732,9 +591,9 @@ mod tests {
 
 		let mut mdb = MemoryDB::default();
 		let mut root = Default::default();
-		let _ = populate_trie::<T>(&mut mdb, &mut root, &pairs);
+		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<T>::new(&mdb, &root).unwrap();
+		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();

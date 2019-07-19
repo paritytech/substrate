@@ -17,7 +17,7 @@
 //! Test crate for srml_support. Allow to make use of `srml_support::decl_storage`.
 //! See tests directory.
 
-//#[test]
+#[test]
 fn reserved_keyword() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/reserved_keyword/*.rs");
