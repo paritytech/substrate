@@ -194,13 +194,14 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		let epoch_duration = now.duration_since(SystemTime::UNIX_EPOCH);
 		match epoch_duration {
 			Err(_) => {
-				warn!("Current time is earlier than UNIX_EPOCH.");
+				// Current time is earlier than UNIX_EPOCH.
 				Timestamp::from_unix_millis(0)
-				},
+			},
 			Ok(d) => {
 				let duration = d.as_millis();
 				// Assuming overflow won't happen for a few hundred years.
-				Timestamp::from_unix_millis(duration.try_into().unwrap())
+				Timestamp::from_unix_millis(duration.try_into()
+					.expect("Overflow occurred in milliseconds conversion."))
 			}
 		}
 	}
@@ -395,7 +396,7 @@ mod tests {
 		let timestamp = api.timestamp();
 		
 		// Compare.
-		assert_eq!(timestamp.unix_millis() > 0, true);
+		assert!(timestamp.unix_millis() > 0);
 		assert_eq!(timestamp.unix_millis(), d);
 	}
 
