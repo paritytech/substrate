@@ -81,6 +81,7 @@ use log::{error, warn, debug, info, trace};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
 mod aux_schema;
+#[cfg(tests)]
 mod tests;
 pub use babe_primitives::AuthorityId;
 

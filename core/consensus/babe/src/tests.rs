@@ -18,7 +18,6 @@
 
 // FIXME #2532: need to allow deprecated until refactor is done
 // https://github.com/paritytech/substrate/issues/2532
-#![cfg(test)]
 #![allow(deprecated)]
 use super::*;
 
@@ -72,6 +71,16 @@ impl Proposer<TestBlock> for DummyProposer {
 
 pub struct BabeTestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
+}
+
+fn make_importer() -> BoxBlockImport<Block> {
+	drop(env_logger::try_init());
+	let client = Arc::new(test_client::new());
+	let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
+	let (block_import, _justification_import, _finality_proof_import, _finality_proof_request_builder, _data)
+		= self.make_block_import(PeersClient::Full(client.clone()));
+	let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
+	Box::new(BabeBlockImport::new(client, SharedEpochChanges::new(), block_import))
 }
 
 impl TestNetFactory for BabeTestNet {
