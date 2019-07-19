@@ -49,6 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use runtime_primitives::weights::{IDEAL_TRANSACTIONS_WEIGHT, WeightMultiplier};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -77,8 +78,10 @@ mod tests {
 	const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
-
-	const TX_FEE: u128 = 3 * CENTS + 460 * MILLICENTS;
+	// from weight
+	const TX_FEE: u128 = 146;
+	// regardless of creation of transfer
+	const TRANSFER_FEE: u128 = 1 * CENTS;
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
@@ -150,13 +153,13 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				vec![0u8; 16]
+				69_u128.encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				vec![0u8; 16]
+				69_u128.encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
-				vec![0u8; 16]
+				0_u128.encode()
 			},
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
@@ -186,13 +189,13 @@ mod tests {
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				vec![0u8; 16]
+				69_u128.encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				vec![0u8; 16]
+				69_u128.encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
-				vec![0u8; 16]
+				0_u128.encode()
 			},
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
@@ -249,7 +252,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - TX_FEE - TRANSFER_FEE);
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -285,7 +288,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - TX_FEE - TRANSFER_FEE);
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -479,12 +482,11 @@ mod tests {
 		// session change => consensus authorities change => authorities change digest item appears
 		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
 		assert_eq!(digest.logs().len(), 0);
-//		assert!(digest.logs()[0].as_consensus().is_some());
 
 		(block1, block2)
 	}
 
-	fn big_block() -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
@@ -492,11 +494,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(time)),
 				},
 				CheckedExtrinsic {
-					signed: Some((alice(), 0)),
-					function: Call::System(system::Call::remark(vec![0; 120000])),
+					signed: Some((charlie(), nonce)),
+					function: Call::System(system::Call::remark(vec![0; size])),
 				}
 			]
 		)
@@ -519,7 +521,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// block1 transfers from alice 69 to bob.
 			// -1 is the default fee
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - TX_FEE - TRANSFER_FEE);
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
 				EventRecord {
@@ -545,7 +547,6 @@ mod tests {
 			];
 			assert_eq!(System::events(), events);
 		});
-
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -557,9 +558,9 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 10 = 32
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * (TX_FEE + TRANSFER_FEE));
 			// 100 + 69 + 10 = 179
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - TX_FEE - TRANSFER_FEE);
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -615,7 +616,7 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// block1 transfers from alice 69 to bob.
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - (TX_FEE + TRANSFER_FEE));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
 
@@ -624,9 +625,9 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 10 = 32
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * (TX_FEE + TRANSFER_FEE));
 			// 100 + 69 + 10 = 179
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - (TX_FEE + TRANSFER_FEE));
 		});
 	}
 
@@ -724,7 +725,6 @@ mod tests {
 
 	#[test]
 	fn deploying_wasm_contract_should_work() {
-
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
 
@@ -795,7 +795,7 @@ mod tests {
 				4,
 				COMPACT_CODE,
 				"Core_execute_block",
-				&big_block().0
+				&block_with_size(42, 0, 120_000).0
 			).is_err()
 		);
 	}
@@ -807,7 +807,7 @@ mod tests {
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&big_block().0,
+			&block_with_size(42, 0, 120_000).0,
 			true,
 			None,
 		).0.unwrap();
@@ -821,7 +821,7 @@ mod tests {
 			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
-				&big_block().0,
+				&block_with_size(42, 0, 120_000).0,
 				false,
 				None,
 			).0.is_err()
@@ -832,10 +832,10 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
-				vec![0u8; 16]
+				0_u128.encode()
 			},
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
-				vec![0u8; 16]
+				0_u128.encode()
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -872,7 +872,7 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * TX_FEE);
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - TX_FEE - TRANSFER_FEE);
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -900,8 +900,7 @@ mod tests {
 		let block1 = changes_trie_block();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
@@ -919,6 +918,159 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
+	}
+
+
+	#[test]
+	fn weight_multiplier_increases_on_big_block() {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
+		let mut prev_multiplier = WeightMultiplier::default();
+
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
+		});
+
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut tt,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 0)),
+					function: Call::System(system::Call::remark(vec![0; (IDEAL_TRANSACTIONS_WEIGHT*2) as usize])),
+				}
+			]
+		);
+		let block2 = construct_block(
+			&mut tt,
+			2,
+			block1.1.clone(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(52)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::System(system::Call::remark(vec![0; (IDEAL_TRANSACTIONS_WEIGHT*2) as usize])),
+				}
+			]
+		);
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block1.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// weight multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_weight_multiplier();
+			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm > prev_multiplier);
+			prev_multiplier = fm;
+		});
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block2.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// weight multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_weight_multiplier();
+			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm > prev_multiplier);
+		});
+	}
+
+	#[test]
+	fn weight_multiplier_decreases_on_small_block() {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
+		let mut prev_multiplier = WeightMultiplier::default();
+
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
+		});
+
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut tt,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 0)),
+					function: Call::System(system::Call::remark(vec![0; 120])),
+				}
+			]
+		);
+		let block2 = construct_block(
+			&mut tt,
+			2,
+			block1.1.clone(),
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(52)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::System(system::Call::remark(vec![0; 120])),
+				}
+			]
+		);
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block1.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// weight multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_weight_multiplier();
+			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm < prev_multiplier);
+			prev_multiplier = fm;
+		});
+
+		// execute a big block.
+		executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_execute_block",
+			&block2.0,
+			true,
+			None,
+		).0.unwrap();
+
+		// weight multiplier is increased for next block.
+		runtime_io::with_externalities(&mut t, || {
+			let fm = System::next_weight_multiplier();
+			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
+			assert!(fm < prev_multiplier);
+		});
 	}
 
 	#[cfg(feature = "benchmarks")]

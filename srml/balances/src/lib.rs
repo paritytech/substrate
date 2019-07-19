@@ -163,6 +163,7 @@ use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating, Bounded
 };
+use primitives::weights::Weight;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -759,6 +760,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
+	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 }
@@ -1145,9 +1147,8 @@ where
 }
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let encoded_len = T::Balance::from(encoded_len as u32);
-		let transaction_fee = T::TransactionBaseFee::get() + T::TransactionByteFee::get() * encoded_len;
+	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
+		let transaction_fee = T::Balance::from(weight);
 		let imbalance = Self::withdraw(
 			transactor,
 			transaction_fee,
