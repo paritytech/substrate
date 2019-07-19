@@ -46,29 +46,6 @@ type TestClient = client::Client<
 	test_client::runtime::RuntimeApi,
 >;
 
-struct DummyFactory(Arc<TestClient>);
-struct DummyProposer(u64, Arc<TestClient>);
-
-impl Environment<TestBlock> for DummyFactory {
-	type Proposer = DummyProposer;
-	type Error = Error;
-
-	fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
-		-> Result<DummyProposer, Error>
-	{
-		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
-	}
-}
-
-impl Proposer<TestBlock> for DummyProposer {
-	type Error = Error;
-	type Create = Result<TestBlock, Error>;
-
-	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
-		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
-	}
-}
-
 pub struct BabeTestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
 }
@@ -140,6 +117,18 @@ impl TestNetFactory for BabeTestNet {
 fn can_serialize_block() {
 	drop(env_logger::try_init());
 	assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
+}
+
+#[test]
+#[should_panic]
+fn rejects_empty_block() {
+	env_logger::try_init().unwrap();
+	debug!(target: "babe", "checkpoint 1");
+	let mut net = BabeTestNet::new(3);
+	let mut block_builder = |builder| {
+		builder.bake()
+	};
+	net.generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder)
 }
 
 #[test]
