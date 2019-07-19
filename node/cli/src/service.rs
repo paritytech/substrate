@@ -29,7 +29,7 @@ use node_executor;
 use primitives::Pair;
 use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
-use node_primitives::Block;
+use node_primitives::{Block, ValidatorId};
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -253,6 +253,9 @@ construct_service_factory! {
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _))
 		}},
+		// TODO: Sure this is supposed to be called AuthorityId? SessionId and AuthorityId are not the same according to
+		// the srml session modul.
+		AuthorityId = ValidatorId,
 	}
 }
 

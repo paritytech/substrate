@@ -32,9 +32,8 @@ use std::time::{Duration, Instant};
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
-use libp2p::{ multihash::Multihash, Multiaddr};
-use runtime_primitives::traits::{ProvideRuntimeApi};
-use client::{self, Client, runtime_api};
+use libp2p::Multiaddr;
+use client::{self};
 use crate::components::TestRuntime;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
@@ -636,6 +635,7 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
+// TODO delete.
 fn build_network_future<
 	Components: components::Components,
 	  S:network::specialization::NetworkSpecialization<ComponentBlock<Components>> ,
@@ -651,6 +651,7 @@ fn build_network_future<
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 
+	println!("==== public key {}", public_key);
 	let hashed_public_key = libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, &public_key.as_bytes()).unwrap();
 
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
@@ -671,6 +672,7 @@ fn build_network_future<
 		}
 
 		while let Ok(Async::Ready(_)) = report_ext_addresses_interval.poll() {
+			println!("==== public key {}", public_key);
 			let external_addresses = network.external_addresses();
 
 			println!("==== external addresses: {:?}", external_addresses);
@@ -1120,6 +1122,8 @@ macro_rules! construct_service_factory {
 			SelectChain = $select_chain:ty
 				{ $( $select_chain_init:tt )* },
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
+			AuthorityId = $authority_id:ty,
+
 		}
 	) => {
 		$( #[$attr] )*
@@ -1142,6 +1146,7 @@ macro_rules! construct_service_factory {
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
 			type SelectChain = $select_chain;
+			type AuthorityId = $authority_id;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,

@@ -26,7 +26,7 @@ use support::{
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
+	AccountId, AccountIndex, ValidatorId, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
 use babe::{AuthorityId as BabeId};

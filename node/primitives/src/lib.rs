@@ -44,6 +44,9 @@ pub type Balance = u128;
 /// Type used for expressing timestamp.
 pub type Moment = u64;
 
+/// Identity of Validator.
+pub type ValidatorId = primitives::sr25519::Public;
+
 /// Index of a transaction in the chain.
 pub type Index = u64;
 
