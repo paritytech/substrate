@@ -314,7 +314,7 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
-/// Reward of an era.
+/// Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
 pub struct EraRewards {
 	total: u32,
