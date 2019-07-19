@@ -385,12 +385,7 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
-
-	fn is_valid_authority_id(authority_id: &<Self as im_online::Trait>::AuthorityId) -> bool {
-		Aura::authorities()
-			.iter()
-			.any(|id| id == authority_id)
-	}
+	type IsValidAuthorityId = Aura;
 }
 
 impl grandpa::Trait for Runtime {

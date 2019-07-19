@@ -77,7 +77,7 @@ use substrate_primitives::{
 };
 use parity_codec::{Encode, Decode};
 use primitives::{
-	ApplyError, traits::{Member, Extrinsic as ExtrinsicT},
+	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity},
 };
 use rstd::{prelude::*};
@@ -159,8 +159,8 @@ pub trait Trait: system::Trait + session::Trait {
 	/// Number of sessions per era.
 	type SessionsPerEra: Get<SessionIndex>;
 
-	// Function to determine if an `AuthorityId` is a valid authority.
-	fn is_valid_authority_id(authority_id: &Self::AuthorityId) -> bool;
+	/// Determine if an `AuthorityId` is a valid authority.
+	type IsValidAuthorityId: IsMember<Self::AuthorityId>;
 }
 
 decl_event!(
@@ -389,7 +389,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			// verify that the incoming (unverified) pubkey is actually an authority id
-			let is_authority = <T as Trait>::is_valid_authority_id(&heartbeat.authority_id);
+			let is_authority = T::IsValidAuthorityId::is_member(&heartbeat.authority_id);
 			if !is_authority {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}

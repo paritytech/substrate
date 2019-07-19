@@ -188,6 +188,14 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	}
 }
 
+impl IsMember<T::AuthorityId> for Module<T> {
+	fn is_member(authority_id: &T::AuthorityId) -> bool {
+		Self::authorities()
+			.iter()
+			.any(|id| id == authority_id)
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
