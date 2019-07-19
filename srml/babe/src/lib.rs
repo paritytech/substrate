@@ -23,7 +23,10 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
+use primitives::{
+	generic::DigestItem,
+	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon}
+};
 use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
