@@ -25,7 +25,7 @@ use crate::codec::{Decode, Encode, Input};
 use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
 use super::CheckedExtrinsic;
 
-const TRANSACTION_VERSION: u8 = 1;
+const TRANSACTION_VERSION: u8 = 2;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
