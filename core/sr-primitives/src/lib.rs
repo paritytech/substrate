@@ -406,24 +406,24 @@ impl Fixed64 {
 	/// Performs a saturated multiply and accumulate.
 	///
 	/// Returns `n + (self * n)`.
-	pub fn saturated_multiply_accumulate(&self, n: u32) -> u32 {
+	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
 		let parts = self.0;
 
 		let positive = parts > 0;
-		// fractional parts can always fit into u32.
-		let perbill_parts = (parts.abs() % DIV) as u32;
 		// natural parts might overflow.
 		let natural_parts = self.clone().saturated_into::<u32>();
+		// fractional parts can always fit into u32.
+		let perbill_parts = (parts.abs() % DIV) as u32;
 
-		let n = n.saturating_mul(natural_parts);
-		let p = Perbill::from_parts(perbill_parts) * n;
+		let n = int.saturating_mul(natural_parts);
+		let p = Perbill::from_parts(perbill_parts) * int;
 		// everything that needs to be either added or subtracted from the original weight.
 		let excess = n.saturating_add(p);
 
 		if positive {
-			n.saturating_add(excess)
+			int.saturating_add(excess)
 		} else {
-			n.saturating_sub(excess)
+			int.saturating_sub(excess)
 		}
 	}
 

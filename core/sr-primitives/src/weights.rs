@@ -133,16 +133,20 @@ mod tests {
 	fn multiplier_apply_to_works() {
 		let test_set = vec![0, 1, 10, 1000, 1_000_000_000];
 
+		// negative (1/2)
+		let mut fm = WeightMultiplier::from_parts(-DIV / 2);
+		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i) as i32, i as i32  - i as i32 / 2); });
+
 		// unit (1) multiplier
-		let mut fm = WeightMultiplier::from_parts(0);
-		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), *i); });
+		fm = WeightMultiplier::from_parts(0);
+		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i); });
 
 		// i.5 multiplier
 		fm = WeightMultiplier::from_parts(DIV / 2);
-		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), i * 3 / 2); });
+		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 3 / 2); });
 
 		// dual multiplier
 		fm = WeightMultiplier::from_parts(DIV);
-		test_set.iter().for_each(|i| { assert_eq!(fm.apply_to(*i), i * 2); });
+		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 2); });
 	}
 }
