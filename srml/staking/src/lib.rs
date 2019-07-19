@@ -317,6 +317,7 @@ pub type EraIndex = u32;
 /// Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
 pub struct EraRewards {
+	/// Total number of points. Equals the sum of reward points for each validator.
 	total: u32,
 	/// Reward at one index correspond to reward for validator in current_elected of this index.
 	/// Thus this reward vec is only valid for one elected set.
