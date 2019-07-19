@@ -24,7 +24,7 @@ use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public,
-	crypto::{Ss58Codec, set_default_ss58_version}, blake2_256
+	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}, blake2_256
 };
 use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
@@ -55,11 +55,12 @@ trait Crypto {
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
-			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		} else if let Ok((public, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
+			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
+				String::from(Ss58AddressFormat::from(v)),
 				HexDisplay::from(&public.as_ref()),
-				public.to_ss58check()
+				public.to_ss58check_with_version(v)
 			);
 		} else {
 			println!("Invalid phrase/URI given");

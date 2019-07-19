@@ -259,11 +259,24 @@ pub trait Ss58Codec: Sized {
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError>;
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	fn from_string(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
+	fn from_string(s: &str) -> Result<Self, PublicError> {
+		Self::from_string_with_version(s)
+			.and_then(|(r, v)| match v {
+				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				v if v == *DEFAULT_VERSION.lock() => Ok(r),
+				_ => Err(PublicError::UnknownVersion),
+			})
+	}
+
 	/// Return the ss58-check string for this key.
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String;
 	/// Return the ss58-check string for this key.
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+	/// Some if the string is a properly encoded SS58Check address, optionally with
+	/// a derivation path following.
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		Self::from_ss58check_with_version(s)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -417,6 +430,28 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
+		}
+	}
+
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
+			.expect("constructed from known-good static value; qed");
+		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
+		let re_junction = Regex::new(r"/(/?[^/]+)")
+			.expect("constructed from known-good static value; qed");
+		let (addr, v) = Self::from_ss58check_with_version(
+			cap.name("ss58")
+				.map(|r| r.as_str())
+				.unwrap_or(DEV_ADDRESS)
+		)?;
+		if cap["path"].is_empty() {
+			Ok((addr, v))
+		} else {
+			let path = re_junction.captures_iter(&cap["path"])
+				.map(|f| DeriveJunction::from(&f[1]));
+			addr.derive(path)
+				.ok_or(PublicError::InvalidPath)
+				.map(|a| (a, v))
 		}
 	}
 }
