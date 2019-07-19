@@ -53,7 +53,7 @@ use parity_codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
 use crate::overlayed_changes::OverlayedChanges;
-use trie::{MemoryDB, DBValue, TrieOps, TrieMut};
+use trie::{MemoryDB, DBValue, TrieMut};
 use trie::trie_types::TrieDBMut;
 
 /// Changes that are made outside of extrinsics are marked with this index;
