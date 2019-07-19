@@ -9,7 +9,7 @@ use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	TaskExecutor,
+	TaskExecutor, DefaultRpcHandlerConstructor
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
@@ -111,5 +111,7 @@ construct_service_factory! {
 					).map_err(Into::into)
 				}
 			},
+		FullRpcHandlerConstructor = DefaultRpcHandlerConstructor,
+		LightRpcHandlerConstructor = DefaultRpcHandlerConstructor,
 	}
 }
