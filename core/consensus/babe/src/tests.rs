@@ -21,7 +21,7 @@
 #![allow(deprecated)]
 use super::*;
 
-use client::LongestChain;
+use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
@@ -46,10 +46,33 @@ type TestClient = client::Client<
 	test_client::runtime::RuntimeApi,
 >;
 
+struct DummyFactory(Arc<TestClient>);
+struct DummyProposer(u64, Arc<TestClient>);
+
+impl Environment<TestBlock> for DummyFactory {
+	type Proposer = DummyProposer;
+	type Error = Error;
+
+	fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+		-> Result<DummyProposer, Error>
+	{
+		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+	}
+}
+
+impl Proposer<TestBlock> for DummyProposer {
+	type Error = Error;
+	type Create = Result<TestBlock, Error>;
+
+	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
+		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
+	}
+}
+
 pub struct BabeTestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
 }
-
+/*
 fn make_importer() -> BoxBlockImport<Block> {
 	drop(env_logger::try_init());
 	let client = Arc::new(test_client::new());
@@ -59,7 +82,7 @@ fn make_importer() -> BoxBlockImport<Block> {
 	let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 	Box::new(BabeBlockImport::new(client, SharedEpochChanges::new(), block_import))
 }
-
+*/
 impl TestNetFactory for BabeTestNet {
 	type Specialization = DummySpecialization;
 	type Verifier = BabeVerifier<PeersFullClient>;
@@ -125,10 +148,26 @@ fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
 	debug!(target: "babe", "checkpoint 1");
 	let mut net = BabeTestNet::new(3);
-	let mut block_builder = |builder| {
-		builder.bake()
+	let block_builder = |builder: BlockBuilder<_, _>| {
+		builder.bake().unwrap()
 	};
-	net.generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder)
+	net.mut_peers(|peer| {
+		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
+	})
+}
+
+#[test]
+#[should_panic]
+fn rejects_missing_inherent_digest() {
+	env_logger::try_init().unwrap();
+	debug!(target: "babe", "checkpoint 1");
+	let mut net = BabeTestNet::new(3);
+	let block_builder = |builder: BlockBuilder<_, _>| {
+		builder.bake().unwrap()
+	};
+	net.mut_peers(|peer| {
+		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
+	})
 }
 
 #[test]
