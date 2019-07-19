@@ -355,24 +355,6 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
-{
-	let mut pre_digest: Option<u64> = None;
-	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
-		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))?,
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
-		}
-	}
-	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
-}
-
-
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
@@ -522,7 +504,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
-	DigestItemFor<B>: CompatibleDigestItem<P:Signature>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
