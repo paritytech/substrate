@@ -21,8 +21,8 @@ use futures::prelude::*;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header};
-use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
+use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
+use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link, BlockImportError, BlockImportResult};
 use network::message;
 
 use consensus_common::BlockOrigin;
@@ -111,10 +111,15 @@ impl WaitLink {
 }
 
 impl<B: Block> Link<B> for WaitLink {
-	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		self.imported_blocks += processed_blocks.len() as u64;
-		if has_error {
-			warn!("There was an error importing {} blocks", processed_blocks.len());
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		self.imported_blocks += imported as u64;
+		if results.iter().any(|(r, _)| r.is_err()) {
+			warn!("There was an error importing {} blocks", count);
 		}
 	}
 }
@@ -130,7 +135,11 @@ pub fn import_blocks<F, E, R>(
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
 	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let mut queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone(), select_chain)?;
+	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
+		&mut config,
+		client.clone(),
+		select_chain
+	)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {

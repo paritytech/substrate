@@ -1369,16 +1369,9 @@ mod tests {
 			assert_eq!(Elections::next_vote_from(4), 4);
 			assert_eq!(Elections::next_vote_from(5), 8);
 			assert_eq!(Elections::vote_index(), 0);
-			assert_eq!(<Test as Trait>::CandidacyBond::get(), 3);
-			assert_eq!(<Test as Trait>::VotingBond::get(), 0);
-			assert_eq!(<Test as Trait>::VotingFee::get(), 0);
-			assert_eq!(<Test as Trait>::PresentSlashPerVoter::get(), 1);
 			assert_eq!(Elections::presentation_duration(), 2);
-			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-			assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
 			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::desired_seats(), 2);
-			assert_eq!(<Test as Trait>::CarryCount::get(), 2);
 
 			assert_eq!(Elections::members(), vec![]);
 			assert_eq!(Elections::next_tally(), Some(4));
