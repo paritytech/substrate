@@ -42,7 +42,7 @@ use log::{debug, trace, warn, info, error};
 use runtime_primitives::{
 	Justification,
 	generic::BlockId,
-	traits::{Block, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
+	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
 };
 use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc};
 
@@ -94,7 +94,7 @@ const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
 
 /// The main data structure which contains all the state for a chains
 /// active syncing strategy.
-pub struct ChainSync<B: Block> {
+pub struct ChainSync<B: BlockT> {
 	/// Chain client.
 	client: Arc<dyn crate::chain::Client<B>>,
 	/// The active peers that we are using to sync and their PeerSync status
@@ -124,7 +124,7 @@ pub struct ChainSync<B: Block> {
 
 /// All the data we have about a Peer that we are trying to sync with
 #[derive(Debug, Clone)]
-pub struct PeerSync<B: Block> {
+pub struct PeerSync<B: BlockT> {
 	/// The common number is the block number that is a common point of
 	/// ancestry for both our chains (as far as we know).
 	pub common_number: NumberFor<B>,
@@ -142,7 +142,7 @@ pub struct PeerSync<B: Block> {
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
-pub struct PeerInfo<B: Block> {
+pub struct PeerInfo<B: BlockT> {
 	/// Their best block hash.
 	pub best_hash: B::Hash,
 	/// Their best block number.
@@ -154,7 +154,7 @@ pub struct PeerInfo<B: Block> {
 /// Generally two categories, "busy" or `Available`. If busy, the enum
 /// defines what we are busy with.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum PeerSyncState<B: Block> {
+pub enum PeerSyncState<B: BlockT> {
 	/// Available for sync requests.
 	Available,
 	/// Searching for ancestors the Peer has in common with us.
@@ -171,7 +171,7 @@ pub enum PeerSyncState<B: Block> {
 	DownloadingFinalityProof(B::Hash)
 }
 
-impl<B: Block> PeerSyncState<B> {
+impl<B: BlockT> PeerSyncState<B> {
 	pub fn is_available(&self) -> bool {
 		if let PeerSyncState::Available = self {
 			true
@@ -192,7 +192,7 @@ pub enum SyncState {
 
 /// Syncing status and statistics.
 #[derive(Clone)]
-pub struct Status<B: Block> {
+pub struct Status<B: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState,
 	/// Target sync block number.
@@ -215,7 +215,7 @@ impl std::error::Error for BadPeer {}
 
 /// Result of [`ChainSync::on_block_data`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockData<B: Block> {
+pub enum OnBlockData<B: BlockT> {
 	/// The block should be imported.
 	Import(BlockOrigin, Vec<IncomingBlock<B>>),
 	/// A new block request needs to be made to the given peer.
@@ -224,7 +224,7 @@ pub enum OnBlockData<B: Block> {
 
 /// Result of [`ChainSync::on_block_announce`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockAnnounce<B: Block> {
+pub enum OnBlockAnnounce<B: BlockT> {
 	/// The announcement does not require further handling.
 	Nothing,
 	/// The announcement header should be imported.
@@ -235,7 +235,7 @@ pub enum OnBlockAnnounce<B: Block> {
 
 /// Result of [`ChainSync::on_block_justification`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockJustification<B: Block> {
+pub enum OnBlockJustification<B: BlockT> {
 	/// The justification needs no further handling.
 	Nothing,
 	/// The justification should be imported.
@@ -249,7 +249,7 @@ pub enum OnBlockJustification<B: Block> {
 
 /// Result of [`ChainSync::on_block_finality_proof`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockFinalityProof<B: Block> {
+pub enum OnBlockFinalityProof<B: BlockT> {
 	/// The proof needs no further handling.
 	Nothing,
 	/// The proof should be imported.
@@ -261,7 +261,7 @@ pub enum OnBlockFinalityProof<B: Block> {
 	}
 }
 
-impl<B: Block> ChainSync<B> {
+impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub fn new(
 		role: Roles,
@@ -1097,7 +1097,7 @@ impl<B: Block> ChainSync<B> {
 
 /// Request the ancestry for a block. Sends a request for header and justification for the given
 /// block number. Used during ancestry search.
-fn ancestry_request<B: Block>(block: NumberFor<B>) -> BlockRequest<B> {
+fn ancestry_request<B: BlockT>(block: NumberFor<B>) -> BlockRequest<B> {
 	message::generic::BlockRequest {
 		id: 0,
 		fields: BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
@@ -1111,7 +1111,7 @@ fn ancestry_request<B: Block>(block: NumberFor<B>) -> BlockRequest<B> {
 /// The ancestor search state expresses which algorithm, and its stateful parameters, we are using to
 /// try to find an ancestor block
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum AncestorSearchState<B: Block> {
+pub enum AncestorSearchState<B: BlockT> {
 	/// Use exponential backoff to find an ancestor, then switch to binary search.
 	/// We keep track of the exponent.
 	ExponentialBackoff(NumberFor<B>),
@@ -1127,7 +1127,7 @@ pub enum AncestorSearchState<B: Block> {
 ///
 /// When we've found a block hash mismatch we then fall back to a binary search between the two
 /// last known points to find the common block closest to the tip.
-fn handle_ancestor_search_state<B: Block>(
+fn handle_ancestor_search_state<B: BlockT>(
 	state: &AncestorSearchState<B>,
 	curr_block_num: NumberFor<B>,
 	block_hash_match: bool
@@ -1169,7 +1169,7 @@ fn handle_ancestor_search_state<B: Block>(
 }
 
 /// Get a new block request for the peer if any.
-fn peer_block_request<B: Block>(
+fn peer_block_request<B: BlockT>(
 	id: &PeerId,
 	peer: &PeerSync<B>,
 	blocks: &mut BlockCollection<B>,

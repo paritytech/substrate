@@ -172,13 +172,11 @@ test-linux-stable-int:
     expire_in:                     24 hrs
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  allow_failure:                   true
 
 
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  allow_failure:                   true
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:

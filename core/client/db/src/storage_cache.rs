@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use runtime_primitives::traits::{Block, Header};
+use runtime_primitives::traits::{Block as BlockT, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
@@ -33,7 +33,7 @@ type ChildStorageKey = (Vec<u8>, Vec<u8>);
 type StorageValue = Vec<u8>;
 
 /// Shared canonical state cache.
-pub struct Cache<B: Block, H: Hasher> {
+pub struct Cache<B: BlockT, H: Hasher> {
 	/// Storage cache. `None` indicates that key is known to be missing.
 	lru_storage: LRUMap<StorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
@@ -144,7 +144,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 
 }
  
-impl<B: Block, H: Hasher> Cache<B, H> {
+impl<B: BlockT, H: Hasher> Cache<B, H> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
 		self.lru_storage.used_size()
@@ -159,7 +159,7 @@ pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 const FIX_LRU_HASH_SIZE: usize = 65_536;
 
 /// Create a new shared cache instance with given max memory usage.
-pub fn new_shared_cache<B: Block, H: Hasher>(
+pub fn new_shared_cache<B: BlockT, H: Hasher>(
 	shared_cache_size: usize,
 	child_ratio: (usize, usize),
 ) -> SharedCache<B, H> {
@@ -202,7 +202,7 @@ struct LocalCache<H: Hasher> {
 }
 
 /// Cache changes.
-pub struct CacheChanges<H: Hasher, B: Block> {
+pub struct CacheChanges<H: Hasher, B: BlockT> {
 	/// Shared canonical state cache.
 	shared_cache: SharedCache<B, H>,
 	/// Local cache of values for this state.
@@ -219,14 +219,14 @@ pub struct CacheChanges<H: Hasher, B: Block> {
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
-pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
+pub struct CachingState<H: Hasher, S: StateBackend<H>, B: BlockT> {
 	/// Backing state.
 	state: S,
 	/// Cache data.
 	pub cache: CacheChanges<H, B>
 }
 
-impl<H: Hasher, B: Block> CacheChanges<H, B> {
+impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
@@ -374,7 +374,7 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 
 }
 
-impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub fn new(state: S, shared_cache: SharedCache<B, H>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
 		CachingState {
@@ -447,7 +447,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	}
 }
 
-impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<H, S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
