@@ -100,6 +100,7 @@ impl WeightMultiplier {
 	}
 
 	/// build self from raw parts per billion.
+	#[cfg(feature = "std")]
 	pub fn from_parts(parts: i64) -> Self {
 		Self(Fixed64(parts))
 	}
@@ -107,6 +108,11 @@ impl WeightMultiplier {
 	/// build self from a fixed64 value.
 	pub fn from_fixed(f: Fixed64) -> Self {
 		Self(f)
+	}
+
+	/// Approximate the fraction `n/d`.
+	pub fn from_rational(n: i64, d: u64) -> Self {
+		Self(Fixed64::from_rational(n, d))
 	}
 }
 
@@ -126,14 +132,13 @@ impl Saturating for WeightMultiplier {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::DIV;
 
 	#[test]
 	fn multiplier_apply_to_works() {
 		let test_set = vec![0, 1, 10, 1000, 1_000_000_000];
 
 		// negative (1/2)
-		let mut fm = WeightMultiplier::from_parts(-DIV / 2);
+		let mut fm = WeightMultiplier::from_rational(-1, 2);
 		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i) as i32, i as i32  - i as i32 / 2); });
 
 		// unit (1) multiplier
@@ -141,11 +146,11 @@ mod tests {
 		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i); });
 
 		// i.5 multiplier
-		fm = WeightMultiplier::from_parts(DIV / 2);
+		fm = WeightMultiplier::from_rational(1, 2);
 		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 3 / 2); });
 
 		// dual multiplier
-		fm = WeightMultiplier::from_parts(DIV);
+		fm = WeightMultiplier::from_rational(1, 1);
 		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 2); });
 	}
 }

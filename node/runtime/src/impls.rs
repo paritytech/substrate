@@ -19,7 +19,7 @@
 use node_primitives::Balance;
 use runtime_primitives::weights::{Weight, WeightMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
 use runtime_primitives::traits::{Convert, Saturating};
-use runtime_primitives::{DIV, Fixed64};
+use runtime_primitives::Fixed64;
 use crate::Balances;
 
 /// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
@@ -86,7 +86,7 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 				// multiplier. While at -1, it means that the network is so un-congested that all
 				// transactions are practically free. We stop here and only increase if the network
 				// became more busy.
-				.max(WeightMultiplier::from_parts(-DIV))
+				.max(WeightMultiplier::from_rational(-1, 1))
 		}
 	}
 }

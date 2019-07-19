@@ -396,6 +396,12 @@ impl Fixed64 {
 		Self(int.saturating_mul(DIV))
 	}
 
+	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
+	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
+	pub fn accuracy() -> i64 {
+		DIV
+	}
+
 	/// creates self from a rational number. Equal to `n/d`.
 	///
 	/// Note that this might be lossy.
