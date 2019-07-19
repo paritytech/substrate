@@ -44,6 +44,7 @@ contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 [dev-dependencies]
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17" }
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
