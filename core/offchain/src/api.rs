@@ -201,7 +201,7 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 				let duration = d.as_millis();
 				// Assuming overflow won't happen for a few hundred years.
 				Timestamp::from_unix_millis(duration.try_into()
-					.expect("Overflow occurred in milliseconds conversion."))
+					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"))
 			}
 		}
 	}
