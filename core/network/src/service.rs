@@ -256,12 +256,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		self.network_service.user_protocol().num_connected_peers()
 	}
 
-	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> Vec<Multiaddr> {
-		let swarm = &self.network_service;
-		Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect()
-	}
-
 	/// Returns the number of peers we're connected to and that are being queried.
 	pub fn num_active_peers(&self) -> usize {
 		self.network_service.user_protocol().num_active_peers()
