@@ -30,29 +30,32 @@ use crate::traits::Bounded;
 pub type Weight = u32;
 
 /// A broad range of dispatch types. This is only distinguishing normal, user-triggered transactions
-/// and anything beyond which serves a higher purpose to the system (`OperationalNormal`).
+/// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DispatchClass {
 	/// A normal dispatch.
-	User,
+	Normal,
 	/// An operational dispatch.
 	Operational,
 }
 
 impl Default for DispatchClass {
 	fn default() -> Self {
-		DispatchClass::User
+		DispatchClass::Normal
 	}
 }
 
 impl From<SimpleDispatchInfo> for DispatchClass {
 	fn from(tx: SimpleDispatchInfo) -> Self {
 		match tx {
-			SimpleDispatchInfo::OperationalNormal(_) => DispatchClass::Operational,
-			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::User,
-			SimpleDispatchInfo::MaxNormal => DispatchClass::User,
-			SimpleDispatchInfo::FreeNormal => DispatchClass::User,
+			SimpleDispatchInfo::FixedOperational(_) => DispatchClass::Operational,
+			SimpleDispatchInfo::MaxOperational => DispatchClass::Operational,
+			SimpleDispatchInfo::FreeOperational => DispatchClass::Operational,
+
+			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
+			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
+			SimpleDispatchInfo::FreeNormal => DispatchClass::Normal,
 		}
 	}
 }
@@ -65,6 +68,17 @@ pub struct DispatchInfo {
 	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
+}
+
+impl DispatchInfo {
+	/// Determine if this dispatch should pay the base length-related fee or not.
+	pub fn pay_length_fee(&self) -> bool {
+		match self.class {
+			DispatchClass::Normal => true,
+			// For now we assume all operational transactions don't pay the length fee.
+			DispatchClass::Operational => false,
+		}
+	}
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with it, using the
@@ -92,32 +106,48 @@ pub trait ClassifyDispatch<T> {
 ///
 /// A user may pass in any other type that implements the correct traits. If not, the `Default`
 /// implementation of [`SimpleDispatchInfo`] is used.
+///
+/// For each broad group (`Normal` and `Operation`):
+///   - A `Fixed` variant means weight fee is charged normally and the weight is the number
+///      specified in the inner value of the variant.
+///   - A `Free` variant is equal to `::Fixed(0)`. Note that this does not guarantee inclusion.
+///   - A `Max` variant is equal to `::Fixed(Weight::max_value())`.
+///
+/// Based on the final weight value, based on the above variants:
+///   - A _weight-fee_  is deducted.
+///   - The block weight is consumed proportionally.
+///
+/// As for the broad groups themselves:
+///   - `Normal` variants will be assigned a priority proportional to their weight. They can only
+///     consume a portion (1/4) of the maximum block resource limits.
+///   - `Operational` variants will be assigned the maximum priority. They can potentially consume
+///     the entire block resource limit.
 #[derive(Clone, Copy)]
 pub enum SimpleDispatchInfo {
-	/// A fixed-weight dispatch function. No dependency on state or input.
+	/// A normal dispatch with fixed weight.
 	FixedNormal(Weight),
-	/// An operational dispatch function. Still incurs a weight-fee but typically has a higher
-	/// priority.
-	OperationalNormal(Weight),
-	/// A dispatch function with the maximum possible weight. This means:
-	///   - The weight-fee will be maximum possible, based on the system state.
-	///   - This transaction will also have a high priority (but not guaranteed to be included.)
-	///   - If included, no more _normal_ dispatches will be permitted in that block. Operational
-	///       dispatches might be included nonetheless.
+	/// A normal dispatch with the maximum weight.
 	MaxNormal,
-	/// Free. The transaction does not increase the total weight. This means:
-	///   - No weight-fee is charged.
-	///   - Block weight is not increased (very likely to be included, but not guaranteed).
+	/// A normal dispatch with no weight.
 	FreeNormal,
+	/// An operational dispatch with fixed weight.
+	FixedOperational(Weight),
+	/// An operational dispatch with the maximum weight.
+	MaxOperational,
+	/// An operational dispatch with no weight.
+	FreeOperational,
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
 	fn weigh_data(&self, _: T) -> Weight {
 		match self {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
-			SimpleDispatchInfo::OperationalNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
+
+			SimpleDispatchInfo::FixedOperational(w) => *w,
+			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
+			SimpleDispatchInfo::FreeOperational => Bounded::min_value(),
 		}
 	}
 }

@@ -1057,7 +1057,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Header = T::Header;
 	type Event = ();
 	type MaximumBlockWeight = T::MaximumBlockWeight;
-	type MaximumBlockSize = T::MaximumBlockSize;
+	type MaximumBlockLength = T::MaximumBlockLength;
 	type BlockHashCount = T::BlockHashCount;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {

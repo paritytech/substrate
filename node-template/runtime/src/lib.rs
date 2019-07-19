@@ -113,7 +113,7 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockSize: u32 = 2 * 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -140,7 +140,7 @@ impl system::Trait for Runtime {
 	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
-	type MaximumBlockSize = MaximumBlockSize;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl aura::Trait for Runtime {

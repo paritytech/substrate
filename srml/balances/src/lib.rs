@@ -164,7 +164,7 @@ use primitives::traits::{
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
 };
 use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::{DispatchInfo, Weight};
+use primitives::weights::DispatchInfo;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -764,7 +764,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
-	type MaximumBlockSize = T::MaximumBlockSize;
+	type MaximumBlockLength = T::MaximumBlockLength;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -1169,16 +1169,21 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	///      and the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
-	fn compute_fee(len: usize, weight: Weight, tip: T::Balance) -> T::Balance {
+	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
 		// length fee
-		let len = T::Balance::from(len as u32);
-		let len_fee = T::TransactionBaseFee::get()
-			.saturating_add(T::TransactionByteFee::get().saturating_mul(len));
+		let len_fee = if info.pay_length_fee() {
+			let len = T::Balance::from(len as u32);
+			let base = T::TransactionBaseFee::get();
+			let byte = T::TransactionByteFee::get();
+			base.saturating_add(byte.saturating_mul(len))
+		} else {
+			Zero::zero()
+		};
 
 		// weight fee
-		let _weight_fee = T::Balance::from(weight); // TODO: should be weight_and_size_to_fee(weight, _len) #2854
+		let _weight_fee = T::Balance::from(0); // TODO: should be weight_and_size_to_fee(weight, _len) #2854
 
-		len_fee.saturating_add(tip)/*.saturating_add(_weight_fee)*/
+		len_fee.saturating_add(_weight_fee).saturating_add(tip)
 	}
 }
 
@@ -1194,36 +1199,17 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AdditionalSigned = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		info: DispatchInfo,
-		len: usize,
-	) -> rstd::result::Result<(), DispatchError> {
-		// pay any fees.
-		let fee = Self::compute_fee(len, info.weight, self.0);
-		let imbalance = <Module<T, I>>::withdraw(
-			who,
-			fee,
-			WithdrawReason::TransactionPayment,
-			ExistenceRequirement::KeepAlive,
-		).map_err(|_| DispatchError::Payment)?;
-		T::TransactionPayment::on_unbalanced(imbalance);
-		Ok(())
-	}
-
 	fn validate(
 		&self,
 		who: &Self::AccountId,
 		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
-		// check that they can pay all their fees.
-		let fee = Self::compute_fee(len, info.weight, self.0);
-		// TODO: just use `<Module<T, I>>::ensure_can_withdraw()`? and no need to handle imbalance imo.
+		// pay any fees.
+		let fee = Self::compute_fee(len, info, self.0);
 		let imbalance = <Module<T, I>>::withdraw(
 			who,
-			fee.clone(),
+			fee,
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive,
 		).map_err(|_| DispatchError::Payment)?;

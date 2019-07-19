@@ -1631,7 +1631,7 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
-			#[weight = SimpleDispatchInfo::OperationalNormal(5)]
+			#[weight = SimpleDispatchInfo::FixedOperational(5)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
@@ -1780,12 +1780,12 @@ mod tests {
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 1, class: DispatchClass::User },
+			DispatchInfo { weight: 1, class: DispatchClass::Normal },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 10, class: DispatchClass::User },
+			DispatchInfo { weight: 10, class: DispatchClass::Normal },
 		);
 	}
 }

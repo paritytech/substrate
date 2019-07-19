@@ -195,8 +195,8 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
 
-	/// The maximum size of a block (in bytes).
-	type MaximumBlockSize: Get<u32>;
+	/// The maximum length of a block (in bytes).
+	type MaximumBlockLength: Get<u32>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -771,16 +771,23 @@ impl<T: Trait> Module<T> {
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> {
+
+	/// Get the quota divisor of each dispatch class type. This indicates that all operational
+	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
+	/// a quarter.
+	fn get_dispatch_limit_divisor(class: DispatchClass) -> Weight {
+		match class {
+			DispatchClass::Operational => 1,
+			DispatchClass::Normal => 4,
+		}
+	}
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_weight(info: DispatchInfo) -> Result<Weight, DispatchError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
-		let limit = match info.class {
-			DispatchClass::Operational => maximum_weight,
-			DispatchClass::User => maximum_weight / 4
-		};
+		let limit = maximum_weight / Self::get_dispatch_limit_divisor(info.class);
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
@@ -792,11 +799,13 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(_info: DispatchInfo, len: usize) -> Result<u32, DispatchError> {
+	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, DispatchError> {
 		let current_len = Module::<T>::all_extrinsics_len();
+		let maximum_len = T::MaximumBlockLength::get();
+		let limit = maximum_len / Self::get_dispatch_limit_divisor(info.class);
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
-		if next_len > T::MaximumBlockSize::get() {
+		if next_len > limit {
 			return Err(DispatchError::BadState)
 		}
 		Ok(next_len)
@@ -805,7 +814,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// get the priority of an extrinsic denoted by `info`.
 	fn get_priority(info: DispatchInfo) -> TransactionPriority {
 		match info.class {
-			DispatchClass::User => info.weight.into(),
+			DispatchClass::Normal => info.weight.into(),
 			DispatchClass::Operational => Bounded::max_value()
 		}
 	}
@@ -1006,7 +1015,7 @@ mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
 		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockSize: u32 = 2 * 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 
 	impl Trait for Test {
@@ -1021,7 +1030,7 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockSize = MaximumBlockSize;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 
 	impl From<Event> for u16 {
@@ -1256,13 +1265,19 @@ mod tests {
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, normal, len).is_err());
 			// will fit.
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, op, len).is_ok());
+
+			// likewise for length limit.
+			let len = 100_usize;
+			AllExtrinsicsLen::put(<MaximumBlockLength as Get<Weight>>::get() / 4);
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, op, len).is_ok());
 		})
 	}
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::User };
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
 
@@ -1288,9 +1303,9 @@ mod tests {
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
+			reset_check_weight(128, false);
 			reset_check_weight(512, false);
-			reset_check_weight(2 * 1024, false);
-			reset_check_weight(3 * 1024, true);
+			reset_check_weight(513, true);
 		})
 	}
 
