@@ -95,6 +95,7 @@ pub enum ConsensusLog<N: Codec> {
 	OnDisabled(AuthorityIndex),
 	/// A signal to pause the current authority set after the given delay.
 	/// After finalizing the block at _delay_ the authorities should stop voting.
+	#[codec(index = "4")]
 	Pause(N),
 	/// A signal to resume the current authority set after the given delay.
 	/// After authoring the block at _delay_ the authorities should resume voting.
