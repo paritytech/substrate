@@ -21,8 +21,6 @@ balances = { package = "srml-balances", path = "../balances" }
 
 [features]
 default = ["std"]
-# use legacy trie implementation (substrate 1.0)
-legacy-trie = []
 std = [
 	"rstd/std",
 	"srml-support/std",

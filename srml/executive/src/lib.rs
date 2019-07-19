@@ -514,10 +514,7 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		#[cfg(not(feature = "legacy-trie"))]
 		let state_root = hex!("61e41e3e79d1bae499fdfafadb866bec932bad484b9a72797c0b3c7251305e77").into();
-		#[cfg(feature = "legacy-trie")]
-		let state_root = hex!("d75c79776d69123b65e819977b70e102482e05fd7538c1dcae1249a248ba64e4").into();
 		with_externalities(&mut new_test_ext(), || {
 			Executive::execute_block(Block {
 				header: Header {
