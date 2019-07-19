@@ -56,7 +56,7 @@ fn block_import_works() {
             header: Header {
                 parent_hash: [69u8; 32].into(),
                 number: 1,
-                state_root: hex!("5518fc5383e35df8bf7cda7d6467d1307cc907424b7c8633148163aba5ee6aa8").into(),
+                state_root: hex!("f7764e0a602859259e65aaf3c583fa61a3d4aaf7d99f2cb5811e2e14a72fd30c").into(),
                 extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
                 digest: Digest { logs: vec![], },
             },
