@@ -60,10 +60,9 @@ decl_storage! {
 		MisconductReports get(kind): linked_map T::Kind => Vec<SessionIndex>;
 
 		/// EraData which have mapping from `EraIndex` to a list of unique hashes
-		///
 		EraData get(idx): linked_map EraIndex => Vec<T::Hash>;
 
-		/// Bonding guard
+		/// Bonding Uniqueness
 		///
 		/// Keeps track of uniquely reported misconducts in the entire bonding duration
 		BondingUniqueness get(uniq): linked_map T::Hash => SessionIndex;
@@ -87,8 +86,7 @@ impl<T: Trait> Module<T> {
 		current_era: EraIndex
 	) -> Result<u64, ()> {
 
-		// filter out misconduct uniqueness over 1 period old
-		Self::refresh(current_era);
+		Self::remove_old_bonding_data(current_era);
 
 		if <BondingUniqueness<T>>::exists(footprint) {
 			return Err(());
@@ -102,13 +100,15 @@ impl<T: Trait> Module<T> {
 		Ok(<MisconductReports<T>>::get(kind).len() as u64)
 	}
 
+	// Remove bonding data which is older than one bonding period
+	//
 	// TODO(niklasad1): optimize
-	fn refresh(current_era: EraIndex) {
+	fn remove_old_bonding_data(current_era: EraIndex) {
 		let bonding_duration = T::BondingDuration::get();
 
 		for (idx, _) in <EraData<T>>::enumerate() {
 			let diff = current_era.wrapping_sub(idx);
-			if diff >= bonding_duration {
+			if diff > bonding_duration {
 				for old in <EraData<T>>::take(idx) {
 					<BondingUniqueness<T>>::remove(old);
 				}
@@ -116,7 +116,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Return number of misbehavior's in the current window
+	/// Return number of misbehavior's in the current window for a kind
 	pub fn get_misbehaved(kind: T::Kind) -> u64 {
 		<MisconductReports<T>>::get(kind).len() as u64
 	}
@@ -247,12 +247,12 @@ mod tests {
 			assert!(RollingWindow::report_misbehavior(Kind::One, zero, 0, 0).is_err());
 			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, one, 0, 1).unwrap(), 2);
 
-			for era in 1..3 {
+			for era in 1..=3 {
 				assert!(RollingWindow::report_misbehavior(Kind::Two, zero, 0, era).is_err());
-			}
 
+			}
 			// bonding period expired but not the rolling window
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, zero, 0, 3).unwrap(), 3);
+			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, zero, 0, 4).unwrap(), 3);
 
 		});
 	}
