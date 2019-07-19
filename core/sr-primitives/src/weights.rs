@@ -96,8 +96,7 @@ impl WeightMultiplier {
 	///
 	/// This will perform a saturated  `weight + weight * self.0`.
 	pub fn apply_to(&self, weight: Weight) -> Weight {
-		let inner = self.0;
-		inner.saturated_multiply_accumulate(weight)
+		self.0.saturated_multiply_accumulate(weight)
 	}
 
 	/// build self from raw parts per billion.
