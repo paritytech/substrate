@@ -655,8 +655,8 @@ pub trait ReportSlash<Misbehaved, Reporter, Hash> {
 	/// Reports slashing for a misconduct where `to_slash` is the misbehaved entities and
 	/// `to_reward` is the entities that detected and reported the misbehavior
 	///
-	/// Returns `Ok(misconduct level)` if the misconduct was unique otherwise `Err`
-	fn slash(to_slash: Misbehaved, to_reward: Reporter, footprint: Hash) -> Result<u8, ()>;
+	/// Returns `Ok` if the misconduct was unique otherwise `Err`
+	fn slash(to_slash: Misbehaved, to_reward: Reporter, footprint: Hash) -> Result<(), ()>;
 }
 
 /// A generic trait for enacting slashes.
