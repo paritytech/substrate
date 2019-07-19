@@ -1164,7 +1164,7 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	///
 	/// The final fee is composed of:
 	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight-fee_: This amount is computer based on the weight of the transaction. Unlike
+	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
 	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
 	///      and the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
