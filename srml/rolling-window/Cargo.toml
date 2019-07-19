@@ -19,7 +19,7 @@ balances = { package = "srml-balances", path = "../balances" }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 substrate-primitives = { path = "../../core/primitives" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
-srml-staking = { path = "../staking", default-features = false }
+srml-staking = { path = "../staking" }
 
 [features]
 default = ["std"]
