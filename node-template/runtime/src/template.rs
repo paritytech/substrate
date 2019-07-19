@@ -72,8 +72,8 @@ mod tests {
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	use support::{impl_outer_origin, assert_ok, parameter_types};
-	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use runtime_primitives::weights::Weight;
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sr_primitives::weights::Weight;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -98,6 +98,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

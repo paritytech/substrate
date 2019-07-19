@@ -55,6 +55,7 @@ impl system::Trait for Test {
 	type Event = TestEvent;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
 }
 

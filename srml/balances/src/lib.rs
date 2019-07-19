@@ -761,6 +761,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
+	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
@@ -1181,9 +1182,10 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 		};
 
 		// weight fee
-		let _weight_fee = T::Balance::from(0); // TODO: should be weight_and_size_to_fee(weight, _len) #2854
+		let weight = info.weight;
+		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier().apply_to(weight).into();
 
-		len_fee.saturating_add(_weight_fee).saturating_add(tip)
+		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}
 }
 

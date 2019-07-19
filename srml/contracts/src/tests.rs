@@ -98,6 +98,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const BalancesTransactionBaseFee: u64 = 0;
+	pub const BalancesTransactionByteFee: u64 = 0;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -108,14 +110,11 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
-}
-parameter_types! {
-	pub const BalancesTransactionBaseFee: u64 = 0;
-	pub const BalancesTransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

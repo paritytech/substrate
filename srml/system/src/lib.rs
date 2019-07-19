@@ -77,20 +77,19 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
-use primitives::{
-	generic::{self, Era}, weights::{Weight, DispatchInfo, DispatchClass} , traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension,
-		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
-		Lookup, DispatchError, SaturatedConversion
-	}, transaction_validity::{
-		ValidTransaction, TransactionPriority, TransactionLongevity
-	},
+use primitives::generic::{self, Era};
+use primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier};
+use primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
+	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+	Lookup, DispatchError, SaturatedConversion,
 };
+use primitives::Perbill;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
-	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
-	StorageMap, Parameter, for_each_tuple, traits::{Contains, Get}
+	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
+	Parameter, for_each_tuple, traits::{Contains, Get}
 };
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
@@ -180,6 +179,14 @@ pub trait Trait: 'static + Eq + Clone {
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
+	/// Handler for updating the weight multiplier at the end of each block.
+	///
+	/// It receives the current block's weight as input and returns the next weight multiplier for next
+	/// block.
+	///
+	/// Note that passing `()` will keep the value constant.
+	type WeightMultiplierUpdate: Convert<(Weight, WeightMultiplier), WeightMultiplier>;
+
 	/// The block header.
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
@@ -194,6 +201,10 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
+
+	/// portion of the block weight that is allowed to be consumed by normal extrinsics. The weight
+	/// multiplier also updates proportional to this.
+	// type IdealBlockWeightRatio: Get<Perbill>;
 
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
@@ -330,6 +341,9 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<Weight>;
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
+		/// The next weight multiplier. This should be updated at the end of each block based on the
+		/// saturation level (weight).
+		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -547,13 +561,23 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Gets a total weight of all executed extrinsics.
-	pub fn all_extrinsics_weight() -> u32 {
+	pub fn all_extrinsics_weight() -> Weight {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
-	/// Gets a total length of all executed extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
 		AllExtrinsicsLen::get().unwrap_or_default()
+	}
+
+	/// Update the next weight multiplier.
+	///
+	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
+	pub fn update_weight_multiplier() {
+		// update the multiplier based on block weight.
+		let current_weight = Self::all_extrinsics_weight();
+		NextWeightMultiplier::mutate(|fm| {
+			*fm = T::WeightMultiplierUpdate::convert((current_weight, *fm))
+		});
 	}
 
 	/// Start the execution of a particular block.
@@ -584,6 +608,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
+		Self::update_weight_multiplier();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
 
@@ -778,6 +803,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_dispatch_limit_divisor(class: DispatchClass) -> Weight {
 		match class {
 			DispatchClass::Operational => 1,
+			// TODO: make this an associated const.
 			DispatchClass::Normal => 4,
 		}
 	}
@@ -1027,6 +1053,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

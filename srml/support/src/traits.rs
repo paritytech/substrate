@@ -21,9 +21,7 @@
 use crate::rstd::{result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
 use substrate_primitives::u32_trait::Value as U32;
-use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, Saturating
-};
+use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
 use crate::runtime_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;

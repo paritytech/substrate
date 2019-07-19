@@ -349,6 +349,7 @@ where
 	}
 }
 
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -393,6 +394,7 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
+		type WeightMultiplierUpdate = ();
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
@@ -455,6 +457,7 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		let xt = primitives::testing::TestXt(Some(1), Call::transfer(2, 69), extra(0, 0));
+		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
@@ -466,15 +469,15 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert_eq!(r, Ok(ApplyOutcome::Success));
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42 - 10);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42 - 10 - weight);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
-			balances: vec![(1, 111)],
+			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.into()
@@ -482,12 +485,12 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		with_externalities(&mut new_test_ext(), || {
+		with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("9159f07939faa7de6ec7f46e292144fc82112c42ead820dfb588f1788f3e8058").into(),
+					state_root: hex!("ba811447b8ae3bf798a07a18f5355ea59926917c8a9cc7527ede20b261aacfdf").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -499,7 +502,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -516,7 +519,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -532,7 +535,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_not_inserted() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(1);
 		// bad nonce check!
 		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(30, 0));
 		with_externalities(&mut t, || {
@@ -550,7 +553,7 @@ mod tests {
 
 	#[test]
 	fn block_weight_limit_enforced() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
 		let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(0, 0));
 		let encoded = xt.encode();
@@ -587,7 +590,7 @@ mod tests {
 		let x1 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(1, 0));
 		let x2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(2, 0));
 		let len = xt.clone().encode().len() as u32;
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(1);
 		with_externalities(&mut t, || {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
@@ -611,7 +614,7 @@ mod tests {
 	fn validate_unsigned() {
 		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69), extra(0, 0));
 		let valid = TransactionValidity::Valid(Default::default());
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(1);
 
 		with_externalities(&mut t, || {
 			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
@@ -623,7 +626,7 @@ mod tests {
 	fn can_pay_for_tx_fee_on_full_lock() {
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
-			let mut t = new_test_ext();
+			let mut t = new_test_ext(1);
 			with_externalities(&mut t, || {
 				<balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
 					id,
@@ -633,6 +636,7 @@ mod tests {
 					lock,
 				);
 				let xt = primitives::testing::TestXt(Some(1), Call::transfer(2, 10), extra(0, 0));
+				let weight = xt.get_dispatch_info().weight as u64;
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -644,7 +648,7 @@ mod tests {
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
 					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail);
 					// but tx fee has been deducted. the transaction failed on transfer, not on fee.
-					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10);
+					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10 - weight);
 				} else {
 					assert_eq!(Executive::apply_extrinsic(xt), Err(ApplyError::CantPay));
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
