@@ -182,36 +182,27 @@ pub trait Trait: timestamp::Trait + historical::Trait {
 fn valid_equivocation<T: Trait>(
 	proof: &AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>
 ) -> bool {
-	let header1 = proof.first_header();
-	let header2 = proof.second_header();
+	let first_header = proof.first_header();
+	let second_header = proof.second_header();
 
-	if header1 == header2 {
+	if first_header == second_header {
 		return false
 	}
 
-	let maybe_slot1 = find_pre_digest::<_, T::Signature>(header1);
-	let maybe_slot2 = find_pre_digest::<_, T::Signature>(header2);
+	let maybe_first_slot = find_pre_digest::<_, T::Signature>(first_header);
+	let maybe_second_slot = find_pre_digest::<_, T::Signature>(second_header);
 
-	if maybe_slot1.is_ok() && maybe_slot1 == maybe_slot2 {
-		let slot = maybe_slot1.expect("OK by previous line; qed");
+	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+		let slot = maybe_first_slot.expect("OK by previous line; qed");
 
-		// FIX: What if there is a different set of authorities?
-		let authorities = <Module<T>>::authorities();
+		// TODO: Check that author matches slot author (improve HistoricalSession).
+		let author = proof.identity();
 
-		let author = match slot_author(slot, authorities.as_slice()) {
-			None => return false,
-			Some(author) => author,
-		};
-
-		let pre_hash1 = header1.hash();
-
-		if !proof.first_signature().verify(pre_hash1.as_ref(), author) {
+		if !proof.first_signature().verify(first_header.hash().as_ref(), author) {
 			return false
 		}
 
-		let pre_hash2 = header2.hash();
-
-		if !proof.second_signature().verify(pre_hash2.as_ref(), author) {
+		if !proof.second_signature().verify(second_header.hash().as_ref(), author) {
 			return false
 		}
 
@@ -249,8 +240,7 @@ decl_module! {
 			);
 
 			if to_punish.is_some() && valid_equivocation::<T>(&equivocation) {
-				// This is the place where we will slash.
-
+				// TODO: Slash.
 			}
 		}
 	}
