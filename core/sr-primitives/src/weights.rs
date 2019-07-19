@@ -32,7 +32,7 @@ use crate::traits::Bounded;
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
-/// A broad range of dispatch types. This is only distinguishing normal, user-triggered transactions
+/// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -110,7 +110,7 @@ pub trait ClassifyDispatch<T> {
 /// A user may pass in any other type that implements the correct traits. If not, the `Default`
 /// implementation of [`SimpleDispatchInfo`] is used.
 ///
-/// For each broad group (`Normal` and `Operation`):
+/// For each generalized group (`Normal` and `Operation`):
 ///   - A `Fixed` variant means weight fee is charged normally and the weight is the number
 ///      specified in the inner value of the variant.
 ///   - A `Free` variant is equal to `::Fixed(0)`. Note that this does not guarantee inclusion.
@@ -120,7 +120,7 @@ pub trait ClassifyDispatch<T> {
 ///   - A _weight-fee_  is deducted.
 ///   - The block weight is consumed proportionally.
 ///
-/// As for the broad groups themselves:
+/// As for the generalized groups themselves:
 ///   - `Normal` variants will be assigned a priority proportional to their weight. They can only
 ///     consume a portion (1/4) of the maximum block resource limits.
 ///   - `Operational` variants will be assigned the maximum priority. They can potentially consume

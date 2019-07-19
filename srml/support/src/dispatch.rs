@@ -1780,7 +1780,7 @@ mod tests {
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 1, class: DispatchClass::Normal },
+			DispatchInfo { weight: 100, class: DispatchClass::Normal },
 		);
 		// custom basic
 		assert_eq!(
