@@ -661,7 +661,7 @@ pub trait ReportSlash<Misbehaved, Reporter, Hash> {
 
 /// A generic trait for enacting slashes.
 pub trait DoSlash<Misbehaved, Reporter, Severity> {
-	/// Performs that actual slashing and rewarding based on severity
+	/// Performs the actual slashing and rewarding based on severity
 	fn do_slash(to_slash: Misbehaved, to_reward: Reporter, severity: Severity) -> Result<(), ()>;
 }
 

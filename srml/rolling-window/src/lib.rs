@@ -52,9 +52,8 @@ decl_storage! {
 		/// Misbehavior reports
 		///
 		/// It stores every unique misbehavior of a kind
-		// TODO(niklasad1): optimize how to shrink the window when sessions expire
+		// TODO [#3149]: optimize how to shrink the window when sessions expire
 		MisconductReports get(kind): linked_map T::Kind => Vec<SessionIndex>;
-
 
 		/// Bonding Uniqueness
 		///
@@ -73,11 +72,23 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Return number of misbehavior's in the current window for a kind
+	pub fn get_misbehaved(kind: T::Kind) -> u64 {
+		<MisconductReports<T>>::get(kind).len() as u64
+	}
+}
+
+/// Trait for reporting misbehavior's
+pub trait MisbehaviorReporter<Kind, Hash> {
 	/// Report misbehavior for a kind
 	///
 	/// If the misbehavior is not unique `Err` is returned otherwise the number of misbehaviors for the kind
 	/// is returned
-	pub fn report_misbehavior(
+	fn report_misbehavior(kind: Kind, footprint: Hash, current_session: SessionIndex) -> Result<u64, ()>;
+}
+
+impl<T: Trait> MisbehaviorReporter<T::Kind, T::Hash> for Module<T> {
+	fn report_misbehavior(
 		kind: T::Kind,
 		footprint: T::Hash,
 		current_session: SessionIndex,
@@ -89,11 +100,6 @@ impl<T: Trait> Module<T> {
 			<MisconductReports<T>>::mutate(kind, |entry| entry.push(current_session));
 			Ok(<MisconductReports<T>>::get(kind).len() as u64)
 		}
-	}
-
-	/// Return number of misbehavior's in the current window for a kind
-	pub fn get_misbehaved(kind: T::Kind) -> u64 {
-		<MisconductReports<T>>::get(kind).len() as u64
 	}
 }
 
