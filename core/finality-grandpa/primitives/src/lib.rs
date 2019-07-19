@@ -99,6 +99,7 @@ pub enum ConsensusLog<N: Codec> {
 	Pause(N),
 	/// A signal to resume the current authority set after the given delay.
 	/// After authoring the block at _delay_ the authorities should resume voting.
+	#[codec(index = "5")]
 	Resume(N),
 }
 
