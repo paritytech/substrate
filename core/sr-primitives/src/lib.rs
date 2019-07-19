@@ -386,7 +386,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 pub struct Fixed64(i64);
 
 /// The maximum value of the `Fixed64` type
-pub const DIV: i64 = 1_000_000_000;
+const DIV: i64 = 1_000_000_000;
 
 impl Fixed64 {
 	/// creates self from a natural number.
