@@ -403,6 +403,30 @@ impl Fixed64 {
 		Self((n as i128 * DIV as i128 / (d as i128).max(1)).try_into().unwrap_or(Bounded::max_value()))
 	}
 
+	/// Performs a saturated multiply and accumulate.
+	///
+	/// Returns `n + (self * n)`.
+	pub fn saturated_multiply_accumulate(&self, n: u32) -> u32 {
+		let parts = self.0;
+
+		let positive = parts > 0;
+		// fractional parts can always fit into u32.
+		let perbill_parts = (parts.abs() % DIV) as u32;
+		// natural parts might overflow.
+		let natural_parts = self.clone().saturated_into::<u32>();
+
+		let n = n.saturating_mul(natural_parts);
+		let p = Perbill::from_parts(perbill_parts) * n;
+		// everything that needs to be either added or subtracted from the original weight.
+		let excess = n.saturating_add(p);
+
+		if positive {
+			n.saturating_add(excess)
+		} else {
+			n.saturating_sub(excess)
+		}
+	}
+
 	/// Raw constructor. Equal to `parts / 1_000_000_000`.
 	pub fn from_parts(parts: i64) -> Self {
 		Self(parts)

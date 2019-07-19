@@ -23,7 +23,7 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-use crate::{Fixed64, DIV, Perbill, traits::{Saturating, SaturatedConversion}};
+use crate::{Fixed64, traits::Saturating};
 use crate::codec::{Encode, Decode};
 
 /// The final type that each `#[weight = $x:expr]`'s
@@ -97,24 +97,7 @@ impl WeightMultiplier {
 	/// This will perform a saturated  `weight + weight * self.0`.
 	pub fn apply_to(&self, weight: Weight) -> Weight {
 		let inner = self.0;
-		let parts = inner.0;
-
-		let positive = parts > 0;
-		// fractional parts can always fit into u32.
-		let perbill_parts = (parts.abs() % DIV) as u32;
-		// natural parts might overflow.
-		let natural_parts = inner.saturated_into::<Weight>();
-
-		let n = weight.saturating_mul(natural_parts);
-		let p = Perbill::from_parts(perbill_parts) * weight;
-		// everything that needs to be either added or subtracted from the original weight.
-		let excess = n.saturating_add(p);
-
-		if positive {
-			weight.saturating_add(excess)
-		} else {
-			weight.saturating_sub(excess)
-		}
+		inner.saturated_multiply_accumulate(weight)
 	}
 
 	/// build self from raw parts per billion.
