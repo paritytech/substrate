@@ -19,9 +19,18 @@
 use std::{sync::Arc, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
+use std::time::Duration;
+use log::{info, warn, debug};
+use std::collections::{HashMap, HashSet};
+use libp2p::{ multihash::Multihash, Multiaddr};
+use parking_lot::Mutex;
+use client::{BlockchainEvents, backend::Backend};
+use futures03::stream::{StreamExt as _, TryStreamExt as _};
+
+use network::{Event, DhtEvent};
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service, AuthorityKeyProvider};
+use crate::{error, Service, AuthorityKeyProvider, NetworkStatus};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -29,6 +38,8 @@ use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as 
 use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
+
+use network::NetworkState;
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, Pair};
 use rpc::{self, apis::system::SystemInfo};
@@ -268,12 +279,155 @@ impl<C: Components> OffchainWorker<Self> for C where
 	}
 }
 
+pub trait TestRuntime<C: Components> {
+	  fn test_runtime<
+	          H: network::ExHashT,
+	      S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
+            >(
+		network: network::NetworkWorker<ComponentBlock<C>, S, H >,
+		client: Arc<ComponentClient<C>>,
+		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<C>>, NetworkState)>>>>,
+		rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
+		should_have_peers: bool,
+		public_key: String,
+	  )-> Box<dyn Future<Item = (), Error = ()>+ Send>  ;
+}
+
+impl<C: Components> TestRuntime<Self> for C where
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
+{
+	  fn test_runtime<
+	          H: network::ExHashT,
+	      S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
+            >(
+		mut network: network::NetworkWorker<ComponentBlock<C>,  S, H>,
+		client: Arc<ComponentClient<C>>,
+		mut status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<C>>, NetworkState)>>>>,
+		mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
+		should_have_peers: bool,
+		public_key: String,
+	)-> Box<dyn Future<Item = (), Error = ()> + Send>  {
+	// Interval at which we send status updates on the status stream.
+	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
+
+		  client.runtime_api().validators();
+
+
+	let hashed_public_key = libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, &public_key.as_bytes()).unwrap();
+
+	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
+
+	let mut report_ext_addresses_interval = tokio_timer::Interval::new_interval(Duration::from_secs(5));
+
+	let mut imported_blocks_stream = client.import_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+
+	Box::new(futures::future::poll_fn(move || {
+		// We poll `imported_blocks_stream`.
+		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
+			network.on_block_imported(notification.hash, notification.header);
+		}
+
+		while let Ok(Async::Ready(_)) = report_ext_addresses_interval.poll() {
+			let external_addresses = network.external_addresses();
+
+			println!("==== external addresses: {:?}", external_addresses);
+
+			// println!("network state: {:?}", network.network_state());
+
+			// TODO: Remove unwrap.
+			let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
+
+			network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
+
+			// TODO: Let's trigger a search for us for now. Remove.
+			network.service().get_value(&hashed_public_key.clone());
+		}
+
+
+
+		// We poll `finality_notification_stream`, but we only take the last event.
+		let mut last = None;
+		while let Ok(Async::Ready(Some(item))) = finality_notification_stream.poll() {
+			last = Some(item);
+		}
+		if let Some(notification) = last {
+			network.on_block_finalized(notification.hash, notification.header);
+		}
+
+		// Poll the RPC requests and answer them.
+		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
+			match request {
+				rpc::apis::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::apis::system::Health {
+						peers: network.peers_debug_info().len(),
+						is_syncing: network.service().is_major_syncing(),
+						should_have_peers,
+					});
+				},
+				rpc::apis::system::Request::Peers(sender) => {
+					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+						rpc::apis::system::PeerInfo {
+							peer_id: peer_id.to_base58(),
+							roles: format!("{:?}", p.roles),
+							protocol_version: p.protocol_version,
+							best_hash: p.best_hash,
+							best_number: p.best_number,
+						}
+					).collect());
+				}
+				rpc::apis::system::Request::NetworkState(sender) => {
+					let _ = sender.send(network.network_state());
+				}
+			};
+		}
+
+		// Interval report for the external API.
+		while let Ok(Async::Ready(_)) = status_interval.poll() {
+			let status = NetworkStatus {
+				sync_state: network.sync_state(),
+				best_seen_block: network.best_seen_block(),
+				num_sync_peers: network.num_sync_peers(),
+				num_connected_peers: network.num_connected_peers(),
+				num_active_peers: network.num_active_peers(),
+				average_download_per_sec: network.average_download_per_sec(),
+				average_upload_per_sec: network.average_upload_per_sec(),
+			};
+			let state = network.network_state();
+
+			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
+		}
+
+		// Main network polling.
+		while let Ok(Async::Ready(Some(Event::Dht(DhtEvent::ValueFound(values))))) = network.poll().map_err(|err| {
+				warn!(target: "service", "Error in network: {:?}", err);
+		}) {
+			for (key, value) in values.iter() {
+				let value = std::str::from_utf8(value).unwrap();
+
+				let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
+
+				println!("==== Found the following external addresses on the DHT: {:?}", external_addresses);
+			}
+		}
+
+		Ok(Async::NotReady)
+
+	}))
+	}
+
+}
+
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
 	Deref<Target = Service<C>>
 	+ Send
 	+ 'static
 	+ StartRPC<C>
+	+ TestRuntime<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}
@@ -282,6 +436,7 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	+ Send
 	+ 'static
 	+ StartRPC<C>
+	+ TestRuntime<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}

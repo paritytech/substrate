@@ -33,6 +33,9 @@ use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 use libp2p::{ multihash::Multihash, Multiaddr};
+use runtime_primitives::traits::{ProvideRuntimeApi};
+use client::{self, Client, runtime_api};
+use crate::components::TestRuntime;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
@@ -211,6 +214,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
+
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
@@ -428,7 +432,7 @@ impl<Components: components::Components> Service<Components> {
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+		let _ = to_spawn_tx.unbounded_send(Box::new(Components::RuntimeServices::test_runtime(
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
@@ -628,12 +632,13 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 	}
 }
 
+
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	Components: components::Components,
-	S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>,
+	  S:network::specialization::NetworkSpecialization<ComponentBlock<Components>> ,
 	H: network::ExHashT
 > (
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
