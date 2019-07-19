@@ -16,6 +16,7 @@
 
 use fnv::FnvHashMap;
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::Multiaddr;
 use libp2p::core::{either::EitherOutput, PeerId, PublicKey};
 use libp2p::core::protocols_handler::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
@@ -27,7 +28,7 @@ use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::Interval;
+use futures_timer::Interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -44,7 +45,7 @@ pub struct DebugInfoBehaviour<TSubstream> {
 	/// Information that we know about all nodes.
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
-	garbage_collect: Interval,
+	garbage_collect: Box<dyn Stream<Item = (), Error = ()> + Send>,
 }
 
 /// Information about a node we're connected to.
@@ -76,7 +77,7 @@ impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
-			garbage_collect: Interval::new_interval(GARBAGE_COLLECT_INTERVAL),
+			garbage_collect: Box::new(Interval::new(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
 		}
 	}
 
