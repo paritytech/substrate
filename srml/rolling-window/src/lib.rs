@@ -82,16 +82,13 @@ impl<T: Trait> Module<T> {
 		footprint: T::Hash,
 		current_session: SessionIndex,
 	) -> Result<u64, ()> {
-
 		if <BondingUniqueness<T>>::exists(footprint) {
-			return Err(());
+			Err(())
 		} else {
 			<BondingUniqueness<T>>::insert(footprint, current_session);
+			<MisconductReports<T>>::mutate(kind, |entry| entry.push(current_session));
+			Ok(<MisconductReports<T>>::get(kind).len() as u64)
 		}
-
-		<MisconductReports<T>>::mutate(kind, |entry| entry.push(current_session));
-
-		Ok(<MisconductReports<T>>::get(kind).len() as u64)
 	}
 
 	/// Return number of misbehavior's in the current window for a kind
