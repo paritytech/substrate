@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ use primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity},
 };
-use rstd::{prelude::*};
+use rstd::prelude::*;
 use session::SessionIndex;
 use sr_io::Printable;
 use srml_support::{
@@ -183,7 +183,7 @@ decl_storage! {
 
 		// For each session index we keep a mapping of `AuthorityId` to
 		// `offchain::OpaqueNetworkState`.
-		ReceivedHeartbeats get(received_heartbeats) config(): double_map session::SessionIndex,
+		ReceivedHeartbeats get(received_heartbeats): double_map session::SessionIndex,
 			blake2_256(T::AuthorityId) => Vec<u8>;
 	}
 }
@@ -222,37 +222,29 @@ decl_module! {
 					_ => return Err(OffchainErr::UnknownCryptoKind),
 				};
 
-				match sr_io::authority_pubkey(kind) {
-					Ok(key) => {
-						let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
-							.ok_or(OffchainErr::DecodeAuthorityId)?;
-						let network_state =
-							sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
-						let heartbeat_data = Heartbeat {
-							block_number,
-							network_state,
-							session_index: <session::Module<T>>::current_index(),
-							authority_id,
-						};
+				// we run only when a local authority key is configured
+				if let Ok(key) = sr_io::authority_pubkey(kind) {
+					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
+						.ok_or(OffchainErr::DecodeAuthorityId)?;
+					let network_state =
+						sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+					let heartbeat_data = Heartbeat {
+						block_number,
+						network_state,
+						session_index: <session::Module<T>>::current_index(),
+						authority_id,
+					};
 
-						match sr_io::sign(None, kind, &heartbeat_data.encode()) {
-							Ok(signature) => {
-								let call = Call::heartbeat(heartbeat_data, signature);
-								let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
-									.ok_or(OffchainErr::ExtrinsicCreation)?;
-								sr_io::submit_transaction(&ex)
-									.map_err(|_| OffchainErr::SubmitTransaction)?;
-								set_worker_status::<T>(block_number, true);
-								Ok(())
-							},
-							Err(_) => Err(OffchainErr::FailedSigning),
-						}
-					},
-					Err(_) => {
-						// we only run when a local authority key is configured
-						Ok(())
-					}
+					let signature = sr_io::sign(None, kind, &heartbeat_data.encode())
+						.map_err(|_| OffchainErr::FailedSigning)?;
+					let call = Call::heartbeat(heartbeat_data, signature);
+					let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
+						.ok_or(OffchainErr::ExtrinsicCreation)?;
+					sr_io::submit_transaction(&ex)
+						.map_err(|_| OffchainErr::SubmitTransaction)?;
+					set_worker_status::<T>(block_number, true);
 				}
+				Ok(())
 			}
 
 			fn set_worker_status<T: Trait>(gossipping_at: T::BlockNumber, done: bool) {
@@ -273,17 +265,16 @@ decl_module! {
 						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &l[..])
 							.ok_or(OffchainErr::DecodeWorkerStatus)?;
 
-						let was_aborted =
-							worker_status.done == false && worker_status.gossipping_at < now;
+						let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
 
 						// another off-chain worker is currently in the process of submitting
 						let already_submitting =
-							worker_status.done == false && worker_status.gossipping_at == now;
+							!worker_status.done && worker_status.gossipping_at == now;
 
 						let not_yet_gossipped =
-							worker_status.done == true && worker_status.gossipping_at < next_gossip;
+							worker_status.done && worker_status.gossipping_at < next_gossip;
 
-						let ret = (was_aborted == true && already_submitting == false) || not_yet_gossipped;
+						let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
 						Ok(ret)
 					},
 					None => Ok(true),
