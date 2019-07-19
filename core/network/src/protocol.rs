@@ -17,6 +17,7 @@
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
@@ -91,9 +92,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio_timer::Interval,
+	tick_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio_timer::Interval,
+	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -365,8 +366,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
