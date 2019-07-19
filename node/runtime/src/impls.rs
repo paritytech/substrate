@@ -108,7 +108,7 @@ mod tests {
 	}
 
 	fn ideal() -> Weight {
-		max() / 4
+		max() / 4 / 4
 	}
 
 	// poc reference implementation.
