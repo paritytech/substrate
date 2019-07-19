@@ -126,7 +126,7 @@ impl Saturating for WeightMultiplier {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{DIV};
+	use crate::DIV;
 
 	#[test]
 	fn multiplier_apply_to_works() {
