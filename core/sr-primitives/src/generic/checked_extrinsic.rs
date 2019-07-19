@@ -22,7 +22,7 @@ use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
 	ValidateUnsigned
 };
-use crate::weights::{Weigh, Weight};
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -57,13 +57,13 @@ where
 	}
 
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, weight, len).into()
+			Extra::validate(extra, id, info, len).into()
 		} else {
-			match Extra::validate_unsigned(weight, len) {
+			match Extra::validate_unsigned(info, len) {
 				Ok(extra) => match U::validate_unsigned(&self.function) {
 					TransactionValidity::Valid(v) =>
 						TransactionValidity::Valid(v.combine_with(extra)),
@@ -75,25 +75,25 @@ where
 	}
 
 	fn dispatch(self,
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((id, extra)) = self.signed {
-			Extra::pre_dispatch(extra, &id, weight, len)?;
+			Extra::pre_dispatch(extra, &id, info, len)?;
 			Some(id)
 		} else {
-			Extra::pre_dispatch_unsigned(weight, len)?;
+			Extra::pre_dispatch_unsigned(info, len)?;
 			None
 		};
 		Ok(self.function.dispatch(Origin::from(maybe_who)))
 	}
 }
 
-impl<AccountId, Call, Extra> Weigh for CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
 where
-	Call: Weigh,
+	Call: GetDispatchInfo,
 {
-	fn weigh(&self) -> Weight {
-		self.function.weigh()
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
 	}
 }

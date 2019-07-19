@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System};
+use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight};
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
@@ -124,7 +124,12 @@ fn lock_reasons_should_work() {
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			// NOTE: this causes a fee payment.
-			assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -132,12 +137,22 @@ fn lock_reasons_should_work() {
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 				"account liquidity restrictions prevent withdrawal"
 			);
-			assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_ok());
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			assert!(<TakeFees<Runtime> as SignedExtension>::validate(&TakeFees::from(1), &1, 1).is_err());
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_err());
 		}
 	);
 }
@@ -741,9 +756,10 @@ fn signed_extension_take_fees_work() {
 			.monied(true)
 			.build(),
 		|| {
-			assert!(TakeFees::<Runtime>::from(0).validate(&1, 10).is_ok());
+			let len = 10;
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(0), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20);
-			assert!(TakeFees::<Runtime>::from(5 /* tipped */).validate(&1, 10).is_ok());
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, info_from_weight(0), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
 		}
 	);

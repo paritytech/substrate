@@ -25,6 +25,7 @@ use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
+use crate::weights::DispatchInfo;
 pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -752,6 +753,7 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 /// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
 /// cannot be more concrete because it's designed to work reasonably well over a broad range of
 /// possible transaction types.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum DispatchError {
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
@@ -825,7 +827,7 @@ pub trait SignedExtension:
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_weight: crate::weights::Weight,
+		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
@@ -833,23 +835,23 @@ pub trait SignedExtension:
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { self.validate(who, weight, len).map(|_| ()) }
+	) -> Result<(), DispatchError> { self.validate(who, info, len).map(|_| ()) }
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
 	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
 	/// validating unsigned transactions.
 	fn validate_unsigned(
-		_weight: crate::weights::Weight,
+		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { Self::validate_unsigned(weight, len).map(|_| ()) }
+	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
 }
 
 macro_rules! tuple_impl_indexed {
@@ -869,33 +871,33 @@ macro_rules! tuple_impl_indexed {
 			fn validate(
 				&self,
 				who: &Self::AccountId,
-				weight: crate::weights::Weight,
+				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, weight, len)?),+];
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch(
 				self,
 				who: &Self::AccountId,
-				weight: crate::weights::Weight,
+				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, weight, len)?;)+
+				$(self.$index.pre_dispatch(who, info, len)?;)+
 				Ok(())
 			}
 			fn validate_unsigned(
-				weight: crate::weights::Weight,
+				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(weight, len)?),+];
+				let aggregator = vec![$($direct::validate_unsigned(info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch_unsigned(
-				weight: crate::weights::Weight,
+				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(weight, len)?;)+
+				$($direct::pre_dispatch_unsigned(info, len)?;)+
 				Ok(())
 			}
 		}
@@ -944,14 +946,14 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	fn dispatch(self,
-		weight: crate::weights::Weight,
+		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError>;
 }

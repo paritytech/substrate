@@ -112,7 +112,8 @@ pub const DAYS: Moment = HOURS * 24;
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 4 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -127,6 +128,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl aura::Trait for Runtime {
