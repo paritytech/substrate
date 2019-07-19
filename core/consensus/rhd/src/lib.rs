@@ -150,7 +150,7 @@ pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
 pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 /// A proposer for a rhododendron instance. This must implement the base proposer logic.
-pub trait LocalProposer<B: Block>: BaseProposer<B, Error=Error> {
+pub trait LocalProposer<B: BlockT>: BaseProposer<B, Error=Error> {
 	/// Import witnessed rhododendron misbehavior.
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior<B::Hash>)>);
 
@@ -224,7 +224,7 @@ struct RoundCache<H> {
 }
 
 /// Instance of BFT agreement.
-struct BftInstance<B: Block, P> {
+struct BftInstance<B: BlockT, P> {
 	key: Arc<ed25519::Pair>,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
@@ -233,7 +233,7 @@ struct BftInstance<B: Block, P> {
 	proposer: P,
 }
 
-impl<B: Block, P: LocalProposer<B>> BftInstance<B, P>
+impl<B: BlockT, P: LocalProposer<B>> BftInstance<B, P>
 	where
 		B: Clone + Eq,
 		B::Hash: ::std::hash::Hash
@@ -262,7 +262,7 @@ impl<B: Block, P: LocalProposer<B>> BftInstance<B, P>
 	}
 }
 
-impl<B: Block, P: LocalProposer<B>> rhododendron::Context for BftInstance<B, P>
+impl<B: BlockT, P: LocalProposer<B>> rhododendron::Context for BftInstance<B, P>
 	where
 		B: Clone + Eq,
 		B::Hash: ::std::hash::Hash,
@@ -465,7 +465,7 @@ impl Drop for AgreementHandle {
 /// is notified of.
 ///
 /// This assumes that it is being run in the context of a tokio runtime.
-pub struct BftService<B: Block, P, I> {
+pub struct BftService<B: BlockT, P, I> {
 	client: Arc<I>,
 	live_agreement: Mutex<Option<(B::Header, AgreementHandle)>>,
 	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
@@ -638,14 +638,14 @@ impl<B, P, I> BftService<B, P, I>
 /// This stream is localized to a specific parent block-hash, as all messages
 /// will be signed in a way that accounts for it. When using this with
 /// `BftService::build_upon`, the user should take care to use the same hash as for that.
-pub struct CheckedStream<B: Block, S> {
+pub struct CheckedStream<B: BlockT, S> {
 	inner: S,
 	local_id: AuthorityId,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
 }
 
-impl<B: Block, S> CheckedStream<B, S> {
+impl<B: BlockT, S> CheckedStream<B, S> {
 	/// Construct a new checked stream.
 	pub fn new(
 		inner: S,
@@ -662,7 +662,7 @@ impl<B: Block, S> CheckedStream<B, S> {
 	}
 }
 
-impl<B: Block, S: Stream<Item=Vec<u8>>> Stream for CheckedStream<B, S>
+impl<B: BlockT, S: Stream<Item=Vec<u8>>> Stream for CheckedStream<B, S>
 	where S::Error: From<InputStreamConcluded>,
 {
 	type Item = Communication<B>;
@@ -780,7 +780,7 @@ fn check_justification_signed_message<H>(
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_justification<B: Block>(
+pub fn check_justification<B: BlockT>(
 	authorities: &[AuthorityId],
 	parent: B::Hash,
 	just: UncheckedJustification<B::Hash>
@@ -795,9 +795,11 @@ pub fn check_justification<B: Block>(
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
-	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
-{
+pub fn check_prepare_justification<B: BlockT>(
+	authorities: &[AuthorityId],
+	parent: B::Hash,
+	just: UncheckedJustification<B::Hash>
+) -> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>> {
 	let vote: Action<B, B::Hash> = Action::Prepare(just.0.round_number as u32, just.0.digest.clone());
 	let message = localized_encode(parent, vote);
 
@@ -824,7 +826,7 @@ pub fn check_proposal<B: Block + Clone>(
 
 /// Check vote message signatures and authority.
 /// Provide all valid authorities.
-pub fn check_vote<B: Block>(
+pub fn check_vote<B: BlockT>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
 	vote: &rhododendron::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
@@ -842,7 +844,11 @@ pub fn check_vote<B: Block>(
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
 
-fn check_action<B: Block>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
+fn check_action<B: BlockT>(
+	action: Action<B, B::Hash>,
+	parent_hash: &B::Hash,
+	sig: &LocalizedSignature
+) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
 	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
@@ -981,7 +987,8 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 
 		let id = BlockId::hash(parent_hash);
 		let random_seed = self.client.random_seed(&id)?;
-		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Hashing::hash(random_seed.as_ref());
+		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>
+			::Hashing::hash(random_seed.as_ref());
 
 		let validators = self.client.validators(&id)?;
 		self.offline.write().note_new_block(&validators[..]);
@@ -1225,7 +1232,10 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		proposer
 	}
 
-	fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
+	fn import_misbehavior(
+		&self,
+		_misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>
+	) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};

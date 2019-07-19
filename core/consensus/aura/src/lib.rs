@@ -49,7 +49,7 @@ use client::{
 
 use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member, Verify
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member, Verify
 };
 
 use primitives::Pair;
@@ -93,7 +93,7 @@ impl SlotDuration {
 	pub fn get_or_compute<A, B, C, S>(client: &C) -> CResult<Self>
 	where
 		A: Codec,
-		B: Block,
+		B: BlockT,
 		C: AuxStore + ProvideRuntimeApi,
 		S: Verify<Signer=A> + Encode + Decode,
 		C::Api: AuraApi<B, A, S>,
@@ -136,7 +136,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	B: Block<Header=H>,
+	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
 	SC: SelectChain<B>,
@@ -183,7 +183,7 @@ struct AuraWorker<C, E, I, P, SO> {
 }
 
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: Block<Header=H>,
+	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
 	E: Environment<B, Error=Error>,
@@ -355,12 +355,31 @@ macro_rules! aura_err {
 	};
 }
 
-/// Check a header has been signed by the right key.
-/// If the slot is too far in the future, an error will be returned.
+fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String>
+	where DigestItemFor<B>: CompatibleDigestItem<P>,
+		P::Signature: Decode,
+		P::Public: Encode + Decode + PartialEq + Clone,
+{
+	let mut pre_digest: Option<u64> = None;
+	for log in header.digest().logs() {
+		trace!(target: "aura", "Checking log {:?}", log);
+		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))?,
+			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
+}
+
+
+/// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-fn check_header<C, B: Block, P: Pair, T>(
+//
+// FIXME #1018 needs misbehavior types
+fn check_header<C, B: BlockT, P: Pair, T>(
 	client: &C,
 	transaction_pool: &Option<Arc<T>>,
 	slot_now: u64,
@@ -450,7 +469,7 @@ pub struct AuraVerifier<C, P, T> {
 impl<C, P, T> AuraVerifier<C, P, T>
 	where P: Send + Sync + 'static
 {
-	fn check_inherents<B: Block>(
+	fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -500,10 +519,10 @@ impl<C, P, T> AuraVerifier<C, P, T>
 }
 
 #[forbid(deprecated)]
-impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B> + HeaderBackend<B>,
+impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+	DigestItemFor<B>: CompatibleDigestItem<P:Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
@@ -605,7 +624,7 @@ impl<B: Block, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 
 fn initialize_authorities_cache<A, B, C, S>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	S: Verify<Signer=A> + Encode + Decode,
 	C::Api: AuraApi<B, A, S>,
@@ -640,7 +659,7 @@ fn initialize_authorities_cache<A, B, C, S>(client: &C) -> Result<(), ConsensusE
 #[allow(deprecated)]
 fn authorities<A, B, C, S>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	S: Verify<Signer=A> + Encode + Decode,
 	C::Api: AuraApi<B, A, S>,
@@ -683,7 +702,7 @@ pub fn import_queue<B, C, P, T>(
 	transaction_pool: Option<Arc<T>>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
-	B: Block,
+	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
