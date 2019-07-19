@@ -327,7 +327,8 @@ mod tests {
 			cell.replace(new)
 		});
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), Default::default(), deadline).unwrap();
+		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
+			.unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
