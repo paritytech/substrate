@@ -108,6 +108,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 	}
@@ -115,7 +116,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 1;
 		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
