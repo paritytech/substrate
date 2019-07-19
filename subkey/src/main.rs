@@ -29,7 +29,7 @@ use substrate_primitives::{
 use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, CheckNonce, TakeFees, BalancesCall};
+use node_runtime::{Call, UncheckedExtrinsic, /*CheckNonce, TakeFees, */BalancesCall};
 
 mod vanity;
 
@@ -129,7 +129,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let sig = pair.sign(&message);
 			println!("{}", hex::encode(&sig));
 		}
-		("transfer", Some(matches)) => {
+		/*("transfer", Some(matches)) => {
 			let signer = matches.value_of("from")
 				.expect("parameter is required; thus it can't be None; qed");
 			let signer = Sr25519::pair_from_suri(signer, password);
@@ -156,7 +156,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
 				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
-          .expect("Invalid genesis hash or unrecognised chain identifier"),
+					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
@@ -219,7 +219,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
-		}
+		}*/
 		("verify", Some(matches)) => {
 			let sig_data = matches.value_of("sig")
 				.expect("signature parameter is required; thus it can't be None; qed");
