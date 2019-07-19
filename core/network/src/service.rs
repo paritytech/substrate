@@ -218,9 +218,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			Swarm::<B, S, H>::add_external_address(&mut swarm, addr.clone());
 		}
 
+		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+
 		let service = Arc::new(NetworkService {
 			bandwidth,
-			external_addresses: Arc::new(Mutex::new(Vec::new())),
+			external_addresses: external_addresses.clone(),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
@@ -230,7 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		});
 
 		Ok(NetworkWorker {
-			external_addresses: Arc::new(Mutex::new(Vec::new())),
+			external_addresses,
 			num_connected,
 			is_major_syncing,
 			network_service: swarm,
