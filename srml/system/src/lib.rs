@@ -201,10 +201,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
 
-	/// portion of the block weight that is allowed to be consumed by normal extrinsics. The weight
-	/// multiplier also updates proportional to this.
-	// type IdealBlockWeightRatio: Get<Perbill>;
-
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
 }
@@ -802,7 +798,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_dispatch_limit_divisor(class: DispatchClass) -> Weight {
 		match class {
 			DispatchClass::Operational => 1,
-			// TODO: make this an associated const.
 			DispatchClass::Normal => 4,
 		}
 	}

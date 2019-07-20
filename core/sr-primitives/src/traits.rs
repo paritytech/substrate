@@ -929,7 +929,7 @@ macro_rules! tuple_impl_indexed {
 	};
 }
 
-// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths.
+// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths. #3152
 #[allow(non_snake_case)]
 tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
