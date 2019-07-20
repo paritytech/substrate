@@ -85,7 +85,6 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtensi
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	Lookup, DispatchError, SaturatedConversion,
 };
-use primitives::Perbill;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,

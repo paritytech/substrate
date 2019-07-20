@@ -70,8 +70,14 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
+	}
+
+	fn new_unsigned(function: Call) -> Option<Self> {
+		Some(UncheckedExtrinsic::new_unsigned(function))
 	}
 }
 

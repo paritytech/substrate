@@ -48,6 +48,14 @@ impl TypedKey for UintAuthorityId {
 	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
 }
 
+impl AsRef<[u8]> for UintAuthorityId {
+	fn as_ref(&self) -> &[u8] {
+		let ptr = self.0 as *const _;
+		// It's safe to do this here since `UintAuthorityId` is `u64`.
+		unsafe { std::slice::from_raw_parts(ptr, 8) }
+	}
+}
+
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
@@ -137,6 +145,8 @@ impl<'a> Deserialize<'a> for Header {
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
@@ -203,7 +213,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct TestXt<Call, Extra>(pub Option<u64>, pub Call, pub Extra);
+pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
 impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -213,7 +223,7 @@ impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: E
 
 impl<Call, Extra> Debug for TestXt<Call, Extra> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "TestXt({:?}, ...)", self.0)
+		write!(f, "TestXt({:?}, ...)", self.0.as_ref().map(|x| &x.0))
 	}
 }
 
@@ -221,10 +231,15 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
+	}
+
+	fn new_unsigned(_c: Call) -> Option<Self> {
+		None
 	}
 }
 
@@ -236,7 +251,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	type AccountId = u64;
 	type Call = Call;
 
-	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
+	fn sender(&self) -> Option<&u64> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
@@ -252,8 +267,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
-		let maybe_who = if let Some(who) = self.0 {
-			Extra::pre_dispatch(self.2, &who, info, len)?;
+		let maybe_who = if let Some((who, extra)) = self.0 {
+			Extra::pre_dispatch(extra, &who, info, len)?;
 			Some(who)
 		} else {
 			Extra::pre_dispatch_unsigned(info, len)?;
