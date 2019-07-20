@@ -185,6 +185,41 @@ impl TryFrom<u32> for HttpRequestStatus {
 	}
 }
 
+/// A blob to hold information about the local node's network state
+/// without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueNetworkState {
+	/// PeerId of the local node.
+	pub peer_id: OpaquePeerId,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses: Vec<OpaqueMultiaddr>,
+}
+
+/// Simple blob to hold a `PeerId` without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaquePeerId(pub Vec<u8>);
+
+impl OpaquePeerId {
+	/// Create new `OpaquePeerId`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaquePeerId(vec)
+	}
+}
+
+/// Simple blob to hold a `Multiaddr` without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueMultiaddr(pub Vec<u8>);
+
+impl OpaqueMultiaddr {
+	/// Create new `OpaqueMultiaddr`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaqueMultiaddr(vec)
+	}
+}
+
 /// Opaque timestamp type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -240,6 +275,12 @@ pub trait Externalities {
 	///
 	/// The transaction will end up in the pool and be propagated to others.
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+
+	/// Returns information about the local node's network state.
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
+
+	/// Returns the locally configured authority public key, if available.
+	fn authority_pubkey(&self, crypto: CryptoKind) -> Result<Vec<u8>, ()>;
 
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
@@ -319,7 +360,7 @@ pub trait Externalities {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Initiaties a http request given HTTP verb and the URL.
+	/// Initiates a http request given HTTP verb and the URL.
 	///
 	/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
 	/// Returns the id of newly started request.
@@ -396,6 +437,14 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 
 	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
 		(&mut **self).encrypt(key, kind, data)
+	}
+
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		(& **self).network_state()
+	}
+
+	fn authority_pubkey(&self, key:CryptoKind) -> Result<Vec<u8>, ()> {
+		(&**self).authority_pubkey(key)
 	}
 
 	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {

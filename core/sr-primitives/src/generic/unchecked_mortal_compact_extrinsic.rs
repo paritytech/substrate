@@ -59,8 +59,14 @@ impl<Address, Index, Call, Signature> UncheckedMortalCompactExtrinsic<Address, I
 }
 
 impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode> Extrinsic for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
+	}
+
+	fn new_unsigned(call: Self::Call) -> Option<Self> {
+		Some(UncheckedMortalCompactExtrinsic::new_unsigned(call))
 	}
 }
 
