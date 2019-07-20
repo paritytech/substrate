@@ -449,6 +449,10 @@ mod tests {
 		)
 	}
 
+	fn sign_extra(who: u64, nonce: u64, fee: u64) -> Option<(u64, SignedExtra)> {
+		Some((who, extra(nonce, fee)))
+	}
+
 	#[test]
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -456,7 +460,7 @@ mod tests {
 			balances: vec![(1, 111)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		let xt = primitives::testing::TestXt(Some(1), Call::transfer(2, 69), extra(0, 0));
+		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
 		with_externalities(&mut t, || {
@@ -537,7 +541,7 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 69), extra(30, 0));
+		let xt = primitives::testing::TestXt(sign_extra(1, 30, 0), Call::transfer(33, 69));
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -555,7 +559,7 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(0, 0));
+		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as u32;
 		let limit = <MaximumBlockWeight as Get<u32>>::get() / 4;
@@ -571,7 +575,7 @@ mod tests {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
 			for nonce in 0..=num_to_exhaust_block {
-				let xt = primitives::testing::TestXt(Some(1), Call::transfer::<Runtime>(33, 0), extra(nonce.into(), 0));
+				let xt = primitives::testing::TestXt(sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0));
 				let res = Executive::apply_extrinsic(xt);
 				if nonce != num_to_exhaust_block {
 					assert_eq!(res.unwrap(), ApplyOutcome::Success);
@@ -586,9 +590,9 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(0, 0));
-		let x1 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(1, 0));
-		let x2 = primitives::testing::TestXt(Some(1), Call::transfer(33, 0), extra(2, 0));
+		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(33, 0));
+		let x1 = primitives::testing::TestXt(sign_extra(1, 1, 0), Call::transfer(33, 0));
+		let x2 = primitives::testing::TestXt(sign_extra(1, 2, 0), Call::transfer(33, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		with_externalities(&mut t, || {
@@ -612,7 +616,7 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69), extra(0, 0));
+		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69));
 		let valid = TransactionValidity::Valid(Default::default());
 		let mut t = new_test_ext(1);
 
@@ -635,7 +639,7 @@ mod tests {
 					10,
 					lock,
 				);
-				let xt = primitives::testing::TestXt(Some(1), Call::transfer(2, 10), extra(0, 0));
+				let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 10));
 				let weight = xt.get_dispatch_info().weight as u64;
 				Executive::initialize_block(&Header::new(
 					1,
