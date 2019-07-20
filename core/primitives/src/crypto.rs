@@ -631,7 +631,7 @@ mod tests {
 	use hex_literal::hex;
 	use super::*;
 
-	#[derive(Eq, PartialEq, Debug)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
 		Generated,
 		GeneratedWithPhrase,
@@ -640,8 +640,13 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
-	#[derive(PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash)]
 	struct TestPublic;
+	impl AsRef<[u8]> for TestPublic {
+		fn as_ref(&self) -> &[u8] {
+			&[]
+		}
+	}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
