@@ -869,9 +869,13 @@ impl ::serde::Serialize for OpaqueExtrinsic {
 }
 
 impl traits::Extrinsic for OpaqueExtrinsic {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
+
+	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
 #[cfg(test)]

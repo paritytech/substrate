@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc, convert::TryFrom};
 use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
@@ -25,6 +25,7 @@ use primitives::offchain::{
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr,
 };
 use primitives::crypto::{Pair, Protected};
 use primitives::{ed25519, sr25519};
@@ -33,6 +34,8 @@ use runtime_primitives::{
 	traits::{self, Extrinsic},
 };
 use transaction_pool::txpool::{Pool, ChainApi};
+use network::NetworkStateInfo;
+use network::{PeerId, Multiaddr};
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {
@@ -59,6 +62,7 @@ pub(crate) struct Api<Storage, KeyProvider> {
 	db: Storage,
 	keys_password: Protected<String>,
 	key_provider: KeyProvider,
+	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -156,6 +160,26 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 		self.db.set(KEYS_PREFIX, &id_encoded, &CryptoKey { phrase, kind } .encode());
 
 		Ok(CryptoKeyId(id))
+	}
+
+	fn authority_pubkey(&self, kind: CryptoKind) -> Result<Vec<u8>, ()> {
+		let key = self.read_key(None, kind)?;
+		let public = match key {
+			Key::Sr25519(pair) => pair.public().encode(),
+			Key::Ed25519(pair) => pair.public().encode(),
+		};
+
+		Ok(public)
+	}
+
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		let external_addresses = self.network_state.external_addresses();
+
+		let state = NetworkState::new(
+			self.network_state.peer_id(),
+			external_addresses,
+		);
+		Ok(OpaqueNetworkState::from(state))
 	}
 
 	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _kind: CryptoKind, _data: &[u8]) -> Result<Vec<u8>, ()> {
@@ -285,6 +309,71 @@ impl<Storage, KeyProvider> OffchainExt for Api<Storage, KeyProvider> where
 	}
 }
 
+/// Information about the local node's network state.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct NetworkState {
+	peer_id: PeerId,
+	external_addresses: Vec<Multiaddr>,
+}
+
+impl NetworkState {
+	fn new(peer_id: PeerId, external_addresses: Vec<Multiaddr>) -> Self {
+		NetworkState {
+			peer_id,
+			external_addresses,
+		}
+	}
+}
+
+impl From<NetworkState> for OpaqueNetworkState {
+	fn from(state: NetworkState) -> OpaqueNetworkState {
+		let enc = Encode::encode(&state.peer_id.into_bytes());
+		let peer_id = OpaquePeerId::new(enc);
+
+		let external_addresses: Vec<OpaqueMultiaddr> = state
+			.external_addresses
+			.iter()
+			.map(|multiaddr| {
+				let e = Encode::encode(&multiaddr.to_string());
+				OpaqueMultiaddr::new(e)
+			})
+			.collect();
+
+		OpaqueNetworkState {
+			peer_id,
+			external_addresses,
+		}
+	}
+}
+
+impl TryFrom<OpaqueNetworkState> for NetworkState {
+	type Error = ();
+
+	fn try_from(state: OpaqueNetworkState) -> Result<Self, Self::Error> {
+		let inner_vec = state.peer_id.0;
+
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).ok_or(())?;
+		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
+
+		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
+			.iter()
+			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
+				let inner_vec = &enc_multiaddr.0;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).ok_or(())?;
+				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
+				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
+				Ok(multiaddr)
+			})
+			.collect();
+		let external_addresses = external_addresses?;
+
+		Ok(NetworkState {
+			peer_id,
+			external_addresses,
+		})
+	}
+}
+
 /// Offchain extensions implementation API
 ///
 /// This is the asynchronous processing part of the API.
@@ -302,6 +391,7 @@ impl<A: ChainApi> AsyncApi<A> {
 		keys_password: Protected<String>,
 		key_provider: P,
 		at: BlockId<A::Block>,
+		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, P>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
@@ -310,6 +400,7 @@ impl<A: ChainApi> AsyncApi<A> {
 			db,
 			keys_password,
 			key_provider,
+			network_state,
 		};
 
 		let async_api = AsyncApi {
@@ -355,8 +446,22 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::{collections::HashSet, convert::TryFrom};
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
+	use network::PeerId;
+
+	struct MockNetworkStateInfo();
+
+	impl NetworkStateInfo for MockNetworkStateInfo {
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
+
+		fn peer_id(&self) -> PeerId {
+			PeerId::random()
+		}
+	}
 
 	fn offchain_api() -> (Api<LocalStorage, TestProvider>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
@@ -366,7 +471,8 @@ mod tests {
 			Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone()))
 		);
 
-		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0))
+		let mock = Arc::new(MockNetworkStateInfo());
+		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0), mock)
 	}
 
 	#[test]
@@ -454,5 +560,24 @@ mod tests {
 			api.verify(None, CryptoKind::Sr25519, msg, &signature).is_err(),
 			"Invalid kind should trigger a missing key error."
 		);
+	}
+
+	#[test]
+	fn should_convert_network_states() {
+		// given
+		let state = NetworkState::new(
+			PeerId::random(),
+			vec![
+				Multiaddr::try_from("/ip4/127.0.0.1/tcp/1234".to_string()).unwrap(),
+				Multiaddr::try_from("/ip6/2601:9:4f81:9700:803e:ca65:66e8:c21").unwrap(),
+			],
+		);
+
+		// when
+		let opaque_state = OpaqueNetworkState::from(state.clone());
+		let converted_back_state = NetworkState::try_from(opaque_state).unwrap();
+
+		// then
+		assert_eq!(state, converted_back_state);
 	}
 }

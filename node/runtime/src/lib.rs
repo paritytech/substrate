@@ -74,8 +74,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 114,
-	impl_version: 114,
+	spec_version: 115,
+	impl_version: 115,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -193,7 +193,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa, Aura);
+type SessionHandlers = (Grandpa, Aura, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -371,6 +371,15 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+impl im_online::Trait for Runtime {
+	type AuthorityId = AuraId;
+	type Call = Call;
+	type Event = Event;
+	type SessionsPerEra = SessionsPerEra;
+	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type IsValidAuthorityId = Aura;
+}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -409,6 +418,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
+		ImOnline: im_online::{default, ValidateUnsigned},
 	}
 );
 

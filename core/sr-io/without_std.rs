@@ -385,6 +385,33 @@ pub mod ext {
 		/// - nonzero otherwise.
 		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
 
+		/// Returns information about the local node's network state.
+		///
+		/// # Returns
+		///
+		/// The encoded `Result<offchain::OpaqueNetworkState, ()>`.
+		/// `written_out` contains the length of the message.
+		///
+		/// The ownership of the returned buffer is transferred to the runtime
+		/// code and the runtime is responsible for freeing it. This is always
+		/// a properly allocated pointer (which cannot be NULL), hence the
+		/// runtime code can always rely on it.
+		fn ext_network_state(written_out: *mut u32) -> *mut u8;
+
+		/// Returns the locally configured authority public key, if available.
+		/// The `crypto` argument is `offchain::CryptoKind` converted to `u32`.
+		///
+		/// # Returns
+		///
+		/// The encoded `Result<PublicKey encoded to Vec<u8>, ()>`.
+		/// `written_out` contains the length of the message.
+		///
+		/// The ownership of the returned buffer is transferred to the runtime
+		/// code and the runtime is responsible for freeing it. This is always
+		/// a properly allocated pointer (which cannot be NULL), hence the
+		/// runtime code can always rely on it.
+		fn ext_authority_pubkey(crypto: u32, written_out: *mut u32) -> *mut u8;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// # Returns
@@ -504,7 +531,7 @@ pub mod ext {
 		/// - Otherwise, pointer to the value in memory. `value_len` contains the length of the value.
 		fn ext_local_storage_get(kind: u32, key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
-		/// Initiaties a http request.
+		/// Initiates a http request.
 		///
 		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
 		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently
@@ -885,6 +912,39 @@ impl OffchainApi for () {
 			Ok(())
 		} else {
 			Err(())
+		}
+	}
+
+	fn network_state() -> Result<offchain::OpaqueNetworkState, ()> {
+		let mut len = 0_u32;
+		let raw_result = unsafe {
+			let ptr = ext_network_state.get()(&mut len);
+
+			from_raw_parts(ptr, len)
+		};
+
+		match raw_result {
+			Some(raw_result) => codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(())),
+			None => Err(())
+		}
+	}
+
+	fn authority_pubkey(kind: offchain::CryptoKind) -> Result<Vec<u8>, ()> {
+		let kind = kind as isize as u32;
+
+		let mut len = 0u32;
+		let raw_result = unsafe {
+			let ptr = ext_authority_pubkey.get()(
+				kind,
+				&mut len,
+			);
+
+			from_raw_parts(ptr, len)
+		};
+
+		match raw_result {
+			Some(raw_result) => codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(())),
+			None => Err(())
 		}
 	}
 

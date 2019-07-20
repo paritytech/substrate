@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
 };
 
 pub mod backend;
@@ -237,6 +237,19 @@ impl NeverOffchainExt {
 
 impl offchain::Externalities for NeverOffchainExt {
 	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn network_state(
+		&self,
+	) -> Result<offchain::OpaqueNetworkState, ()> {
+		unreachable!()
+	}
+
+	fn authority_pubkey(
+		&self,
+		_crypto: offchain::CryptoKind,
+	) -> Result<Vec<u8>, ()> {
 		unreachable!()
 	}
 

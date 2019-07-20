@@ -38,6 +38,7 @@ use primitives::offchain::{
 	HttpRequestId, HttpRequestStatus, HttpError,
 	CryptoKind, CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Error verifying ECDSA signature
@@ -239,6 +240,13 @@ export_api! {
 		/// The transaction will end up in the pool.
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
+		/// Returns information about the local node's network state.
+		fn network_state() -> Result<OpaqueNetworkState, ()>;
+
+		/// Returns the currently configured authority public key, if available.
+		// TODO [#3139] change into crypto_pubkey(&self, key: Option<CryptoKeyId>, kind: CryptoKind)
+		fn authority_pubkey(crypto: CryptoKind) -> Result<Vec<u8>, ()>;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.
@@ -313,7 +321,7 @@ export_api! {
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
 		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Initiaties a http request given HTTP verb and the URL.
+		/// Initiates a http request given HTTP verb and the URL.
 		///
 		/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
 		/// Returns the id of newly started request.
