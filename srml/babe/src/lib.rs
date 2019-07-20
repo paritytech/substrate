@@ -22,16 +22,17 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{
-	decl_storage, decl_module, StorageValue, Parameter, traits::{FindAuthor, Get}
+	decl_storage, decl_module, StorageValue, Parameter,
+	traits::{FindAuthor, Get, KeyOwnerProofSystem }
 };
 use timestamp::OnTimestampSet;
 use primitives::{
 	generic::DigestItem,
 	traits::{
 		SaturatedConversion, Saturating, Member, Verify, ValidateUnsigned,
-		RandomnessBeacon
+		RandomnessBeacon, Header, TypedKey
 	},
-	transaction_validity::TransactionValidity
+	transaction_validity::TransactionValidity, KeyTypeId, key_types
 };
 use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
@@ -42,7 +43,11 @@ use inherents::{
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, BabeEquivocationProof, ConsensusLog};
+use babe_primitives::{BABE_ENGINE_ID, BabeEquivocationProof, ConsensusLog, get_slot};
+use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
+use session::historical::{self, Proof};
+use system::ensure_signed;
+
 pub use babe_primitives::{
 	AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH
 };
@@ -132,6 +137,9 @@ pub trait Trait: timestamp::Trait {
 
 	/// The signature type for an authority.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
+
+	/// The session key owner system.
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
 decl_storage! {
@@ -165,6 +173,37 @@ decl_storage! {
 	}
 }
 
+fn valid_equivocation<T: Trait>(
+	proof: &BabeEquivocationProof<T::Header, T::Signature, T::AuthorityId>
+) -> bool {
+	let first_header = proof.first_header();
+	let second_header = proof.second_header();
+
+	if first_header == second_header {
+		return false
+	}
+
+	let maybe_first_slot = get_slot::<T::Header, T::Signature>(first_header);
+	let maybe_second_slot = get_slot::<T::Header, T::Signature>(second_header);
+
+	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+		// TODO: Check that author matches slot author (improve HistoricalSession).
+		let author = proof.identity();
+
+		if !proof.first_signature().verify(first_header.hash().as_ref(), author) {
+			return false
+		}
+
+		if !proof.second_signature().verify(second_header.hash().as_ref(), author) {
+			return false
+		}
+
+		return true;
+	}
+
+	false
+}
+
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -185,10 +224,22 @@ decl_module! {
 
 		/// Report equivocation.
 		fn report_equivocation(
-			_origin,
-			_equivocation_proof: BabeEquivocationProof<T::Header, T::Signature, T::AuthorityId>
+			origin,
+			proved_equivocation: (
+				BabeEquivocationProof<T::Header, T::Signature, T::AuthorityId>,
+				Proof,
+			)
 		) {
-			// This is the place where we will slash.
+			let _who = ensure_signed(origin)?;
+			let (equivocation, proof) = proved_equivocation;
+			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+				(key_types::ED25519, equivocation.identity().encode()),
+				proof,
+			);
+
+			if to_punish.is_some() && valid_equivocation::<T>(&equivocation) {
+				// TODO: Slash.
+			}
 		}
 	}
 }

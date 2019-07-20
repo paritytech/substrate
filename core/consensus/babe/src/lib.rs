@@ -418,21 +418,6 @@ macro_rules! babe_err {
 	};
 }
 
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
-{
-	let mut pre_digest: Option<_> = None;
-	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}", log);
-		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
-			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
-		}
-	}
-	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
-}
-
 /// check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.

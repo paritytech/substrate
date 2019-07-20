@@ -18,9 +18,12 @@
 #![deny(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 use rstd::vec::Vec;
-use runtime_primitives::{ConsensusEngineId, traits::Block as BlockT};
+use runtime_primitives::{
+	ConsensusEngineId, traits::{Block as BlockT, Header}, DigestItem,
+	generic::OpaqueDigestItemId
+};
 use substrate_primitives::sr25519::{Public, Signature};
 use substrate_client::decl_runtime_apis;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
@@ -185,4 +188,77 @@ impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for BabeEquivocationProof<H, 
 	fn second_signature(&self) -> &S {
 		&self.second_signature
 	}
+}
+
+
+/// A digest item which is usable with BABE consensus.
+pub trait CompatibleDigestItem<BabePreDigest, Signature> {
+	/// Construct a digest item which contains a BABE pre-digest.
+	fn babe_pre_digest(seal: BabePreDigest) -> Self;
+
+	/// If this item is an BABE pre-digest, return it.
+	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
+
+	/// Construct a digest item which contains a BABE seal.
+	fn babe_seal(signature: Signature) -> Self;
+
+	/// If this item is a BABE signature, return the signature.
+	fn as_babe_seal(&self) -> Option<Signature>;
+}
+
+/// Extract the digest item type for a block.
+pub type DigestItemForHeader<H> = DigestItem<<H as Header>::Hash>;
+
+/// Find Babe's pre-digest.
+pub fn find_pre_digest<H: Header, D, S>(header: &H) -> Result<D, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem<D, S>,
+{
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err("Multiple BABE pre-runtime headers, rejecting!")?,
+			(None, _) => {},
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| "No BABE pre-runtime digest found")
+}
+
+
+impl<Hash, D, S> CompatibleDigestItem<D, S> for DigestItem<Hash> where
+	Hash: Send + Sync + Eq + Clone + Codec + 'static,
+	S: Codec,
+	D: Codec,
+{
+	fn babe_pre_digest(digest: D) -> Self {
+		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
+	}
+
+	fn as_babe_pre_digest(&self) -> Option<D> {
+		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
+	}
+
+	fn babe_seal(signature: S) -> Self {
+		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
+	}
+
+	fn as_babe_seal(&self) -> Option<S> {
+		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
+	}
+}
+
+/// Raw Babe pre-digest;
+pub type RawBabePreDigest = (
+	[u8; VRF_OUTPUT_LENGTH],
+	[u8; VRF_PROOF_LENGTH],
+	u64,
+	u64,
+);
+
+/// Get the slot.
+pub fn get_slot<H: Header, S: Codec>(header: &H) -> Result<SlotNumber, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem<RawBabePreDigest, S>,
+{
+	find_pre_digest(header)
+		.map(|raw_pre_digest| raw_pre_digest.3)
 }
