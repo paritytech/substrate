@@ -24,14 +24,16 @@ mod config;
 mod custom_proto;
 mod service_task;
 mod transport;
+mod identify_specialization;
 
 pub use crate::behaviour::Severity;
 pub use crate::config::*;
 pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
+pub use crate::identify_specialization::{IdentifySpecialization, DefaultIdentifySpecialization};
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
-pub use libp2p::{identity, PeerId, core::PublicKey};
+pub use libp2p::{identity, PeerId, core::PublicKey, identify::protocol::IdentifyInfo};
 
 use libp2p::core::nodes::ConnectedPoint;
 use serde::{Deserialize, Serialize};

@@ -27,7 +27,7 @@ use crate::service::{ExHashT, TransactionPool};
 use std::sync::Arc;
 
 /// Service initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
+pub struct Params<B: BlockT, S, H: ExHashT, I> {
 	/// Configuration.
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
@@ -40,6 +40,8 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub transaction_pool: Arc<TransactionPool<H, B>>,
 	/// Protocol specialization.
 	pub specialization: S,
+	/// Identify specialization.
+	pub identify_specialization: I,
 }
 
 /// Configuration for the Substrate-specific part of the networking layer.

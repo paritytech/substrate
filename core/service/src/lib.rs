@@ -50,6 +50,7 @@ pub use transaction_pool::txpool::{
 };
 use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
+use network::IdentifySpecialization;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
@@ -135,6 +136,7 @@ impl<Components: components::Components> Service<Components> {
 		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+		let identify_specialization = <Components::Factory>::build_identify_specialization(&config)?;
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
@@ -151,6 +153,7 @@ impl<Components: components::Components> Service<Components> {
 			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
+			identify_specialization: identify_specialization,
 		};
 
 		let protocol_id = {
@@ -549,6 +552,7 @@ macro_rules! construct_service_factory {
 				{ $( $light_import_queue_init:tt )* },
 			FullRpcHandlerConstructor = $full_rpc_handler_constructor:ty,
 			LightRpcHandlerConstructor = $light_rpc_handler_constructor:ty,
+			IdentifySpecialization = $identify_specialization:ty { $( $identify_specialization_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -570,6 +574,7 @@ macro_rules! construct_service_factory {
 			type LightImportQueue = $light_import_queue;
 			type FullRpcHandlerConstructor = $full_rpc_handler_constructor;
 			type LightRpcHandlerConstructor = $light_rpc_handler_constructor;
+			type IdentifySpecialization = $identify_specialization;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -624,6 +629,12 @@ macro_rules! construct_service_factory {
 					let key = (&service).authority_key().map(Arc::new);
 					($( $authority_setup )*)(service, executor, key)
 				})
+			}
+
+			fn build_identify_specialization(
+				config: &FactoryFullConfiguration<Self>,
+			) -> Result<Self::IdentifySpecialization, $crate::Error>{
+				( $( $identify_specialization_init )* ) (config)
 			}
 		}
 	}

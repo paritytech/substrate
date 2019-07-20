@@ -49,7 +49,7 @@ pub use network_libp2p::{
 	ProtocolId, Severity, Multiaddr,
 	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
 	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
-	build_multiaddr, PeerId, PublicKey
+	build_multiaddr, PeerId, PublicKey, IdentifySpecialization, DefaultIdentifySpecialization, IdentifyInfo, 
 };
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;

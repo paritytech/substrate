@@ -19,7 +19,7 @@ use crate::{
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol};
-use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
+use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr, IdentifySpecialization};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{Multiaddr, core::swarm::NetworkBehaviour, PeerId};
@@ -35,11 +35,12 @@ use std::time::Duration;
 /// Starts the substrate libp2p service.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-pub fn start_service<TMessage>(
+pub fn start_service<TMessage, I>(
 	config: NetworkConfiguration,
 	registered_custom: RegisteredProtocol<TMessage>,
-) -> Result<(Service<TMessage>, substrate_peerset::PeersetHandle), IoError>
-where TMessage: CustomMessage + Send + 'static {
+	identify_specialization: I,
+) -> Result<(Service<TMessage, I>, substrate_peerset::PeersetHandle), IoError>
+where TMessage: CustomMessage + Send + 'static, I: IdentifySpecialization {
 
 	if let Some(ref path) = config.net_config_path {
 		fs::create_dir_all(Path::new(path))?;
@@ -89,7 +90,8 @@ where TMessage: CustomMessage + Send + 'static {
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns);
+		let user_agent = identify_specialization.customize_user_agent(user_agent.as_str());
+		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns, identify_specialization);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
@@ -155,9 +157,9 @@ pub enum ServiceEvent<TMessage> {
 }
 
 /// Network service. Must be polled regularly in order for the networking to work.
-pub struct Service<TMessage> where TMessage: CustomMessage {
+pub struct Service<TMessage, I> where TMessage: CustomMessage, I: IdentifySpecialization {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<TMessage, Substream<StreamMuxerBox>>>,
+	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<TMessage, Substream<StreamMuxerBox>, I>>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
@@ -180,8 +182,8 @@ struct NodeInfo {
 	latest_ping: Option<Duration>,
 }
 
-impl<TMessage> Service<TMessage>
-where TMessage: CustomMessage + Send + 'static {
+impl<TMessage, I> Service<TMessage, I>
+where TMessage: CustomMessage + Send + 'static, I: IdentifySpecialization {
 	/// Returns a struct containing tons of useful information about the network.
 	pub fn state(&mut self) -> NetworkState {
 		let connected_peers = {
@@ -367,7 +369,7 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 }
 
-impl<TMessage> Stream for Service<TMessage> where TMessage: CustomMessage + Send + 'static {
+impl<TMessage, I> Stream for Service<TMessage, I> where TMessage: CustomMessage + Send + 'static, I: IdentifySpecialization {
 	type Item = ServiceEvent<TMessage>;
 	type Error = IoError;
 

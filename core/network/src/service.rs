@@ -34,6 +34,7 @@ use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use crate::specialization::NetworkSpecialization;
+use crate::IdentifySpecialization;
 
 use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Builder as RuntimeBuilder;
@@ -128,7 +129,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
+pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> {
 	/// Sinks to propagate status updates.
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	/// Are we connected to any peer?
@@ -138,7 +139,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Peers whom we are connected with.
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// Network service
-	network: Arc<Mutex<NetworkService<Message<B>>>>,
+	network: Arc<Mutex<NetworkService<Message<B>, I>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
@@ -150,13 +151,13 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> Service<B, S, I> {
 	/// Creates and register protocol with the network service
 	pub fn new<H: ExHashT>(
-		params: Params<B, S, H>,
+		params: Params<B, S, H, I>,
 		protocol_id: ProtocolId,
 		import_queue: Box<ImportQueue<B>>,
-	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
+	) -> Result<(Arc<Service<B, S, I>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
@@ -183,6 +184,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			network_port,
 			params.network_config,
 			registered,
+			params.identify_specialization,
 		)?;
 
 		let service = Arc::new(Service {
@@ -291,7 +293,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> ::consensus::SyncOracle for Service<B, S, I> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
@@ -301,7 +303,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> Drop for Service<B, S, I> {
 	fn drop(&mut self) {
 		if let Some((sender, join)) = self.bg_thread.take() {
 			let _ = sender.send(());
@@ -312,7 +314,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> SyncProvider<B> for Service<B, S, I> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
@@ -346,7 +348,7 @@ pub trait ManageNetwork {
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, I: IdentifySpecialization> ManageNetwork for Service<B, S, I> {
 	fn accept_unreserved_peers(&self) {
 		self.peerset.set_reserved_only(false);
 	}
@@ -455,14 +457,15 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static>(
+fn start_thread<B: BlockT + 'static, I: IdentifySpecialization>(
 	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, PeersetHandle), Error> {
+	identify_specialization: I,
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>, I>>>, PeersetHandle), Error> {
 	// Start the main service.
-	let (service, peerset) = match start_service(config, registered) {
+	let (service, peerset) = match start_service(config, registered, identify_specialization) {
 		Ok((service, peerset)) => (Arc::new(Mutex::new(service)), peerset),
 		Err(err) => {
 			warn!("Error starting network: {}", err);
@@ -492,9 +495,9 @@ fn start_thread<B: BlockT + 'static>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static>(
+fn run_thread<B: BlockT + 'static, I: IdentifySpecialization>(
 	protocol_sender: Sender<FromNetworkMsg<B>>,
-	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	network_service: Arc<Mutex<NetworkService<Message<B>, I>>>,
 	network_port: NetworkPort<B>,
 	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {

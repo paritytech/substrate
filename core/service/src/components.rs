@@ -24,7 +24,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, maybe_start_server};
 use consensus_common::import_queue::ImportQueue;
-use network::{self, OnDemand};
+use network::{self, OnDemand, IdentifySpecialization};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{
@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
+pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol, <F as ServiceFactory>::IdentifySpecialization>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -337,6 +337,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullRpcHandlerConstructor: RpcHandlerConstructor<FullComponents<Self>>;
     /// Light Rpc Handler Constructor
     type LightRpcHandlerConstructor: RpcHandlerConstructor<LightComponents<Self>>;
+	/// Identify specialization
+	type IdentifySpecialization: IdentifySpecialization;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -356,6 +358,10 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build light service.
 	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
 		-> Result<Self::LightService, error::Error>;
+
+	/// Build identify specialization
+	fn build_identify_specialization(config: &FactoryFullConfiguration<Self>)
+		-> Result<Self::IdentifySpecialization, error::Error>;
 
 	/// ImportQueue for a full client
 	fn build_full_import_queue(

@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::custom_proto::{CustomProto, CustomProtoOut, RegisteredProtocol};
+use crate::IdentifySpecialization;
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
@@ -35,7 +36,7 @@ use void;
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut<TMessage>", poll_method = "poll")]
-pub struct Behaviour<TMessage, TSubstream> {
+pub struct Behaviour<TMessage, TSubstream, I> {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
 	ping: Ping<TSubstream>,
 	/// Custom protocols (dot, bbq, sub, etc.).
@@ -50,9 +51,14 @@ pub struct Behaviour<TMessage, TSubstream> {
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: Vec<BehaviourOut<TMessage>>,
+
+	/// Identify specialization
+	#[behaviour(ignore)]
+	identify_specialization: I,
 }
 
-impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> Behaviour<TMessage, TSubstream, I>
+where I: IdentifySpecialization{
 	/// Builds a new `Behaviour`.
 	pub fn new(
 		user_agent: String,
@@ -61,9 +67,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		peerset: substrate_peerset::Peerset,
 		enable_mdns: bool,
+		identify_specialization: I,
 	) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
+			let proto_version = identify_specialization.customize_protocol_version(proto_version.as_str());
 			Identify::new(proto_version, user_agent, local_public_key.clone())
 		};
 
@@ -99,6 +107,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				None.into()
 			},
 			events: Vec::new(),
+			identify_specialization,
 		}
 	}
 
@@ -152,6 +161,17 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&self) -> serde_json::Value {
 		self.custom_protocols.peerset_debug_info()
+	}
+
+	/// Add discovered node according to identify_info
+	pub fn add_discovered_node(&mut self, peer_id: &PeerId, identify_info: Option<&IdentifyInfo>) {
+
+		let should = self.identify_specialization.should_add_discovered_node(&peer_id, identify_info);
+		debug!(target: "sub-libp2p", "Check identify_info, should_add_discovered_node: {}, peer_id: {}, identify_info: {:?}", should, peer_id, identify_info);
+
+		if should {
+			self.custom_protocols.add_discovered_node(peer_id);
+		}
 	}
 }
 
@@ -228,26 +248,29 @@ impl<TMessage> From<CustomProtoOut<TMessage>> for BehaviourOut<TMessage> {
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<void::Void> for Behaviour<TMessage, TSubstream, I> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<CustomProtoOut<TMessage>> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<CustomProtoOut<TMessage>> for Behaviour<TMessage, TSubstream, I> {
 	fn inject_event(&mut self, event: CustomProtoOut<TMessage>) {
 		self.events.push(event.into());
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TMessage, TSubstream, I> where I: IdentifySpecialization {
 	fn inject_event(&mut self, event: IdentifyEvent) {
 		match event {
 			IdentifyEvent::Identified { peer_id, mut info, .. } => {
 				trace!(target: "sub-libp2p", "Identified {:?} => {:?}", peer_id, info);
-				// TODO: ideally we would delay the first identification to when we open the custom
-				//	protocol, so that we only report id info to the service about the nodes we
-				//	care about (https://github.com/libp2p/rust-libp2p/issues/876)
+
+				if !self.identify_specialization.should_accept_identify_info(&peer_id, &info){
+					warn!(target: "sub-libp2p", "Connected to unacceptable node: {:?}", info);
+					self.drop_node(&peer_id);
+					return;
+				}
 				if !info.protocol_version.contains("substrate") {
 					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 				}
@@ -261,7 +284,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 				for addr in &info.listen_addrs {
 					self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
 				}
-				self.custom_protocols.add_discovered_node(&peer_id);
+				self.add_discovered_node(&peer_id, Some(&info));
 				self.events.push(BehaviourOut::Identified { peer_id, info });
 			}
 			IdentifyEvent::Error { .. } => {}
@@ -273,12 +296,12 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TMessage, TSubstream, I> where I: IdentifySpecialization  {
 	fn inject_event(&mut self, out: KademliaOut) {
 		match out {
 			KademliaOut::Discovered { .. } => {}
 			KademliaOut::KBucketAdded { peer_id, .. } => {
-				self.custom_protocols.add_discovered_node(&peer_id);
+				self.add_discovered_node(&peer_id, None);
 			}
 			KademliaOut::FindNodeResult { key, closer_peers } => {
 				trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
@@ -294,7 +317,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behavio
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TMessage, TSubstream, I> {
 	fn inject_event(&mut self, event: PingEvent) {
 		match event {
 			PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } => {
@@ -306,12 +329,12 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream, I> where I: IdentifySpecialization  {
 	fn inject_event(&mut self, event: MdnsEvent) {
 		match event {
 			MdnsEvent::Discovered(list) => {
 				for (peer_id, _) in list {
-					self.custom_protocols.add_discovered_node(&peer_id);
+					self.add_discovered_node(&peer_id, None);
 				}
 			},
 			MdnsEvent::Expired(_) => {}
@@ -319,7 +342,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour
 	}
 }
 
-impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
+impl<TMessage, TSubstream, I> Behaviour<TMessage, TSubstream, I> {
 	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut<TMessage>>> {
 		if !self.events.is_empty() {
 			return Async::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))

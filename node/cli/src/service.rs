@@ -34,7 +34,7 @@ use substrate_service::{
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
-use network::construct_simple_protocol;
+use network::{construct_simple_protocol, DefaultIdentifySpecialization};
 use substrate_service::construct_service_factory;
 use log::info;
 
@@ -164,6 +164,7 @@ construct_service_factory! {
 		},
 		FullRpcHandlerConstructor = DefaultRpcHandlerConstructor,
 		LightRpcHandlerConstructor = DefaultRpcHandlerConstructor,
+		IdentifySpecialization = DefaultIdentifySpecialization { |config| Ok(DefaultIdentifySpecialization{}) },
 	}
 }
 
