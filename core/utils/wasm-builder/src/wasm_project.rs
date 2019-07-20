@@ -187,23 +187,14 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 				members = [ {members} ]
 
 [patch.crates-io]
-trie-db = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-trie-root = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-hash-db = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-memory-db = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-keccak-hasher = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-trie-bench = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-hash256-std-hasher = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-trie-standardmap = {{ git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }}
-
-
-#[patch.crates-io]
-#trie-db = {{ path = "../parity-trie/trie-db" }}
-#trie-root = {{ path = "../parity-trie/trie-root" }}
-#hash-db = {{ path = "../parity-trie/hash-db" }}
-#memory-db = {{ path = "../parity-trie/memory-db" }}
-#keccak-hasher = {{ path = "../parity-trie/test-support/keccak-hasher" }}
-#trie-bench = {{ path = "../parity-trie/test-support/trie-bench" }}
+trie-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+trie-root = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+hash-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+memory-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+keccak-hasher = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+trie-bench = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+hash256-std-hasher = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
+trie-standardmap = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
 
 
 			"#,

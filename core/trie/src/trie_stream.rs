@@ -20,7 +20,7 @@ use hash_db::Hasher;
 use trie_root;
 use codec::Encode;
 use rstd::vec::Vec;
-use crate::s_cst;
+use crate::trie_constants;
 use crate::node_header::{NodeKind, s_size_and_prefix_iter};
 use crate::node_codec::BitMap16;
 use trie_db::ChildBitmap;
@@ -29,7 +29,7 @@ const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
 
 #[derive(Default, Clone)]
-/// Codec-flavored TrieStream
+/// Codec-flavored TrieStream.
 pub struct TrieStream {
 	buffer: Vec<u8>,
 }
@@ -52,12 +52,12 @@ fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
 
 /// Create a leaf/branch node, encoding a number of nibbles.
 fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Item = u8> + 'a {
-	let size = rstd::cmp::min(s_cst::NIBBLE_SIZE_BOUND, nibbles.len());
+	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
 
 	let iter_start = match kind {
-		NodeKind::Leaf => s_size_and_prefix_iter(size, s_cst::LEAF_PREFIX_MASK),
-		NodeKind::BranchNoValue => s_size_and_prefix_iter(size, s_cst::BRANCH_WITHOUT_MASK),
-		NodeKind::BranchWithValue => s_size_and_prefix_iter(size, s_cst::BRANCH_WITH_MASK),
+		NodeKind::Leaf => s_size_and_prefix_iter(size, trie_constants::LEAF_PREFIX_MASK),
+		NodeKind::BranchNoValue => s_size_and_prefix_iter(size, trie_constants::BRANCH_WITHOUT_MASK),
+		NodeKind::BranchWithValue => s_size_and_prefix_iter(size, trie_constants::BRANCH_WITH_MASK),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -74,7 +74,7 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_empty_data(&mut self) {
-		self.buffer.push(s_cst::EMPTY_TRIE);
+		self.buffer.push(trie_constants::EMPTY_TRIE);
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
@@ -84,11 +84,11 @@ impl trie_root::TrieStream for TrieStream {
 
 	fn begin_branch(
 		&mut self,
-		maybe_key: Option<&[u8]>,
+		maybe_partial: Option<&[u8]>,
 		maybe_value: Option<&[u8]>,
 		has_children: impl Iterator<Item = bool>,
 	) {
-		if let Some(partial) = maybe_key {
+		if let Some(partial) = maybe_partial {
 			if maybe_value.is_some() {
 				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
 			} else {
@@ -97,7 +97,7 @@ impl trie_root::TrieStream for TrieStream {
 			let bm = branch_node_bit_mask(has_children);
 			self.buffer.extend([bm.0,bm.1].iter());
 		} else {
-			// should not happen
+			debug_assert!(false, "trie stream codec only for no extension trie");
 			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
 		}
 		if let Some(value) = maybe_value {
@@ -106,7 +106,7 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_extension(&mut self, _key: &[u8]) {
-		// should not happen
+		debug_assert!(false, "trie stream codec only for no extension trie");
 	}
 
 	fn append_substream<H: Hasher>(&mut self, other: Self) {

@@ -56,17 +56,17 @@ impl<H: Hasher> TrieLayOut for Layout<H> {
 
 impl<H: Hasher> TrieOps for Layout<H> {
 	fn trie_root<I, A, B>(input: I) -> <Self::H as Hasher>::Out where
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
 	{
 		trie_root::trie_root_no_ext::<H, TrieStream, _, _, _>(input)
 	}
 	
 	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8> where
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
 	{
 		trie_root::unhashed_trie_no_ext::<H, TrieStream, _, _, _>(input)
 	}
@@ -76,20 +76,25 @@ impl<H: Hasher> TrieOps for Layout<H> {
 	}
 }
 
-/// `trie_db`, error type.
+/// TrieDB error over `TrieOps` trait. 
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
-/// As in `hash_db`, but less generic, trait exposed.
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
-/// As in `hash_db`, but less generic, trait exposed.
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
-/// As in `hash_db`, but less generic, trait exposed.
+/// Reexport from `hash_db`, with genericity set for key only.
 pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
-/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
+/// This uses a `KeyFunction` for prefixing keys internally (avoiding
+/// key conflict for non random keys).
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
-/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
+/// This uses the `KeyFunction` for prefixing keys internally (avoiding
+/// This uses a noops `KeyFunction` (key addressing must be hashed or using
+/// an encoding scheme that avoid key conflict).
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
-/// As in `memory_db`, but less generic, trait exposed.
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
@@ -102,7 +107,7 @@ pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
 pub type TrieHash<L> = <<L as TrieLayOut>::H as Hasher>::Out;
 
 /// This module is for non generic definition of trie type.
-/// Only the `Hasher` is generic in this case.
+/// Only the `Hasher` trait is generic in this case.
 pub mod trie_types {
 	pub type LayOut<H> = super::Layout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
@@ -299,8 +304,8 @@ pub fn read_child_trie_value_with<L: TrieOps, Q: Query<L::H, Item=DBValue>, DB>(
 	Ok(TrieDB::<L>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
-/// constants used with trie simplification codec
-mod s_cst {
+/// Constants used into trie simplification codec.
+mod trie_constants {
 	pub const EMPTY_TRIE: u8 = 0;
 	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;

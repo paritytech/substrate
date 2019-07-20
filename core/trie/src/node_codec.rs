@@ -24,7 +24,7 @@ use hash_db::Hasher;
 use trie_db::{self, NibbleSlice, node::Node, ChildReference, ChildBitmap,
 	NibbleOps, Partial, NodeCodec as NodeCodecT, ChildSliceIx};
 use crate::error::Error;
-use crate::s_cst;
+use crate::trie_constants;
 use super::{node_header::{NodeHeader, NodeKind}};
 
 
@@ -119,7 +119,7 @@ impl<
 	}
 
 	fn empty_node() -> &'static [u8] {
-		&[s_cst::EMPTY_TRIE]
+		&[trie_constants::EMPTY_TRIE]
 	}
 
 	fn leaf_node(partial: Partial, value: &[u8]) -> Vec<u8> {
@@ -177,12 +177,14 @@ impl<
 
 // utils
 
+/// Encode and allocate node type header (type and size), and partial value.
+/// It uses an iterator over encoded partial bytes as input.
 fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(
 	partial: I,
 	nibble_count: usize,
 	node_kind: NodeKind,
 ) -> Vec<u8> {
-	let nibble_count = rstd::cmp::min(s_cst::NIBBLE_SIZE_BOUND, nibble_count);
+	let nibble_count = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
 
 	let mut output = Vec::with_capacity(3 + (nibble_count / N::NIBBLE_PER_BYTE));
 	match node_kind {
@@ -194,11 +196,13 @@ fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(
 	output
 }
 
+/// Encode and allocate node type header (type and size), and partial value.
+/// Same as `partial_enc_it` but uses non encoded `Partial` as input.
 fn partial_enc<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 	let nb_nibble_hpe = (partial.0).0 as usize;
 	let nibble_count = partial.1.len() * N::NIBBLE_PER_BYTE + nb_nibble_hpe;
 
-	let nibble_count = rstd::cmp::min(s_cst::NIBBLE_SIZE_BOUND, nibble_count);
+	let nibble_count = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
 
 	let mut output = Vec::with_capacity(3 + partial.1.len());
 	match node_kind {
@@ -213,7 +217,10 @@ fn partial_enc<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 	output
 }
 
-/// bitmap codec for radix 16
+/// Radix 16 trie, bitmap encoding implementation,
+/// it contains children mapping information for a branch
+/// (children presence only), it encodes into
+/// a compact bitmap encoding representation.
 pub struct BitMap16(u16);
 
 impl ChildBitmap for BitMap16 {

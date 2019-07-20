@@ -106,11 +106,11 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 panic = "unwind"
 
 [patch.crates-io]
-trie-db = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-trie-root = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-hash-db = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-memory-db = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-keccak-hasher = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-trie-bench = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-hash256-std-hasher = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
-trie-standardmap = { git = "https://github.com/cheme/trie.git", branch = "n_ext_trie" }
+trie-db = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+trie-root = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+hash-db = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+memory-db = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+keccak-hasher = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+trie-bench = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+hash256-std-hasher = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
+trie-standardmap = { git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }
