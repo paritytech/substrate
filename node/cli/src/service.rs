@@ -26,6 +26,7 @@ use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
+use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -66,6 +67,8 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		ConsensusPair = AuraPair,
+		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -83,7 +86,7 @@ construct_service_factory! {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key::<AuraPair>() {
+				if let Some(aura_key) = service.authority_key() {
 					info!("Using aura key {}", aura_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
@@ -113,7 +116,7 @@ construct_service_factory! {
 				let grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					service.authority_key::<grandpa_primitives::AuthorityPair>()
+					service.fg_authority_key()
 				};
 
 				let config = grandpa::Config {
