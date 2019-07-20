@@ -114,6 +114,10 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+	//save odd hash of transactions
+	ready_odd: Vec<Hash>,
+	//save even hash of transactions
+	ready_even: Vec<Hash>,
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
@@ -123,6 +127,8 @@ impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
 			provided_tags: Default::default(),
 			ready: Default::default(),
 			best: Default::default(),
+			ready_odd: Default::default(),
+			ready_even: Default::default(),
 		}
 	}
 }
@@ -167,6 +173,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		self.insertion_id += 1;
 		let insertion_id = self.insertion_id;
 		let hash = tx.transaction.hash.clone();
+		let hash_to_judge = tx.transaction.hash.clone();
 		let transaction = tx.transaction;
 
 		let replaced = self.replace_previous(&transaction)?;
@@ -205,6 +212,16 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			unlocks: vec![],
 			requires_offset: 0,
 		});
+
+		//store hash in odd & even queue
+		//println!("hash_to_judge {:?}",hash_to_judge);
+			let odd:u64 = 1;//hash_to_judge.into();
+			if odd %2 == 1 {
+				//self.ready_odd.push(hash_to_judge);
+			}
+			else{
+				//self.ready_even.push(hash_to_judge)
+			}
 
 		Ok(replaced)
 	}

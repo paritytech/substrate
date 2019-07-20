@@ -218,12 +218,28 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
 				let pending_iterator = self.transaction_pool.ready();
+				let mut odd_flag = false;
+				let mut even_flag = false;
 
 				debug!("Attempting to push transactions from the pool.");
 				for pending in pending_iterator {
 					if (self.now)() > deadline {
 						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
 						break;
+					}
+
+					let h = format!("{:?}", pending.hash.clone());
+					let hash_byte = h.as_bytes().last().unwrap();
+					let odd = (i32::from_str_radix(&hash_byte.to_string(), 16).unwrap() %2) == 1;
+					if odd_flag && even_flag {
+						break;
+					}
+					if (odd && odd_flag) || (!odd && even_flag){
+						continue;
+					}
+					match odd {
+						false => even_flag = true,
+						true => odd_flag = true,
 					}
 
 					trace!("[{:?}] Pushing to the block.", pending.hash);
