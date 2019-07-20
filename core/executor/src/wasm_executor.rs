@@ -771,11 +771,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(offset)
 	},
-	ext_authority_pubkey(
+	ext_pubkey(
+		key: u64,
 		written_out: *mut u32
 	) -> *mut u8 => {
+		let key = offchain::CryptoKey::try_from(key)
+			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
 		let res = this.ext.offchain()
-			.map(|api| api.authority_pubkey())
+			.map(|api| api.pubkey(key))
 			.ok_or_else(|| "Calling unavailable API ext_authority_pubkey: wasm")?;
 
 		let encoded = res.encode();

@@ -410,7 +410,7 @@ pub mod ext {
 		/// code and the runtime is responsible for freeing it. This is always
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
-		fn ext_authority_pubkey(written_out: *mut u32) -> *mut u8;
+		fn ext_pubkey(key: u64, written_out: *mut u32) -> *mut u8;
 
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
@@ -925,10 +925,11 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn authority_pubkey() -> Result<Vec<u8>, ()> {
+	fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()> {
 		let mut len = 0u32;
 		let raw_result = unsafe {
-			let ptr = ext_authority_pubkey.get()(
+			let ptr = ext_pubkey.get()(
+				key.into(),
 				&mut len,
 			);
 

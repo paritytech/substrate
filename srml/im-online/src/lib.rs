@@ -214,7 +214,7 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 				// we run only when a local authority key is configured
-				if let Ok(key) = sr_io::authority_pubkey() {
+				if let Ok(key) = sr_io::pubkey(CryptoKey::AuthorityKey) {
 					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
 						.ok_or(OffchainErr::DecodeAuthorityId)?;
 					let network_state =

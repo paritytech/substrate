@@ -275,9 +275,9 @@ impl OffchainApi for () {
 		}, "network_state can be called only in the offchain worker context")
 	}
 
-	fn authority_pubkey() -> Result<Vec<u8>, ()> {
+	fn pubkey(key: offchain::CryptoKey) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
-			ext.authority_pubkey()
+			ext.pubkey(key)
 		}, "authority_pubkey can be called only in the offchain worker context")
 	}
 

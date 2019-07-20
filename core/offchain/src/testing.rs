@@ -144,7 +144,7 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn authority_pubkey(&self) -> Result<Vec<u8>, ()> {
+	fn pubkey(&self, _key: CryptoKey) -> Result<Vec<u8>, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 

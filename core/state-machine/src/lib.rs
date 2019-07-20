@@ -246,8 +246,9 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn authority_pubkey(
+	fn pubkey(
 		&self,
+		_key: offchain::CryptoKey,
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
 	}

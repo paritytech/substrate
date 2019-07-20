@@ -314,13 +314,13 @@ pub trait Externalities {
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
 
-	/// Returns the locally configured authority public key, if available.
-	fn authority_pubkey(&self) -> Result<Vec<u8>, ()>;
-
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
 	/// Returns an error if given crypto kind is not supported.
 	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()>;
+
+	/// Returns the locally configured authority public key, if available.
+	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()>;
 
 	/// Encrypt a piece of data using given crypto key.
 	///
@@ -478,8 +478,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(& **self).network_state()
 	}
 
-	fn authority_pubkey(&self) -> Result<Vec<u8>, ()> {
-		(&**self).authority_pubkey()
+	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()> {
+		(&**self).pubkey(key)
 	}
 
 	fn decrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {

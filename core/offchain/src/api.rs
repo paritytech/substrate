@@ -274,8 +274,8 @@ where
 		Ok(CryptoKey::LocalKey { id, kind })
 	}
 
-	fn authority_pubkey(&self) -> Result<Vec<u8>, ()> {
-		self.read_key(CryptoKey::AuthorityKey)?.public()
+	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()> {
+		self.read_key(key)?.public()
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
