@@ -60,9 +60,17 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// Provides currently configured authority key.
-pub trait AuthorityKeyProvider: Clone + 'static {
+pub trait AuthorityKeyProvider<Block: traits::Block>: Clone + 'static {
+	/// The crypto used by the block authoring algorithm.
+	type ConsensusPair: crypto::Pair;
+	/// The crypto used by the finality gadget.
+	type FinalityPair: crypto::Pair;
+
 	/// Returns currently configured authority key.
-	fn authority_key<TPair: crypto::Pair>(&self) -> Option<TPair>;
+	fn authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::ConsensusPair>;
+
+	/// Returns currently configured finality gadget authority key.
+	fn fg_authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::FinalityPair>;
 }
 
 /// An offchain workers manager.
@@ -122,7 +130,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 	Block: traits::Block,
 	Client: ProvideRuntimeApi,
 	Client::Api: OffchainWorkerApi<Block>,
-	KeyProvider: AuthorityKeyProvider,
+	KeyProvider: AuthorityKeyProvider<Block>,
 	Storage: client::backend::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
