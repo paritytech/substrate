@@ -23,7 +23,10 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet, Trait};
-use primitives::{generic::DigestItem, traits::{SaturatedConversion, Saturating, RandomnessBeacon}};
+use primitives::{
+	generic::DigestItem,
+	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon}
+};
 use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -185,6 +188,14 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 			}
 		}
 		return None
+	}
+}
+
+impl<T: timestamp::Trait> IsMember<AuthorityId> for Module<T> {
+	fn is_member(authority_id: &AuthorityId) -> bool {
+		<Module<T>>::authorities()
+			.iter()
+			.any(|id| id == authority_id)
 	}
 }
 

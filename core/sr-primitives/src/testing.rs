@@ -44,6 +44,14 @@ impl TypedKey for UintAuthorityId {
 	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
 }
 
+impl AsRef<[u8]> for UintAuthorityId {
+	fn as_ref(&self) -> &[u8] {
+		let ptr = self.0 as *const _;
+		// It's safe to do this here since `UintAuthorityId` is `u64`.
+		unsafe { std::slice::from_raw_parts(ptr, 8) }
+	}
+}
+
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
@@ -133,6 +141,8 @@ impl<'a> Deserialize<'a> for Header {
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
@@ -219,6 +229,8 @@ impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}
