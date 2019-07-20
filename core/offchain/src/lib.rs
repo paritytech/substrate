@@ -171,8 +171,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 mod tests {
 	use super::*;
 	use futures::Future;
-	use primitives::{ed25519, sr25519, crypto::{TypedKey, Pair}};
-	use std::collections::HashSet;
+	use primitives::{ed25519, sr25519};
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();
@@ -187,19 +186,33 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone, Default)]
-	pub(crate) struct TestProvider {
+	#[derive(Clone)]
+	pub(crate) struct TestProvider<Block> {
+		_marker: PhantomData<Block>,
 		pub(crate) sr_key: Option<sr25519::Pair>,
 		pub(crate) ed_key: Option<ed25519::Pair>,
 	}
 
-	impl AuthorityKeyProvider for TestProvider {
-		fn authority_key<TPair: crypto::Pair>(&self) -> Option<TPair> {
-			TPair::from_seed_slice(&match TPair::KEY_TYPE {
-				sr25519::Pair::KEY_TYPE => self.sr_key.as_ref().map(|key| key.to_raw_vec()),
-				ed25519::Pair::KEY_TYPE => self.ed_key.as_ref().map(|key| key.to_raw_vec()),
-				_ => None,
-			}?).ok()
+	impl<Block: traits::Block> Default for TestProvider<Block> {
+		fn default() -> Self {
+			Self {
+				_marker: PhantomData,
+				sr_key: None,
+				ed_key: None,
+			}
+		}
+	}
+
+	impl<Block: traits::Block> AuthorityKeyProvider<Block> for TestProvider<Block> {
+		type ConsensusPair = ed25519::Pair;
+		type FinalityPair = sr25519::Pair;
+
+		fn authority_key(&self, _: &BlockId<Block>) -> Option<Self::ConsensusPair> {
+			self.ed_key.clone()
+		}
+
+		fn fg_authority_key(&self, _: &BlockId<Block>) -> Option<Self::FinalityPair> {
+			self.sr_key.clone()
 		}
 	}
 

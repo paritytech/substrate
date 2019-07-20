@@ -543,10 +543,12 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::{collections::HashSet, convert::TryFrom};
+	use std::convert::TryFrom;
+	use runtime_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
 	use network::PeerId;
+	use test_client::runtime::Block;
 
 	struct MockNetworkStateInfo();
 
@@ -560,7 +562,7 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage, TestProvider>, AsyncApi<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage, TestProvider<Block>, Block>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
@@ -569,7 +571,7 @@ mod tests {
 		);
 
 		let mock = Arc::new(MockNetworkStateInfo());
-		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(0), mock)
+		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(Zero::zero()), mock)
 	}
 
 	#[test]
@@ -612,22 +614,16 @@ mod tests {
 			let msg = b"Hello world!";
 
 			// when
-			let key_id = api.new_crypto_key(kind).unwrap();
-			let signature = api.sign(Some(key_id), kind, msg).unwrap();
+			let key = api.new_crypto_key(kind).unwrap();
+			let signature = api.sign(key, msg).unwrap();
 
 			// then
-			let res = api.verify(Some(key_id), kind, msg, &signature).unwrap();
+			let res = api.verify(key, msg, &signature).unwrap();
 			assert_eq!(res, true);
-			let res = api.verify(Some(key_id), kind, msg, &[]).unwrap();
+			let res = api.verify(key, msg, &[]).unwrap();
 			assert_eq!(res, false);
-			let res = api.verify(Some(key_id), kind, b"Different msg", &signature).unwrap();
+			let res = api.verify(key, b"Different msg", &signature).unwrap();
 			assert_eq!(res, false);
-
-			assert_eq!(
-				api.verify(Some(key_id), CryptoKind::Sr25519, msg, &signature).is_err(),
-				kind != CryptoKind::Sr25519
-			);
-
 		};
 
 		test(CryptoKind::Ed25519);
@@ -640,23 +636,17 @@ mod tests {
 		let mut api = offchain_api().0;
 		api.key_provider.ed_key = Some(ed25519::Pair::generate().0);
 		let msg = b"Hello world!";
-		let kind = CryptoKind::Ed25519;
 
 		// when
-		let signature = api.sign(None, kind, msg).unwrap();
+		let signature = api.sign(CryptoKey::AuthorityKey, msg).unwrap();
 
 		// then
-		let res = api.verify(None, kind, msg, &signature).unwrap();
+		let res = api.verify(CryptoKey::AuthorityKey, msg, &signature).unwrap();
 		assert_eq!(res, true);
-		let res = api.verify(None, kind, msg, &[]).unwrap();
+		let res = api.verify(CryptoKey::AuthorityKey, msg, &[]).unwrap();
 		assert_eq!(res, false);
-		let res = api.verify(None, kind, b"Different msg", &signature).unwrap();
+		let res = api.verify(CryptoKey::AuthorityKey, b"Different msg", &signature).unwrap();
 		assert_eq!(res, false);
-
-		assert!(
-			api.verify(None, CryptoKind::Sr25519, msg, &signature).is_err(),
-			"Invalid kind should trigger a missing key error."
-		);
 	}
 
 	#[test]
