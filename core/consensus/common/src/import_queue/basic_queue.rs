@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{pin::Pin, sync::Arc};
+use std::{mem, pin::Pin, sync::Arc};
 use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
@@ -170,9 +170,29 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		}
 
 		let mut block_import = Some(block_import);
+		let mut importing = None;
 
 		let future = futures::future::poll_fn(move |cx| {
 			loop {
+				// If the results sender is closed, that means that the import queue is shutting
+				// down and we should end this future.
+				if worker.result_sender.is_closed() {
+					return Poll::Ready(())
+				}
+
+				if let Some(imp_fut) = importing.as_mut() {
+					match Future::poll(Pin::new(imp_fut), cx) {
+						Poll::Pending => return Poll::Pending,
+						Poll::Ready(bi) => {
+							block_import = Some(bi);
+							importing = None;
+						},
+					}
+				}
+
+				debug_assert!(importing.is_none());
+				debug_assert!(block_import.is_some());
+
 				let msg = match Stream::poll_next(Pin::new(&mut port), cx) {
 					Poll::Ready(Some(msg)) => msg,
 					Poll::Ready(None) => return Poll::Ready(()),
@@ -182,7 +202,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 				match msg {
 					ToWorkerMsg::ImportBlocks(origin, blocks) => {
 						let bi = block_import.take().expect("block_import is always Some; qed");
-						block_import = Some(worker.import_a_batch_of_blocks(bi, origin, blocks));
+						importing = Some(worker.import_a_batch_of_blocks(bi, origin, blocks));
 					},
 					ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
 						worker.import_finality_proof(who, hash, number, proof);
@@ -197,18 +217,15 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		(future, sender)
 	}
 
-	fn import_a_batch_of_blocks(&mut self, block_import: BoxBlockImport<B>, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) -> BoxBlockImport<B> {
-		let result_sender = &self.result_sender;
-		let (imported, count, results, block_import) = import_many_blocks(
-			block_import,
-			origin,
-			blocks,
-			self.verifier.clone(),
-			|| !result_sender.is_closed(),
-		);
+	fn import_a_batch_of_blocks(&mut self, block_import: BoxBlockImport<B>, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>)
+		-> impl Future<Output = BoxBlockImport<B>> {
+		let mut result_sender = self.result_sender.clone();
 
-		self.result_sender.blocks_processed(imported, count, results);
-		block_import
+		import_many_blocks(block_import, origin, blocks, self.verifier.clone())
+			.then(move |(imported, count, results, block_import)| {
+				result_sender.blocks_processed(imported, count, results);
+				future::ready(block_import)
+			})
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
@@ -258,20 +275,18 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 
 /// Import several blocks at once, returning import result for each block.
 ///
-/// The `keep_going` closure will be called regularly. If it returns false, then the function will
-/// end prematurely.
+/// The returned `Future` yields at every imported block, which makes the execution more
+/// fine-grained and making it possible to interrupt the process.
 fn import_many_blocks<B: BlockT, V: Verifier<B>>(
-	mut import_handle: BoxBlockImport<B>,
+	import_handle: BoxBlockImport<B>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,
-	keep_going: impl Fn() -> bool,
-) -> (usize, usize, Vec<(
+) -> impl Future<Output = (usize, usize, Vec<(
 	Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 	B::Hash,
-)>, BoxBlockImport<B>) {
+)>, BoxBlockImport<B>)> {
 	let count = blocks.len();
-	let mut imported = 0;
 
 	let blocks_range = match (
 		blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -284,16 +299,27 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 
 	trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
 
+	let mut imported = 0;
 	let mut results = vec![];
-
 	let mut has_error = false;
+	let mut blocks = blocks.into_iter();
+	let mut import_handle = Some(import_handle);
 
 	// Blocks in the response/drain should be in ascending order.
-	for block in blocks {
-		if !keep_going() {
-			// Setting `has_error` to true cancels the rest of the import.
-			has_error = true;
-		}
+
+	future::poll_fn(move |cx| {
+		let block = match blocks.next() {
+			Some(b) => b,
+			None => {
+				let import_handle = import_handle.take()
+					.expect("Future polled again after it has finished");
+				let results = mem::replace(&mut results, Vec::new());
+				return Poll::Ready((imported, count, results, import_handle));
+			},
+		};
+
+		let import_handle = import_handle.as_mut()
+			.expect("Future polled again after it has finished");
 
 		let block_number = block.header.as_ref().map(|h| h.number().clone());
 		let block_hash = block.hash;
@@ -301,12 +327,13 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			Err(BlockImportError::Cancelled)
 		} else {
 			import_single_block(
-				&mut *import_handle,
+				&mut **import_handle,
 				blocks_origin.clone(),
 				block,
 				verifier.clone(),
 			)
 		};
+
 		let was_ok = import_result.is_ok();
 		if was_ok {
 			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
@@ -314,8 +341,11 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 		} else {
 			has_error = true;
 		}
-		results.push((import_result, block_hash));
-	}
 
-	(imported, count, results, import_handle)
+		results.push((import_result, block_hash));
+
+		// Notifies the current task again so that we re-execute this closure again.
+		cx.waker().wake_by_ref();
+		Poll::Pending
+	})
 }
