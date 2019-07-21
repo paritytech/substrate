@@ -97,6 +97,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type WeightMultiplierUpdate = ();
 }
 
 impl balances::Trait for Test {
