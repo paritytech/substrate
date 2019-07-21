@@ -164,7 +164,6 @@ mod tests {
 	use super::*;
 	use futures::Future;
 	use primitives::{ed25519, sr25519, crypto::{TypedKey, Pair}};
-	use std::collections::HashSet;
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();

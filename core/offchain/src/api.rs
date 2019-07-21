@@ -446,7 +446,7 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::{collections::HashSet, convert::TryFrom};
+	use std::convert::TryFrom;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
 	use network::PeerId;

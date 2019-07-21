@@ -189,7 +189,7 @@ impl<T: timestamp::Trait> IsMember<AuthorityId> for Module<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
-			.any(|id| id == authority_id)
+			.any(|id| &id.0 == authority_id)
 	}
 }
 
