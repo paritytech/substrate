@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{mem, pin::Pin, sync::Arc};
+use std::{mem, pin::Pin, sync::Arc, time::Duration};
 use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
+use futures_timer::Delay;
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::block_import::BlockOrigin;
@@ -138,6 +139,7 @@ struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	verifier: Arc<V>,
+	delay_between_blocks: Duration,
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
@@ -155,6 +157,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			verifier,
 			justification_import,
 			finality_proof_import,
+			delay_between_blocks: Duration::new(0, 0),
 		};
 
 		// Let's initialize `justification_import` and `finality_proof_import`.
@@ -241,7 +244,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	) -> impl Future<Output = BoxBlockImport<B>> {
 		let mut result_sender = self.result_sender.clone();
 
-		import_many_blocks(block_import, origin, blocks, self.verifier.clone())
+		import_many_blocks(block_import, origin, blocks, self.verifier.clone(), self.delay_between_blocks)
 			.then(move |(imported, count, results, block_import)| {
 				result_sender.blocks_processed(imported, count, results);
 				future::ready(block_import)
@@ -305,6 +308,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,
+	delay_between_blocks: Duration,
 ) -> impl Future<Output = (usize, usize, Vec<(
 	Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 	B::Hash,
@@ -327,10 +331,20 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 	let mut has_error = false;
 	let mut blocks = blocks.into_iter();
 	let mut import_handle = Some(import_handle);
+	let mut waiting = None;
 
 	// Blocks in the response/drain should be in ascending order.
 
 	future::poll_fn(move |cx| {
+		// Handle the optional timer that makes us wait before the next import.
+		if let Some(waiting) = &mut waiting {
+			match Future::poll(Pin::new(waiting), cx) {
+				Poll::Ready(_) => {},
+				Poll::Pending => return Poll::Pending,
+			}
+		}
+		waiting = None;
+
 		// Is there any block left to import?
 		let block = match blocks.next() {
 			Some(b) => b,
@@ -374,6 +388,9 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 
 		// Notifies the current task again so that we re-execute this closure again for the next
 		// block.
+		if delay_between_blocks != Duration::new(0, 0) {
+			waiting = Some(Delay::new(delay_between_blocks));
+		}
 		cx.waker().wake_by_ref();
 		Poll::Pending
 	})
