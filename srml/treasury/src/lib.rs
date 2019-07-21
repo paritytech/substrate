@@ -79,6 +79,7 @@ use runtime_primitives::{Permill, ModuleId};
 use runtime_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
+use runtime_primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
@@ -153,6 +154,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change, one extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500)]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -179,6 +181,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
@@ -196,6 +199,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 

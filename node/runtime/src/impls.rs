@@ -19,7 +19,7 @@
 use node_primitives::Balance;
 use runtime_primitives::weights::{Weight, WeightMultiplier};
 use runtime_primitives::traits::{Convert, Saturating};
-use runtime_primitives::Fixed64;
+use runtime_primitives::{Fixed64, Perbill};
 use support::traits::Get;
 use crate::{Balances, MaximumBlockWeight};
 
@@ -44,27 +44,38 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 ///
 /// This assumes that weight is a numeric value in the u32 range.
 ///
+/// Given `TARGET_BLOCK_FULLNESS = 1/2`, a block saturation greater than 1/2 will cause the system
+/// fees to slightly grow and the opposite for block saturations less than 1/2.
+///
 /// Formula:
-///   diff = (ideal_weight - current_block_weight)
+///   diff = (target_weight - current_block_weight)
 ///   v = 0.00004
 ///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
 pub struct WeightMultiplierUpdateHandler;
+
+// CRITICAL NOTE: The system module maintains two constants: a _maximum_ block weight and a
+// _ratio_ of it yielding the portion which is accessible to normal transactions (reserving the rest
+// for operational ones). `TARGET_BLOCK_FULLNESS` is entirely independent and the system module is
+// not aware of if, nor should it care about it. This constant simply denotes on which ratio of the
+// _maximum_ block weight we tweak the fees. It does NOT care about the type of the dispatch.
+//
+// For the system to be configured in a sane way, `TARGET_BLOCK_FULLNESS` should always be less than
+// the ratio that `system` module uses to find normal transaction quota.
+/// The block saturation level. Fees will be updates based on this value.
+pub const TARGET_BLOCK_FULLNESS: Perbill = Perbill(1_000_000_000 / 4);
+
 impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierUpdateHandler {
 	fn convert(previous_state: (Weight, WeightMultiplier)) -> WeightMultiplier {
 		let (block_weight, multiplier) = previous_state;
-		// CRITICAL NOTE: what the system module interprets as maximum block weight, and a portion
-		// of it (1/4 usually) as ideal weight demonstrate the gap in block weights for operational
-		// transactions. What this weight multiplier interprets as the maximum, is actually the
-		// maximum that is available to normal transactions. Hence,
-		let max_weight = <MaximumBlockWeight as Get<u32>>::get() / 4;
-		let ideal_weight = (max_weight / 4) as u128;
+		let max_weight = <MaximumBlockWeight as Get<u32>>::get();
+		let target_weight = (TARGET_BLOCK_FULLNESS * max_weight) as u128;
 		let block_weight = block_weight as u128;
 
 		// determines if the first_term is positive
-		let positive = block_weight >= ideal_weight;
-		let diff_abs = block_weight.max(ideal_weight) - block_weight.min(ideal_weight);
+		let positive = block_weight >= target_weight;
+		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
 		// diff is within u32, safe.
 		let diff = Fixed64::from_rational(diff_abs as i64, max_weight as u64);
 		let diff_squared = diff.saturating_mul(diff);
@@ -102,13 +113,14 @@ mod tests {
 	use super::*;
 	use runtime_primitives::weights::Weight;
 	use runtime_primitives::Perbill;
+	use crate::MaximumBlockWeight;
 
 	fn max() -> Weight {
 		<MaximumBlockWeight as Get<Weight>>::get()
 	}
 
-	fn ideal() -> Weight {
-		max() / 4 / 4
+	fn target() -> Weight {
+		TARGET_BLOCK_FULLNESS * max()
 	}
 
 	// poc reference implementation.
@@ -120,7 +132,7 @@ mod tests {
 		// maximum tx weight
 		let m = max() as f32;
 		// Ideal saturation in terms of weight
-		let ss = ideal() as f32;
+		let ss = target() as f32;
 		// Current saturation in terms of weight
 		let s = block_weight;
 
@@ -130,7 +142,7 @@ mod tests {
 		Perbill::from_parts((fm * 1_000_000_000_f32) as u32)
 	}
 
-	fn fm(parts: i64) -> WeightMultiplier {
+	fn wm(parts: i64) -> WeightMultiplier {
 		WeightMultiplier::from_parts(parts)
 	}
 
@@ -138,44 +150,44 @@ mod tests {
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() / 4, WeightMultiplier::default())),
-			fm(-7500)
+			WeightMultiplierUpdateHandler::convert((target() / 4, WeightMultiplier::default())),
+			wm(-7500)
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() / 2, WeightMultiplier::default())),
-			fm(-5000)
+			WeightMultiplierUpdateHandler::convert((target() / 2, WeightMultiplier::default())),
+			wm(-5000)
 		);
 		// ideal. Original fee. No changes.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() as u32, WeightMultiplier::default())),
-			fm(0)
+			WeightMultiplierUpdateHandler::convert((target() as u32, WeightMultiplier::default())),
+			wm(0)
 		);
 		// // More than ideal. Fee is increased.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert(((ideal() * 2) as u32, WeightMultiplier::default())),
-			fm(10000)
+			WeightMultiplierUpdateHandler::convert(((target() * 2) as u32, WeightMultiplier::default())),
+			wm(10000)
 		);
 	}
 
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() * 2, WeightMultiplier::default())),
-			fm(10000)
+			WeightMultiplierUpdateHandler::convert((target() * 2, WeightMultiplier::default())),
+			wm(10000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(10000))),
-			fm(20000)
+			WeightMultiplierUpdateHandler::convert((target() * 2, wm(10000))),
+			wm(20000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(20000))),
-			fm(30000)
+			WeightMultiplierUpdateHandler::convert((target() * 2, wm(20000))),
+			wm(30000)
 		);
 		// ...
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(1_000_000_000))),
-			fm(1_000_000_000 + 10000)
+			WeightMultiplierUpdateHandler::convert((target() * 2, wm(1_000_000_000))),
+			wm(1_000_000_000 + 10000)
 		);
 	}
 
@@ -183,27 +195,25 @@ mod tests {
 	fn stateful_weight_mil_collapse_to_minus_one() {
 		assert_eq!(
 			WeightMultiplierUpdateHandler::convert((0, WeightMultiplier::default())),
-			fm(-10000)
+			wm(-10000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, fm(-10000))),
-			fm(-20000)
+			WeightMultiplierUpdateHandler::convert((0, wm(-10000))),
+			wm(-20000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, fm(-20000))),
-			fm(-30000)
+			WeightMultiplierUpdateHandler::convert((0, wm(-20000))),
+			wm(-30000)
 		);
 		// ...
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, fm(1_000_000_000 * -1))),
-			fm(-1_000_000_000)
+			WeightMultiplierUpdateHandler::convert((0, wm(1_000_000_000 * -1))),
+			wm(-1_000_000_000)
 		);
 	}
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		// defensive-only test. at the moment we are not allowing any weight more than
-		// 4 * 1024 * 1024 in a block.
 		let kb = 1024_u32;
 		let mb = kb * kb;
 		let max_fm = WeightMultiplier::from_fixed(Fixed64::from_natural(i64::max_value()));
@@ -214,7 +224,9 @@ mod tests {
 				WeightMultiplierUpdateHandler::convert((i, WeightMultiplier::default()));
 			});
 
-		vec![10 * mb, Weight::max_value() / 2, Weight::max_value()]
+		// Some values that are all above the target and will cause an increase.
+		let target_weight = TARGET_BLOCK_FULLNESS * <MaximumBlockWeight as Get<u32>>::get();
+		vec![target_weight + 100, target_weight * 2, target_weight * 4]
 			.into_iter()
 			.for_each(|i| {
 				let fm = WeightMultiplierUpdateHandler::convert((

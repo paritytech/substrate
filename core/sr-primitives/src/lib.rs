@@ -170,7 +170,7 @@ pub type ConsensusEngineId = [u8; 4];
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-pub struct Permill(u32);
+pub struct Permill(pub u32);
 
 impl Permill {
 	/// Nothing.
@@ -274,7 +274,7 @@ impl From<codec::Compact<Permill>> for Permill {
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub struct Perbill(u32);
+pub struct Perbill(pub u32);
 
 impl Perbill {
 	/// Nothing.
@@ -383,7 +383,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 /// cannot hold a value larger than +-`9223372036854775807 / 1_000_000_000` (~9 billion).
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Fixed64(i64);
+pub struct Fixed64(pub i64);
 
 /// The maximum value of the `Fixed64` type
 const DIV: i64 = 1_000_000_000;

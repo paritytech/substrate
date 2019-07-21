@@ -108,6 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
+				DispatchError::Resource => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
@@ -562,7 +563,8 @@ mod tests {
 		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as u32;
-		let limit = <MaximumBlockWeight as Get<u32>>::get() / 4;
+		// TODO: this should be fetched from the test system once the ratio is exposed as a const.
+		let limit = <MaximumBlockWeight as Get<u32>>::get() * 3 / 4;
 		let num_to_exhaust_block = limit / encoded_len;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
@@ -582,7 +584,7 @@ mod tests {
 					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce + 1));
 				} else {
-					assert_eq!(res, Err(ApplyError::CantPay));
+					assert_eq!(res, Err(ApplyError::FullBlock));
 				}
 			}
 		});

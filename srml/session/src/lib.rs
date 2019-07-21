@@ -122,6 +122,7 @@
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::{Decode, Encode};
 use primitives::KeyTypeId;
+use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash};
 use srml_support::{
 	dispatch::Result,
@@ -355,6 +356,7 @@ decl_module! {
 		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(150)] // TODO: this is operational?
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 

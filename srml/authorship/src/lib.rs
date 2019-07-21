@@ -28,6 +28,7 @@ use srml_support::dispatch::Result as DispatchResult;
 use parity_codec::{Encode, Decode};
 use system::ensure_none;
 use primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use primitives::weights::SimpleDispatchInfo;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -217,6 +218,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
+		#[weight = SimpleDispatchInfo::FixedOperational(10)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 

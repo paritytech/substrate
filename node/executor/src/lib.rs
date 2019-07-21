@@ -40,7 +40,7 @@ mod tests {
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AuthorityKeyring, AccountKeyring};
-	use runtime_support::{Hashable, StorageValue, StorageMap, traits::{Currency, Get}};
+	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::{Currency, Get}};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
 		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
@@ -49,7 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, WeighData};
+	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, GetDispatchInfo, WeighData};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -86,12 +86,16 @@ mod tests {
 		let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
 			<TransactionByteFee as Get<Balance>>::get() *
 			(extrinsic.encode().len() as Balance);
-		let weight_fee = SimpleDispatchInfo::default().weigh_data(()) as Balance;
+		let weight_fee = default_transfer_call().get_dispatch_info().weight as Balance;
+		// TODO: with this we have 100% accurate fee estimation. Should probably be able to get rid
+		// of `assert_eq_error_rate!` now. But it makes test mockup much more complicated because
+		// the fee for each block can only be estimated _before_ that block.
+		// weight_fee = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight_fee as u32) as Balance;
 		length_fee + weight_fee
 	}
 
-	fn multiplier_ideal() -> u32 {
-		<MaximumBlockWeight as Get<u32>>::get() / 4 / 4
+	fn multiplier_target() -> u32 {
+		<MaximumBlockWeight as Get<u32>>::get() / 4
 	}
 
 	fn creation_fee() -> Balance {
@@ -155,10 +159,14 @@ mod tests {
 		)
 	}
 
+	fn default_transfer_call() -> balances::Call<Runtime> {
+		balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
+	}
+
 	fn xt() -> UncheckedExtrinsic {
 		sign(CheckedExtrinsic {
 			signed: Some((alice(), signed_extra(0, 0))),
-			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)),
+			function: Call::Balances(default_transfer_call()),
 		})
 	}
 
@@ -576,9 +584,19 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// TODO TODO: this needs investigating: why are we deducting creation fee twice here? and why bob also pays it?
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - transfer_fee(&xt()) - creation_fee());
+			// TODO: this needs investigating: why are we deducting creation fee twice here? and why bob also pays it?
+			// NOTE: fees differ slightly in tests that execute more than one block due to the
+			// weight update.
+			assert_eq_error_rate!(
+				Balances::total_balance(&alice()),
+				 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee(),
+				 10
+			);
+			assert_eq_error_rate!(
+				Balances::total_balance(&bob()),
+				179 * DOLLARS - transfer_fee(&xt()) - creation_fee(),
+				10
+			);
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -640,8 +658,16 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
-			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
+			assert_eq_error_rate!(
+				Balances::total_balance(&alice()),
+				32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee(),
+				10
+			);
+			assert_eq_error_rate!(
+				Balances::total_balance(&bob()),
+				179 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee(),
+				10
+			);
 		});
 	}
 
@@ -803,15 +829,14 @@ mod tests {
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		assert!(
-			WasmExecutor::new().call(
-				&mut t,
-				4,
-				COMPACT_CODE,
-				"Core_execute_block",
-				&block_with_size(42, 0, 120_000).0
-			).is_err()
+		let result = WasmExecutor::new().call(
+			&mut t,
+			4,
+			COMPACT_CODE,
+			"Core_execute_block",
+			&block_with_size(42, 0, 120_000).0
 		);
+		assert!(result.is_err()); // Err(Wasmi(Trap(Trap { kind: Host(AllocatorOutOfSpace) })))
 	}
 
 	#[test]
@@ -946,25 +971,37 @@ mod tests {
 		});
 
 		let mut tt = new_test_ext(COMPACT_CODE, false);
-		// NOTE: This assumes that system::remark has the default.
-		let num_to_exhaust = multiplier_ideal() * 2 / SimpleDispatchInfo::default().weigh_data(());
-		println!("++ Generating {} transactions to fill {} weight units", num_to_exhaust, multiplier_ideal() * 2);
 
-		let mut xts = (0..num_to_exhaust).map(|i| CheckedExtrinsic {
-			signed: Some((charlie(), signed_extra(i.into(), 0))),
-			function: Call::System(system::Call::remark(vec![0; 1])),
-		}).collect::<Vec<CheckedExtrinsic>>();
-		xts.insert(0, CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(42)),
-		});
+		// This test can either use `fill_block()`, which is controversial, or should be dropped.
+		// NOTE: This assumes that system::remark has the default.
+		// let num_to_exhaust = (multiplier_target() + 100) / SimpleDispatchInfo::default().weigh_data(());
+		// println!("++ Generating {} transactions to fill {} weight units", num_to_exhaust, multiplier_target() + 100);
+		// let mut xts = (0..num_to_exhaust).map(|i| CheckedExtrinsic {
+		// 	signed: Some((charlie(), signed_extra(i.into(), 0))),
+		// 	function: Call::System(system::Call::remark(vec![0; 1])),
+		// }).collect::<Vec<CheckedExtrinsic>>();
+		// xts.insert(0, CheckedExtrinsic {
+		// 	signed: None,
+		// 	function: Call::Timestamp(timestamp::Call::set(42)),
+		// });
+
+		println!("++ Generated all extrinsics. Constructing blocks.");
 
 		// big one in terms of weight.
 		let block1 = construct_block(
 			&mut tt,
 			1,
 			GENESIS_HASH.into(),
-			xts
+			vec![
+				CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), signed_extra(0, 0))),
+					function: Call::System(system::Call::fill_block()),
+				}
+			]
 		);
 
 		// small one in terms of weight.
@@ -978,11 +1015,13 @@ mod tests {
 				function: Call::Timestamp(timestamp::Call::set(52)),
 				},
 				CheckedExtrinsic {
-					signed: Some((charlie(), signed_extra(num_to_exhaust.into(), 0))),
+					signed: Some((charlie(), signed_extra(1, 0))),
 					function: Call::System(system::Call::remark(vec![0; 1])),
 				}
 			]
 		);
+
+		println!("++ Block 1 size: {} / Block 2 size {}", block1.0.encode().len(), block2.0.encode().len());
 
 		// execute a big block.
 		executor().call::<_, NeverNativeValue, fn() -> _>(

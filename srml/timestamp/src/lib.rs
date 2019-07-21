@@ -98,6 +98,7 @@ use parity_codec::Decode;
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple, traits::Get};
 use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
+use runtime_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
@@ -235,6 +236,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");

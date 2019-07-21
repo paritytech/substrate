@@ -144,11 +144,11 @@ pub enum SimpleDispatchInfo {
 impl<T> WeighData<T> for SimpleDispatchInfo {
 	fn weigh_data(&self, _: T) -> Weight {
 		match self {
-			SimpleDispatchInfo::FixedNormal(w) => *w,
+			SimpleDispatchInfo::FixedNormal(w) => *w * 1000,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
 
-			SimpleDispatchInfo::FixedOperational(w) => *w,
+			SimpleDispatchInfo::FixedOperational(w) => *w * 1000,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
 			SimpleDispatchInfo::FreeOperational => Bounded::min_value(),
 		}
@@ -162,11 +162,11 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 }
 
 impl Default for SimpleDispatchInfo {
+	// TODO: based on the fact that this has a system-wide impact, it should probably be
+	// configurable at the `node/runtime` level.
 	fn default() -> Self {
-		// This implies that the weight is currently equal to 100, nothing more
-		// for all substrate transactions that do NOT explicitly annotate weight.
-		// TODO #2431 needs to be updated with proper max values.
-		SimpleDispatchInfo::FixedNormal(100)
+		// Default weight of all transactions. For simplicity, all weights are factored by 10^3.
+		SimpleDispatchInfo::FixedNormal(10)
 	}
 }
 

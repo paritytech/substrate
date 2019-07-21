@@ -164,7 +164,7 @@ use primitives::traits::{
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
 };
 use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::DispatchInfo;
+use primitives::weights::{DispatchInfo, SimpleDispatchInfo};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -428,6 +428,7 @@ decl_module! {
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
 		///
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -451,6 +452,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(500)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
