@@ -41,7 +41,6 @@ use keystore::{LocalStore, Store};
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
@@ -85,6 +84,8 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	consensus_keystore: Arc<LocalStore<ComponentConsensusPair<Components>>>,
+	finality_keystore: Arc<LocalStore<ComponentFinalityPair<Components>>>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -171,8 +172,6 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let keystore = Store::new();
-
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
@@ -232,9 +231,18 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let keystore_authority_key = AuthorityKeyProvider {
+		let keystore = Store::new();
+		let consensus_keystore = keystore
+			.create_local_store::<Components::ConsensusPair>(config.key.as_ref());
+		let finality_keystore = keystore
+			.create_local_store::<Components::FinalityPair>(config.key.as_ref());
+
+		let authority_key_provider = AuthorityKeyProvider {
 			_marker: PhantomData,
+			consensus_keystore: consensus_keystore.clone(),
+			finality_keystore: finality_keystore.clone(),
 		};
+
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -242,7 +250,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					keystore_authority_key,
+					authority_key_provider,
 					config.offchain_worker_password.clone(),
 				)))
 			},
@@ -454,7 +462,8 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
+			consensus_keystore,
+			finality_keystore,
 			config,
 			exit,
 			rpc_handlers,
@@ -463,6 +472,20 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
+	}
+
+	/// Returns the consensus keystore.
+	pub fn consensus_keystore(
+		&self
+	) -> Arc<LocalStore<ComponentConsensusPair<Components>>> {
+		self.consensus_keystore.clone()
+	}
+
+	/// Returns the finality keystore.
+	pub fn finality_keystore(
+		&self
+	) -> Arc<LocalStore<ComponentFinalityPair<Components>>> {
+		self.finality_keystore.clone()
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -495,11 +518,6 @@ impl<Components: components::Components> Service<Components> {
 		-> impl Future<Item = Option<String>, Error = ()>
 	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
-	}
-
-	/// Get store.
-	pub fn store(&self) -> &Store {
-		&self.keystore
 	}
 
 	/// Get shared client instance.
@@ -861,9 +879,9 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// A provider of current authority key.
 pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
 	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
-	roles: Roles,
-	keystore: Option<Arc<Keystore>>,
-	password: crypto::Protected<String>,
+	client: Arc<ComponentClient<Components>>,
+	consensus_store: Arc<LocalStore<ConsensusPair>>,
+	finality_store: Arc<LocalStore<FinalityPair>>,
 }
 
 impl<Block, ConsensusPair, FinalityPair>
@@ -877,14 +895,32 @@ where
 	type ConsensusPair = ConsensusPair;
 	type FinalityPair = FinalityPair;
 
-	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
-		None
+	fn authority_key(&self, at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
+		let authorities = self.client
+			.runtime_api()
+			.authorities(at)
+			.unwrap_or_default();
+		self.consensus_store.get_keys(|public| {
+			authorities.iter().find(|aid| aid == &public).is_some()
+		})
+			.into_iter()
+			.next()
 	}
 
 	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
-		None
+		let authorities = self.client
+			.runtime_api()
+			.grandpa_authorities(at)
+			.unwrap_or_default();
+		self.finality_store.get_keys(|public| {
+			authorities.iter().find(|(aid, _)| aid == public).is_some()
+		})
+			.into_iter()
+			.next()
 	}
 }
+
+
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
