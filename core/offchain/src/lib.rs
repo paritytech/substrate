@@ -51,6 +51,7 @@ use runtime_primitives::{
 };
 use futures::future::Future;
 use transaction_pool::txpool::{Pool, ChainApi};
+use network::NetworkStateInfo;
 
 mod api;
 
@@ -130,6 +131,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
+		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> impl Future<Item = (), Error = ()> where
 		A: ChainApi<Block=Block> + 'static,
 	{
@@ -145,6 +147,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 				self.keys_password.clone(),
 				self.authority_key.clone(),
 				at.clone(),
+				network_state.clone(),
 			);
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
@@ -161,6 +164,20 @@ mod tests {
 	use super::*;
 	use futures::Future;
 	use primitives::{ed25519, sr25519, crypto::{TypedKey, Pair}};
+	use std::collections::HashSet;
+	use network::{Multiaddr, PeerId};
+
+	struct MockNetworkStateInfo();
+
+	impl NetworkStateInfo for MockNetworkStateInfo {
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
+
+		fn peer_id(&self) -> PeerId {
+			PeerId::random()
+		}
+	}
 
 	#[derive(Clone, Default)]
 	pub(crate) struct TestProvider {
@@ -186,10 +203,11 @@ mod tests {
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
+		let mock = Arc::new(MockNetworkStateInfo());
 
 		// when
 		let offchain = OffchainWorkers::new(client, db, TestProvider::default(), "".to_owned().into());
-		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool));
+		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, mock.clone()));
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();

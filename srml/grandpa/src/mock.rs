@@ -60,6 +60,7 @@ impl system::Trait for Test {
 	type AccountId = AuthorityId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
 }

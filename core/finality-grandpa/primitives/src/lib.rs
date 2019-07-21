@@ -136,8 +136,16 @@ pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec> {
 	/// Note that the authority with given index is disabled until the next change.
 	#[codec(index = "3")]
 	OnDisabled(AuthorityIndex),
-	/// Set of challenges submitted.
+	/// A signal to pause the current authority set after the given delay.
+	/// After finalizing the block at _delay_ the authorities should stop voting.
 	#[codec(index = "4")]
+	Pause(N),
+	/// A signal to resume the current authority set after the given delay.
+	/// After authoring the block at _delay_ the authorities should resume voting.
+	#[codec(index = "5")]
+	Resume(N),
+	/// Set of challenges submitted.
+	#[codec(index = "6")]
 	Challenges(Vec<safety::Challenge<H, N, Header>>),
 }
 
@@ -154,6 +162,22 @@ impl<H: Codec, N: Codec, Header: Codec> ConsensusLog<H, N, Header> {
 	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
 		match self {
 			ConsensusLog::ForcedChange(median, change) => Some((median, change)),
+			_ => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained pause signal.
+	pub fn try_into_pause(self) -> Option<N> {
+		match self {
+			ConsensusLog::Pause(delay) => Some(delay),
+			_ => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained resume signal.
+	pub fn try_into_resume(self) -> Option<N> {
+		match self {
+			ConsensusLog::Resume(delay) => Some(delay),
 			_ => None,
 		}
 	}

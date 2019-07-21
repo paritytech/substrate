@@ -616,7 +616,7 @@ fn check_vesting_status() {
 			assert_eq!(System::block_number(), 10);
 
 			// Account 1 has fully vested by block 10
-			assert_eq!(Balances::vesting_balance(&1), 0); 
+			assert_eq!(Balances::vesting_balance(&1), 0);
 			// Account 2 has started vesting by block 10
 			assert_eq!(Balances::vesting_balance(&2), user2_free_balance);
 			// Account 12 has started vesting by block 10

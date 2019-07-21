@@ -23,7 +23,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
-use network::{self, OnDemand, FinalityProofProvider, config::BoxFinalityProofRequestBuilder};
+use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{
 	self, Options as TransactionPoolOptions, Pool as TransactionPool, PoolApi as _PoolApi,
@@ -237,6 +237,7 @@ pub trait OffchainWorker<C: Components> {
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
+		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
 
@@ -253,8 +254,9 @@ impl<C: Components> OffchainWorker<Self> for C where
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
+		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		Ok(Box::new(offchain.on_block_imported(number, pool)))
+		Ok(Box::new(offchain.on_block_imported(number, pool, network_state.clone())))
 	}
 }
 

@@ -29,8 +29,8 @@ use timestamp::OnTimestampSet;
 use primitives::{
 	generic::DigestItem,
 	traits::{
-		SaturatedConversion, Saturating, Member, Verify, ValidateUnsigned,
-		RandomnessBeacon, Header, TypedKey
+		IsMember, SaturatedConversion, Saturating, Member, Verify,
+		ValidateUnsigned, RandomnessBeacon, Header, TypedKey
 	},
 	transaction_validity::TransactionValidity, KeyTypeId, key_types
 };
@@ -276,6 +276,14 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 			}
 		}
 		return None
+	}
+}
+
+impl<T: Trait> IsMember<AuthorityId> for Module<T> {
+	fn is_member(authority_id: &AuthorityId) -> bool {
+		<Module<T>>::authorities()
+			.iter()
+			.any(|id| id == authority_id)
 	}
 }
 

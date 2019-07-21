@@ -60,7 +60,7 @@ use srml_support::{
 };
 use primitives::{
 	traits::{
-		SaturatedConversion, Saturating, Zero, One, Member, Verify,
+		SaturatedConversion, Saturating, Zero, One, Member, Verify, IsMember,
 		ValidateUnsigned, Header, TypedKey,
 	},
 	generic::DigestItem, transaction_validity::TransactionValidity, key_types,
@@ -280,6 +280,14 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		);
 
 		<system::Module<T>>::deposit_log(log.into());
+	}
+}
+
+impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
+	fn is_member(authority_id: &T::AuthorityId) -> bool {
+		Self::authorities()
+			.iter()
+			.any(|id| id == authority_id)
 	}
 }
 
