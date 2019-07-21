@@ -72,20 +72,38 @@ impl Proposer<TestBlock> for DummyProposer {
 pub struct BabeTestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
 }
-/*
-fn make_importer() -> BoxBlockImport<Block> {
-	drop(env_logger::try_init());
-	let client = Arc::new(test_client::new());
-	let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
-	let (block_import, _justification_import, _finality_proof_import, _finality_proof_request_builder, _data)
-		= self.make_block_import(PeersClient::Full(client.clone()));
-	let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
-	Box::new(BabeBlockImport::new(client, SharedEpochChanges::new(), block_import))
+
+type TestHeader = <TestBlock as BlockT>::Header;
+type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
+
+pub struct TestVerifier {
+	inner: BabeVerifier<PeersFullClient>,
+	mutator: Box<dyn Fn(TestHeader) -> TestHeader + Send + Sync>,
 }
-*/
+
+impl Verifier<TestBlock> for TestVerifier {
+	/// Verify the given data and return the ImportBlock and an optional
+	/// new set of validators to import. If not, err with an Error-Message
+	/// presented to the User in the logs.
+	fn verify(
+		&self,
+		origin: BlockOrigin,
+		header: TestHeader,
+		justification: Option<Justification>,
+		body: Option<Vec<TestExtrinsic>>,
+	) -> Result<(ImportBlock<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		self.inner.verify(
+			origin,
+			(self.mutator)(header),
+			justification,
+			body,
+		)
+	}
+}
+
 impl TestNetFactory for BabeTestNet {
 	type Specialization = DummySpecialization;
-	type Verifier = BabeVerifier<PeersFullClient>;
+	type Verifier = TestVerifier;
 	type PeerData = ();
 
 	/// Create new test network with peers and given config.
@@ -110,11 +128,14 @@ impl TestNetFactory for BabeTestNet {
 		).expect("Registers babe inherent data provider");
 		trace!(target: "babe", "Provider registered");
 
-		Arc::new(BabeVerifier {
-			api,
-			inherent_data_providers,
-			config,
-			time_source: Default::default(),
+		Arc::new(TestVerifier {
+			inner: BabeVerifier {
+				api,
+				inherent_data_providers,
+				config,
+				time_source: Default::default(),
+			},
+			mutator: Box::new(|s| s),
 		})
 	}
 

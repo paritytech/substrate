@@ -86,6 +86,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 	N: Ord + Clone,
 	V: Clone,
 {
+	/// Prune nodes that are not descendents of `hash` according to `is_descendent_of`.
+	/// The number and order of calls to `is_descendent_of` is unspecified and subject to change.
 	pub fn prune<F, E>(
 		&mut self,
 		hash: &H,
@@ -202,6 +204,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
+	/// Find a node in the tree that satisfies a predicate
 	pub fn find_node_where<F, E, P>(
 		&self,
 		hash: &H,
