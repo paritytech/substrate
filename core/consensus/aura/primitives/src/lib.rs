@@ -21,7 +21,7 @@
 use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
-use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Verify}};
+use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Verify, Header}};
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
 mod digest;
@@ -93,7 +93,11 @@ pub struct AuraEquivocationProof<H, S, P> {
 	second_signature: S,
 }
 
-impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for AuraEquivocationProof<H, S, P> {
+impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for AuraEquivocationProof<H, S, P>
+where
+	H: Header,
+	S: Verify<Signer=P> + Codec,
+{
 	fn new(
 		identity: P,
 		first_header: H,
@@ -108,6 +112,36 @@ impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for AuraEquivocationProof<H, 
 			first_signature,
 			second_signature
 		}
+	}
+
+	/// Check the validity of the equivocation proof.
+	fn is_valid(&self) -> bool {
+		let first_header = self.first_header();
+		let second_header = self.second_header();
+
+		if first_header == second_header {
+			return false
+		}
+
+		let maybe_first_slot = find_pre_digest::<H, S>(first_header);
+		let maybe_second_slot = find_pre_digest::<H, S>(second_header);
+
+		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+			// TODO: Check that author matches slot author (improve HistoricalSession).
+			let author = self.identity();
+
+			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+				return false
+			}
+
+			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+				return false
+			}
+
+			return true;
+		}
+
+		false
 	}
 
 	/// Get the identity of the suspect of equivocating.

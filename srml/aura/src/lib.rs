@@ -179,37 +179,6 @@ pub trait Trait: timestamp::Trait + historical::Trait {
 	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
-fn valid_equivocation<T: Trait>(
-	proof: &AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>
-) -> bool {
-	let first_header = proof.first_header();
-	let second_header = proof.second_header();
-
-	if first_header == second_header {
-		return false
-	}
-
-	let maybe_first_slot = find_pre_digest::<_, T::Signature>(first_header);
-	let maybe_second_slot = find_pre_digest::<_, T::Signature>(second_header);
-
-	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-		// TODO: Check that author matches slot author (improve HistoricalSession).
-		let author = proof.identity();
-
-		if !proof.first_signature().verify(first_header.hash().as_ref(), author) {
-			return false
-		}
-
-		if !proof.second_signature().verify(second_header.hash().as_ref(), author) {
-			return false
-		}
-
-		return true;
-	}
-
-	false
-}
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
@@ -237,7 +206,7 @@ decl_module! {
 				proof,
 			);
 
-			if to_punish.is_some() && valid_equivocation::<T>(&equivocation) {
+			if to_punish.is_some() && equivocation.is_valid() {
 				// TODO: Slash.
 			}
 		}

@@ -38,6 +38,10 @@ pub trait AuthorshipEquivocationProof<H, S, P> {
 		second_signature: S,
 	) -> Self;
 
+	/// Check the validity of the equivocation.
+	/// Includes checking signatures, same slot and distinct headers.
+	fn is_valid(&self) -> bool;
+
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &P;
 
