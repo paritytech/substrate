@@ -29,7 +29,7 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock},
 };
 use consensus::{
-	Error as ConsensusError, ImportBlock,
+	Error as ConsensusError, BlockImportParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
@@ -817,12 +817,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		import_block: ImportBlock<Block>,
+		import_block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
-		let ImportBlock {
+		let BlockImportParams {
 			origin,
 			header,
 			justification,
@@ -1460,10 +1460,10 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	type Error = ConsensusError;
 
 	/// Import a checked and validated block. If a justification is provided in
-	/// `ImportBlock` then `finalized` *must* be true.
+	/// `BlockImportParams` then `finalized` *must* be true.
 	fn import_block(
 		&mut self,
-		import_block: ImportBlock<Block>,
+		import_block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
@@ -1506,7 +1506,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 
 	fn import_block(
 		&mut self,
-		import_block: ImportBlock<Block>,
+		import_block: BlockImportParams<Block>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).import_block(import_block, new_cache)
