@@ -37,7 +37,7 @@ use client::{
 use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, Convert,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
@@ -59,6 +59,11 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
+/// Implementations for `Convert` and other helper structs passed into runtime modules as associated
+/// types.
+pub mod impls;
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler};
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -72,8 +77,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 114,
-	impl_version: 114,
+	spec_version: 115,
+	impl_version: 115,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -125,6 +130,7 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type WeightMultiplierUpdate = WeightMultiplierUpdateHandler;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 }
@@ -190,7 +196,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa, Aura);
+type SessionHandlers = (Grandpa, Aura, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -224,20 +230,6 @@ impl session::historical::Trait for Runtime {
 parameter_types! {
 	pub const SessionsPerEra: session::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
-}
-
-pub struct CurrencyToVoteHandler;
-
-impl CurrencyToVoteHandler {
-	fn factor() -> u128 { (Balances::total_issuance() / u64::max_value() as u128).max(1) }
-}
-
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 { (x / Self::factor()) as u64 }
-}
-
-impl Convert<u128, u128> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u128 { x * Self::factor() }
 }
 
 impl staking::Trait for Runtime {
@@ -382,6 +374,15 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+impl im_online::Trait for Runtime {
+	type AuthorityId = AuraId;
+	type Call = Call;
+	type Event = Event;
+	type SessionsPerEra = SessionsPerEra;
+	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type IsValidAuthorityId = Aura;
+}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -420,6 +421,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
+		ImOnline: im_online::{default, ValidateUnsigned},
 	}
 );
 

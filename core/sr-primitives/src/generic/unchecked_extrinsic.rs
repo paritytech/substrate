@@ -114,8 +114,14 @@ impl<
 	Signature: Codec,
 	Call,
 > Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
+	}
+
+	fn new_unsigned(call: Self::Call) -> Option<Self> {
+		Some(UncheckedExtrinsic::new_unsigned(call))
 	}
 }
 

@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::{IdentityLookup}, testing::Header};
+use primitives::{traits::IdentityLookup, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types, traits::Get};
@@ -77,6 +77,7 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 }
@@ -118,6 +119,11 @@ impl Default for ExtBuilder {
 	}
 }
 impl ExtBuilder {
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+		self.transaction_base_fee = base_fee;
+		self.transaction_byte_fee = byte_fee;
+		self
+	}
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
@@ -129,11 +135,6 @@ impl ExtBuilder {
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
 		self.creation_fee = creation_fee;
-		self
-	}
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
 		self
 	}
 	pub fn monied(mut self, monied: bool) -> Self {

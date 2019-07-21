@@ -86,6 +86,7 @@ members = [
 	"srml/rolling-window",
 	"srml/timestamp",
 	"srml/treasury",
+	"srml/im-online",
 	"node/cli",
 	"node/executor",
 	"node/primitives",

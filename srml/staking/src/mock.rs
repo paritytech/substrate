@@ -97,12 +97,13 @@ impl system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
-	pub const TransferFee: u64 = 0;
-	pub const CreationFee: u64 = 0;
+	pub const TransferFee: Balance = 0;
+	pub const CreationFee: Balance = 0;
 	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 0;
 }

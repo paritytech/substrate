@@ -33,6 +33,7 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../core/
 rpc = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
 tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
+parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }

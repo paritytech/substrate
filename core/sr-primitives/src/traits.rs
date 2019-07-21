@@ -622,6 +622,12 @@ pub trait RandomnessBeacon {
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
+/// Determine if a `MemberId` is a valid member.
+pub trait IsMember<MemberId> {
+	/// Is the given `MemberId` a valid member?
+	fn is_member(member_id: &MemberId) -> bool;
+}
+
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -702,10 +708,16 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDes
 }
 
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
+pub trait Extrinsic: Sized {
+	/// The function call.
+	type Call;
+
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
 	fn is_signed(&self) -> Option<bool> { None }
+
+	/// New instance of an unsigned extrinsic aka "inherent".
+	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
 /// Extract the hashing type for a block.
