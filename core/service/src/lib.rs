@@ -542,7 +542,8 @@ impl<Components: components::Components> Service<Components> {
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
 	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-	-> impl Future<Item = Option<String>, Error = ()> {
+		-> impl Future<Item = Option<String>, Error = ()>
+	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
 	}
 
@@ -1002,8 +1003,8 @@ where
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
-///         ConsensusPair = primitives::ed25519::Pair,
-///         FinalityPair = primitives::ed25519::Pair,
+///		ConsensusPair = primitives::ed25519::Pair,
+///		FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
