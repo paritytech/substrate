@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 use runtime_primitives::{generic::BlockId, AnySignature};
 use log::{info, warn};
 use client::blockchain::HeaderBackend;
-use client::transaction_builder::api::TransactionBuilder as TransactionBuilderApi;
+use client::transaction_builder::TransactionBuilder as TransactionBuilderApi;
 use substrate_primitives::{crypto::Pair as PairT, ed25519::Pair};
 
 /// Trait to submit report calls to the transaction pool.

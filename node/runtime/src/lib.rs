@@ -37,7 +37,7 @@ use grandpa::fg_primitives::{
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-	transaction_builder::api::{self as transaction_builder_api},
+	transaction_builder::{self as transaction_builder_api},
 	runtime_api as client_api, impl_runtime_apis
 };
 use runtime_primitives::{

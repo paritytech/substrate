@@ -25,11 +25,10 @@ use client::{blockchain, CallExecutor, Client};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
-use client::transaction_builder::api::TransactionBuilder;
+use client::transaction_builder::TransactionBuilder;
 use consensus_common::{
-	BlockImport, Error as ConsensusError,
-	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
-	SelectChain,
+	BlockImport, Error as ConsensusError, ImportBlock, ImportResult,
+	JustificationImport, well_known_cache_keys, SelectChain,
 };
 use consensus_accountable_safety::SubmitReport;
 use consensus_accountable_safety_primitives::{

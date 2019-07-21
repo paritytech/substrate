@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility struct to build a transaction.
+//! The runtime api for building transactions.
 
-#[cfg(feature = "std")]
 pub mod transaction_builder;
-#[cfg(feature = "std")]
 pub use self::transaction_builder::*;
-pub mod api;
