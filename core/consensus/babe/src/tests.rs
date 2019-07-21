@@ -34,7 +34,7 @@ use client::BlockchainEvents;
 use test_client;
 use futures::Async;
 use log::debug;
-use std::time::Duration;
+use std::{time::Duration, borrow::Borrow, cell::RefCell};
 type Item = generic::DigestItem<Hash>;
 
 type Error = client::error::Error;
@@ -69,6 +69,12 @@ impl Proposer<TestBlock> for DummyProposer {
 	}
 }
 
+type Mutator = Arc<dyn for<'r> Fn(&'r mut TestHeader) + Send + Sync>;
+
+thread_local! {
+	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_|()));
+}
+
 pub struct BabeTestNet {
 	peers: Vec<Peer<(), DummySpecialization>>,
 }
@@ -78,7 +84,7 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<PeersFullClient>,
-	mutator: Box<dyn Fn(TestHeader) -> TestHeader + Send + Sync>,
+	mutator: Mutator,
 }
 
 impl Verifier<TestBlock> for TestVerifier {
@@ -88,16 +94,13 @@ impl Verifier<TestBlock> for TestVerifier {
 	fn verify(
 		&self,
 		origin: BlockOrigin,
-		header: TestHeader,
+		mut header: TestHeader,
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
 	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		self.inner.verify(
-			origin,
-			(self.mutator)(header),
-			justification,
-			body,
-		)
+		let cb: &(dyn Fn(&mut TestHeader) + Send + Sync) = self.mutator.borrow();
+		cb(&mut header);
+		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
 	}
 }
 
@@ -114,6 +117,7 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
+	/// KLUDGE: this function gets the mutator from thread-local storage.
 	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{
@@ -135,7 +139,7 @@ impl TestNetFactory for BabeTestNet {
 				config,
 				time_source: Default::default(),
 			},
-			mutator: Box::new(|s| s),
+			mutator: MUTATOR.with(|s| s.borrow().clone()),
 		})
 	}
 
@@ -177,22 +181,7 @@ fn rejects_empty_block() {
 	})
 }
 
-#[test]
-#[should_panic]
-fn rejects_missing_inherent_digest() {
-	env_logger::try_init().unwrap();
-	debug!(target: "babe", "checkpoint 1");
-	let mut net = BabeTestNet::new(3);
-	let block_builder = |builder: BlockBuilder<_, _>| {
-		builder.bake().unwrap()
-	};
-	net.mut_peers(|peer| {
-		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
-	})
-}
-
-#[test]
-fn authoring_blocks() {
+fn run_one_test() {
 	drop(env_logger::try_init());
 	debug!(target: "babe", "checkpoint 1");
 	let net = BabeTestNet::new(3);
@@ -216,7 +205,7 @@ fn authoring_blocks() {
 		import_notifications.push(
 			client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
-				.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+				.take_while(|n| Ok(n.header.number() < &1000))
 				.for_each(move |_| Ok(()))
 		);
 
@@ -248,12 +237,44 @@ fn authoring_blocks() {
 	debug!(target: "babe", "checkpoint 5");
 
 	// wait for all finalized on each.
-	let wait_for = ::futures::future::join_all(import_notifications)
+	let wait_for = futures::future::join_all(import_notifications)
 		.map(drop)
 		.map_err(drop);
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+	drop(runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap())
+}
+
+#[test]
+fn authoring_blocks() { run_one_test() }
+
+#[test]
+#[should_panic]
+fn rejects_missing_inherent_digest() {
+	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		header.digest_mut().logs = v.into_iter().filter(|v| v.as_babe_pre_digest().is_none()).collect()
+	}));
+	run_one_test()
+}
+
+#[test]
+#[should_panic]
+fn rejects_missing_seals() {
+	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+		header.digest_mut().pop();
+	}));
+	run_one_test()
+}
+
+#[test]
+#[should_panic]
+fn rejects_missing_consensus_digests() {
+	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		header.digest_mut().logs = v.into_iter().filter(|v| v.as_babe_epoch().is_none()).collect()
+	}));
+	run_one_test()
 }
 
 #[test]
