@@ -213,17 +213,6 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		match call {
-			Call::report_equivocation(_proof) => TransactionValidity::Invalid(0),
-			_ => TransactionValidity::Invalid(0),
-		}
-	}
-}
-
 impl<T: Trait> RandomnessBeacon for Module<T> {
 	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
 		Self::epoch_randomness()

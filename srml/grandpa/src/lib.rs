@@ -45,7 +45,7 @@ use primitives::{
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrecommit,
 	SignedPrecommit, VoterSet, localized_payload, AncestryChain,
-	Chain, validate_commit, ConsensusLog,
+	Chain, validate_commit, ConsensusLog, equivocation::GrandpaEquivocation
 };
 pub use fg_primitives::{
 	AuthorityId, AuthorityWeight, AuthoritySignature, CHALLENGE_SESSION_LENGTH,
@@ -71,7 +71,7 @@ type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<
 type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
 // type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
 
-type Equivocation<T> = safety::GrandpaEquivocation<Hash<T>, Number<T>>;
+type Equivocation<T> = GrandpaEquivocation<Hash<T>, Number<T>>;
 type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
 
 pub trait Trait: system::Trait {
@@ -217,39 +217,9 @@ decl_module! {
 				return Err("Bad session key proof")
 			}
 
-			let identity = equivocation.identity;
-
-			let first_vote = equivocation.first.0;
-			let first_signature = equivocation.first.1;
-
-			let second_vote = equivocation.second.0;
-			let second_signature = equivocation.second.1;
-			
-			if first_vote != second_vote {
-				let first_payload = localized_payload(
-					equivocation.round_number,
-					equivocation.set_id,
-					&first_vote,
-				);
-
-				if !first_signature.verify(first_payload.as_slice(), &identity) {
-					return Err("Bad signature")
-				}
-
-				let second_payload = localized_payload(
-					equivocation.round_number,
-					equivocation.set_id,
-					&second_vote,
-				);
-
-				if !second_signature.verify(second_payload.as_slice(), &identity) {
-					return Err("Bad signature")
-				}
-
-				// Slash identity
+			if equivocation.is_valid() {
+				// Slash
 			}
-
-			return Err("Votes are the same")
 		}
 
 		/// Report rejecting set of prevotes.

@@ -27,7 +27,8 @@ use serde::Serialize;
 
 use parity_codec::{Encode, Decode, Codec};
 use sr_primitives::{
-	ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT, Hash, Header}
+	ConsensusEngineId,
+	traits::{DigestFor, NumberFor, Block as BlockT, Hash, Header, Verify}
 };
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
@@ -77,7 +78,7 @@ pub type Message<Block> = GrandpaMessage<<Block as BlockT>::Hash, NumberFor<Bloc
 
 /// Grandpa equivocation.
 pub type GrandpaEquivocation<Block> =
-	safety::GrandpaEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>;
+	equivocation::GrandpaEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>;
 
 /// Grandpa challenge
 pub type Challenge<Block> = safety::Challenge<
@@ -312,5 +313,62 @@ where
 
 	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		None
+	}
+}
+
+pub mod equivocation {
+	use super::*;
+
+	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	pub struct GrandpaEquivocation<H, N> {
+		/// The set id.
+		pub set_id: u64,
+		/// The round number equivocated in.
+		pub round_number: u64,
+		/// The identity of the equivocator.
+		pub identity: AuthorityId,
+		/// The first vote in the equivocation.
+		pub	first: (GrandpaMessage<H, N>, AuthoritySignature),
+		/// The second vote in the equivocation.
+		pub second: (GrandpaMessage<H, N>, AuthoritySignature),
+	}
+
+	impl<H, N> GrandpaEquivocation<H, N> 
+		where H: Codec + PartialEq + Eq, N: Codec + PartialEq + Eq
+	{
+		pub fn is_valid(&self) -> bool {
+			let first_vote = &self.first.0;
+			let first_signature = &self.first.1;
+
+			let second_vote = &self.second.0;
+			let second_signature = &self.second.1;
+			
+			if first_vote != second_vote {
+				let first_payload = localized_payload(
+					self.round_number,
+					self.set_id,
+					&first_vote,
+				);
+
+				if !first_signature.verify(first_payload.as_slice(), &self.identity) {
+					return false
+				}
+
+				let second_payload = localized_payload(
+					self.round_number,
+					self.set_id,
+					&second_vote,
+				);
+
+				if !second_signature.verify(second_payload.as_slice(), &self.identity) {
+					return false
+				}
+
+				return true
+			}
+
+			false
+		}
 	}
 }

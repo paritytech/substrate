@@ -58,22 +58,6 @@ pub trait AuthorshipEquivocationProof<H, S, P> {
 	fn second_signature(&self) -> &S;
 }
 
-
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Clone, PartialEq, Encode, Decode)]
-pub struct GrandpaEquivocation<H, N> {
-	/// The set id.
-	pub set_id: u64,
-	/// The round number equivocated in.
-	pub round_number: u64,
-	/// The identity of the equivocator.
-	pub identity: AuthorityId,
-	/// The first vote in the equivocation.
-	pub	first: (Message<H, N>, AuthoritySignature),
-	/// The second vote in the equivocation.
-	pub second: (Message<H, N>, AuthoritySignature),
-}
-
 /// A challenge is a transaction T containing
 /// a) the set of votes S being challenged, that were cast in round r_S,
 /// b) a reference to a finalized block B, with respect to which the set of votes S is incompatible,
