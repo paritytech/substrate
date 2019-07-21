@@ -22,7 +22,7 @@ use client;
 use transaction_pool::txpool::{self, PoolApi};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
-use runtime_primitives::{generic::BlockId, AnySignature};
+use runtime_primitives::generic::BlockId;
 use log::{info, warn};
 use client::blockchain::HeaderBackend;
 use client::transaction_builder::TransactionBuilder as TransactionBuilderApi;

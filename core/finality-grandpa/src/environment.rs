@@ -32,7 +32,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet, AccountableSafety, Message
+	voter, voter_set::VoterSet, Message
 };
 use grandpa_primitives::Equivocation;
 use fg_primitives::{GrandpaEquivocation, GrandpaApi};
@@ -779,7 +779,7 @@ where
 		let first_signature = equivocation.first.1;
 		let second_signature = equivocation.second.1;
 
-		let mut grandpa_equivocation = GrandpaEquivocation::<Block> {
+		let grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
 			first: (first_vote, first_signature),
@@ -819,7 +819,7 @@ where
 		let first_signature = equivocation.first.1;
 		let second_signature = equivocation.second.1;
 
-		let mut grandpa_equivocation = GrandpaEquivocation::<Block> {
+		let grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
 			first: (first_vote, first_signature),

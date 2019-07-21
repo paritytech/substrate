@@ -31,25 +31,20 @@
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
-use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use parity_codec::{self as codec, Encode, Decode, Codec};
 
 use srml_support::{
-	decl_event, decl_storage, decl_module, dispatch::Result, Parameter,
+	decl_event, decl_storage, decl_module, dispatch::Result,
 	traits::KeyOwnerProofSystem,
 	storage::{StorageValue, StorageMap, EnumerableStorageMap}
 };
 use primitives::{
-	generic::{DigestItem, OpaqueDigestItemId, Block},
-	traits::{
-		CurrentHeight, MaybeSerializeDebug, ValidateUnsigned, Verify, Header as HeaderT,
-		Block as BlockT, Member, TypedKey, BlakeTwo256, Hash as HashT,
-	},
-	transaction_validity::TransactionValidity, key_types,
+	generic::{DigestItem, OpaqueDigestItemId, Block}, key_types,
+	traits::{CurrentHeight, Verify, Header as HeaderT, Block as BlockT},
 };
 use fg_primitives::{
-	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrevote, GrandpaPrecommit,
-	SignedPrecommit, VoterSet, GrandpaMessage, localized_payload, AncestryChain,
+	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrecommit,
+	SignedPrecommit, VoterSet, localized_payload, AncestryChain,
 	Chain, validate_commit, ConsensusLog,
 };
 pub use fg_primitives::{
@@ -60,7 +55,6 @@ pub use fg_primitives::{
 use substrate_primitives::crypto::KeyTypeId;
 use session::historical::Proof;
 use system::{DigestOf, ensure_signed};
-use num_traits as num;
 use core::iter::FromIterator;
 
 mod mock;
@@ -73,9 +67,9 @@ type Header<T> = <T as system::Trait>::Header;
 type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
 type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>>;
 
-type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
+// type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
 type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
-type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
+// type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
 
 type Equivocation<T> = safety::GrandpaEquivocation<Hash<T>, Number<T>>;
 type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;

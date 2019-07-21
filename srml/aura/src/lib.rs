@@ -61,9 +61,9 @@ use srml_support::{
 use primitives::{
 	traits::{
 		SaturatedConversion, Saturating, Zero, One, Member, Verify, IsMember,
-		ValidateUnsigned, Header, TypedKey,
+		Header, TypedKey,
 	},
-	generic::DigestItem, transaction_validity::TransactionValidity, key_types,
+	generic::DigestItem, key_types,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -74,7 +74,7 @@ use inherents::{
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{
-	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, slot_author, AuraEquivocationProof
+	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, AuraEquivocationProof
 };
 use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
@@ -193,8 +193,6 @@ fn valid_equivocation<T: Trait>(
 	let maybe_second_slot = find_pre_digest::<_, T::Signature>(second_header);
 
 	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-		let slot = maybe_first_slot.expect("OK by previous line; qed");
-
 		// TODO: Check that author matches slot author (improve HistoricalSession).
 		let author = proof.identity();
 
@@ -232,7 +230,7 @@ decl_module! {
 				Proof,
 			)
 		) {
-			let who = ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
 			let (equivocation, proof) = proved_equivocation;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::ED25519, equivocation.identity().encode()),

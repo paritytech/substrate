@@ -3814,7 +3814,6 @@ dependencies = [
 name = "srml-grandpa"
 version = "2.0.0"
 dependencies = [
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",

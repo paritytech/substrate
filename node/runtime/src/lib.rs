@@ -26,14 +26,12 @@ use support::{
 	traits::{SplitTwoWays, Currency, OnUnbalanced, KeyOwnerProofSystem}
 };
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
-use parity_codec::{Encode, Decode, Compact};
+use parity_codec::{Encode, Decode};
 use node_primitives::{
-	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Hash, Index,
-	Moment, Signature,
+	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Hash, Index, Moment, Signature,
 };
 use grandpa::fg_primitives::{
-	self, ScheduledChange, AuthoritySignature, AuthorityId, GrandpaEquivocation,
-	Challenge, Prevote, Precommit,
+	self, ScheduledChange, AuthoritySignature, AuthorityId, GrandpaEquivocation, Challenge,
 };
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -42,7 +40,7 @@ use client::{
 };
 use runtime_primitives::{
 	ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types,
-	AnySignature, generic::{UncheckedMortalExtrinsic, Era}, KeyTypeId,
+	generic::{UncheckedMortalExtrinsic, Era}, KeyTypeId,
 	traits::BlockNumberToHash
 };
 use runtime_primitives::transaction_validity::TransactionValidity;

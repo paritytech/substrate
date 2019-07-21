@@ -23,8 +23,7 @@ use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::Serialize;
 
-use session::historical::Proof;
-use grandpa_primitives::{Message, Commit};
+use grandpa_primitives::Message;
 use substrate_primitives::ed25519::{
 	Public as AuthorityId, Signature as AuthoritySignature
 };
