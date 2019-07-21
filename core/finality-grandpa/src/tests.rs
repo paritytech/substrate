@@ -30,7 +30,7 @@ use client::{
 	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
+use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -969,7 +969,7 @@ fn allows_reimporting_change_blocks() {
 
 	let block = || {
 		let block = block.clone();
-		ImportBlock {
+		BlockImportParams {
 			origin: BlockOrigin::File,
 			header: block.header,
 			justification: None,
@@ -1018,7 +1018,7 @@ fn test_bad_justification() {
 
 	let block = || {
 		let block = block.clone();
-		ImportBlock {
+		BlockImportParams {
 			origin: BlockOrigin::File,
 			header: block.header,
 			justification: Some(Vec::new()),
