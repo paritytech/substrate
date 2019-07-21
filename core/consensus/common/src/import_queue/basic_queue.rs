@@ -18,8 +18,7 @@ use std::{pin::Pin, sync::Arc};
 use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
-use crate::error::Error as ConsensusError;
-use crate::block_import::{BlockImport, BlockOrigin};
+use crate::block_import::BlockOrigin;
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
 	BoxJustificationImport, ImportQueue, Link, Origin,
@@ -136,7 +135,6 @@ enum ToWorkerMsg<B: BlockT> {
 
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 	result_sender: BufferedLinkSender<B>,
-	block_import: BoxBlockImport<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	verifier: Arc<V>,
@@ -156,7 +154,6 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			result_sender,
 			verifier,
 			justification_import,
-			block_import,
 			finality_proof_import,
 		};
 
@@ -172,6 +169,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			}
 		}
 
+		let mut block_import = Some(block_import);
+
 		let future = futures::future::poll_fn(move |cx| {
 			loop {
 				let msg = match Stream::poll_next(Pin::new(&mut port), cx) {
@@ -182,7 +181,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 
 				match msg {
 					ToWorkerMsg::ImportBlocks(origin, blocks) => {
-						worker.import_a_batch_of_blocks(origin, blocks);
+						let bi = block_import.take().expect("block_import is always Some; qed");
+						block_import = Some(worker.import_a_batch_of_blocks(bi, origin, blocks));
 					},
 					ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
 						worker.import_finality_proof(who, hash, number, proof);
@@ -197,10 +197,10 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		(future, sender)
 	}
 
-	fn import_a_batch_of_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+	fn import_a_batch_of_blocks(&mut self, block_import: BoxBlockImport<B>, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) -> BoxBlockImport<B> {
 		let result_sender = &self.result_sender;
-		let (imported, count, results) = import_many_blocks(
-			&mut *self.block_import,
+		let (imported, count, results, block_import) = import_many_blocks(
+			block_import,
 			origin,
 			blocks,
 			self.verifier.clone(),
@@ -208,6 +208,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		);
 
 		self.result_sender.blocks_processed(imported, count, results);
+		block_import
 	}
 
 	fn import_finality_proof(&mut self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
@@ -260,7 +261,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 /// The `keep_going` closure will be called regularly. If it returns false, then the function will
 /// end prematurely.
 fn import_many_blocks<B: BlockT, V: Verifier<B>>(
-	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
+	mut import_handle: BoxBlockImport<B>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: Arc<V>,
@@ -268,7 +269,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 ) -> (usize, usize, Vec<(
 	Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 	B::Hash,
-)>) {
+)>, BoxBlockImport<B>) {
 	let count = blocks.len();
 	let mut imported = 0;
 
@@ -300,7 +301,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			Err(BlockImportError::Cancelled)
 		} else {
 			import_single_block(
-				import_handle,
+				&mut *import_handle,
 				blocks_origin.clone(),
 				block,
 				verifier.clone(),
@@ -316,5 +317,5 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 		results.push((import_result, block_hash));
 	}
 
-	(imported, count, results)
+	(imported, count, results, import_handle)
 }
