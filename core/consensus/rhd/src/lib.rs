@@ -46,7 +46,7 @@ use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
 use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
-use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
+use runtime_primitives::generic::{BlockId, Era, ImportResult, BlockImportParams, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT,
@@ -391,7 +391,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 				justified_block.header().number(), hash);
 			let just: Justification = UncheckedJustification(committed.justification.uncheck()).into();
 			let (header, body) = justified_block.deconstruct();
-			let import_block = ImportBlock {
+			let import_block = BlockImportParams {
 				origin: BlockOrigin::ConsensusBroadcast,
 				header: header,
 				justification: Some(just),
@@ -1344,7 +1344,7 @@ mod tests {
 		type Error = Error;
 
 		fn import_block(&self,
-			block: ImportBlock<TestBlock>,
+			block: BlockImportParams<TestBlock>,
 			_new_authorities: Option<Vec<AuthorityId>>
 		) -> Result<ImportResult, Self::Error> {
 			assert!(self.imported_heights.lock().insert(block.header.number));
