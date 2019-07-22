@@ -17,7 +17,6 @@
 //! Test implementation for Externalities.
 
 use std::collections::{HashMap};
-use std::iter::FromIterator;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -226,11 +225,25 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
+
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+
+
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		self.backend.storage_root(delta).0
+		self.backend.full_storage_root(delta, child_delta_iter).0
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
@@ -282,7 +295,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("cc65c26c37ebd4abcdeb3f1ecd727527051620779a2f6c809bac0f8a87dbb816");
+		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

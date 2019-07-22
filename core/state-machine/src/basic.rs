@@ -159,7 +159,16 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.top.clone())
+		let mut top = self.top.clone();
+		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
+		for storage_key in keys {
+			let child_root = self.child_storage_root(
+				ChildStorageKey::<H>::from_slice(storage_key.as_slice())
+					.expect("Map only feed by valid keys; qed")
+			);
+			top.insert(storage_key, child_root);
+		}
+		trie_root::<H, _, _, _>(top)
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
@@ -195,12 +204,13 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
+		// heap_page as child_storage
 		let mut ext = BasicExternalities::default();
 		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
+		const ROOT: [u8; 32] = hex!("0a2a153db8e409bf8b23d24c8d5ec75007b81c02e8bc5b22d9c20f15e8f99f66");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
