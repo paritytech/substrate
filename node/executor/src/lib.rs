@@ -936,6 +936,7 @@ mod tests {
 
 
 	#[test]
+	#[ignore]
 	fn weight_multiplier_increases_and_decreases_on_big_weight() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
