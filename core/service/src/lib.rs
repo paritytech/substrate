@@ -29,7 +29,7 @@ use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -39,7 +39,7 @@ use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
-use log::{info, warn, debug, error};
+use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
 use primitives::{Pair, ed25519, crypto};
 use runtime_primitives::generic::BlockId;
@@ -647,6 +647,8 @@ fn build_network_future<
 		.map(|v| Ok::<_, ()>(v)).compat();
 
 	futures::future::poll_fn(move || {
+		let before_polling = Instant::now();
+
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
 			network.on_block_imported(notification.hash, notification.header);
@@ -705,10 +707,22 @@ fn build_network_future<
 		}
 
 		// Main network polling.
-		network.poll()
-			.map_err(|err| {
-				warn!(target: "service", "Error in network: {:?}", err);
-			})
+		match network.poll() {
+			Ok(Async::NotReady) => {}
+			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
+			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
+		}
+
+		// Now some diagnostic for performances.
+		let polling_dur = before_polling.elapsed();
+		log!(
+			target: "service",
+			if polling_dur >= Duration::from_millis(50) { Level::Warn } else { Level::Trace },
+			"Polling the network future took {:?}",
+			polling_dur
+		);
+		
+		Ok(Async::NotReady)
 	})
 }
 
