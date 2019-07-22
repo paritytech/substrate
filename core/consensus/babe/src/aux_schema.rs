@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Schema for slots in the aux-db.
+//! Schema for BABE epoch changes in the aux-db.
 
 use log::info;
 use parity_codec::{Decode, Encode};
@@ -39,6 +39,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
+/// Load or initialize persistent epoch change data from backend.
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 ) -> ClientResult<SharedEpochChanges<Block>> {
@@ -54,6 +55,7 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	Ok(epoch_changes)
 }
 
+/// Update the epoch changes on disk after a change.
 pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 	epoch_changes: &EpochChanges<Block>,
 	write_aux: F,
