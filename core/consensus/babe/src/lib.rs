@@ -287,7 +287,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			return Box::new(future::ok(()));
 		}
 
-		let proposal_work = if let Some(((inout, vrf_proof, _batchable_proof), authority_index)) = claim_slot(
+		let proposal_work = if let Some(claim) = claim_slot(
 			&randomness,
 			slot_info.number,
 			epoch_index,
@@ -295,6 +295,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			&pair,
 			self.threshold,
 		) {
+			let ((inout, vrf_proof, _batchable_proof), authority_index) = claim;
+
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_number,
@@ -308,7 +310,11 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let proposer = match env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
-					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_number, e);
+					warn!(target: "babe",
+						"Unable to author block in slot {:?}: {:?}",
+						slot_number,
+						e,
+					);
 					telemetry!(CONSENSUS_WARN; "babe.unable_authoring_block";
 						"slot" => slot_number, "err" => ?e
 					);
@@ -562,7 +568,9 @@ impl<C> BabeVerifier<C> {
 		if !inherent_res.ok() {
 			inherent_res
 				.into_errors()
-				.try_for_each(|(i, e)| Err(self.inherent_data_providers.error_to_string(&i, &e)))
+				.try_for_each(|(i, e)| {
+					Err(self.inherent_data_providers.error_to_string(&i, &e))
+				})
 		} else {
 			Ok(())
 		}
@@ -581,7 +589,9 @@ fn median_algorithm(
 		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
 			let offset: u128 = u128::from(slot_duration)
 				.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
-				.and_then(|x| x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl))))
+				.and_then(|x| {
+					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
+				})
 				.expect("we cannot have timespans long enough for this to overflow; qed");
 
 			const NANOS_PER_SEC: u32 = 1_000_000_000;
@@ -975,11 +985,14 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
 		let check_roots = || -> Result<bool, ConsensusError> {
-			// this can only happen when the chain starts, since there's no epoch change at genesis.
-			// afterwards every time we expect an epoch change it means we will import another one.
+			// this can only happen when the chain starts, since there's no
+			// epoch change at genesis. afterwards every time we expect an epoch
+			// change it means we will import another one.
 			for (root, _, _) in epoch_changes.roots() {
 				let is_descendent_of = is_descendent_of(root, &hash)
-					.map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+					.map_err(|e| {
+						ConsensusError::from(ConsensusError::ClientImport(e.to_string()))
+					})?;
 
 				if is_descendent_of {
 					return Ok(false);
@@ -996,7 +1009,9 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 			(false, false) => {},
 			(true, false) => {
 				return Err(
-					ConsensusError::ClientImport("Expected epoch change to happen by this block".into())
+					ConsensusError::ClientImport(
+						"Expected epoch change to happen by this block".into(),
+					)
 				);
 			},
 			(false, true) => {
@@ -1123,7 +1138,9 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 				&notification.hash,
 				*notification.header.number(),
 				&is_descendent_of,
-			).map_err(|e| debug!(target: "babe", "Error pruning epoch changes fork tree: {:?}", e))?;
+			).map_err(|e| {
+				debug!(target: "babe", "Error pruning epoch changes fork tree: {:?}", e)
+			})?;
 
 			Ok(())
 		});

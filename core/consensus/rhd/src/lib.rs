@@ -1579,7 +1579,11 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &Ed25519Keyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(
+			rhododendron::Message::Propose(1, block.clone()),
+			&Ed25519Keyring::Alice.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1593,7 +1597,11 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &Ed25519Keyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(
+			rhododendron::Message::Propose(1, block),
+			&Ed25519Keyring::Bob.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {

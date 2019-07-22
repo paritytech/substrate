@@ -898,7 +898,13 @@ fn force_change_to_new_set() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	// two of these guys are offline.
-	let genesis_authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie, Ed25519Keyring::One, Ed25519Keyring::Two];
+	let genesis_authorities = &[
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Bob,
+		Ed25519Keyring::Charlie,
+		Ed25519Keyring::One,
+		Ed25519Keyring::Two,
+	];
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let api = TestApi::new(make_ids(genesis_authorities));
 

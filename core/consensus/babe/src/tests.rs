@@ -64,7 +64,12 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Create = Result<TestBlock, Error>;
 
-	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
+	fn propose(
+		&self,
+		_: InherentData,
+		digests: DigestFor<TestBlock>,
+		_: Duration,
+	) -> Result<TestBlock, Error> {
 		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 	}
 }
@@ -232,7 +237,10 @@ fn run_one_test() {
 	// wait for all finalized on each.
 	let wait_for = futures::future::join_all(import_notifications);
 
-	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
+	let drive_to_completion = futures::future::poll_fn(|| {
+		net.lock().poll();
+		Ok(Async::NotReady)
+	});
 	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
