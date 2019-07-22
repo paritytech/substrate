@@ -107,7 +107,9 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-pub trait Trait: timestamp::Trait {}
+pub trait Trait: timestamp::Trait {
+	type EpochDuration: Get<u64>;
+}
 
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
@@ -206,10 +208,10 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	}
 }
 
-impl<T: Trait + Duration> session::ShouldEndSession<T::BlockNumber> for Module<T> {
+impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
-		 diff >= T::babe_epoch_duration()
+		diff >= <T::EpochDuration>::get()
 	}
 }
 
@@ -260,11 +262,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-pub trait Duration {
-	fn babe_epoch_duration() -> u64;
-}
-
-impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
@@ -288,14 +286,14 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 		// What was the next epoch is now the current epoch
 		let randomness = Self::randomness_change_epoch(epoch_index);
 
-		EpochStartSlot::mutate(|previous| *previous += T::babe_epoch_duration());
+		EpochStartSlot::mutate(|previous| *previous += <T::EpochDuration>::get());
 
 		let start_slot = EpochStartSlot::get();
 
 		Self::change_epoch(Epoch {
 			epoch_index,
 			start_slot,
-			duration: T::babe_epoch_duration(),
+			duration: <T::EpochDuration>::get(),
 			authorities,
 			randomness,
 		})

@@ -356,7 +356,13 @@ impl srml_timestamp::Trait for Runtime {
 	type MinimumPeriod = MinimumPeriod;
 }
 
-impl srml_babe::Trait for Runtime {}
+parameter_types! {
+	pub const EpochDuration: u64 = 6;
+}
+
+impl srml_babe::Trait for Runtime {
+	type EpochDuration = EpochDuration;
+}
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
