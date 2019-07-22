@@ -1387,11 +1387,10 @@ pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
 impl<T: Trait, Reporters> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Reporters, Perbill>
 	for StakingSlasher<T>
 where
-	Reporters: IntoIterator<Item = T::AccountId>,
+	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
 {
-	// TODO: #XXXX pay out reward to the reporters
-	// The reporters shall be sorted in the same order as they reported misbehavior.
-	// The first reporter shall get the biggest reward and the last reporter the smallest reward.
+	// TODO: #3166 pay out reward to the reporters
+	// Perbill is priority for the reporter
 	fn do_slash(
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
 		_reporters: Reporters,
