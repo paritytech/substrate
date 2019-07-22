@@ -108,7 +108,7 @@ impl<T: Trait> srml_session::OnSessionEnding<T::AccountId> for Module<T> {
 		for (kind, _) in <MisconductReports<T>>::enumerate() {
 			let window_length = kind.window_length();
 			<MisconductReports<T>>::mutate(kind, |reports| {
-				// it is guaranteed that `reported_session` happened before `end`
+				// it is guaranteed that `reported_session` happened in the same session or before `ending`
 				reports.retain(|reported_session| {
 					let diff = ending.wrapping_sub(*reported_session);
 					diff < *window_length
