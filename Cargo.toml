@@ -14,9 +14,6 @@ cli = { package = "node-cli", path = "node/cli" }
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
-[patch.crates-io]
-libp2p = { path = "../rust-libp2p" }
-
 [build-dependencies]
 vergen = "3"
 

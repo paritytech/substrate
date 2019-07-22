@@ -51,6 +51,7 @@ use futures03::{compat::Compat, TryFutureExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
+use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::record::store::MemoryStore;
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::{swarm::toggle::Toggle, nodes::Substream, muxing::StreamMuxerBox};
@@ -312,11 +313,14 @@ where
 					}
 					KademliaEvent::GetClosestPeersResult(res) => {
 						match res {
-							Err(e) => {
-								trace!(target: "sub-libp2p", "Kademlia query for closest peers failed: {:?}", e);
+							Err(GetClosestPeersError::Timeout { key, peers }) => {
+								warn!(target: "sub-libp2p",
+									"Libp2p => Query for {:?} timed out with {:?} results",
+									key, peers.len());
 							},
 							Ok(ok) => {
-								trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
+								trace!(target: "sub-libp2p",
+									"Libp2p => Query for {:?} yielded {:?} results",
 									ok.key, ok.peers.len());
 								if ok.peers.is_empty() && self.num_connections != 0 {
 									warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
@@ -350,9 +354,22 @@ where
 						};
 						return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 					}
+					KademliaEvent::RepublishRecordResult(res) => {
+						match res {
+							Ok(ok) => debug!(target: "sub-libp2p",
+								"Libp2p => Record republished: {:?}",
+								ok.key),
+							Err(e) => warn!(target: "sub-libp2p",
+								"Libp2p => Republishing of record {:?} failed with: {:?}",
+								e.key(), e)
+						}
+					}
+					KademliaEvent::Discovered { .. } => {
+						// We are not interested in these events at the moment.
+					}
 					// We never start any other type of query.
 					e => {
-						trace!(target: "sub-libp2p", "Ignored Kademlia event: {:?}", e)
+						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					}
 				},
 				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
@@ -448,7 +465,7 @@ mod tests {
 				.collect::<HashSet<_>>()
 		}).collect::<Vec<_>>();
 
-		let fut = futures::future::poll_fn(move || {
+		let fut = futures::future::poll_fn::<_, (), _>(move || {
 			'polling: loop {
 				for swarm_n in 0..swarms.len() {
 					match swarms[swarm_n].0.poll().unwrap() {
@@ -485,6 +502,6 @@ mod tests {
 			}
 		});
 
-		tokio::run(fut)
+		tokio::runtime::Runtime::new().unwrap().block_on(fut).unwrap();
 	}
 }
