@@ -439,7 +439,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	// forget obsoleted consensus changes
 	let consensus_finalization_res = data.consensus_changes
-		.finalize((number, hash), |at_height| canonical_at_height(&client, (hash, number), true, at_height));
+		.finalize((number, hash), |at_height| canonical_at_height(client, (hash, number), true, at_height));
 	match consensus_finalization_res {
 		Ok((true, _)) => require_insert_aux(
 			&client,
@@ -506,20 +506,14 @@ fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
 }
 
 /// Insert into aux store. If failed, return error && show inconsistency warning.
-fn require_insert_aux<T: Encode, B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &Client<B, E, Block, RA>,
+fn require_insert_aux<T: Encode, A: AuxStore>(
+	store: &A,
 	key: &[u8],
 	value: &T,
 	value_type: &str,
-) -> Result<(), ConsensusError>
-	where
-		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-{
-	#[allow(deprecated)]
-	let backend = &**client.backend();
+) -> Result<(), ConsensusError> {
 	let encoded = value.encode();
-	let update_res = Backend::insert_aux(backend, &[(key, &encoded[..])], &[]);
+	let update_res = store.insert_aux(&[(key, &encoded[..])], &[]);
 	if let Err(error) = update_res {
 		return Err(on_post_finalization_error(error, value_type));
 	}

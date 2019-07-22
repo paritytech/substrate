@@ -26,7 +26,10 @@ use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
+	Client, error::Error as ClientError,
+	blockchain::HeaderBackend,
+
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -696,7 +699,6 @@ where
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		use client::blockchain::HeaderBackend;
 
 		#[allow(deprecated)]
 		let blockchain = self.inner.backend().blockchain();
@@ -819,7 +821,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 			let write_result = crate::aux_schema::update_consensus_changes(
 				&*consensus_changes,
-				|insert| client.apply_aux(import_op, insert, &[]),
+				|insert| apply_aux(import_op, insert, &[]),
 			);
 
 			if let Err(e) = write_result {
@@ -912,7 +914,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			let write_result = crate::aux_schema::update_authority_set::<Block, _, _>(
 				&authority_set,
 				new_authorities.as_ref(),
-				|insert| client.apply_aux(import_op, insert, &[]),
+				|insert| apply_aux(import_op, insert, &[]),
 			);
 
 			if let Err(e) = write_result {
@@ -943,14 +945,14 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &Client<B, E, Block, RA>,
+pub(crate) fn canonical_at_height<Block: BlockT<Hash=H256>, C>(
+	client: C,
 	base: (Block::Hash, NumberFor<Block>),
 	base_is_canonical: bool,
 	height: NumberFor<Block>,
 ) -> Result<Option<Block::Hash>, ClientError> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	C: BlockNumberToHash<BlockNumber=NumberFor<Block>, Hash=Block::Hash> +
+	   HeaderBackend<Block>
 {
 	if height > base.1 {
 		return Ok(None);
@@ -970,7 +972,7 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	// start by getting _canonical_ block with number at parent position and then iterating
 	// backwards by hash.
-	let mut current = match client.header(&BlockId::Number(base.1 - one))? {
+	let mut current = match client.header(BlockId::Number(base.1 - one))? {
 		Some(header) => header,
 		_ => return Ok(None),
 	};
@@ -979,7 +981,7 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	let mut steps = base.1 - height - one;
 
 	while steps > NumberFor::<Block>::zero() {
-		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
+		current = match client.header(BlockId::Hash(*current.parent_hash()))? {
 			Some(header) => header,
 			_ => return Ok(None),
 		};

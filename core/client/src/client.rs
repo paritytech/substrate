@@ -62,7 +62,7 @@ use hash_db::Hasher;
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	StorageCollection, ChildStorageCollection
+	StorageCollection, ChildStorageCollection,
 };
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
@@ -80,9 +80,6 @@ use crate::genesis;
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
-
-#[cfg(feature = "test-helpers")]
-use client::in_mem::Backend as InMemoryBackend;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -808,28 +805,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		result
 	}
 
-	/// Set a block as best block.
-	pub fn set_head(
-		&self,
-		id: BlockId<Block>
-	) -> error::Result<()> {
-		self.lock_import_and_run(|operation| {
-			self.apply_head(operation, id)
-		})
-	}
-
-	/// Set a block as best block, and apply it to an operation.
-	pub fn apply_head(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		id: BlockId<Block>,
-	) -> error::Result<()> {
-		operation.op.mark_head(id)
-	}
-
 	/// Apply a checked and validated block to an operation. If a justification is provided
-	/// then `finalized` *must* be true.
-	pub fn apply_block(
+	/// then `fed` *must* be true.
+	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		import_block: ImportBlock<Block>,
@@ -1185,26 +1163,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Apply auxiliary data insertion into an operation.
-	pub fn apply_aux<
-		'a,
-		'b: 'a,
-		'c: 'a,
-		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
-		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		insert: I,
-		delete: D
-	) -> error::Result<()> {
-		operation.op.insert_aux(
-			insert.into_iter()
-				.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-				.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
-		)
-	}
-
 	/// Mark all blocks up to given as finalized in operation. If a
 	/// justification is provided it is stored with the given finalized
 	/// block (any other finalized blocks are left unjustified).
@@ -1387,6 +1345,33 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	}
 }
 
+impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync
+{
+	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
+		(**self).backend.blockchain().header(id)
+	}
+
+	fn info(&self) -> blockchain::Info<Block> {
+		(**self).backend.blockchain().info()
+	}
+
+	fn status(&self, id: BlockId<Block>) -> error::Result<blockchain::BlockStatus> {
+		(**self).status(id)
+	}
+
+	fn number(&self, hash: Block::Hash) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		(**self).number(hash)
+	}
+
+	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
+		(**self).hash(number)
+	}
+}
+
 impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1549,6 +1534,18 @@ impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 }
 
 impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type BlockNumber = <Block::Header as HeaderT>::Number;
+	type Hash = Block::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		self.block_hash(n).unwrap_or(None)
+	}
+}
+
+impl<B, E, Block, RA> BlockNumberToHash for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1807,7 +1804,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		// layer, one can always use atomic operations to make sure
 		// import is only locked once.
 		self.lock_import_and_run(|operation| {
-			self.apply_aux(operation, insert, delete)
+			apply_aux(operation, insert, delete)
 		})
 	}
 	/// Query auxiliary data from key-value store.
@@ -1815,6 +1812,50 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		crate::backend::AuxStore::get_aux(&*self.backend, key)
 	}
 }
+
+
+impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher>,
+		Block: BlockT<Hash=H256>,
+{
+	/// Insert auxiliary data into key-value store.
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> error::Result<()> {
+		(**self).insert_aux(insert, delete)
+	}
+	/// Query auxiliary data from key-value store.
+	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+		(**self).get_aux(key)
+	}
+}
+
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, H, D, I>(
+	operation: &mut ClientImportOperation<Block, H, B>,
+	insert: I,
+	delete: D
+) -> error::Result<()>
+where
+	Block: BlockT,
+	H: Hasher<Out=Block::Hash>,
+	B: backend::Backend<Block, H>,
+	I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+	D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::collections::HashMap;
