@@ -160,8 +160,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 			debug!("Spawning offchain workers at {:?}", at);
 			let number = *number;
 			let client = self.client.clone();
-			// TODO [ToDr] (#1458) consider using a thread pool in the future.
-			std::thread::spawn(move || {
+			spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
@@ -174,6 +173,31 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 			futures::future::Either::B(futures::future::ok(()))
 		}
 	}
+}
+
+/// Spawns a new offchain worker (browser).
+///
+/// For browser environment, due to lack of threading we just run
+/// the workers within current thread.
+/// Note that this will block for potentially a significant amount of time,
+/// but we don't expect browser nodes to run any heavy offchain code anyway.
+#[cfg(not(target_os = "unknown"))]
+fn spawn_worker(f: impl FnOnce() -> ()) {
+	f()
+}
+
+/// Spawns a new offchain worker (non-browser).
+///
+/// For regular (non-browser) systems we spawn workers for each block
+/// in a separate thread, since they can run for a significant amount of time
+/// in a blocking fashion and we don't want to block the runtime.
+///
+/// Note that we should avoid that if we switch to future-based runtime in the future,
+/// alternatively:
+/// TODO [ToDr] (#1458) we can consider using a thread pool instead.
+#[cfg(target_os = "unknown")]
+fn spawn_worker(f: impl FnOnce() -> ()) {
+	std::thread::spawn(f)
 }
 
 #[cfg(test)]
