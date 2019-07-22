@@ -418,6 +418,8 @@ macro_rules! babe_err {
 	};
 }
 
+/// Extract the BABE pre digest from the given header. Pre-runtime digests are
+/// mandatory, the function will return `Err` if none is found.
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -430,6 +432,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, Strin
 	Err(babe_err!("No BABE pre-runtime digest found"))
 }
 
+/// Extract the BABE epoch change digest from the given header, if it exists.
 fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Option<Epoch>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -442,7 +445,7 @@ fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Option<Epoch>
 	return None;
 }
 
-/// check a header has been signed by the right key. If the slot is too far in
+/// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
 ///
@@ -450,7 +453,6 @@ fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Option<Epoch>
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-//
 // FIXME #1018 needs misbehavior types
 fn check_header<B: BlockT + Sized, C: AuxStore>(
 	client: &C,
@@ -721,6 +723,8 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	}
 }
 
+/// Extract current epoch data from cache and fallback to querying the runtime
+/// if the cache isn't populated.
 fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -845,15 +849,17 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		.map_err(map_err)
 }
 
-// data stored in tree is the hash and block number of the block signaling the
-// epoch change, the new epoch index and the minimum *slot number* when the next
-// epoch should start (i.e. slot number begin + duration).
+/// Tree of all epoch changes across all *seen* forks. Data stored in tree is the
+/// hash and block number of the block signaling the epoch change, the new epoch
+/// index and the minimum *slot number* when the next epoch should start (i.e.
+/// slot number begin + duration).
 type EpochChanges<Block> = ForkTree<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	(u64, SlotNumber),
 >;
 
+/// A shared epoch changes tree.
 #[derive(Clone)]
 struct SharedEpochChanges<Block: BlockT> {
 	inner: Arc<Mutex<EpochChanges<Block>>>,
@@ -879,7 +885,14 @@ impl<Block: BlockT> From<EpochChanges<Block>> for SharedEpochChanges<Block> {
 	}
 }
 
-/// FIXME: add docs
+/// A block-import handler for BABE.
+///
+/// This scans each imported block for epoch change signals. The signals are
+/// tracked in a tree (of all forks), and the import logic validates all epoch
+/// change transitions, i.e. whether a given epoch change is expected or whether
+/// it is missing.
+///
+/// The epoch change tree should be pruned as blocks are finalized.
 pub struct BabeBlockImport<B, E, Block: BlockT, I, RA> {
 	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
@@ -1055,7 +1068,12 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 	}
 }
 
-/// Start an import queue for the Babe consensus algorithm.
+/// Start an import queue for the BABE consensus algorithm. This method returns
+/// the import queue, some data that needs to be passed to the block authoring
+/// logic (`BabeLink`), a `BabeBlockImport` which should be used by the
+/// authoring when importing its own blocks, and a future that must be run to
+/// completion and is responsible for listening to finality notifications and
+/// pruning the epoch changes tree.
 pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	config: Config,
 	block_import: I,
