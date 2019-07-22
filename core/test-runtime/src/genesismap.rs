@@ -68,7 +68,7 @@ impl GenesisConfig {
 		let mut map_storage_item: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
 		map_storage_item.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		let mut map = HashMap::new();
-		map.insert(b":child_storage:modules:Balance:".to_vec(), balance_map);
+		map.insert(b":child_storage:modules:Balances:".to_vec(), balance_map);
 		map.insert(b":child_storage:modules:System:".to_vec(), system_map);
 		map.insert(b":child_storage:other:".to_vec(), map_storage_item);
 		(Default::default(), map)
