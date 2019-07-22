@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 use primitives::sr25519::Signature;
-use babe_primitives::{self, BABE_ENGINE_ID, SlotNumber, CompatibleDigestItem};
+use babe_primitives::{self, BABE_ENGINE_ID, RawBabePreDigest, SlotNumber, CompatibleDigestItem};
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Codec, Input};

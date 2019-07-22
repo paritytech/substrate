@@ -27,7 +27,6 @@
 #![cfg_attr(not(test), forbid(dead_code))]
 extern crate core;
 mod digest;
-use digest::CompatibleDigestItem;
 pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -328,7 +327,9 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					slot_info.inherent_data,
 					generic::Digest {
 						logs: vec![
-							generic::DigestItem::babe_pre_digest(inherent_digest.clone()),
+							<generic::DigestItem<B::Hash> as 
+								CompatibleDigestItem<BabePreDigest, AuthoritySignature>>
+									::babe_pre_digest(inherent_digest.clone()),
 						],
 					},
 					remaining_duration,
@@ -356,7 +357,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let pre_digest: Result<BabePreDigest, String> = find_pre_digest::<B>(&header);
+			let pre_digest: Result<BabePreDigest, &str> =
+				find_pre_digest::<H, BabePreDigest, AuthoritySignature>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -371,7 +373,8 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
+			let signature_digest_item = <DigestItemFor::<B> as
+				CompatibleDigestItem<BabePreDigest, AuthoritySignature>>::babe_seal(signature);
 
 			let import_block: BlockImportParams<B> = BlockImportParams {
 				origin: BlockOrigin::Own,
@@ -436,7 +439,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	authorities: &[AuthorityId],
 	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+	where DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -448,7 +451,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let pre_digest = find_pre_digest::<B>(&header)?;
+	let pre_digest = find_pre_digest::<B::Header, BabePreDigest, AuthoritySignature>(&header)?;
 	let BabePreDigest { slot_num, index, ref proof, ref vrf_output } = pre_digest;
 
 	if slot_num > slot_now {
@@ -480,7 +483,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 			}
 
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, BabeEquivocationProof<B::Header, _>, _,
+				_, _, BabeEquivocationProof<B::Header, _, _>, _,
 			>(
 				client,
 				slot_now,
@@ -498,7 +501,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 				);
 			}
 
-			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
+			let pre_digest = CompatibleDigestItem::<BabePreDigest, AuthoritySignature>::babe_pre_digest(pre_digest);
 			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
@@ -578,7 +581,7 @@ fn median_algorithm(
 impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
 {
 	fn verify(
 		&self,
@@ -825,7 +828,7 @@ pub fn import_queue<B, C, E>(
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
 	E: 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;

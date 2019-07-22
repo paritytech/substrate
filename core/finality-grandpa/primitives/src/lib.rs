@@ -41,8 +41,9 @@ use num_traits as num;
 pub use consensus_accountable_safety_primitives as safety;
 
 pub use grandpa_primitives::{
-	Precommit as GrandpaPrecommit, Equivocation, Message as GrandpaMessage,
-	Error as GrandpaError, Chain, validate_commit, Commit, VoterSet, SignedPrecommit,
+	Prevote as GrandpaPrevote, Precommit as GrandpaPrecommit, Equivocation,
+	Message as GrandpaMessage, Error as GrandpaError, Chain, validate_commit,
+	Commit, VoterSet, SignedPrecommit
 };
 
 /// The `ConsensusEngineId` of GRANDPA.
@@ -70,7 +71,7 @@ pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
-// pub type Prevote<Block> = GrandpaPrevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type Prevote<Block> = GrandpaPrevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 
 pub type Precommit<Block> = GrandpaPrecommit<<Block as BlockT>::Hash, NumberFor<Block>>;
 

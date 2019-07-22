@@ -138,13 +138,13 @@ fn validate_unsigned_works() {
 	let sig1 = pair.sign(hash1.as_ref());
 	let sig2 = pair.sign(hash2.as_ref());
 
-	let proof1 = AuraEquivocationProof::new(header1.clone(), header2.clone(), sig1.clone(), sig2);
+	let proof1 = AuraEquivocationProof::new(public.clone(), header1.clone(), header2.clone(), sig1.clone(), sig2);
 	let call1 = Call::report_equivocation(proof1);
 
-	let proof2 = AuraEquivocationProof::new(header1.clone(), header1.clone(), sig1.clone(), sig1.clone());
+	let proof2 = AuraEquivocationProof::new(public.clone(), header1.clone(), header1.clone(), sig1.clone(), sig1.clone());
 	let call2 = Call::report_equivocation(proof2);
 
-	let proof3 = AuraEquivocationProof::new(header1.clone(), header2.clone(), sig1.clone(), sig1.clone());
+	let proof3 = AuraEquivocationProof::new(public.clone(), header1.clone(), header2.clone(), sig1.clone(), sig1.clone());
 	let call3 = Call::report_equivocation(proof3);
 
 	with_externalities(&mut new_test_ext(authorities), || {

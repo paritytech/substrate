@@ -75,14 +75,6 @@ pub struct Challenge<H, N, Header> {
 	pub previous_challenge: Option<H>,
 }
 
-// #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-// #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-// pub struct FinalizedBlockProof<H, N, Header> {
-// 	pub commit: Commit<H, N, AuthoritySignature, AuthorityId>,
-// 	pub headers: Vec<Header>,
-// 	pub round: u64,
-// }
-
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct VoteSet<H, N, Header> {
