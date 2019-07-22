@@ -22,7 +22,7 @@
 //! that it just reports the number of occurrences in the window instead of
 //! calculating the average.
 //!
-//! It is mainly implemented to keep track of misbehaviors and only the take
+//! It is mainly implemented to keep track of misbehaviors and only to take
 //! the last `sessions` of misbehaviors into account.
 //!
 
