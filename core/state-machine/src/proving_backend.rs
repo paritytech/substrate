@@ -24,7 +24,7 @@ use trie::{
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
 };
 pub use trie::Recorder;
-pub use trie::trie_types::{LayOut, TrieError};
+pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
@@ -50,7 +50,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<LayOut<H>, _, Ephemeral<S, H>>(
+		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
 			&eph,
 			self.backend.root(),
 			key,
@@ -64,7 +64,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<LayOut<H>>(storage_key));
+			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -74,7 +74,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with::<LayOut<H>, _, _>(
+		read_child_trie_value_with::<Layout<H>, _, _>(
 			storage_key,
 			&eph,
 			&root,
@@ -92,7 +92,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<LayOut<H>, _>(&eph, root, &mut *self.proof_recorder)
+			record_all_keys::<Layout<H>, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {

@@ -19,7 +19,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
-use trie::trie_types::{TrieDB, TrieError, LayOut};
+use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 
@@ -138,7 +138,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match delta_trie_root::<LayOut<H>, _, _, _, _>(&mut eph, root, delta) {
+			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -152,11 +152,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		let default_root = default_child_trie_root::<LayOut<H>>(storage_key);
+		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
 
 		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.storage(storage_key) {
-			Ok(value) => value.unwrap_or(default_child_trie_root::<LayOut<H>>(storage_key)),
+			Ok(value) => value.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
 				default_root.clone()
@@ -169,7 +169,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<LayOut<H>, _, _, _, _>(
+			match child_delta_trie_root::<Layout<H>, _, _, _, _>(
 				storage_key,
 				&mut eph,
 				root.clone(),

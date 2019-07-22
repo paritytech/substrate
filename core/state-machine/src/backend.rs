@@ -25,7 +25,7 @@ use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieOps};
-use trie::trie_types::{TrieDBMut, LayOut};
+use trie::trie_types::{TrieDBMut, Layout};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -316,7 +316,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = LayOut::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
+		let root = Layout::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -339,7 +339,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = child_trie_root::<LayOut<H>, _, _, _>(
+		let root = child_trie_root::<Layout<H>, _, _, _>(
 			&storage_key,
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
@@ -349,7 +349,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
 
-		let is_default = root == default_child_trie_root::<LayOut<H>>(&storage_key);
+		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
 		(root, is_default, full_transaction)
 	}

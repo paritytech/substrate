@@ -21,7 +21,7 @@ use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::TrieOps;
-use trie::trie_types::LayOut;
+use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
 use parity_codec::Encode;
@@ -152,7 +152,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		LayOut::<H>::trie_root(self.top.clone())
+		Layout::<H>::trie_root(self.top.clone())
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {

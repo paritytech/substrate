@@ -34,7 +34,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, CError,
-	Query, TrieLayOut, TrieOps, NibbleHalf, Cache16, NibbleOps};
+	Query, TrieLayout, TrieOps, NibbleHalf, Cache16, NibbleOps};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
 pub use memory_db::prefixed_key;
@@ -46,7 +46,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// substrate trie layout
 pub struct Layout<H>(rstd::marker::PhantomData<H>);
 
-impl<H: Hasher> TrieLayOut for Layout<H> {
+impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
 	type H = H;
 	type C = NodeCodec<Self::H, Self::N, node_codec::BitMap16>;
@@ -104,18 +104,18 @@ pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
 /// Querying interface, as in `trie_db` but less generic.
 pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
 /// Hash type for a trie layout.
-pub type TrieHash<L> = <<L as TrieLayOut>::H as Hasher>::Out;
+pub type TrieHash<L> = <<L as TrieLayout>::H as Hasher>::Out;
 
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` trait is generic in this case.
 pub mod trie_types {
-	pub type LayOut<H> = super::Layout<H>;
+	pub type Layout<H> = super::Layout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
-	pub type TrieDB<'a, H> = super::TrieDB<'a, LayOut<H>>;
+	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
-	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, LayOut<H>>;
+	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
-	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, LayOut<H>, Q>;
+	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
 	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
 }

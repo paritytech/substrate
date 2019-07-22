@@ -610,9 +610,9 @@ pub mod tests {
 	}
 
 	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
-		use trie::{TrieOps, trie_types::LayOut};
+		use trie::{TrieOps, trie_types::Layout};
 		let iter = extrinsics.iter().map(Encode::encode);
-		let extrinsics_root = LayOut::<Blake2Hasher>::ordered_trie_root(iter);
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter);
 
 		// only care about `extrinsics_root`
 		Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())
