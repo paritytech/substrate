@@ -910,6 +910,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		let parent_hash = *block.header.parent_hash();
 		let is_descendent_of = is_descendent_of(&self.client, Some((&hash, &parent_hash)));
 
+		// check if there's any epoch change expected to happen at this slot
 		let mut epoch_changes = self.epoch_changes.lock();
 		let epoch_change = epoch_changes.find_node_where(
 			&hash,
@@ -952,6 +953,10 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			},
 		}
 
+		// if there's a pending epoch we'll save the previous epoch changes here
+		// this way we can revert it if there's any error
+		let mut old_epoch_changes = None;
+
 		if let Some(entry) = new_cache.get(&well_known_cache_keys::AUTHORITIES) {
 			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
 				if let Some(last_epoch_change) = epoch_change {
@@ -965,8 +970,9 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 					}
 				}
 
+				old_epoch_changes = Some(epoch_changes.clone());
+
 				// track the epoch change in the fork tree
-				// FIXME: handle reverts in case the block import below fails
 				epoch_changes.import(
 					hash,
 					number,
@@ -980,7 +986,6 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 						insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
 					)
 				);
-
 			} else {
 				return Err(
 					ConsensusError::ClientImport("Failed to decode epoch change digest".into())
@@ -988,7 +993,17 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			}
 		}
 
-		self.inner.import_block(block, new_cache)
+		let import_result = self.inner.import_block(block, new_cache);
+
+		// revert to the original epoch changes in case there's an error
+		// importing the block
+		if let Err(_) = import_result {
+			if let Some(old_epoch_changes) = old_epoch_changes {
+				*epoch_changes = old_epoch_changes;
+			}
+		}
+
+		import_result
 	}
 
 	fn check_block(
