@@ -23,7 +23,7 @@ pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
-	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
@@ -852,17 +852,28 @@ impl<Block: BlockT> From<EpochChanges<Block>> for SharedEpochChanges<Block> {
 	}
 }
 
-struct BabeBlockImport<B, E, Block: BlockT, RA> {
-	inner: BoxBlockImport<Block>,
+/// FIXME: add docs
+pub struct BabeBlockImport<B, E, Block: BlockT, I, RA> {
+	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	epoch_changes: SharedEpochChanges<Block>,
 }
 
-impl<B, E, Block: BlockT, RA> BabeBlockImport<B, E, Block, RA> {
+impl<B, E, Block: BlockT, I: Clone, RA> Clone for BabeBlockImport<B, E, Block, I, RA> {
+	fn clone(&self) -> Self {
+		BabeBlockImport {
+			inner: self.inner.clone(),
+			client: self.client.clone(),
+			epoch_changes: self.epoch_changes.clone(),
+		}
+	}
+}
+
+impl<B, E, Block: BlockT, I, RA> BabeBlockImport<B, E, Block, I, RA> {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		epoch_changes: SharedEpochChanges<Block>,
-		block_import: BoxBlockImport<Block>,
+		block_import: I,
 	) -> Self {
 		BabeBlockImport {
 			client,
@@ -872,8 +883,10 @@ impl<B, E, Block: BlockT, RA> BabeBlockImport<B, E, Block, RA> {
 	}
 }
 
-impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> where
+impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA> where
 	Block: BlockT<Hash=H256>,
+	I: BlockImport<Block> + Send + Sync,
+	I::Error: Into<ConsensusError>,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
@@ -1003,7 +1016,7 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 			}
 		}
 
-		import_result
+		import_result.map_err(Into::into)
 	}
 
 	fn check_block(
@@ -1011,24 +1024,28 @@ impl<B, E, Block, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, RA> wh
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, parent_hash)
+		self.inner.check_block(hash, parent_hash).map_err(Into::into)
 	}
 }
 
 /// Start an import queue for the Babe consensus algorithm.
-pub fn import_queue<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
+pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	config: Config,
-	block_import: BoxBlockImport<Block>,
+	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-) -> ClientResult<
-		(BabeImportQueue<Block>, BabeLink, impl Future<Item = (), Error = ()>),
-	>
-where
+) -> ClientResult<(
+	BabeImportQueue<Block>,
+	BabeLink,
+	BabeBlockImport<B, E, Block, I, RA>,
+	impl Future<Item = (), Error = ()>,
+)> where
 	B: Backend<Block, Blake2Hasher> + 'static,
+	I: BlockImport<Block> + Clone + Send + Sync + 'static,
+	I::Error: Into<ConsensusError>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
@@ -1047,11 +1064,11 @@ where
 	#[allow(deprecated)]
 	let epoch_changes = aux_schema::load_epoch_changes(&**client.backend())?;
 
-	let block_import = Box::new(BabeBlockImport::new(
+	let block_import = BabeBlockImport::new(
 		client.clone(),
 		epoch_changes.clone(),
 		block_import,
-	));
+	);
 
 	let pruning_task = client.finality_notification_stream()
 		.map(|v| Ok::<_, ()>(v)).compat()
@@ -1069,10 +1086,10 @@ where
 	let timestamp_core = verifier.time_source.clone();
 	let queue = BasicQueue::new(
 		Arc::new(verifier),
-		block_import,
+		Box::new(block_import.clone()),
 		justification_import,
 		finality_proof_import,
 	);
 
-	Ok((queue, timestamp_core, pruning_task))
+	Ok((queue, timestamp_core, block_import, pruning_task))
 }
