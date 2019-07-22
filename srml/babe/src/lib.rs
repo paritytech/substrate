@@ -129,7 +129,7 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness get(random): [u8; RANDOMNESS_LENGTH];
+		pub Randomness get(randomness): [u8; RANDOMNESS_LENGTH];
 
 		/// Current epoch index
 		EpochIndex: u64;
@@ -164,7 +164,7 @@ decl_module! {
 
 impl<T: Trait> RandomnessBeacon for Module<T> {
 	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
-		Self::random()
+		Self::randomness()
 	}
 }
 
