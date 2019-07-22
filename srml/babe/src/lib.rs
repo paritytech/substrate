@@ -290,11 +290,14 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 
 		EpochStartSlot::mutate(|previous| *previous += T::babe_epoch_duration());
 
+		let start_slot = EpochStartSlot::get();
+
 		Self::change_epoch(Epoch {
-			randomness,
-			authorities,
 			epoch_index,
+			start_slot,
 			duration: T::babe_epoch_duration(),
+			authorities,
+			randomness,
 		})
 	}
 

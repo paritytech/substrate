@@ -310,6 +310,7 @@ fn can_author_block() {
 	let (pair, _) = sr25519::Pair::generate();
 	let mut i = 0;
 	let epoch = Epoch {
+		start_slot: 0,
 		authorities: vec![(pair.public(), 0)],
 		randomness: [0; 32],
 		epoch_index: 1,

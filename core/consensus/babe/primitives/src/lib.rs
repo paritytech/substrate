@@ -64,12 +64,14 @@ pub type BabeWeight = u64;
 pub struct Epoch {
 	/// The epoch index
 	pub epoch_index: u64,
-	/// Randomness for this epoch
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// The starting slot of the epoch,
+	pub start_slot: u64,
 	/// The duration of this epoch
 	pub duration: SlotNumber,
 	/// The authorities and their weights
 	pub authorities: Vec<(AuthorityId, BabeWeight)>,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }
 
 /// An consensus log item for BABE.
