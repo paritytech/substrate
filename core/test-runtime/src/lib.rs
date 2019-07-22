@@ -47,6 +47,7 @@ pub use primitives::hash::H256;
 use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use runtime_support::{impl_outer_origin, parameter_types};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 pub use consensus_babe::AuthorityId;
@@ -311,7 +312,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-runtime_support::impl_outer_origin!{
+impl_outer_origin!{
 	pub enum Origin for Runtime where system = srml_system {}
 }
 
@@ -325,7 +326,7 @@ impl From<srml_system::Event> for Event {
 	}
 }
 
-runtime_support::parameter_types! {
+parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
 }
@@ -521,19 +522,17 @@ cfg_if! {
 						slot_duration: 3,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
-						slots_per_epoch: 20,
+						slots_per_epoch: 6,
 					}
 				}
 				fn epoch() -> consensus_babe::Epoch {
 					let authorities = system::authorities();
-					assert!(!authorities.is_empty(), "no authorities!");
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 0)).collect();
-					assert!(!authorities.is_empty(), "no authorities!");
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
 					consensus_babe::Epoch {
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: 1,
-						duration: 20,
+						duration: 6,
 					}
 				}
 			}
@@ -678,20 +677,18 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
-						slots_per_epoch: 20,
+						slots_per_epoch: 6,
 					}
 				}
 
 				fn epoch() -> consensus_babe::Epoch {
 					let authorities = system::authorities();
-					assert!(!authorities.is_empty(), "no authorities!");
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 0)).collect();
-					assert!(!authorities.is_empty(), "no authorities!");
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
 					consensus_babe::Epoch {
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: 1,
-						duration: 20,
+						duration: 6,
 					}
 				}
 			}
