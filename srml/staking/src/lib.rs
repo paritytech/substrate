@@ -1381,16 +1381,20 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	}
 }
 
-/// StakingSlasher
+/// A type for performing slashing based on severity of misbehavior
 pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait, Reporter>
-	DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Reporter, Perbill>
+impl<T: Trait, Reporters> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Reporters, Perbill>
 	for StakingSlasher<T>
+where
+	Reporters: IntoIterator<Item = T::AccountId>,
 {
+	// TODO: #XXXX pay out reward to the reporters
+	// The reporters shall be sorted in the same order as they reported misbehavior.
+	// The first reporter shall get the biggest reward and the last reporter the smallest reward.
 	fn do_slash(
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
-		_to_reward: Reporter,
+		_reporters: Reporters,
 		severity: Perbill
 	) -> Result<(), ()> {
 		T::Currency::slash(&who, severity * exposure.own);

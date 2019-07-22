@@ -53,7 +53,7 @@ decl_storage! {
 		///
 		/// It stores every unique misbehavior of a kind
 		// TODO [#3149]: optimize how to shrink the window when sessions expire
-		MisconductReports get(kind): linked_map T::Kind => Vec<SessionIndex>;
+		MisbehaviorReports get(misbehavior_reports): linked_map T::Kind => Vec<SessionIndex>;
 
 		/// Bonding Uniqueness
 		///
@@ -62,7 +62,7 @@ decl_storage! {
 		///
 		/// Footprints need to be unique or stash accounts must be banned from joining
 		/// the validator set after been slashed
-		BondingUniqueness get(uniq): linked_map T::Hash => SessionIndex;
+		BondingUniqueness get(bonding_uniqueness): linked_map T::Hash => SessionIndex;
 	}
 }
 
@@ -71,20 +71,22 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait> Module<T> {
-	/// Return number of misbehavior's in the current window for a kind
-	pub fn get_misbehaved(kind: T::Kind) -> u64 {
-		<MisconductReports<T>>::get(kind).len() as u64
+/// Trait for getting the number of misbehaviors in the current window
+pub trait GetMisbehaviors<Kind> {
+	/// Get number of misbehavior's in the current window for a kind
+	fn get_misbehaviors(kind: Kind) -> u64;
+}
+
+impl<T: Trait> GetMisbehaviors<T::Kind> for Module<T> {
+	fn get_misbehaviors(kind: T::Kind) -> u64 {
+		<MisbehaviorReports<T>>::get(kind).len() as u64
 	}
 }
 
 /// Trait for reporting misbehavior's
 pub trait MisbehaviorReporter<Kind, Hash> {
 	/// Report misbehavior for a kind
-	///
-	/// If the misbehavior is not unique `Err` is returned otherwise the number of misbehaviors for the kind
-	/// is returned
-	fn report_misbehavior(kind: Kind, footprint: Hash, current_session: SessionIndex) -> Result<u64, ()>;
+	fn report_misbehavior(kind: Kind, footprint: Hash, current_session: SessionIndex) -> Result<(), ()>;
 }
 
 impl<T: Trait> MisbehaviorReporter<T::Kind, T::Hash> for Module<T> {
@@ -92,22 +94,22 @@ impl<T: Trait> MisbehaviorReporter<T::Kind, T::Hash> for Module<T> {
 		kind: T::Kind,
 		footprint: T::Hash,
 		current_session: SessionIndex,
-	) -> Result<u64, ()> {
+	) -> Result<(), ()> {
 		if <BondingUniqueness<T>>::exists(footprint) {
 			Err(())
 		} else {
 			<BondingUniqueness<T>>::insert(footprint, current_session);
-			<MisconductReports<T>>::mutate(kind, |entry| entry.push(current_session));
-			Ok(<MisconductReports<T>>::get(kind).len() as u64)
+			<MisbehaviorReports<T>>::mutate(kind, |entry| entry.push(current_session));
+			Ok(())
 		}
 	}
 }
 
 impl<T: Trait> srml_session::OnSessionEnding<T::AccountId> for Module<T> {
 	fn on_session_ending(ending: SessionIndex, _applied_at: SessionIndex) -> Option<Vec<T::AccountId>> {
-		for (kind, _) in <MisconductReports<T>>::enumerate() {
+		for (kind, _) in <MisbehaviorReports<T>>::enumerate() {
 			let window_length = kind.window_length();
-			<MisconductReports<T>>::mutate(kind, |reports| {
+			<MisbehaviorReports<T>>::mutate(kind, |reports| {
 				// it is guaranteed that `reported_session` happened in the same session or before `ending`
 				reports.retain(|reported_session| {
 					let diff = ending.wrapping_sub(*reported_session);
@@ -187,10 +189,12 @@ mod tests {
 
 			let mut current_session = 0;
 
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session).unwrap(), 1);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
 			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session).is_err());
 
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).unwrap(), 2);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
 			assert!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).is_err());
 
 
@@ -198,19 +202,21 @@ mod tests {
 
 			current_session += 1;
 
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, two, current_session).unwrap(), 3);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, two, current_session).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
+
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 3);
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
 			current_session += 1;
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 3);
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
 			current_session += 1;
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 1);
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
 		});
 	}
 
@@ -223,16 +229,17 @@ mod tests {
 			let zero = H256::zero();
 			let one: H256 = [1_u8; 32].into();
 
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, zero, 0).unwrap(), 1);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, 0).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
 			assert!(RollingWindow::report_misbehavior(Kind::One, zero, 0).is_err());
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Two, one, 0).unwrap(), 2);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, one, 0).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
 
 			// rolling window has expired but bonding_uniqueness shall be unbounded
 			RollingWindow::on_session_ending(50, 51);
 
-			// bonding period expired but not the rolling window
-			assert_eq!(RollingWindow::get_misbehaved(Kind::One), 0);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Two), 0);
+			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, 51).is_err());
+			assert!(RollingWindow::report_misbehavior(Kind::One, one, 52).is_err());
 		});
 	}
 
@@ -243,20 +250,21 @@ mod tests {
 		|| {
 
 			// window length is u32::max_value should expire at session 24
-			assert_eq!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25).unwrap(), 1);
+			assert!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25).is_ok());
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 
 			// `u32::max_value() - 25` sessions have been executed
 			RollingWindow::on_session_ending(u32::max_value(), 0);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 1);
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 
 			for session in 0..24 {
 				RollingWindow::on_session_ending(session, session + 1);
-				assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 1);
+				assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 			}
 
 			// `u32::max_value` sessions have been executed should removed from the window
 			RollingWindow::on_session_ending(24, 25);
-			assert_eq!(RollingWindow::get_misbehaved(Kind::Four), 0);
+			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 0);
 		});
 	}
 
