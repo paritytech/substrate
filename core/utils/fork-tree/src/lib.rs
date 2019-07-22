@@ -997,4 +997,40 @@ mod test {
 			);
 		}
 	}
+
+	#[test]
+	fn find_node_works() {
+		let (tree, is_descendent_of) = test_fork_tree();
+
+		let node = tree.find_node_where(
+			&"D",
+			&4,
+			&is_descendent_of,
+			&|_| true,
+		).unwrap().unwrap();
+
+		assert_eq!(node.hash, "C");
+		assert_eq!(node.number, 3);
+	}
+
+	#[test]
+	fn prune_works() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		tree.prune(
+			&"C",
+			3,
+			&is_descendent_of,
+		).unwrap();
+
+		assert_eq!(
+			tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(),
+			vec!["C"],
+		);
+
+		assert_eq!(
+			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+			vec!["C", "D", "E"],
+		);
+	}
 }
