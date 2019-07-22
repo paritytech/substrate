@@ -974,7 +974,7 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
 				if let Some(last_epoch_change) = epoch_change {
 					let last_epoch_index = last_epoch_change.data.0;
-					if last_epoch_index.checked_sub(epoch.epoch_index) != Some(1) {
+					if epoch.epoch_index.checked_sub(last_epoch_index) != Some(1) {
 						return Err(ConsensusError::ClientImport(format!(
 							"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
 							last_epoch_index.saturating_add(1),
