@@ -21,14 +21,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
+use babe::{import_queue, start_babe, BabeImportQueue, Config};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
 use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
-use node_primitives::{AuraPair, Block};
+use node_primitives::{BabePair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -47,19 +47,34 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
+type BabeBlockImportForService<F> = babe::BabeBlockImport<
+	FullBackend<F>,
+	FullExecutor<F>,
+	<F as crate::ServiceFactory>::Block,
+	grandpa::BlockImportForService<F>,
+	<F as crate::ServiceFactory>::RuntimeApi,
+>;
+
 /// Node specific configuration
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
-	/// grandpa connection to import block
+	/// GRANDPA and BABE connection to import block.
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	pub grandpa_import_setup: Option<(grandpa::BlockImportForService<F>, grandpa::LinkHalfForService<F>)>,
+	pub import_setup: Option<(
+		BabeBlockImportForService<F>,
+		grandpa::LinkHalfForService<F>,
+		babe::BabeLink,
+	)>,
+	/// Tasks that were created by previous setup steps and should be spawned.
+	pub tasks_to_spawn: Option<Vec<Box<dyn Future<Item = (), Error = ()> + Send>>>,
 	inherent_data_providers: InherentDataProviders,
 }
 
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	fn default() -> NodeConfig<F> {
 		NodeConfig {
-			grandpa_import_setup: None,
+			import_setup: None,
 			inherent_data_providers: InherentDataProviders::new(),
+			tasks_to_spawn: None,
 		}
 	}
 }
@@ -67,7 +82,7 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = AuraPair,
+		ConsensusPair = BabePair,
 		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -83,11 +98,22 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
 			|mut service: Self::FullService| {
-				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
+				let (block_import, link_half, babe_link) = service.config.custom.import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key() {
-					info!("Using aura key {}", aura_key.public());
+				// spawn any futures that were created in the previous setup steps
+				if let Some(tasks) = service.config.custom.tasks_to_spawn.take() {
+					for task in tasks {
+						service.spawn_task(
+							task.select(service.on_exit())
+								.map(|_| ())
+								.map_err(|_| ())
+						);
+					}
+				}
+
+				if let Some(babe_key) = service.authority_key() {
+					info!("Using BABE key {}", babe_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
@@ -98,18 +124,21 @@ construct_service_factory! {
 					let select_chain = service.select_chain()
 						.ok_or(ServiceError::SelectChainRequired)?;
 
-					let aura = start_aura(
-						SlotDuration::get_or_compute(&*client)?,
-						Arc::new(aura_key),
+					let babe_config = babe::BabeParams {
+						config: Config::get_or_compute(&*client)?,
+						local_key: Arc::new(babe_key),
 						client,
 						select_chain,
 						block_import,
-						proposer,
-						service.network(),
-						service.config.custom.inherent_data_providers.clone(),
-						service.config.force_authoring,
-					)?;
-					let select = aura.select(service.on_exit()).then(|_| Ok(()));
+						env: proposer,
+						sync_oracle: service.network(),
+						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+						force_authoring: service.config.force_authoring,
+						time_source: babe_link,
+					};
+
+					let babe = start_babe(babe_config)?;
+					let select = babe.select(service.on_exit()).then(|_| Ok(()));
 					service.spawn_task(Box::new(select));
 				}
 
@@ -158,27 +187,30 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
-		FullImportQueue = AuraImportQueue<Self::Block>
+		FullImportQueue = BabeImportQueue<Self::Block>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
-				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
 				let justification_import = block_import.clone();
 
-				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
-
-				import_queue::<_, _, AuraPair>(
-					slot_duration,
-					Box::new(block_import),
+				let (import_queue, babe_link, babe_block_import, pruning_task) = import_queue(
+					Config::get_or_compute(&*client)?,
+					block_import,
 					Some(Box::new(justification_import)),
 					None,
+					client.clone(),
 					client,
 					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+				)?;
+
+				config.custom.import_setup = Some((babe_block_import.clone(), link_half, babe_link));
+				config.custom.tasks_to_spawn = Some(vec![Box::new(pruning_task)]);
+
+				Ok(import_queue)
 			}},
-		LightImportQueue = AuraImportQueue<Self::Block>
+		LightImportQueue = BabeImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 				#[allow(deprecated)]
 				let fetch_checker = client.backend().blockchain().fetcher()
@@ -188,17 +220,22 @@ construct_service_factory! {
 				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
 					client.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
+
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, AuraPair>(
-					SlotDuration::get_or_compute(&*client)?,
-					Box::new(block_import),
+				// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
+				let (import_queue, ..) = import_queue(
+					Config::get_or_compute(&*client)?,
+					block_import,
 					None,
 					Some(Box::new(finality_proof_import)),
+					client.clone(),
 					client,
 					config.custom.inherent_data_providers.clone(),
-				).map(|q| (q, finality_proof_request_builder)).map_err(Into::into)
+				)?;
+
+				Ok((import_queue, finality_proof_request_builder))
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
