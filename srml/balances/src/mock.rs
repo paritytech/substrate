@@ -18,10 +18,11 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::Header};
+use primitives::{traits::IdentityLookup, testing::Header, weights::{DispatchInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types};
+use srml_support::traits::Get;
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -34,7 +35,7 @@ thread_local! {
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
-	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
@@ -67,6 +68,8 @@ impl Get<u64> for TransactionByteFee {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -80,6 +83,8 @@ impl system::Trait for Runtime {
 	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 impl Trait for Runtime {
 	type Balance = u64;
@@ -186,3 +191,8 @@ impl ExtBuilder {
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
+
+/// create a transaction info struct from weight. Handy to avoid building the whole struct.
+pub fn info_from_weight(w: Weight) -> DispatchInfo {
+	DispatchInfo { weight: w, ..Default::default() }
+}
