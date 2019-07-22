@@ -176,7 +176,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
 			}
 		}
-		return None
+		return None;
 	}
 }
 
@@ -245,11 +245,14 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		use staking::BalanceOf;
-		let to_votes = |b: BalanceOf<T>|
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b);
+		let to_votes = |b: BalanceOf<T>| {
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
+		};
+
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
 		EpochIndex::put(epoch_index);
 
 		// *Next* epoch's authorities.

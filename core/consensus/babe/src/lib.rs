@@ -17,6 +17,7 @@
 //! # BABE consensus
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
+
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
 #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
@@ -136,7 +137,7 @@ impl SlotCompatible for BabeLink {
 /// Parameters for BABE.
 pub struct BabeParams<C, E, I, SO, SC> {
 
-	/// The configuration for BABE.  Includes the slot duration, threshold, and
+	/// The configuration for BABE. Includes the slot duration, threshold, and
 	/// other parameters.
 	pub config: Config,
 
@@ -271,10 +272,13 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return Box::new(future::ok(()));
 			}
 		};
+
 		let Epoch { ref authorities, randomness, epoch_index, .. } = epoch;
+
 		if authorities.is_empty() {
 			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
 		}
+
 		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "babe", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "babe.skipping_proposal_slot";
@@ -350,7 +354,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
 					"slot" => slot_number
 				);
-				return
+				return;
 			}
 
 			let (header, body) = b.deconstruct();
@@ -489,6 +493,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 					slot_number,
 					epoch_index,
 				);
+
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, vrf_output, vrf_proof)
 				}).map_err(|s| {
@@ -572,22 +577,26 @@ fn median_algorithm(
 	let num_timestamps = time_source.1.len();
 	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
 		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
-				let offset: u128 = u128::from(slot_duration)
-					.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
-					.and_then(|x| x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl))))
-					.expect("we cannot have timespans long enough for this to overflow; qed");
-				const NANOS_PER_SEC: u32 = 1_000_000_000;
-				let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
-				let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
-				t + Duration::new(secs, nanos)
-			}).collect();
+			let offset: u128 = u128::from(slot_duration)
+				.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
+				.and_then(|x| x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl))))
+				.expect("we cannot have timespans long enough for this to overflow; qed");
+
+			const NANOS_PER_SEC: u32 = 1_000_000_000;
+			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
+			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
+
+			t + Duration::new(secs, nanos)
+		}).collect();
+
 		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
 		new_list.sort_unstable();
+
 		let &median = new_list
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
+
 		time_source.1.clear();
-		// FIXME #2927: pass this to the block authoring logic somehow
 		time_source.0.replace(Instant::now() - median);
 	} else {
 		time_source.1.push((Instant::now(), slot_now))
@@ -619,17 +628,20 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			.inherent_data_providers
 			.create_inherent_data()
 			.map_err(String::from)?;
+
 		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
+
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let Epoch { authorities, randomness, epoch_index, .. } =
 			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
+				.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
+
 		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
-		// we add one to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of
-		// headers
+
+		// We add one to allow for some small drift.
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B, C>(
 			&self.api,
 			slot_now + 1,
@@ -640,6 +652,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			epoch_index,
 			self.config.threshold(),
 		)?;
+
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
 				let BabePreDigest { slot_number, .. } = pre_digest.as_babe_pre_digest()
@@ -684,6 +697,8 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
+
+				// FIXME: this should eventually be moved to BabeBlockImport
 				median_algorithm(
 					self.config.0.median_required_blocks,
 					self.config.get(),
@@ -691,6 +706,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					slot_now,
 					&mut *self.time_source.0.lock(),
 				);
+
 				// FIXME #1019 extract authorities
 				Ok((import_block, maybe_keys))
 			}
@@ -823,6 +839,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 			"Error initializing authorities cache: {}",
 			error,
 		)));
+
 	let genesis_epoch = epoch(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_epoch.encode())
 		.map_err(map_err)
