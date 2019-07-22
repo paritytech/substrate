@@ -531,7 +531,7 @@ cfg_if! {
 					assert!(!authorities.is_empty(), "no authorities!");
 					consensus_babe::Epoch {
 						authorities,
-						randomness: srml_babe::randomness::<Runtime>(),
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: 1,
 						duration: 20,
 					}

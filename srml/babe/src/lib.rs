@@ -136,10 +136,6 @@ decl_storage! {
 	}
 }
 
-pub fn randomness<T: Trait>() -> [u8; RANDOMNESS_LENGTH] {
-	<Module<T> as Store>::Randomness::get()
-}
-
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
