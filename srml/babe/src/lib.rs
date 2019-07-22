@@ -111,7 +111,7 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		NextRandomness config(next_randomness): [u8; RANDOMNESS_LENGTH];
+		NextRandomness: [u8; RANDOMNESS_LENGTH];
 
 		/// Randomness under construction
 		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
@@ -129,7 +129,7 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness get(random) config(): [u8; RANDOMNESS_LENGTH];
+		pub Randomness get(random): [u8; RANDOMNESS_LENGTH];
 
 		/// Current epoch index
 		EpochIndex: u64;
