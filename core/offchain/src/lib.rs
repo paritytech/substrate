@@ -164,7 +164,12 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
-				if let Err(e) =	runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), number) {
+				let run = runtime.offchain_worker_with_context(
+					&at,
+					ExecutionContext::OffchainWorker(api),
+					number
+				);
+				if let Err(e) =	run {
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
 			});
@@ -181,8 +186,8 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 /// the workers within current thread.
 /// Note that this will block for potentially a significant amount of time,
 /// but we don't expect browser nodes to run any heavy offchain code anyway.
-#[cfg(not(target_os = "unknown"))]
-fn spawn_worker(f: impl FnOnce() -> ()) {
+#[cfg(target_os = "unknown")]
+fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 	f()
 }
 
@@ -195,9 +200,9 @@ fn spawn_worker(f: impl FnOnce() -> ()) {
 /// Note that we should avoid that if we switch to future-based runtime in the future,
 /// alternatively:
 /// TODO [ToDr] (#1458) we can consider using a thread pool instead.
-#[cfg(target_os = "unknown")]
-fn spawn_worker(f: impl FnOnce() -> ()) {
-	std::thread::spawn(f)
+#[cfg(not(target_os = "unknown"))]
+fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
+	std::thread::spawn(f);
 }
 
 #[cfg(test)]
