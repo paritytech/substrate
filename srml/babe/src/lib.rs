@@ -18,11 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+
 pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
-use timestamp::{OnTimestampSet, Trait};
+use timestamp::{OnTimestampSet};
 use primitives::{generic::DigestItem, ConsensusEngineId};
 use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
@@ -106,6 +107,8 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+pub trait Trait: timestamp::Trait {}
+
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
 
@@ -180,7 +183,7 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	}
 }
 
-impl<T: timestamp::Trait> IsMember<AuthorityId> for Module<T> {
+impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
