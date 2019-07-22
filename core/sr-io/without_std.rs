@@ -19,7 +19,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, cell::Cell, convert::TryInto};
+use rstd::{vec::Vec, cell::Cell, convert::TryInto, convert::TryFrom};
 use primitives::{offchain, Blake2Hasher};
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -410,7 +410,7 @@ pub mod ext {
 		/// code and the runtime is responsible for freeing it. This is always
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
-		fn ext_authority_pubkey(crypto: u32, written_out: *mut u32) -> *mut u8;
+		fn ext_pubkey(key: u64, written_out: *mut u32) -> *mut u8;
 
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
@@ -418,7 +418,7 @@ pub mod ext {
 		///
 		/// - A crypto key id (if the value is less than u16::max_value)
 		/// - `u32::max_value` in case the crypto is not supported
-		fn ext_new_crypto_key(crypto: u32) -> u32;
+		fn ext_new_crypto_key(crypto: u32) -> u64;
 
 		/// Encrypt a piece of data using given crypto key.
 		///
@@ -430,8 +430,7 @@ pub mod ext {
 		/// - Otherwise, pointer to the encrypted message in memory,
 		///	`msg_len` contains the length of the message.
 		fn ext_encrypt(
-			key: u32,
-			kind: u32,
+			key: u64,
 			data: *const u8,
 			data_len: u32,
 			msg_len: *mut u32
@@ -448,8 +447,7 @@ pub mod ext {
 		/// - Otherwise, pointer to the decrypted message in memory,
 		///	`msg_len` contains the length of the message.
 		fn ext_decrypt(
-			key: u32,
-			kind: u32,
+			key: u64,
 			data: *const u8,
 			data_len: u32,
 			msg_len: *mut u32
@@ -466,8 +464,7 @@ pub mod ext {
 		/// - Otherwise, pointer to the signature in memory,
 		///	`sig_data_len` contains the length of the signature.
 		fn ext_sign(
-			key: u32,
-			kind: u32,
+			key: u64,
 			data: *const u8,
 			data_len: u32,
 			sig_data_len: *mut u32
@@ -482,8 +479,7 @@ pub mod ext {
 		/// - `1` in case it doesn't match the key
 		/// - `u32::max_value` if the key is invalid.
 		fn ext_verify(
-			key: u32,
-			kind: u32,
+			key: u64,
 			msg: *const u8,
 			msg_len: u32,
 			signature: *const u8,
@@ -929,13 +925,11 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn authority_pubkey(kind: offchain::CryptoKind) -> Result<Vec<u8>, ()> {
-		let kind = kind as isize as u32;
-
+	fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()> {
 		let mut len = 0u32;
 		let raw_result = unsafe {
-			let ptr = ext_authority_pubkey.get()(
-				kind,
+			let ptr = ext_pubkey.get()(
+				key.into(),
 				&mut len,
 			);
 
@@ -948,76 +942,73 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
+	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
 		let crypto = crypto.into();
 		let ret = unsafe {
 			ext_new_crypto_key.get()(crypto)
 		};
-
-		if ret > u16::max_value() as u32 {
-			Err(())
-		} else {
-			Ok(offchain::CryptoKeyId(ret as u16))
-		}
+		offchain::CryptoKey::try_from(ret)
 	}
 
 	fn encrypt(
-		key: Option<offchain::CryptoKeyId>,
-		kind: offchain::CryptoKind,
+		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(Into::into).unwrap_or(0);
-		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_encrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_encrypt.get()(
+				key.into(),
+				data.as_ptr(),
+				data.len() as u32,
+				&mut len
+			);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
 	fn decrypt(
-		key: Option<offchain::CryptoKeyId>,
-		kind: offchain::CryptoKind,
+		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(Into::into).unwrap_or(0);
-		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_decrypt.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_decrypt.get()(
+				key.into(),
+				data.as_ptr(),
+				data.len() as u32,
+				&mut len
+			);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
 	fn sign(
-		key: Option<offchain::CryptoKeyId>,
-		kind: offchain::CryptoKind,
+		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.map(Into::into).unwrap_or(0);
-		let kind = kind.into();
 		let mut len = 0_u32;
 		unsafe {
-			let ptr = ext_sign.get()(key, kind, data.as_ptr(), data.len() as u32, &mut len);
+			let ptr = ext_sign.get()(
+				key.into(),
+				data.as_ptr(),
+				data.len() as u32,
+				&mut len
+			);
 
 			from_raw_parts(ptr, len).ok_or(())
 		}
 	}
 
 	fn verify(
-		key: Option<offchain::CryptoKeyId>,
-		kind: offchain::CryptoKind,
+		key: offchain::CryptoKey,
 		msg: &[u8],
 		signature: &[u8],
 	) -> Result<bool, ()> {
-		let key = key.map(Into::into).unwrap_or(0);
-		let kind = kind.into();
 		let val = unsafe {
 			ext_verify.get()(
-				key,
-				kind,
+				key.into(),
 				msg.as_ptr(),
 				msg.len() as u32,
 				signature.as_ptr(),
