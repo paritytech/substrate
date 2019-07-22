@@ -54,8 +54,9 @@ use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::record::store::MemoryStore;
 #[cfg(not(target_os = "unknown"))]
-use libp2p::core::{swarm::toggle::Toggle, nodes::Substream, muxing::StreamMuxerBox};
-use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
+use libp2p::{swarm::toggle::Toggle};
+#[cfg(not(target_os = "unknown"))]
+use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multihash::Multihash;
