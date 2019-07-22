@@ -111,7 +111,7 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		NextRandomness config(next_randomness): [u8; 32];
+		NextRandomness config(next_randomness): [u8; RANDOMNESS_LENGTH];
 
 		/// Randomness under construction
 		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
@@ -129,7 +129,7 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness get(random) config(): [u8; 32];
+		pub Randomness get(random) config(): [u8; RANDOMNESS_LENGTH];
 
 		/// Current epoch index
 		EpochIndex: u64;
@@ -219,14 +219,14 @@ impl<T: Trait> Module<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(epoch_index: u64) -> [u8; 32] {
+	fn randomness_change_epoch(epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
 		let next_randomness = compute_randomness(
 			this_randomness,
 			epoch_index,
 			UnderConstruction::get(),
 		);
-		UnderConstruction::put(&[0; 32]);
+		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
 		NextRandomness::put(&next_randomness);
 		this_randomness
 	}
@@ -275,10 +275,10 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 }
 
 fn compute_randomness(
-	last_epoch_randomness: [u8; 32],
+	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
 	epoch_index: u64,
 	rho: [u8; VRF_OUTPUT_LENGTH],
-) -> [u8; 32] {
+) -> [u8; RANDOMNESS_LENGTH] {
 	let mut s = [0; 40 + VRF_OUTPUT_LENGTH];
 	s[..32].copy_from_slice(&last_epoch_randomness);
 	s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
