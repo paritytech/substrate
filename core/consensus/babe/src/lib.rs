@@ -852,7 +852,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 /// Tree of all epoch changes across all *seen* forks. Data stored in tree is the
 /// hash and block number of the block signaling the epoch change, the new epoch
 /// index and the minimum *slot number* when the next epoch should start (i.e.
-/// slot number begin + duration).
+/// epoch start slot + epoch duration).
 type EpochChanges<Block> = ForkTree<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
@@ -1029,7 +1029,7 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 				epoch_changes.import(
 					hash,
 					number,
-					(epoch.epoch_index, slot_number + epoch.duration),
+					(epoch.epoch_index, epoch.start_slot + epoch.duration),
 					&is_descendent_of,
 				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
