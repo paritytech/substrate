@@ -69,8 +69,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_primitives::{
-	crypto::TypedKey, offchain::CryptoKind,
-	crypto::key_types,
+	crypto::TypedKey, offchain::CryptoKey,
 	offchain::OpaqueNetworkState,
 	offchain::StorageKind,
 	sr25519, ed25519,
@@ -113,7 +112,6 @@ enum OffchainErr {
 	FailedSigning,
 	NetworkState,
 	SubmitTransaction,
-	UnknownCryptoKind,
 }
 
 impl Printable for OffchainErr {
@@ -125,7 +123,6 @@ impl Printable for OffchainErr {
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
 			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
-			OffchainErr::UnknownCryptoKind => print("Offchain error: the CryptoKind is unknown!"),
 		}
 	}
 }
@@ -216,14 +213,8 @@ decl_module! {
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
 			fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
-				let kind = match <T::AuthorityId as TypedKey>::KEY_TYPE {
-					key_types::SR25519 => CryptoKind::Sr25519,
-					key_types::ED25519 => CryptoKind::Ed25519,
-					_ => return Err(OffchainErr::UnknownCryptoKind),
-				};
-
 				// we run only when a local authority key is configured
-				if let Ok(key) = sr_io::authority_pubkey(kind) {
+				if let Ok(key) = sr_io::pubkey(CryptoKey::AuthorityKey) {
 					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
 						.ok_or(OffchainErr::DecodeAuthorityId)?;
 					let network_state =
@@ -235,7 +226,7 @@ decl_module! {
 						authority_id,
 					};
 
-					let signature = sr_io::sign(None, kind, &heartbeat_data.encode())
+					let signature = sr_io::sign(CryptoKey::AuthorityKey, &heartbeat_data.encode())
 						.map_err(|_| OffchainErr::FailedSigning)?;
 					let call = Call::heartbeat(heartbeat_data, signature);
 					let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
