@@ -174,7 +174,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		finality_proof: Vec<u8>,
-		verifier: &dyn Verifier<Block>,
+		verifier: &mut dyn Verifier<Block>,
 	) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 		do_import_finality_proof::<_, _, _, _, GrandpaJustification<Block>>(
 			&*self.client,
@@ -290,7 +290,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	_hash: Block::Hash,
 	_number: NumberFor<Block>,
 	finality_proof: Vec<u8>,
-	verifier: &dyn Verifier<Block>,
+	verifier: &mut dyn Verifier<Block>,
 ) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -608,7 +608,7 @@ pub mod tests {
 			hash: Block::Hash,
 			number: NumberFor<Block>,
 			finality_proof: Vec<u8>,
-			verifier: &dyn Verifier<Block>,
+			verifier: &mut dyn Verifier<Block>,
 		) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 			self.0.import_finality_proof(hash, number, finality_proof, verifier)
 		}
