@@ -27,7 +27,7 @@ pub trait StorageHasher: 'static {
 	fn hash(x: &[u8]) -> Self::Output;
 }
 
-/// Hash storage keys with `concat(twox128(key), key)`
+/// Hash storage keys with `concat(twox64(key), key)`
 pub struct Twox64Concat;
 impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
