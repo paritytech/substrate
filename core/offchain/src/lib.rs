@@ -128,9 +128,9 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 	Block,
 > where
 	Block: traits::Block,
-	Client: ProvideRuntimeApi,
+	Client: ProvideRuntimeApi + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
-	KeyProvider: AuthorityKeyProvider<Block>,
+	KeyProvider: AuthorityKeyProvider<Block> + Send,
 	Storage: client::backend::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
@@ -157,9 +157,18 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 				at.clone(),
 				network_state.clone(),
 			);
-			debug!("Running offchain workers at {:?}", at);
-			let api = Box::new(api);
-			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
+			debug!("Spawning offchain workers at {:?}", at);
+			let number = *number;
+			let client = self.client.clone();
+			// TODO [ToDr] (#1458) consider using a thread pool in the future.
+			std::thread::spawn(move || {
+				let runtime = client.runtime_api();
+				let api = Box::new(api);
+				debug!("Running offchain workers at {:?}", at);
+				if let Err(e) =	runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), number) {
+					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
+				}
+			});
 			futures::future::Either::A(runner.process())
 		} else {
 			futures::future::Either::B(futures::future::ok(()))
