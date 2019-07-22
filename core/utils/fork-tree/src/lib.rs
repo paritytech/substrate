@@ -86,8 +86,12 @@ impl<H, N, V> ForkTree<H, N, V> where
 	N: Ord + Clone,
 	V: Clone,
 {
-	/// Prune nodes that are not descendents of `hash` according to `is_descendent_of`.
-	/// The number and order of calls to `is_descendent_of` is unspecified and subject to change.
+	/// Prune all nodes that are not descendents of `hash` according to
+	/// `is_descendent_of`. The given function `is_descendent_of` should return
+	/// `true` if the second hash (target) is a descendent of the first hash
+	/// (base). After pruning the tree it should have one or zero roots. The
+	/// number and order of calls to `is_descendent_of` is unspecified and
+	/// subject to change.
 	pub fn prune<F, E>(
 		&mut self,
 		hash: &H,
@@ -204,7 +208,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
-	/// Find a node in the tree that satisfies a predicate
+	/// Find a node in the tree that is the lowest ancestor of the given
+	/// block hash and which passes the given predicate. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target)
+	/// is a descendent of the first hash (base).
 	pub fn find_node_where<F, E, P>(
 		&self,
 		hash: &H,
@@ -479,7 +486,9 @@ mod node_implementation {
 		}
 
 		/// Find a node in the tree that is the lowest ancestor of the given
-		/// block hash and which passes the given predicate.
+		/// block hash and which passes the given predicate. The given function
+		/// `is_descendent_of` should return `true` if the second hash (target)
+		/// is a descendent of the first hash (base).
 		// FIXME: it would be useful if this returned a mutable reference but
 		// rustc can't deal with lifetimes properly. an option would be to try
 		// an iterative definition instead.
