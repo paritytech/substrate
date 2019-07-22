@@ -136,10 +136,7 @@ decl_storage! {
 	}
 }
 
-pub fn authorities<T: Trait>() -> Vec<(AuthorityId, u64)> {
-	<Module<T> as Store>::Authorities::get()
-}
-pub fn random<T: Trait>() -> [u8; 32] {
+pub fn randomness<T: Trait>() -> [u8; RANDOMNESS_LENGTH] {
 	<Module<T> as Store>::Randomness::get()
 }
 
