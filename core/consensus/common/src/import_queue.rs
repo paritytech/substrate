@@ -29,7 +29,7 @@ use std::{sync::Arc, collections::HashMap};
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
-	BlockImport, BlockOrigin, ImportBlock, ImportedAux, JustificationImport, ImportResult,
+	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	FinalityProofImport,
 };
 
@@ -67,7 +67,7 @@ pub struct IncomingBlock<B: BlockT> {
 
 /// Verify a justification of a block
 pub trait Verifier<B: BlockT>: Send + Sync {
-	/// Verify the given data and return the ImportBlock and an optional
+	/// Verify the given data and return the BlockImportParams and an optional
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
@@ -76,7 +76,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
 
 /// Blocks import queue API.

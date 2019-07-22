@@ -82,7 +82,7 @@ pub struct TestVerifier {
 }
 
 impl Verifier<TestBlock> for TestVerifier {
-	/// Verify the given data and return the ImportBlock and an optional
+	/// Verify the given data and return the BlockImportParams and an optional
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
@@ -91,7 +91,7 @@ impl Verifier<TestBlock> for TestVerifier {
 		header: TestHeader,
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
-	) -> Result<(ImportBlock<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		self.inner.verify(
 			origin,
 			(self.mutator)(header),
