@@ -457,7 +457,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: TypedKey + PartialEq + Eq {
+pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -476,7 +476,7 @@ pub trait Public: TypedKey + PartialEq + Eq {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: TypedKey + Sized + 'static {
+pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -631,7 +631,7 @@ mod tests {
 	use hex_literal::hex;
 	use super::*;
 
-	#[derive(Eq, PartialEq, Debug)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
 		Generated,
 		GeneratedWithPhrase,
@@ -640,8 +640,13 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
-	#[derive(PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash)]
 	struct TestPublic;
+	impl AsRef<[u8]> for TestPublic {
+		fn as_ref(&self) -> &[u8] {
+			&[]
+		}
+	}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
