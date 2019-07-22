@@ -32,7 +32,7 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 
 use parity_codec::{Encode, Decode, Codec};
 use consensus_common::{self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
+	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
 };
 use consensus_common::import_queue::{
@@ -317,7 +317,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
-			let import_block: ImportBlock<B> = ImportBlock {
+			let import_block: BlockImportParams<B> = BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
@@ -515,7 +515,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -578,7 +578,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 						_ => None,
 					});
 
-				let import_block = ImportBlock {
+				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![seal],

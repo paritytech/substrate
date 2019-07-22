@@ -91,10 +91,42 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 	}
 }
 
+/// Current state of the GRANDPA authority set. State transitions must happen in
+/// the same order of states defined below, e.g. `Paused` implies a prior
+/// `PendingPause`.
+#[derive(Decode, Encode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub enum StoredState<N> {
+	/// The current authority set is live, and GRANDPA is enabled.
+	Live,
+	/// There is a pending pause event which will be enacted at the given block
+	/// height.
+	PendingPause {
+		/// Block at which the intention to pause was scheduled.
+		scheduled_at: N,
+		/// Number of blocks after which the change will be enacted.
+		delay: N
+	},
+	/// The current GRANDPA authority set is paused.
+	Paused,
+	/// There is a pending resume event which will be enacted at the given block
+	/// height.
+	PendingResume {
+		/// Block at which the intention to resume was scheduled.
+		scheduled_at: N,
+		/// Number of blocks after which the change will be enacted.
+		delay: N,
+	},
+}
+
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
 		NewAuthorities(Vec<(AuthorityId, u64)>),
+		/// Current authority set has been paused.
+		Paused,
+		/// Current authority set has been resumed.
+		Resumed,
 	}
 );
 
@@ -102,6 +134,9 @@ decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
 		Authorities get(authorities) config(): Vec<(AuthorityId, AuthorityWeight)>;
+
+		/// State of the current authority set.
+		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
@@ -125,12 +160,14 @@ decl_module! {
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
+			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
+				// emit signal if we're at the block that scheduled the change
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {
 						Self::deposit_log(ConsensusLog::ForcedChange(
 							median,
-							ScheduledChange{
+							ScheduledChange {
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
 							}
@@ -145,6 +182,7 @@ decl_module! {
 					}
 				}
 
+				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Authorities::put(&pending_change.next_authorities);
 					Self::deposit_event(
@@ -152,6 +190,35 @@ decl_module! {
 					);
 					<PendingChange<T>>::kill();
 				}
+			}
+
+			// check for scheduled pending state changes
+			match <State<T>>::get() {
+				StoredState::PendingPause { scheduled_at, delay } => {
+					// signal change to pause
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Pause(delay));
+					}
+
+					// enact change to paused state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Paused);
+						Self::deposit_event(Event::Paused);
+					}
+				},
+				StoredState::PendingResume { scheduled_at, delay } => {
+					// signal change to resume
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Resume(delay));
+					}
+
+					// enact change to live state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Live);
+						Self::deposit_event(Event::Resumed);
+					}
+				},
+				_ => {},
 			}
 		}
 	}
@@ -161,6 +228,36 @@ impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 		Authorities::get()
+	}
+
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
+		if let StoredState::Live = <State<T>>::get() {
+			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			<State<T>>::put(StoredState::PendingPause {
+				delay: in_blocks,
+				scheduled_at,
+			});
+
+			Ok(())
+		} else {
+			Err("Attempt to signal GRANDPA pause when the authority set isn't live \
+				(either paused or already pending pause).")
+		}
+	}
+
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
+		if let StoredState::Paused = <State<T>>::get() {
+			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			<State<T>>::put(StoredState::PendingResume {
+				delay: in_blocks,
+				scheduled_at,
+			});
+
+			Ok(())
+		} else {
+			Err("Attempt to signal GRANDPA resume when the authority set isn't paused \
+				(either live or already pending resume).")
+		}
 	}
 
 	/// Schedule a change in the authorities.
@@ -232,6 +329,18 @@ impl<T: Trait> Module<T> {
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
+
+	pub fn pending_pause(digest: &DigestOf<T>)
+		-> Option<T::BlockNumber>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
+	}
+
+	pub fn pending_resume(digest: &DigestOf<T>)
+		-> Option<T::BlockNumber>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
@@ -254,6 +363,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
+
 	fn on_disabled(i: usize) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}

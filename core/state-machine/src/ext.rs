@@ -81,7 +81,7 @@ where
 	changes_trie_transaction: Option<(MemoryDB<H>, H::Out)>,
 	/// Additional externalities for offchain workers.
 	///
-	/// If None, some methods from the trait might not supported.
+	/// If None, some methods from the trait might not be supported.
 	offchain_externalities: Option<&'a mut O>,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,

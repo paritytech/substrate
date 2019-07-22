@@ -17,6 +17,8 @@
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use crate::custom_proto::upgrade::{RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use futures::prelude::*;
+use futures03::{compat::Compat, TryFutureExt as _};
+use futures_timer::Delay;
 use libp2p::core::{
 	ConnectedPoint, PeerId, Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
 	protocols_handler::IntoProtocolsHandler,
@@ -29,7 +31,6 @@ use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
 use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, clock::Clock};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -119,17 +120,15 @@ where
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		let clock = Clock::new();
 		CustomProtoHandler {
 			protocol: self.protocol,
 			endpoint: connected_point.to_endpoint(),
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
-				init_deadline: Delay::new(clock.now() + Duration::from_secs(5))
+				init_deadline: Delay::new(Duration::from_secs(5)).compat()
 			},
 			events_queue: SmallVec::new(),
-			clock,
 		}
 	}
 }
@@ -155,9 +154,6 @@ pub struct CustomProtoHandler<TMessage, TSubstream> {
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, (), CustomProtoHandlerOut<TMessage>>; 16]>,
-
-	/// `Clock` instance that uses the current execution context's source of time.
-	clock: Clock,
 }
 
 /// State of the handler.
@@ -167,14 +163,14 @@ enum ProtocolState<TMessage, TSubstream> {
 		/// List of substreams opened by the remote but that haven't been processed yet.
 		substreams: SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
-		init_deadline: Delay,
+		init_deadline: Compat<Delay>,
 	},
 
 	/// Handler is opening a substream in order to activate itself.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
 	Opening {
 		/// Deadline after which the opening is abnormally long.
-		deadline: Delay,
+		deadline: Compat<Delay>,
 	},
 
 	/// Normal operating mode. Contains the substreams that are open.
@@ -286,7 +282,7 @@ where
 						});
 					}
 					ProtocolState::Opening {
-						deadline: Delay::new(self.clock.now() + Duration::from_secs(60))
+						deadline: Delay::new(Duration::from_secs(60)).compat()
 					}
 
 				} else {
@@ -356,7 +352,7 @@ where
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match init_deadline.poll() {
 					Ok(Async::Ready(())) => {
-						init_deadline.reset(self.clock.now() + Duration::from_secs(60));
+						init_deadline = Delay::new(Duration::from_secs(60)).compat();
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
@@ -371,7 +367,7 @@ where
 			ProtocolState::Opening { mut deadline } => {
 				match deadline.poll() {
 					Ok(Async::Ready(())) => {
-						deadline.reset(self.clock.now() + Duration::from_secs(60));
+						deadline = Delay::new(Duration::from_secs(60)).compat();
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
@@ -385,7 +381,7 @@ where
 					},
 					Err(_) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline.reset(self.clock.now() + Duration::from_secs(60));
+						deadline = Delay::new(Duration::from_secs(60)).compat();
 						self.state = ProtocolState::Opening { deadline };
 						None
 					},
@@ -454,7 +450,7 @@ where
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
 					self.state = ProtocolState::Opening {
-						deadline: Delay::new(self.clock.now() + Duration::from_secs(60))
+						deadline: Delay::new(Duration::from_secs(60)).compat()
 					};
 					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 						protocol: SubstreamProtocol::new(self.protocol.clone()),
