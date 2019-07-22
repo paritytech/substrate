@@ -1391,13 +1391,13 @@ dependencies = [
 [[package]]
 name = "jsonrpc-client-transports"
 version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.31 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-pubsub 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1406,9 +1406,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc-client-transports"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
+dependencies = [
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-pubsub 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "jsonrpc-core"
 version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jsonrpc-core"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
 dependencies = [
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1420,15 +1446,23 @@ dependencies = [
 [[package]]
 name = "jsonrpc-core-client"
 version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "jsonrpc-client-transports 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-client-transports 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jsonrpc-core-client"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
+dependencies = [
+ "jsonrpc-client-transports 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
 ]
 
 [[package]]
 name = "jsonrpc-derive"
-version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
 dependencies = [
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1438,37 +1472,48 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-http-server"
-version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
 dependencies = [
  "hyper 0.12.31 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-server-utils 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-server-utils 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicase 2.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "jsonrpc-pubsub"
 version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
+name = "jsonrpc-pubsub"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
+dependencies = [
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "jsonrpc-server-utils"
-version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
 dependencies = [
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "globset 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1479,13 +1524,13 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-ws-server"
-version = "12.1.0"
-source = "git+https://github.com/paritytech/jsonrpc?branch=td-todelegate#7b2e3fa2ee8affdfcefa4aa3191dd80a95c2b966"
+version = "13.0.0"
+source = "git+https://github.com/paritytech/jsonrpc#0011d4f7b26482ba64b4b45dbb64d042e378516b"
 dependencies = [
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-server-utils 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-server-utils 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2018,6 +2063,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lock_api"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "scopeguard 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "log"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2248,7 +2301,7 @@ dependencies = [
  "exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-executor 2.0.0",
  "node-primitives 2.0.0",
@@ -2332,10 +2385,10 @@ name = "node-rpc"
 version = "2.0.0"
 dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-derive 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-core-client 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-derive 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-pubsub 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
@@ -2355,7 +2408,7 @@ dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.31 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core-client 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "substrate-rpc 2.0.0",
@@ -2726,6 +2779,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "parking_lot"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "lock_api 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot_core 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "parking_lot_core"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2769,6 +2832,20 @@ dependencies = [
  "cloudabi 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.59 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cloudabi 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.59 (registry+https://github.com/rust-lang/crates.io-index)",
  "redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4712,10 +4789,10 @@ dependencies = [
  "derive_more 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-preview 0.3.0-alpha.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-derive 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-core-client 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-derive 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-pubsub 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4739,10 +4816,10 @@ dependencies = [
 name = "substrate-rpc-servers"
 version = "2.0.0"
 dependencies = [
- "jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-http-server 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
- "jsonrpc-ws-server 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)",
+ "jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-http-server 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-pubsub 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
+ "jsonrpc-ws-server 13.0.0 (git+https://github.com/paritytech/jsonrpc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
@@ -6112,14 +6189,18 @@ dependencies = [
 "checksum itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5b8467d9c1cebe26feb08c640139247fac215782d35371ade9a2136ed6085358"
 "checksum itoa 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "501266b7edd0174f8530248f87f99c88fbe60ca4ef3dd486835b8d8d53136f7f"
 "checksum js-sys 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)" = "eac16f41aa9b9388230b1d6617d7ed897a1af5416b8fe1c8734dcef79c7aae10"
-"checksum jsonrpc-client-transports 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-core 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-core-client 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-derive 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-http-server 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-pubsub 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-server-utils 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
-"checksum jsonrpc-ws-server 12.1.0 (git+https://github.com/paritytech/jsonrpc?branch=td-todelegate)" = "<none>"
+"checksum jsonrpc-client-transports 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6be24a8de4ced80f6fd8b6ace54aa610823a7642976a0e8e00e3bb2f4d8c33f0"
+"checksum jsonrpc-client-transports 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-core 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0216cf4c95fb373d89c63572672097b8aa74cfcdd77054accbf545d840be5bd7"
+"checksum jsonrpc-core 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-core-client 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1603b6cc05060de7794c2962edd705e1ad2698bd2b0d2ddd4489f8c85df122b7"
+"checksum jsonrpc-core-client 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-derive 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-http-server 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-pubsub 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e3c45f7cdb1bb28a3bfb3a0a5184bf99669c9ffe8cf8d7b8a582f2a52bf9944a"
+"checksum jsonrpc-pubsub 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-server-utils 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
+"checksum jsonrpc-ws-server 13.0.0 (git+https://github.com/paritytech/jsonrpc)" = "<none>"
 "checksum keccak 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
 "checksum keccak-hasher 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3767172fe16797c41f975f12f38247964ace8e5e1a2539b82d5e19f9106b1cb9"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
@@ -6158,6 +6239,7 @@ dependencies = [
 "checksum linked_hash_set 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3c7c91c4c7bbeb4f2f7c4e5be11e6a05bd6830bc37249c47ce1ad86ad453ff9c"
 "checksum lock_api 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "62ebf1391f6acad60e5c8b43706dde4582df75c06698ab44511d15016bc2442c"
 "checksum lock_api 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ed946d4529956a20f2d63ebe1b69996d5a2137c91913fe3ebbeff957f5bca7ff"
+"checksum lock_api 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f8912e782533a93a167888781b836336a6ca5da6175c05944c86cf28c31104dc"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 "checksum log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "c84ec4b527950aa83a329754b01dbe3f58361d1c5efacd1f6d68c494d08a17c6"
 "checksum lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "31e24f1ad8321ca0e8a1e0ac13f23cb668e6f5466c2c57319f6a5cf1cc8e3b1c"
@@ -6209,10 +6291,12 @@ dependencies = [
 "checksum parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "f0802bff09003b291ba756dc7e79313e51cc31667e94afbe847def490424cde5"
 "checksum parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ab41b4aed082705d1056416ae4468b6ea99d52599ecf3169b00088d43113e337"
 "checksum parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fa7767817701cce701d5585b9c4db3cdd02086398322c1d7e8bf5094a96a2ce7"
+"checksum parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f842b1982eb6c2fe34036a4fbfb06dd185a3f5c8edfaacdf7d1ea10b07de6252"
 "checksum parking_lot_core 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)" = "4db1a8ccf734a7bce794cc19b3df06ed87ab2f3907036b693c68f56b4d4537fa"
 "checksum parking_lot_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ad7f7e6ebdc79edff6fdcb87a55b620174f7a989e3eb31b65231f4af57f00b8c"
 "checksum parking_lot_core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "94c8c7923936b28d546dfd14d4472eaf34c99b14e1c973a32b3e6d4eb04298c9"
 "checksum parking_lot_core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cb88cb1cb3790baa6776844f968fea3be44956cf184fa1be5a03341f5491278c"
+"checksum parking_lot_core 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b876b1b9e7ac6e1a74a6da34d25c42e17e8862aa409cbbbdcfc8d86c6f3bc62b"
 "checksum paste 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "1f4a4a1c555c6505821f9d58b8779d0f630a6b7e4e1be24ba718610acf01fa79"
 "checksum paste-impl 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "26e796e623b8b257215f27e6c80a5478856cae305f5b59810ff9acdaa34570e6"
 "checksum pbkdf2 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "006c038a43a45995a9670da19e67600114740e8511d4333bf97a56e66a7542d9"
