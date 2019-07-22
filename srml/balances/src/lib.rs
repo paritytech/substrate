@@ -154,16 +154,17 @@ use rstd::{cmp, result, mem};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance, ReservableCurrency
+	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
-use srml_support::{dispatch::Result, traits::Get};
+use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
-	MaybeSerializeDebug, Saturating, Bounded
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
+	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
 };
-use primitives::weights::Weight;
+use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
+use primitives::weights::DispatchInfo;
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -763,6 +764,8 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
+	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type MaximumBlockLength = T::MaximumBlockLength;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -1146,17 +1149,79 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
-	fn make_payment(transactor: &T::AccountId, weight: Weight) -> Result {
-		let transaction_fee = T::Balance::from(weight);
-		let imbalance = Self::withdraw(
-			transactor,
-			transaction_fee,
+/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
+/// in the queue.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)] T::Balance);
+
+impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
+	/// utility constructor. Used only in client/factory code.
+	#[cfg(feature = "std")]
+	pub fn from(fee: T::Balance) -> Self {
+		Self(fee)
+	}
+
+	/// Compute the final fee value for a particular transaction.
+	///
+	/// The final fee is composed of:
+	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
+	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
+	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
+	///      and the time it consumes.
+	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
+	///      transactions can have a tip.
+	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
+		// length fee
+		let len_fee = if info.pay_length_fee() {
+			let len = T::Balance::from(len as u32);
+			let base = T::TransactionBaseFee::get();
+			let byte = T::TransactionByteFee::get();
+			base.saturating_add(byte.saturating_mul(len))
+		} else {
+			Zero::zero()
+		};
+
+		// weight fee
+		let weight = info.weight;
+		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier().apply_to(weight).into();
+
+		len_fee.saturating_add(weight_fee).saturating_add(tip)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		info: DispatchInfo,
+		len: usize,
+	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+		// pay any fees.
+		let fee = Self::compute_fee(len, info, self.0);
+		let imbalance = <Module<T, I>>::withdraw(
+			who,
+			fee,
 			WithdrawReason::TransactionPayment,
-			ExistenceRequirement::KeepAlive
-		)?;
+			ExistenceRequirement::KeepAlive,
+		).map_err(|_| DispatchError::Payment)?;
 		T::TransactionPayment::on_unbalanced(imbalance);
-		Ok(())
+
+		let mut r = ValidTransaction::default();
+		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
+		// will be a bit more than setting the priority to tip. For now, this is enough.
+		r.priority = fee.saturated_into::<TransactionPriority>();
+		Ok(r)
 	}
 }
 
