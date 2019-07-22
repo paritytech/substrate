@@ -1389,7 +1389,7 @@ impl<T: Trait, Reporters> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceO
 where
 	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
 {
-	// TODO: #3166 pay out reward to the reporters
+	// TODO: #3166 pay out rewards to the reporters
 	// Perbill is priority for the reporter
 	fn do_slash(
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),

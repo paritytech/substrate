@@ -36,7 +36,7 @@ use substrate_client::{
 use runtime_primitives::{
 	ApplyResult,
 	create_runtime_str,
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify
@@ -377,13 +377,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
@@ -518,13 +518,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
