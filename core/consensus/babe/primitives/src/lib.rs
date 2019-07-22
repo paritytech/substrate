@@ -97,18 +97,6 @@ pub struct BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The number of slots per BABE epoch. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub slots_per_epoch: u64,
-
-	/// The expected block time in milliseconds for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub expected_block_time: u64,
-
 	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
 	/// only the value provided by this type at genesis will be used.
 	///

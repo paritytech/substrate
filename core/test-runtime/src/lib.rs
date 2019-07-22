@@ -532,9 +532,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 3,
-						expected_block_time: 1,
 						threshold: core::u64::MAX,
-						slots_per_epoch: 6,
 					}
 				}
 				fn epoch() -> consensus_babe::Epoch {
@@ -688,9 +686,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 1,
-						expected_block_time: 1,
 						threshold: core::u64::MAX,
-						slots_per_epoch: 6,
 					}
 				}
 
