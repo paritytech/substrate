@@ -85,6 +85,7 @@ members = [
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
+	"srml/im-online",
 	"node/cli",
 	"node/executor",
 	"node/primitives",

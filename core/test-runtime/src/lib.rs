@@ -141,12 +141,18 @@ impl BlindCheckable for Extrinsic {
 }
 
 impl ExtrinsicT for Extrinsic {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		if let Extrinsic::IncludeData(_) = *self {
 			Some(false)
 		} else {
 			Some(true)
 		}
+	}
+
+	fn new_unsigned(_call: Self::Call) -> Option<Self> {
+		None
 	}
 }
 

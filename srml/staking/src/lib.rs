@@ -447,7 +447,7 @@ pub const DEFAULT_BONDING_DURATION: u32 = 1;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
-/// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
+/// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
 	fn disable_validator(validator: &AccountId) -> Result<(), ()>;

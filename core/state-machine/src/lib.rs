@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
 };
 
 pub mod backend;
@@ -241,17 +241,29 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
+	fn network_state(
+		&self,
+	) -> Result<offchain::OpaqueNetworkState, ()> {
+		unreachable!()
+	}
+
+	fn pubkey(
+		&self,
+		_key: offchain::CryptoKey,
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
 	fn new_crypto_key(
 		&mut self,
 		_crypto: offchain::CryptoKind,
-	) -> Result<offchain::CryptoKeyId, ()> {
+	) -> Result<offchain::CryptoKey, ()> {
 		unreachable!()
 	}
 
 	fn encrypt(
 		&mut self,
-		_key: Option<offchain::CryptoKeyId>,
-		_kind: offchain::CryptoKind,
+		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
@@ -259,8 +271,7 @@ impl offchain::Externalities for NeverOffchainExt {
 
 	fn decrypt(
 		&mut self,
-		_key: Option<offchain::CryptoKeyId>,
-		_kind: offchain::CryptoKind,
+		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
@@ -268,8 +279,7 @@ impl offchain::Externalities for NeverOffchainExt {
 
 	fn sign(
 		&mut self,
-		_key: Option<offchain::CryptoKeyId>,
-		_kind: offchain::CryptoKind,
+		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
 		unreachable!()
@@ -277,8 +287,7 @@ impl offchain::Externalities for NeverOffchainExt {
 
 	fn verify(
 		&mut self,
-		_key: Option<offchain::CryptoKeyId>,
-		_kind: offchain::CryptoKind,
+		_key: offchain::CryptoKey,
 		_msg: &[u8],
 		_signature: &[u8],
 	) -> Result<bool, ()> {
