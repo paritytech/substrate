@@ -87,14 +87,49 @@ impl From<CryptoKind> for u32 {
 	}
 }
 
-/// Opaque type for created crypto keys.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// Key to use in the offchain worker crypto api.
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct CryptoKeyId(pub u16);
+pub enum CryptoKey {
+	/// Use a key from the offchain workers local storage.
+	LocalKey {
+		/// The id of the key.
+		id: u16,
+		/// The kind of the key.
+		kind: CryptoKind,
+	},
+	/// Use the key the block authoring algorithm uses.
+	AuthorityKey,
+	/// Use the key the finality gadget uses.
+	FgAuthorityKey,
+}
 
-impl From<CryptoKeyId> for u32 {
-	fn from(c: CryptoKeyId) -> Self {
-		c.0 as u32
+impl TryFrom<u64> for CryptoKey {
+	type Error = ();
+
+	fn try_from(key: u64) -> Result<Self, Self::Error> {
+		match key & 0xFF {
+			0 => {
+				let id = (key >> 8 & 0xFFFF) as u16;
+				let kind = CryptoKind::try_from((key >> 32) as u32)?;
+				Ok(CryptoKey::LocalKey { id, kind })
+			}
+			1 => Ok(CryptoKey::AuthorityKey),
+			2 => Ok(CryptoKey::FgAuthorityKey),
+			_ => Err(()),
+		}
+	}
+}
+
+impl From<CryptoKey> for u64 {
+	fn from(key: CryptoKey) -> u64 {
+		match key {
+			CryptoKey::LocalKey { id, kind } => {
+				((kind as u64) << 32) | ((id as u64) << 8)
+			}
+			CryptoKey::AuthorityKey => 1,
+			CryptoKey::FgAuthorityKey => 2,
+		}
 	}
 }
 
@@ -279,13 +314,13 @@ pub trait Externalities {
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
 
-	/// Returns the locally configured authority public key, if available.
-	fn authority_pubkey(&self, crypto: CryptoKind) -> Result<Vec<u8>, ()>;
-
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
 	/// Returns an error if given crypto kind is not supported.
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
+	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()>;
+
+	/// Returns the locally configured authority public key, if available.
+	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()>;
 
 	/// Encrypt a piece of data using given crypto key.
 	///
@@ -293,7 +328,7 @@ pub trait Externalities {
 	///
 	/// Returns an error if `key` is not available or does not exist,
 	/// or the expected `CryptoKind` does not match.
-	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+	fn encrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 	/// Decrypt a piece of data using given crypto key.
 	///
@@ -301,7 +336,7 @@ pub trait Externalities {
 	///
 	/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist,
 	/// or the expected `CryptoKind` does not match.
-	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+	fn decrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 	/// Sign a piece of data using given crypto key.
 	///
@@ -309,14 +344,14 @@ pub trait Externalities {
 	///
 	/// Returns an error if `key` is not available or does not exist,
 	/// or the expected `CryptoKind` does not match.
-	fn sign(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+	fn sign(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 	/// Verifies that `signature` for `msg` matches given `key`.
 	///
 	/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
 	/// Returns an error in case the key is not available or does not exist or the parameters
 	/// lengths are incorrect or `CryptoKind` does not match.
-	fn verify(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
+	fn verify(&mut self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp;
@@ -431,32 +466,32 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
+	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()> {
 		(&mut **self).new_crypto_key(crypto)
 	}
 
-	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).encrypt(key, kind, data)
+	fn encrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).encrypt(key, data)
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		(& **self).network_state()
 	}
 
-	fn authority_pubkey(&self, key:CryptoKind) -> Result<Vec<u8>, ()> {
-		(&**self).authority_pubkey(key)
+	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()> {
+		(&**self).pubkey(key)
 	}
 
-	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).decrypt(key, kind, data)
+	fn decrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).decrypt(key, data)
 	}
 
-	fn sign(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).sign(key, kind, data)
+	fn sign(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).sign(key, data)
 	}
 
-	fn verify(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		(&mut **self).verify(key, kind, msg, signature)
+	fn verify(&mut self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		(&mut **self).verify(key, msg, signature)
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -535,5 +570,28 @@ mod tests {
 		assert_eq!(t.add(Duration::from_millis(10)), Timestamp(15));
 		assert_eq!(t.sub(Duration::from_millis(10)), Timestamp(0));
 		assert_eq!(t.diff(&Timestamp(3)), Duration(2));
+	}
+
+	#[test]
+	fn crypto_key_to_from_u64() {
+		let key = CryptoKey::AuthorityKey;
+		let uint: u64 = key.clone().into();
+		let key2 = CryptoKey::try_from(uint).unwrap();
+		assert_eq!(key, key2);
+
+		let key = CryptoKey::FgAuthorityKey;
+		let uint: u64 = key.clone().into();
+		let key2 = CryptoKey::try_from(uint).unwrap();
+		assert_eq!(key, key2);
+
+		let key = CryptoKey::LocalKey { id: 0, kind: CryptoKind::Ed25519 };
+		let uint: u64 = key.clone().into();
+		let key2 = CryptoKey::try_from(uint).unwrap();
+		assert_eq!(key, key2);
+
+		let key = CryptoKey::LocalKey { id: 10, kind: CryptoKind::Sr25519 };
+		let uint: u64 = key.clone().into();
+		let key2 = CryptoKey::try_from(uint).unwrap();
+		assert_eq!(key, key2);
 	}
 }
