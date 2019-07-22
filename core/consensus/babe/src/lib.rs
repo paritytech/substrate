@@ -27,7 +27,7 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
@@ -373,10 +373,21 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
-			let cache = find_epoch_digest::<B>(&header)
-				.map(|epoch| vec![(well_known_cache_keys::AUTHORITIES, epoch.encode())])
-				.map(|keys| keys.into_iter().collect())
-				.unwrap_or_default();
+			let cache = match find_epoch_digest::<B>(&header) {
+				Ok(Some(epoch)) => {
+					let mut cache = HashMap::new();
+					cache.insert(well_known_cache_keys::AUTHORITIES, epoch.encode());
+					cache
+				},
+				Ok(None) => Default::default(),
+				Err(err) => {
+					error!(target: "babe", "Error with block built on {:?}: {:?}",
+						parent_hash,
+						err,
+					);
+					Default::default()
+				},
+			};
 
 			let import_block = BlockImportParams::<B> {
 				origin: BlockOrigin::Own,
@@ -429,26 +440,34 @@ macro_rules! babe_err {
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
+	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		if let Some(pre_digest) = log.as_babe_pre_digest() {
-			return Ok(pre_digest);
+		trace!(target: "babe", "Checking log {:?}, looking for pre runtime digest", log);
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime digests, rejecting!"))?,
+			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
 		}
 	}
-
-	Err(babe_err!("No BABE pre-runtime digest found"))
+	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
 }
 
 /// Extract the BABE epoch change digest from the given header, if it exists.
-fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Option<Epoch>
+fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
+	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		if let Some(epoch_digest) = log.as_babe_epoch() {
-			return Some(epoch_digest);
+		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
+		match (log, epoch_digest.is_some()) {
+			(Some(ConsensusLog::NextEpochData(_)), true) => Err(babe_err!("Multiple BABE epoch change digests, rejecting!"))?,
+			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
+			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
 		}
 	}
 
-	return None;
+	Ok(epoch_digest)
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -696,7 +715,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 				// `Consensus` is the Babe-specific authorities change log.
 				// It's an encoded `Epoch`, the same format as is stored in the
 				// cache, so no need to decode/re-encode.
-				let maybe_keys = find_epoch_digest::<B>(&pre_header)
+				let maybe_keys = find_epoch_digest::<B>(&pre_header)?
 					.map(|epoch| vec![(well_known_cache_keys::AUTHORITIES, epoch.encode())]);
 
 				let import_block = BlockImportParams {
