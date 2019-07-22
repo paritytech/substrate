@@ -254,7 +254,7 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 		EpochIndex::put(epoch_index);
 
-		// *Next* epoch’s authorities.
+		// *Next* epoch's authorities.
 		let authorities = queued_validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
@@ -306,7 +306,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(RuntimeString::from("timestamp set in block doesn’t match slot in seal").into())
+			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
 		}
 	}
 }
