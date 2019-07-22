@@ -2266,8 +2266,6 @@ dependencies = [
  "substrate-basic-authorship 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-aura 2.0.0",
- "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",

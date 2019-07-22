@@ -97,7 +97,7 @@ parameter_types! {
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type AccountId = AccountId;

@@ -253,7 +253,7 @@ construct_service_factory! {
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use aura::CompatibleDigestItem;
+	use babe::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
@@ -265,7 +265,7 @@ mod tests {
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
-	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
+	use keyring::{AccountKeyring, Sr25519Keyring};
 	use substrate_service::ServiceFactory;
 	use service_test::SyncService;
 	use crate::service::Factory;
@@ -331,7 +331,7 @@ mod tests {
 	fn test_sync() {
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
-		let alice = Arc::new(AuthorityKeyring::Alice.pair());
+		let alice = Arc::new(Sr25519Keyring::Alice.pair());
 		let mut slot_num = 1u64;
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
@@ -352,7 +352,7 @@ mod tests {
 			});
 
 			let mut digest = Digest::<H256>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num));
+			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::babe_pre_digest(slot_num));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
@@ -366,7 +366,7 @@ mod tests {
 			// add it to a digest item.
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
-			let item = <DigestItem as CompatibleDigestItem<Pair>>::aura_seal(
+			let item = <DigestItem as CompatibleDigestItem<Pair>>::babe_seal(
 				signature,
 			);
 			slot_num += 1;
