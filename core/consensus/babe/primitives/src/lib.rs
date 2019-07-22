@@ -54,20 +54,22 @@ pub type AuthorityIndex = u64;
 pub type SlotNumber = u64;
 
 /// The weight of an authority.
-pub type Weight = u64;
+// NOTE: we use a unique name for the weight to avoid conflicts with other
+//       `Weight` types, since the metadata isn't able to disambiguate.
+pub type BabeWeight = u64;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
-	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, Weight)>,
 	/// The epoch index
 	pub epoch_index: u64,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// The duration of this epoch
 	pub duration: SlotNumber,
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, BabeWeight)>,
 }
 
 /// An consensus log item for BABE.

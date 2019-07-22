@@ -32,7 +32,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -118,7 +118,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, Weight)>;
+		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
