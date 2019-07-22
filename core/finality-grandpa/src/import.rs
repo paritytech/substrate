@@ -27,7 +27,7 @@ use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use client::transaction_builder::TransactionBuilder;
 use consensus_common::{
-	BlockImport, Error as ConsensusError, ImportBlock, ImportResult,
+	BlockImport, BlockImportParams, Error as ConsensusError, ImportResult,
 	JustificationImport, well_known_cache_keys, SelectChain,
 };
 use consensus_accountable_safety::SubmitReport;
@@ -303,7 +303,7 @@ where
 		}
 	}
 
-	fn make_authorities_changes<'a>(&'a self, block: &mut ImportBlock<Block>, hash: Block::Hash)
+	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
 		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
 	{
 		// when we update the authorities, we need to hold the lock
@@ -451,7 +451,7 @@ where
 		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
 
-	fn answer_misbehaviour_reports(&self, block: &mut ImportBlock<Block>, hash: Block::Hash)
+	fn answer_misbehaviour_reports(&self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
 		-> Result<Option<Vec<AuthorityId>>, ConsensusError> {
 		let header = &block.header;
 		let at = BlockId::<Block>::hash(*header.parent_hash());
@@ -613,7 +613,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&mut self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
+	fn import_block(&mut self, mut block: BlockImportParams<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();

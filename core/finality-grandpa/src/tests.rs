@@ -31,7 +31,8 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber, blockchain::{Info, BlockStatus}};
 use consensus_common::{
-	BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult
+	BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, BlockImportParams,
+	ImportResult
 };
 use consensus_common::import_queue::{
 	SharedFinalityProofRequestBuilder,
@@ -1179,7 +1180,7 @@ fn allows_reimporting_change_blocks() {
 
 	let block = || {
 		let block = block.clone();
-		ImportBlock {
+		BlockImportParams {
 			origin: BlockOrigin::File,
 			header: block.header,
 			justification: None,
@@ -1228,7 +1229,7 @@ fn test_bad_justification() {
 
 	let block = || {
 		let block = block.clone();
-		ImportBlock {
+		BlockImportParams {
 			origin: BlockOrigin::File,
 			header: block.header,
 			justification: Some(Vec::new()),

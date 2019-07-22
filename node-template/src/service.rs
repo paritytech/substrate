@@ -43,6 +43,8 @@ construct_simple_protocol! {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		ConsensusPair = Pair,
+		FinalityPair = Pair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,
@@ -66,7 +68,7 @@ construct_service_factory! {
 			},
 		AuthoritySetup = {
 			|service: Self::FullService| {
-				if let Some(key) = service.authority_key::<Pair>() {
+				if let Some(key) = service.authority_key() {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
