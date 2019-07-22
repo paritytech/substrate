@@ -650,18 +650,18 @@ impl<T> ChangeMembers<T> for () {
 }
 
 /// A generic trait for reporting slashing violations.
-pub trait ReportSlash<Misbehaved, Reporter, Hash> {
-	/// Reports slashing for a misconduct where `to_slash` is the misbehaved entities and
-	/// `to_reward` is the entities that detected and reported the misbehavior
+pub trait ReportSlash<Misbehaved, Reporters, Hash> {
+	/// Reports slashing for a misconduct where `to_slash` are the misbehaved entities and
+	/// `to_reward` are the entities that detected and reported the misbehavior
 	///
 	/// Returns `Ok` if the misconduct was unique otherwise `Err`
-	fn slash(to_slash: Misbehaved, to_reward: Reporter, footprint: Hash) -> Result<(), ()>;
+	fn slash(to_slash: Misbehaved, to_reward: Reporters, footprint: Hash) -> Result<(), ()>;
 }
 
 /// A generic trait for enacting slashes.
-pub trait DoSlash<Misbehaved, Reporter, Severity> {
+pub trait DoSlash<Misbehaved, Reporters, Severity> {
 	/// Performs the actual slashing and rewarding based on severity
-	fn do_slash(to_slash: Misbehaved, to_reward: Reporter, severity: Severity) -> Result<(), ()>;
+	fn do_slash(to_slash: Misbehaved, to_reward: Reporters, severity: Severity) -> Result<(), ()>;
 }
 
 /// Trait for representing window length
