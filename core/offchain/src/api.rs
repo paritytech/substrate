@@ -18,7 +18,7 @@ use std::{
 	str::FromStr, 
 	sync::Arc, 
 	convert::{TryFrom, TryInto}, 
-	time::SystemTime,
+	time::{SystemTime, Duration},
 	thread::sleep,
 };
 use client::backend::OffchainStorage;
@@ -27,7 +27,7 @@ use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::{Encode, Decode};
 use primitives::offchain::{
-	Timestamp, Duration,
+	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKey,
@@ -335,9 +335,9 @@ where
 		// Get current timestamp.
 		let now = self.timestamp();
 		// Calculate the diff with the deadline.
-		let diff = deadline.sub(Duration::from_millis(now.unix_millis()));
+		let diff = deadline.diff(&now);
 		// Call thread::sleep for the diff duration.
-		sleep(std::time::Duration::from_millis(diff.unix_millis()));
+		sleep(Duration::from_millis(diff.millis()));
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
@@ -621,15 +621,16 @@ mod tests {
 
 		// Arrange.
 		let now = api.timestamp();
-		let delta = Duration::from_millis(100);
-		let t1 = now.add(delta);
+		let delta = primitives::offchain::Duration::from_millis(100);
+		let deadline = now.add(delta);
 
 		// Act.
-		api.sleep_until(t1);
-		let t2 = api.timestamp();
+		api.sleep_until(deadline);
+		let new_now = api.timestamp();
 		
 		// Assert.
-		assert_eq!(t2.unix_millis() - now.unix_millis(), 100);
+		// The diff could be more than the sleep duration.
+		assert!(new_now.unix_millis() - 100 >= now.unix_millis());
 	}
 
 	#[test]
