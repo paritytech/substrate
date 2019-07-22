@@ -172,15 +172,31 @@ Assuming marshaled size of a balance value is of the constant size we can neglec
 
 **complexity**: up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
 
+## Initialization
+
+Before a call or create can be performed the execution context must be initialized.
+
+For the first call or instantiation in the handling of an extrinsic, this involves two calls:
+
+1. `<timestamp::Module<T>>::now()`
+2. `<system::Module<T>>::block_number()`
+
+The complexity of initialization depends on the complexity of these functions. In the current
+implementation they just involve a DB read.
+
+For subsequent calls and instantiations during contract execution, the initialization requires no
+expensive operations.
+
 ## Call
 
 This function receives input data for the contract execution. The execution consists of the following steps:
 
-1. Checking rent payment.
-2. Loading code from the DB.
-3. `transfer`-ing funds between the caller and the destination account.
-4. Executing the code of the destination account.
-5. Committing overlayed changed to the underlying `AccountDb`.
+1. Initialization of the execution context.
+2. Checking rent payment.
+3. Loading code from the DB.
+4. `transfer`-ing funds between the caller and the destination account.
+5. Executing the code of the destination account.
+6. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
@@ -211,11 +227,12 @@ Finally, all changes are `commit`-ted into the underlying overlay. The complexit
 
 This function takes the code of the constructor and input data. Creation of a contract consists of the following steps:
 
-1. Calling `DetermineContractAddress` hook to determine an address for the contract,
-2. `transfer`-ing funds between self and the newly created contract.
-3. Executing the constructor code. This will yield the final code of the code.
-4. Storing the code for the newly created contract in the overlay.
-5. Committing overlayed changed to the underlying `AccountDb`.
+1. Initialization of the execution context.
+2. Calling `DetermineContractAddress` hook to determine an address for the contract,
+3. `transfer`-ing funds between self and the newly created contract.
+4. Executing the constructor code. This will yield the final code of the code.
+5. Storing the code for the newly created contract in the overlay.
+6. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
@@ -384,3 +401,9 @@ It consists of the following steps:
 
 **complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity. This
 function performs a DB read.
+
+## ext_block_number
+
+This function serializes the current block's number into the scratch buffer.
+
+**complexity**: Assuming that the block number is of constant size, this function has constant complexity.

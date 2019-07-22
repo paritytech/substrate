@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::{IdentityLookup}, testing::Header};
+use primitives::{traits::IdentityLookup, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types, traits::Get};
@@ -77,6 +77,7 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 }
@@ -118,6 +119,11 @@ impl Default for ExtBuilder {
 	}
 }
 impl ExtBuilder {
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+		self.transaction_base_fee = base_fee;
+		self.transaction_byte_fee = byte_fee;
+		self
+	}
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
@@ -129,11 +135,6 @@ impl ExtBuilder {
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
 		self.creation_fee = creation_fee;
-		self
-	}
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
 		self
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
@@ -159,12 +160,22 @@ impl ExtBuilder {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
 		t.extend(GenesisConfig::<Runtime> {
 			balances: if self.monied {
-				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
+				vec![
+					(1, 10 * self.existential_deposit),
+					(2, 20 * self.existential_deposit),
+					(3, 30 * self.existential_deposit),
+					(4, 40 * self.existential_deposit),
+					(12, 10 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},
 			vesting: if self.vesting && self.monied {
-				vec![(1, 0, 10), (2, 10, 20)]
+				vec![
+					(1, 0, 10, 5 * self.existential_deposit),
+					(2, 10, 20, 0),
+					(12, 10, 20, 5 * self.existential_deposit)
+				]
 			} else {
 				vec![]
 			},

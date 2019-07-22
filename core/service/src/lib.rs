@@ -30,7 +30,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use futures::sync::mpsc;
-use futures03::{StreamExt as _, TryStreamExt as _};
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
@@ -38,7 +37,7 @@ use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use network::NetworkState;
+use network::{NetworkState, NetworkStateInfo};
 use log::{info, warn, debug, error};
 use parity_codec::{Encode, Decode};
 use primitives::{Pair, ed25519, crypto};
@@ -294,6 +293,7 @@ impl<Components: components::Components> Service<Components> {
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
+			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -313,6 +313,7 @@ impl<Components: components::Components> Service<Components> {
 							&number,
 							&offchain,
 							&txpool,
+							&network_state_info,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -926,7 +927,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 /// # use client::{self, LongestChain};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
@@ -944,7 +945,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+/// # 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }

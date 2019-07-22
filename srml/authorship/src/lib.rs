@@ -348,6 +348,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 	}
@@ -543,7 +544,6 @@ mod tests {
 			// old uncles can't get in.
 			{
 				assert_eq!(System::block_number(), 8);
-				assert_eq!(<Test as Trait>::UncleGenerations::get(), 5);
 
 				let gen_2 = seal_header(
 					create_header(2, canon_chain.canon_hash(1), [3; 32].into()),
