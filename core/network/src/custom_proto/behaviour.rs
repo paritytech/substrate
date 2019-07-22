@@ -930,6 +930,7 @@ where
 			CustomProtoHandlerOut::ProtocolError { error, .. } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
+				self.peerset.report_peer(source.clone(), i32::min_value());
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}
