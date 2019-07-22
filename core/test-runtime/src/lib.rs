@@ -347,9 +347,7 @@ fn code_using_trie() -> u64 {
 			}
 			iter_pairs.len() as u64
 		} else { 102 }
-	} else {
-		103
-	}
+	} else { 103 }
 }
 
 cfg_if! {

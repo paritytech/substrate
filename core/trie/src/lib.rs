@@ -331,8 +331,8 @@ mod tests {
 
 	fn check_equivalent<T: TrieOps>(input: &Vec<(&[u8], &[u8])>) {
 		{
-			let closed_form = T::trie_root::<_, _, _>(input.clone());
-			let d = T::trie_root_unhashed::<_, _, _>(input.clone());
+			let closed_form = T::trie_root(input.clone());
+			let d = T::trie_root_unhashed(input.clone());
 			println!("Data: {:#x?}, {:#x?}", d, Blake2Hasher::hash(&d[..]));
 			let persistent = {
 				let mut memdb = MemoryDB::default();
