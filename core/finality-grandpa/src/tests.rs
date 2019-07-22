@@ -379,46 +379,31 @@ impl GrandpaApi<Block> for RuntimeApi {
 		Ok(NativeOrEncoded::Native(vec![]))
 	}
 
-	fn GrandpaApi_grandpa_prevote_challenge_runtime_api_impl(
+	fn GrandpaApi_grandpa_challenges_runtime_api_impl(
 		&self,
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<&DigestFor<Block>>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>>>>> {
+	) -> Result<NativeOrEncoded<Option<Vec<Challenge<Block>>>>> {
 		Ok(NativeOrEncoded::Native(None))
 	}
 
-
-	fn GrandpaApi_grandpa_precommit_challenge_runtime_api_impl(
+	fn GrandpaApi_construct_equivocation_report_call_runtime_api_impl(
 		&self,
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<&DigestFor<Block>>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>>>>> {
-		Ok(NativeOrEncoded::Native(None))
-	}
-
-	fn GrandpaApi_construct_report_unjustified_prevotes_call_runtime_api_impl(
-		&self,
-		_at: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<Challenge<
-			<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Prevote<Block>
-		>>,
+		_: Option<Challenge<Block>>,
 		_: Vec<u8>,
 	) ->  Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))
 	}
 
-	fn GrandpaApi_construct_report_unjustified_precommits_call_runtime_api_impl(
+	fn GrandpaApi_construct_rejecting_set_call_runtime_api_impl(
 		&self,
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<Challenge<
-			<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, AuthoritySignature, AuthorityId, Precommit<Block>
-		>>,
+		_: Option<Challenge<Block>>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<u8>>> {
 		Ok(NativeOrEncoded::Native(vec![]))

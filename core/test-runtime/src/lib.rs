@@ -515,44 +515,19 @@ cfg_if! {
 					unimplemented!()
 				}
 
-				fn grandpa_prevote_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>>> {
-					unimplemented!()
-				}
-		
-				fn grandpa_precommit_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>>> {
+				fn grandpa_challenges(digest: &DigestFor<Block>) 
+				-> Option<Challenge<Block>> {
 					unimplemented!()
 				}
 
-				fn construct_prevote_equivocation_report_call(
-					_proof: GrandpaEquivocationProof<
-						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
+				fn construct_equivocation_report_call(
+					_proof: GrandpaEquivocation<Block>
 				) -> Vec<u8> {
 					vec![]
 				}
 		
-				fn construct_precommit_equivocation_report_call(
-					_proof: GrandpaEquivocationProof<
-						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
-				) -> Vec<u8> {
-					vec![]
-				}
-
-				fn construct_report_unjustified_prevotes_call(
-					_proof: Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
-				) -> Vec<u8> {
-					vec![]
-				}
-
-				fn construct_report_unjustified_precommits_call(
-					_proof: Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
+				fn construct_rejecting_set_report_call(
+					_proof: GrandpaEquivocation<Block>
 				) -> Vec<u8> {
 					vec![]
 				}
@@ -690,7 +665,11 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					_proof: AuraEquivocationProof<<Block as BlockT>::Header, sr25519::Signature>
+					_proof: AuraEquivocationProof<
+						<Block as BlockT>::Header,
+						sr25519::Signature,
+						sr25519::Public
+					>
 				) -> Vec<u8> {
 					vec![]
 				}
@@ -723,49 +702,20 @@ cfg_if! {
 					unimplemented!()
 				}
 		
-				fn construct_prevote_equivocation_report_call(
-					_proof: GrandpaEquivocationProof<
-						PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
-				) -> Vec<u8> {
-					vec![]
-				}
-		
-				fn construct_precommit_equivocation_report_call(
-					_proof: GrandpaEquivocationProof<
-						PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
+				fn construct_equivocation_report_call(
+					_proof: GrandpaEquivocation<Block>
 				) -> Vec<u8> {
 					vec![]
 				}
 
-				fn construct_report_unjustified_prevotes_call(
-					_proof: Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
+				fn construct_rejecting_set_call(
+					_proof: Challenge<Block>
 				) -> Vec<u8> {
 					vec![]
 				}
 
-				fn construct_report_unjustified_precommits_call(
-					_proof: Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
-					>
-				) -> Vec<u8> {
-					vec![]
-				}
-
-				fn grandpa_prevote_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Prevote<<Block as BlockT>::Hash, NumberFor<Block>>
-					>> {
-					unimplemented!()
-				}
-
-				fn grandpa_precommit_challenge(digest: &DigestFor<Block>) 
-				-> Option<Challenge<
-						<Block as BlockT>::Hash, NumberFor<Block>, <Block as BlockT>::Header, GrandpaAuthoritySignature, GrandpaAuthorityId, Precommit<<Block as BlockT>::Hash, NumberFor<Block>>
-					>> {
+				fn grandpa_challenges(digest: &DigestFor<Block>) 
+				-> Option<Challenge<Block>> {
 					unimplemented!()
 				}
 			}
