@@ -163,7 +163,7 @@ impl TestNetFactory for BabeTestNet {
 
 #[test]
 fn can_serialize_block() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
 }
 
@@ -182,7 +182,7 @@ fn rejects_empty_block() {
 }
 
 fn run_one_test() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	debug!(target: "babe", "checkpoint 1");
 	let net = BabeTestNet::new(3);
 	debug!(target: "babe", "checkpoint 2");
@@ -237,12 +237,10 @@ fn run_one_test() {
 	debug!(target: "babe", "checkpoint 5");
 
 	// wait for all finalized on each.
-	let wait_for = futures::future::join_all(import_notifications)
-		.map(drop)
-		.map_err(drop);
+	let wait_for = futures::future::join_all(import_notifications);
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-	drop(runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap())
+	runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
 }
 
 #[test]
@@ -279,7 +277,7 @@ fn rejects_missing_consensus_digests() {
 
 #[test]
 fn wrong_consensus_engine_id_rejected() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	let sig = sr25519::Pair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
@@ -288,14 +286,14 @@ fn wrong_consensus_engine_id_rejected() {
 
 #[test]
 fn malformed_pre_digest_rejected() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 }
 
 #[test]
 fn sig_is_not_pre_digest() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	let sig = sr25519::Pair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
@@ -304,7 +302,7 @@ fn sig_is_not_pre_digest() {
 
 #[test]
 fn can_author_block() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	let randomness = &[];
 	let (pair, _) = sr25519::Pair::generate();
 	let mut i = 0;
@@ -327,7 +325,7 @@ fn can_author_block() {
 
 #[test]
 fn authorities_call_works() {
-	drop(env_logger::try_init());
+	let _ = env_logger::try_init();
 	let client = test_client::new();
 
 	assert_eq!(client.info().chain.best_number, 0);
