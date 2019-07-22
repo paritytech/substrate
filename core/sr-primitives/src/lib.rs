@@ -170,7 +170,7 @@ pub type ConsensusEngineId = [u8; 4];
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-pub struct Permill(pub u32);
+pub struct Permill(u32);
 
 impl Permill {
 	/// Nothing.
@@ -181,6 +181,11 @@ impl Permill {
 
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000) }
+
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000] [(parts > 1_000_000) as usize])
+	}
 
 	/// From an explicitly defined number of parts per maximum of the type.
 	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
@@ -274,7 +279,7 @@ impl From<codec::Compact<Permill>> for Permill {
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub struct Perbill(pub u32);
+pub struct Perbill(u32);
 
 impl Perbill {
 	/// Nothing.
@@ -285,6 +290,11 @@ impl Perbill {
 
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000_000) }
+
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000_000] [(parts > 1_000_000_000) as usize])
+	}
 
 	/// From an explicitly defined number of parts per maximum of the type.
 	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
@@ -383,7 +393,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 /// cannot hold a value larger than +-`9223372036854775807 / 1_000_000_000` (~9 billion).
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Fixed64(pub i64);
+pub struct Fixed64(i64);
 
 /// The maximum value of the `Fixed64` type
 const DIV: i64 = 1_000_000_000;
@@ -411,13 +421,17 @@ impl Fixed64 {
 
 	/// Performs a saturated multiply and accumulate.
 	///
-	/// Returns `n + (self * n)`.
-	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
+	/// Returns a saturated `n + (self * n)`.
+	pub fn saturated_multiply_accumulate<N>(&self, int: N) -> N
+		where N: Copy + Clone + From<u32> + Saturating + Bounded + UniqueSaturatedInto<u32>
+		+ From<Fixed64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N>
+		+ ops::Add<N, Output=N>,
+	{
 		let parts = self.0;
-
 		let positive = parts > 0;
+
 		// natural parts might overflow.
-		let natural_parts = self.clone().saturated_into::<u32>();
+		let natural_parts = self.clone().saturated_into::<N>();
 		// fractional parts can always fit into u32.
 		let perbill_parts = (parts.abs() % DIV) as u32;
 
@@ -439,13 +453,21 @@ impl Fixed64 {
 	}
 }
 
-impl UniqueSaturatedInto<u32> for Fixed64 {
-	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
-	/// expected to be lossy.
-	fn unique_saturated_into(self) -> u32 {
-		(self.0.abs() / DIV).try_into().unwrap_or(Bounded::max_value())
+macro_rules! impl_from_for_unsigned {
+	( $($type:ty),+ ) => {
+		$(
+			impl From<Fixed64> for $type {
+				fn from(t: Fixed64) -> Self {
+					// Note that such implementation with `max(0)` only makes sense for unsigned
+					// numbers.
+					(t.0.max(0) / DIV).try_into().unwrap_or(Bounded::max_value())
+				}
+			}
+		)*
 	}
 }
+
+impl_from_for_unsigned!(u16, u32, u64, u128);
 
 impl Saturating for Fixed64 {
 	fn saturating_add(self, rhs: Self) -> Self {

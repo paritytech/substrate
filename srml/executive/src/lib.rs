@@ -358,6 +358,8 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::generic::Era;
+	use primitives::Perbill;
+	use primitives::weights::Weight;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
@@ -383,6 +385,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -397,6 +400,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type WeightMultiplierUpdate = ();
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
@@ -562,9 +566,8 @@ mod tests {
 		// given: TestXt uses the encoded len as fixed Len:
 		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
 		let encoded = xt.encode();
-		let encoded_len = encoded.len() as u32;
-		// TODO: this should be fetched from the test system once the ratio is exposed as a const.
-		let limit = <MaximumBlockWeight as Get<u32>>::get() * 3 / 4;
+		let encoded_len = encoded.len() as Weight;
+		let limit = <AvailableBlockRatio as Get<Perbill>>::get() * <MaximumBlockWeight as Get<Weight>>::get();
 		let num_to_exhaust_block = limit / encoded_len;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
@@ -582,7 +585,7 @@ mod tests {
 				if nonce != num_to_exhaust_block {
 					assert_eq!(res.unwrap(), ApplyOutcome::Success);
 					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
 					assert_eq!(res, Err(ApplyError::FullBlock));
 				}
@@ -606,7 +609,7 @@ mod tests {
 			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!( <system::Module<Runtime>>::all_extrinsics_weight(), 3 * len);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len).into());
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();

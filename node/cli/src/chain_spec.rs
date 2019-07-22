@@ -22,8 +22,9 @@ use node_runtime::{
 	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig,
 	CouncilConfig, AuraConfig,  ImOnlineConfig, IndicesConfig, SessionConfig, StakingConfig,
 	SudoConfig,	TechnicalCommitteeConfig, SystemConfig, WASM_BINARY, Perbill, SessionKeys,
-	StakerStatus, DAYS, DOLLARS, MILLICENTS,
+	StakerStatus,
 };
+use node_runtime::constants::{time::*, currency::*};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;

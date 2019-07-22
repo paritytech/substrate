@@ -330,7 +330,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use runtime_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -342,6 +342,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -356,6 +357,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {

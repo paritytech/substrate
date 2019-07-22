@@ -22,7 +22,7 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
 };
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -57,10 +57,13 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
-/// Implementations for `Convert` and other helper structs passed into runtime modules as associated
-/// types.
+/// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author};
+
+/// Constant values used within the runtime.
+pub mod constants;
+use constants::{time::*, currency::*};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -89,19 +92,7 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
-pub const MILLICENTS: Balance = 1_000_000_000;
-pub const CENTS: Balance = 1_000 * MILLICENTS;    // assume this is worth about a cent.
-pub const DOLLARS: Balance = 100 * CENTS;
-
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
-
-pub struct Author;
-
-impl OnUnbalanced<NegativeImbalance> for Author {
-	fn on_unbalanced(amount: NegativeImbalance) {
-		Balances::resolve_creating(&Authorship::author(), amount);
-	}
-}
 
 pub type DealWithFees = SplitTwoWays<
 	Balance,
@@ -110,14 +101,10 @@ pub type DealWithFees = SplitTwoWays<
 	_1, Author,     // 1 part (20%) goes to the block author.
 >;
 
-pub const SECS_PER_BLOCK: Moment = 6;
-pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
-pub const HOURS: Moment = MINUTES * 60;
-pub const DAYS: Moment = HOURS * 24;
-
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MaximumBlockWeight: Weight = 1_000_000_000;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 }
 
@@ -134,6 +121,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 }
 

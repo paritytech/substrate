@@ -767,6 +767,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type MaximumBlockLength = T::MaximumBlockLength;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
@@ -1185,7 +1186,8 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 
 		// weight fee
 		let weight = info.weight;
-		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier().apply_to(weight).into();
+		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier()
+			.apply_to(weight).saturated_into();
 
 		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}

@@ -24,7 +24,7 @@ use crate::traits::{
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
-use crate::weights::{GetDispatchInfo, DispatchInfo};
+use crate::weights::{GetDispatchInfo, DispatchInfo, Weight};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
@@ -282,7 +282,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: self.encode().len() as u32,
+			weight: self.encode().len() as Weight,
 			..Default::default()
 		}
 	}

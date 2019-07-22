@@ -399,7 +399,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
+		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
 	use crate as collective;
 
@@ -407,6 +407,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -421,6 +422,7 @@ mod tests {
 		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	impl Trait<Instance1> for Test {

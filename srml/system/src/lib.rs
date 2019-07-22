@@ -204,6 +204,12 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
+
+	/// The portion of the block that is available to normal transaction. The rest can only be used
+	/// by operational transactions. This can be applied to any resource limit managed by the system
+	/// module, including weight and length.
+	type AvailableBlockRatio: Get<Perbill>;
+
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -812,7 +818,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		match class {
 			DispatchClass::Operational => Perbill::one(),
 			// TODO: this must be some sort of a constant.
-			DispatchClass::Normal => Perbill::from_percent(75),
+			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}
 
@@ -1050,7 +1056,8 @@ mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
 		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+		pub const MaximumBlockLength: u32 = 1024;
 	}
 
 	impl Trait for Test {
@@ -1066,6 +1073,7 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 
@@ -1082,6 +1090,14 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+	}
+
+	fn normal_weight_limit() -> Weight {
+		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockWeight::get()
+	}
+
+	fn normal_length_limit() -> u32 {
+		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockLength::get()
 	}
 
 	#[test]
@@ -1239,7 +1255,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_works_normal_tx() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal_limit = <MaximumBlockWeight as Get<Weight>>::get() *  3 / 4;
+			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
 			let medium = DispatchInfo {
 				weight: normal_limit - 1,
@@ -1281,7 +1297,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
 			let len = 0_usize;
-			let normal_limit = <MaximumBlockWeight as Get<Weight>>::get() *  3 / 4;
+			let normal_limit = normal_weight_limit();
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, max, len);
@@ -1296,7 +1312,7 @@ mod tests {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
-			let normal_limit = <MaximumBlockWeight as Get<Weight>>::get() *  3 / 4;
+			let normal_limit = normal_weight_limit();
 
 			// given almost full block
 			AllExtrinsicsWeight::put(normal_limit);
@@ -1307,7 +1323,7 @@ mod tests {
 
 			// likewise for length limit.
 			let len = 100_usize;
-			AllExtrinsicsLen::put(<MaximumBlockLength as Get<Weight>>::get() * 3 / 4);
+			AllExtrinsicsLen::put(normal_length_limit());
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, normal, len).is_err());
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, op, len).is_ok());
 		})
@@ -1334,17 +1350,24 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_block_size_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let tx = DispatchInfo::default();
-			let normal_limit = (<MaximumBlockLength as Get<Weight>>::get() * 3 / 4) as usize;
-			let reset_check_weight = |s, f| {
+			let normal = DispatchInfo::default();
+			let normal_limit = normal_weight_limit() as usize;
+			let reset_check_weight = |tx, s, f| {
 				AllExtrinsicsLen::put(0);
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, tx, s);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
-			reset_check_weight(normal_limit - 1, false);
-			reset_check_weight(normal_limit, false);
-			reset_check_weight(normal_limit + 1, true);
+			reset_check_weight(normal, normal_limit - 1, false);
+			reset_check_weight(normal, normal_limit, false);
+			reset_check_weight(normal, normal_limit + 1, true);
+
+			// Operational ones don't have this limit.
+			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational };
+			reset_check_weight(op, normal_limit, false);
+			reset_check_weight(op, normal_limit + 100, false);
+			reset_check_weight(op, 1024, false);
+			reset_check_weight(op, 1025, true);
 		})
 	}
 

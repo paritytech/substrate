@@ -49,17 +49,17 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, GetDispatchInfo, WeighData};
+	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, GetDispatchInfo, WeighData, Weight};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CreationFee,
-		CENTS, DOLLARS, MILLICENTS, SignedExtra, TransactionBaseFee, TransactionByteFee,
-		MaximumBlockWeight,
+		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CreationFee, SignedExtra,
+		TransactionBaseFee, TransactionByteFee, MaximumBlockWeight,
 	};
+	use node_runtime::constants::currency::*;
 	use wabt;
 	use primitives::map;
 
@@ -94,8 +94,8 @@ mod tests {
 		length_fee + weight_fee
 	}
 
-	fn multiplier_target() -> u32 {
-		<MaximumBlockWeight as Get<u32>>::get() / 4
+	fn multiplier_target() -> Weight {
+		<MaximumBlockWeight as Get<Weight>>::get() / 4
 	}
 
 	fn creation_fee() -> Balance {

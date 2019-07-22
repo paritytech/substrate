@@ -30,7 +30,7 @@ pub use crate::transaction_validity::TransactionPriority;
 use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+pub type Weight = u64;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).

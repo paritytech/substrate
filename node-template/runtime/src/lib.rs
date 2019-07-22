@@ -103,6 +103,7 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MaximumBlockWeight: Weight = 1_000_000_000;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 }
 
@@ -131,6 +132,8 @@ impl system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
 	type MaximumBlockWeight = MaximumBlockWeight;
+	/// Portion of the block weight that is available to all normal transactions.
+	type AvailableBlockRatio = AvailableBlockRatio;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
 }

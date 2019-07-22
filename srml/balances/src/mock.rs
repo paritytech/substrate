@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::Header, weights::{DispatchInfo, Weight}};
+use primitives::{Perbill, traits::IdentityLookup, testing::Header, weights::{DispatchInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
@@ -70,6 +70,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -84,6 +85,7 @@ impl system::Trait for Runtime {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 }
 impl Trait for Runtime {
