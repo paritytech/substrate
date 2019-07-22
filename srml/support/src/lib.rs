@@ -302,8 +302,8 @@ mod tests {
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			// initialized during genesis TODO EMCH restore when genesis child init fixed
-			//assert_eq!(Map::get(&15u32), 42u64);
+			// initialized during genesis
+			assert_eq!(Map::get(&15u32), 42u64);
 
 			// get / insert / take
 			let key = 17u32;
@@ -328,8 +328,6 @@ mod tests {
 	#[test]
 	fn linked_map_enumeration_and_head_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Map::head(), None);
-			Map::insert(15u32, 42u64);
 			assert_eq!(Map::head(), Some(15));
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
 			// insert / remove
@@ -384,7 +382,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			type DoubleMap = DataDM;
 			// initialized during genesis
-			//assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
 			let key1 = 17u32;
