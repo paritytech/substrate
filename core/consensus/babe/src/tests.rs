@@ -171,7 +171,6 @@ fn can_serialize_block() {
 #[should_panic]
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
-	debug!(target: "babe", "checkpoint 1");
 	let mut net = BabeTestNet::new(3);
 	let block_builder = |builder: BlockBuilder<_, _>| {
 		builder.bake().unwrap()
@@ -183,11 +182,7 @@ fn rejects_empty_block() {
 
 fn run_one_test() {
 	let _ = env_logger::try_init();
-	debug!(target: "babe", "checkpoint 1");
 	let net = BabeTestNet::new(3);
-	debug!(target: "babe", "checkpoint 2");
-
-	debug!(target: "babe", "checkpoint 3");
 
 	let peers = &[
 		(0, Keyring::Alice),
@@ -197,7 +192,6 @@ fn run_one_test() {
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	debug!(target: "babe", "checkpoint 4");
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	for (peer_id, key) in peers {
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
@@ -205,7 +199,7 @@ fn run_one_test() {
 		import_notifications.push(
 			client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
-				.take_while(|n| Ok(n.header.number() < &1000))
+				.take_while(|n| Ok(n.header.number() < &5))
 				.for_each(move |_| Ok(()))
 		);
 
@@ -234,13 +228,12 @@ fn run_one_test() {
 			time_source: Default::default(),
 		}).expect("Starts babe"));
 	}
-	debug!(target: "babe", "checkpoint 5");
 
 	// wait for all finalized on each.
 	let wait_for = futures::future::join_all(import_notifications);
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]
@@ -251,7 +244,9 @@ fn authoring_blocks() { run_one_test() }
 fn rejects_missing_inherent_digest() {
 	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
-		header.digest_mut().logs = v.into_iter().filter(|v| v.as_babe_pre_digest().is_none()).collect()
+		header.digest_mut().logs = v.into_iter()
+			.filter(|v| v.as_babe_pre_digest().is_none())
+			.collect()
 	}));
 	run_one_test()
 }
@@ -260,7 +255,10 @@ fn rejects_missing_inherent_digest() {
 #[should_panic]
 fn rejects_missing_seals() {
 	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
-		header.digest_mut().pop();
+		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		header.digest_mut().logs = v.into_iter()
+			.filter(|v| v.as_babe_seal().is_none())
+			.collect()
 	}));
 	run_one_test()
 }
