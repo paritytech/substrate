@@ -44,15 +44,15 @@ pub type Balance = u128;
 /// Type used for expressing timestamp.
 pub type Moment = u64;
 
-/// The aura crypto scheme defined via the keypair type.
+/// The Babe crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
-pub type AuraPair = primitives::ed25519::Pair;
+pub type BabePair = primitives::sr25519::Pair;
 
-/// Identity of an Aura authority.
-pub type AuraId = primitives::ed25519::Public;
+/// Identity of a Babe authority.
+pub type BabeId = primitives::sr25519::Public;
 
-/// Signature for an Aura authority.
-pub type AuraSignature = primitives::ed25519::Signature;
+/// Signature for a Babe authority.
+pub type BabeSignature = primitives::sr25519::Signature;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;
