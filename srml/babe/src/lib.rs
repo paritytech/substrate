@@ -114,13 +114,19 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		NextRandomness: [u8; RANDOMNESS_LENGTH];
+		/// Current epoch index.
+		pub EpochIndex get(epoch_index): u64;
 
-		/// Randomness under construction
-		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
-
-		/// Current epoch
+		/// Current epoch authorities.
 		pub Authorities get(authorities) config(): Vec<(AuthorityId, Weight)>;
+
+		/// Slot at which the current epoch started. It is possible that no
+		/// block was authored at the given slot and the epoch change was
+		/// signalled later than this.
+		pub EpochStartSlot get(epoch_start_slot): u64;
+
+		/// Current slot number.
+		pub CurrentSlot get(current_slot): u64;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -134,8 +140,11 @@ decl_storage! {
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
 		pub Randomness get(randomness): [u8; RANDOMNESS_LENGTH];
 
-		/// Current epoch index
-		EpochIndex: u64;
+		/// Next epoch randomness.
+		NextRandomness: [u8; RANDOMNESS_LENGTH];
+
+		/// Randomness under construction.
+		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
 	}
 }
 
@@ -144,7 +153,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Initialization
 		fn on_initialize() {
-			for i in Self::get_inherent_digests()
+			for digest in Self::get_inherent_digests()
 				.logs
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
@@ -152,9 +161,15 @@ decl_module! {
 					RawBabePreDigest::decode(&mut data)
 				} else {
 					None
-				}) {
+				})
+			{
+				if EpochStartSlot::get() == 0 {
+					EpochStartSlot::put(digest.slot_number);
+				}
 
-				Self::deposit_vrf_output(&i.vrf_output);
+				CurrentSlot::put(digest.slot_number);
+				Self::deposit_vrf_output(&digest.vrf_output);
+
 				return;
 			}
 		}
@@ -265,6 +280,9 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 
 		// What was the next epoch is now the current epoch
 		let randomness = Self::randomness_change_epoch(epoch_index);
+
+		EpochStartSlot::mutate(|previous| *previous += T::babe_epoch_duration());
+
 		Self::change_epoch(Epoch {
 			randomness,
 			authorities,
@@ -307,6 +325,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
 		let seal_slot = data.babe_inherent_data()?;
+
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
