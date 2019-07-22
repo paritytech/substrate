@@ -23,7 +23,7 @@ use rstd::vec::Vec;
 use crate::trie_constants;
 use crate::node_header::{NodeKind, s_size_and_prefix_iter};
 use crate::node_codec::BitMap16;
-use trie_db::ChildBitmap;
+use trie_db::BitMap;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -128,7 +128,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 
 fn branch_node_buf<BM, I>(has_value: bool, has_children: I, dest: &mut[u8]) 
 	where
-		BM: ChildBitmap,
+		BM: BitMap,
 		I: Iterator<Item = bool>,
 {
 	let first = if has_value {

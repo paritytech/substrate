@@ -21,12 +21,11 @@ use rstd::vec::Vec;
 use rstd::borrow::Borrow;
 use codec::{Encode, Decode, Compact};
 use hash_db::Hasher;
-use trie_db::{self, NibbleSlice, node::Node, ChildReference, ChildBitmap,
+use trie_db::{self, NibbleSlice, node::Node, ChildReference, BitMap,
 	NibbleOps, Partial, NodeCodec as NodeCodecT, ChildSliceIx};
 use crate::error::Error;
 use crate::trie_constants;
 use super::{node_header::{NodeHeader, NodeKind}};
-
 
 fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
 	if input.len() < count {
@@ -39,12 +38,12 @@ fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
 
 /// Concrete implementation of a `NodeCodec` with Parity Codec encoding, generic over the `Hasher`
 #[derive(Default, Clone)]
-pub struct NodeCodec<H, N, BM>(PhantomData<(H,N,BM)>);
+pub struct NodeCodec<H, N, BM>(PhantomData<(H, N, BM)>);
 
 impl<
 	H: Hasher,
 	N: NibbleOps,
-	BM: ChildBitmap<Error = Error>
+	BM: BitMap<Error = Error>
 > NodeCodecT<H, N> for NodeCodec<H, N, BM> {
 	type Error = Error;
 
@@ -65,8 +64,7 @@ impl<
 				}
 				let nibble_data = take(input, (nibble_count + (N::NIBBLE_PER_BYTE - 1)) / N::NIBBLE_PER_BYTE)
 					.ok_or(Error::BadFormat)?;
-				let nibble_slice = NibbleSlice::new_offset(nibble_data,
-					N::nb_padding(nibble_count));
+				let nibble_slice = NibbleSlice::new_offset(nibble_data, N::nb_padding(nibble_count));
 				let bm_slice = take(input, BM::ENCODED_LEN).ok_or(Error::BadFormat)?;
 				let bitmap = BM::decode(&bm_slice[..])?;
 				let value = if has_value {
@@ -123,7 +121,7 @@ impl<
 	}
 
 	fn leaf_node(partial: Partial, value: &[u8]) -> Vec<u8> {
-		let mut output = partial_enc::<N>(partial, NodeKind::Leaf);
+		let mut output = partial_encode::<N>(partial, NodeKind::Leaf);
 		value.encode_to(&mut output);
 		output
 	}
@@ -138,7 +136,8 @@ impl<
 
 	fn branch_node(
 		_children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
-		_maybe_value: Option<&[u8]>) -> Vec<u8> {
+		_maybe_value: Option<&[u8]>,
+	) -> Vec<u8> {
 		unreachable!()
 	}
 
@@ -146,11 +145,12 @@ impl<
 		partial: impl Iterator<Item = u8>,
 		nb_nibble: usize,
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
-		maybe_value: Option<&[u8]>) -> Vec<u8> {
+		maybe_value: Option<&[u8]>,
+	) -> Vec<u8> {
 		let mut output = if maybe_value.is_some() {
-			partial_enc_it::<N,_>(partial, nb_nibble, NodeKind::BranchWithValue)
+			partial_from_iterator_encode::<N,_>(partial, nb_nibble, NodeKind::BranchWithValue)
 		} else {
-			partial_enc_it::<N,_>(partial, nb_nibble, NodeKind::BranchNoValue)
+			partial_from_iterator_encode::<N,_>(partial, nb_nibble, NodeKind::BranchNoValue)
 		};
 		let bm_ix = output.len();
 		let mut bm: BM::Buff = Default::default();
@@ -179,7 +179,7 @@ impl<
 
 /// Encode and allocate node type header (type and size), and partial value.
 /// It uses an iterator over encoded partial bytes as input.
-fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(
+fn partial_from_iterator_encode<N: NibbleOps, I: Iterator<Item = u8>>(
 	partial: I,
 	nibble_count: usize,
 	node_kind: NodeKind,
@@ -197,8 +197,8 @@ fn partial_enc_it<N: NibbleOps, I: Iterator<Item = u8>>(
 }
 
 /// Encode and allocate node type header (type and size), and partial value.
-/// Same as `partial_enc_it` but uses non encoded `Partial` as input.
-fn partial_enc<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
+/// Same as `partial_from_iterator_encode` but uses non encoded `Partial` as input.
+fn partial_encode<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 	let nb_nibble_hpe = (partial.0).0 as usize;
 	let nibble_count = partial.1.len() * N::NIBBLE_PER_BYTE + nb_nibble_hpe;
 
@@ -223,10 +223,10 @@ fn partial_enc<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 /// a compact bitmap encoding representation.
 pub struct BitMap16(u16);
 
-impl ChildBitmap for BitMap16 {
+impl BitMap for BitMap16 {
 	const ENCODED_LEN: usize = 2;
 	type Error = Error;
-	type Buff = [u8;3]; // need a byte for header
+	type Buff = [u8; 3]; // need an additional byte for header
 
 	fn decode(data: &[u8]) -> Result<Self, Self::Error> {
 		u16::decode(&mut &data[..])
