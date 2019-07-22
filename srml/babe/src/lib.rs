@@ -206,6 +206,13 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	}
 }
 
+impl<T: Trait + Duration> session::ShouldEndSession<T::BlockNumber> for Module<T> {
+	fn should_end_session(_: T::BlockNumber) -> bool {
+		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
+		 diff >= T::babe_epoch_duration()
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
