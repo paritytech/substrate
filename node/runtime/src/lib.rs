@@ -530,17 +530,17 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_babe::BabeApi<Block> for Runtime {
-		fn startup_data() -> consensus_babe::BabeConfiguration {
-			consensus_babe::BabeConfiguration {
+	impl babe_primitives::BabeApi<Block> for Runtime {
+		fn startup_data() -> babe_primitives::BabeConfiguration {
+			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
 				threshold: core::u64::MAX,
 			}
 		}
 
-		fn epoch() -> consensus_babe::Epoch {
-			consensus_babe::Epoch {
+		fn epoch() -> babe_primitives::Epoch {
+			babe_primitives::Epoch {
 				start_slot: Babe::epoch_start_slot(),
 				authorities: Babe::authorities(),
 				epoch_index: Babe::epoch_index(),

@@ -50,11 +50,10 @@ use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-pub use consensus_babe::AuthorityId;
+
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub use babe_primitives::AuthorityId;
 pub type AuraId = AuthorityId;
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub type BabeId = AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -522,23 +521,23 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
+			impl babe_primitives::BabeApi<Block> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 3,
 						threshold: core::u64::MAX,
 					}
 				}
-				fn epoch() -> consensus_babe::Epoch {
+				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-					consensus_babe::Epoch {
+					babe_primitives::Epoch {
 						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
@@ -676,24 +675,24 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
+			impl babe_primitives::BabeApi<Block> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 1,
 						threshold: core::u64::MAX,
 					}
 				}
 
-				fn epoch() -> consensus_babe::Epoch {
+				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-					consensus_babe::Epoch {
+					babe_primitives::Epoch {
 						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),

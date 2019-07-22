@@ -25,7 +25,7 @@ substrate-service = { path = "../../core/service" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe" }
-babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }

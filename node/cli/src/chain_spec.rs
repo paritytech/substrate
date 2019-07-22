@@ -16,8 +16,9 @@
 
 //! Substrate chain configurations.
 
+use babe_primitives::AuthorityId as BabeId;
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::{AccountId, BabeId, Balance};
+use node_primitives::{AccountId, Balance};
 use node_runtime::{
 	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,

@@ -24,16 +24,21 @@ mod digest;
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519::Public;
+use substrate_primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
+/// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
+/// the main Babe module. If that ever changes, then this must, too.
+#[cfg(feature = "std")]
+pub type AuthorityPair = sr25519::Pair;
+
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = Public;
+pub type AuthorityId = sr25519::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
