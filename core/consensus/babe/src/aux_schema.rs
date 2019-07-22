@@ -45,7 +45,7 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let epoch_changes = load_decode::<_, EpochChanges<Block>>(backend, BABE_EPOCH_CHANGES)?
 		.map(Into::into)
 		.unwrap_or_else(|| {
-			info!(target: "afg",
+			info!(target: "babe",
 				"Creating empty BABE epoch changes on what appears to be first startup."
 			);
 			SharedEpochChanges::new()
