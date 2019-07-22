@@ -154,7 +154,9 @@ decl_module! {
 				} else {
 					None
 				}) {
-				return Self::deposit_vrf_output(&i.vrf_output)
+
+				Self::deposit_vrf_output(&i.vrf_output);
+				return;
 			}
 		}
 	}
