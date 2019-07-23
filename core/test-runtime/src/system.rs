@@ -113,9 +113,9 @@ fn execute_block_with_state_root_handler(
 
 	let o_new_authorities = <NewAuthorities>::take();
 
-	// need symetric removal of finalize for roots to match
+	// symetric removal of finalize for roots to match not putting parent hash as it
+	// seems to touch the state (required key value).
 	<Number>::kill();
-	<ParentHash>::kill();
 	<StorageDigest>::kill();
 	<NewAuthorities>::kill();
 
@@ -322,20 +322,20 @@ mod tests {
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, map};
 	use substrate_executor::WasmExecutor;
-// TODO EMCH path to child function in wellknowkey (see chils_sorage or deps on balance for test
+
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
 			AuthorityKeyring::Alice.to_raw_public(),
 			AuthorityKeyring::Bob.to_raw_public(),
 			AuthorityKeyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new(map![
+		TestExternalities::new((map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 			}
-		], map![])
+		], map![]))
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {

@@ -172,7 +172,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				69_u128.encode()
 			},
@@ -185,7 +185,7 @@ mod tests {
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
 			}
-		], map![]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -208,7 +208,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				69_u128.encode()
 			},
@@ -221,7 +221,7 @@ mod tests {
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
 			}
-		], map![]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -244,7 +244,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -253,7 +253,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		], map![]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -280,7 +280,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -289,7 +289,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		], map![]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -844,7 +844,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				0_u128.encode()
 			},
@@ -853,7 +853,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		], map![]);
+		], map![]));
 
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
@@ -866,7 +866,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -875,7 +875,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		], map![]);
+		], map![]));
 
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));

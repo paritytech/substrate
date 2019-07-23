@@ -229,7 +229,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 					.collect();
 				let children = storage.1.into_iter()
 					.map(|(sk, child)| (
-							StorageKey(sk), 
+							StorageKey(sk),
 							child.into_iter()
 								.map(|(k, v)| (StorageKey(k), StorageData(v)))
 								.collect(),
