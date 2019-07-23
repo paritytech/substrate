@@ -152,7 +152,17 @@ fn create_out_file(file_name: &str, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> Command {
-	if Command::new("rustup")
+	let version = Command::new("cargo")
+		.arg("--version")
+		.output()
+		.map_err(|_| ())
+		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+		.unwrap_or_default();
+
+	if version.contains("-nightly") {
+		Command::new("cargo")
+	}
+	else if Command::new("rustup")
 		.args(&["run", "nightly", "cargo"])
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())
