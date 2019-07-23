@@ -301,9 +301,9 @@ decl_module! {
 		const DecayRatio: u32 = T::DecayRatio::get();
 
 		/// The chunk size of the voter vector.
-		const VOTER_SET_SIZE: usize = VOTER_SET_SIZE;
+		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
 		/// The chunk size of the approval vector.
-		const APPROVAL_SET_SIZE: usize = APPROVAL_SET_SIZE;
+		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
 		fn deposit_event<T>() = default;
 
