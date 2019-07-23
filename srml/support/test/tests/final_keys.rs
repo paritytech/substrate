@@ -29,7 +29,7 @@ srml_support::decl_module! {
 }
 
 srml_support::decl_storage!{
-	trait Store for Module<T: Trait> as Module {
+	trait Store for Module<T: Trait> as FinalKeys {
 		pub Value config(value): u32;
 
 		pub Map: map u32 => u32;
@@ -82,14 +82,14 @@ fn final_keys() {
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
 
-		DoubleMap::insert(1, 2, 3);
+		DoubleMap::insert(&1, &2, &3);
 		let mut k = b"Module DoubleMap".to_vec();
 		k.extend(1u32.encode());
 		let mut k = runtime_io::blake2_256(&k).to_vec();
 		k.extend(&runtime_io::blake2_256(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 
-		DoubleMap2::insert(1, 2, 3);
+		DoubleMap2::insert(&1, &2, &3);
 		let mut k = b"Module DoubleMap2".to_vec();
 		k.extend(1u32.encode());
 		let mut k = runtime_io::twox_128(&k).to_vec();

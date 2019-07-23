@@ -18,7 +18,7 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![recursion_limit="256"]
+#![recursion_limit="512"]
 
 extern crate proc_macro;
 
