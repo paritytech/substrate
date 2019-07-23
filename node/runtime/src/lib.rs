@@ -139,7 +139,7 @@ impl system::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const EpochDuration: u64 = 6;
+	pub const EpochDuration: u64 = 10 * MINUTES;
 }
 
 impl babe::Trait for Runtime {
@@ -195,11 +195,6 @@ impl authorship::Trait for Runtime {
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
 	type EventHandler = ();
-}
-
-parameter_types! {
-	pub const Period: BlockNumber = 10 * MINUTES;
-	pub const Offset: BlockNumber = 0;
 }
 
 type SessionHandlers = (Grandpa, Babe, ImOnline);
