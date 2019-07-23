@@ -121,6 +121,12 @@ fn execute_block_with_state_root_handler(
 
 	let o_new_authorities = <NewAuthorities>::take();
 
+	// need symetric removal of finalize for roots to match
+	<Number>::kill();
+	<ParentHash>::kill();
+	<StorageDigest>::kill();
+	<NewAuthorities>::kill();
+
 	if let Mode::Overwrite = mode {
 		header.state_root = storage_root().into();
 	} else {
@@ -210,13 +216,12 @@ pub fn finalize_block() -> Header {
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-	// let mut digest = Digest::default();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	// This MUST come after all changes to storage are done.  Otherwise we will fail the
+	// This MUST come after all changes to storage are done.	Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
