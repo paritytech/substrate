@@ -154,7 +154,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub block_import: I,
 
 	/// The environment
-	pub env: Arc<E>,
+	pub env: E,
 
 	/// A sync oracle
 	pub sync_oracle: SO,
@@ -220,7 +220,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
-	env: Arc<E>,
+	env: E,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -252,7 +252,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let pair = self.local_key.clone();
 		let ref client = self.client;
 		let block_import = self.block_import.clone();
-		let ref env = self.env;
 
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -303,7 +302,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let mut proposer = match env.init(&chain_head) {
+			let mut proposer = match self.env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -903,7 +902,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+		fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -1007,7 +1006,7 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().as_full().unwrap();
-			let environ = Arc::new(DummyFactory(client.clone()));
+			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()
 					.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
@@ -1032,7 +1031,7 @@ mod tests {
 				block_import: client.clone(),
 				select_chain,
 				client,
-				env: environ.clone(),
+				env: environ,
 				sync_oracle: DummyOracle,
 				inherent_data_providers,
 				force_authoring: false,

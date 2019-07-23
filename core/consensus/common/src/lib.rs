@@ -61,7 +61,7 @@ pub trait Environment<B: BlockT> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header)
+	fn init(&mut self, parent_header: &B::Header)
 		-> Result<Self::Proposer, Self::Error>;
 }
 

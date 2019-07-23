@@ -89,10 +89,10 @@ construct_service_factory! {
 				if let Some(aura_key) = service.authority_key() {
 					info!("Using aura key {}", aura_key.public());
 
-					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
+					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-					});
+					};
 
 					let client = service.client();
 					let select_chain = service.select_chain()

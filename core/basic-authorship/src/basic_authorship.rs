@@ -132,7 +132,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 	type Error = error::Error;
 
 	fn init(
-		&self,
+		&mut self,
 		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
 	) -> Result<Self::Proposer, error::Error> {
 		let parent_hash = parent_header.hash();
