@@ -17,10 +17,11 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use node_primitives::Balance;
-use runtime_primitives::weights::{Weight, WeightMultiplier, MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT};
+use runtime_primitives::weights::{Weight, WeightMultiplier};
 use runtime_primitives::traits::{Convert, Saturating};
 use runtime_primitives::Fixed64;
-use crate::Balances;
+use support::traits::Get;
+use crate::{Balances, MaximumBlockWeight};
 
 /// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
 /// calculation.
@@ -53,14 +54,19 @@ pub struct WeightMultiplierUpdateHandler;
 impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierUpdateHandler {
 	fn convert(previous_state: (Weight, WeightMultiplier)) -> WeightMultiplier {
 		let (block_weight, multiplier) = previous_state;
-		let ideal = IDEAL_TRANSACTIONS_WEIGHT as u128;
+		// CRITICAL NOTE: what the system module interprets as maximum block weight, and a portion
+		// of it (1/4 usually) as ideal weight demonstrate the gap in block weights for operational
+		// transactions. What this weight multiplier interprets as the maximum, is actually the
+		// maximum that is available to normal transactions. Hence,
+		let max_weight = <MaximumBlockWeight as Get<u32>>::get() / 4;
+		let ideal_weight = (max_weight / 4) as u128;
 		let block_weight = block_weight as u128;
 
 		// determines if the first_term is positive
-		let positive = block_weight >= ideal;
-		let diff_abs = block_weight.max(ideal) - block_weight.min(ideal);
+		let positive = block_weight >= ideal_weight;
+		let diff_abs = block_weight.max(ideal_weight) - block_weight.min(ideal_weight);
 		// diff is within u32, safe.
-		let diff = Fixed64::from_rational(diff_abs as i64, MAX_TRANSACTIONS_WEIGHT as u64);
+		let diff = Fixed64::from_rational(diff_abs as i64, max_weight as u64);
 		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
@@ -94,8 +100,16 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::weights::{MAX_TRANSACTIONS_WEIGHT, IDEAL_TRANSACTIONS_WEIGHT, Weight};
+	use runtime_primitives::weights::Weight;
 	use runtime_primitives::Perbill;
+
+	fn max() -> Weight {
+		<MaximumBlockWeight as Get<Weight>>::get()
+	}
+
+	fn ideal() -> Weight {
+		max() / 4 / 4
+	}
 
 	// poc reference implementation.
 	#[allow(dead_code)]
@@ -104,9 +118,9 @@ mod tests {
 		let v: f32 = 0.00004;
 
 		// maximum tx weight
-		let m = MAX_TRANSACTIONS_WEIGHT as f32;
+		let m = max() as f32;
 		// Ideal saturation in terms of weight
-		let ss = IDEAL_TRANSACTIONS_WEIGHT as f32;
+		let ss = ideal() as f32;
 		// Current saturation in terms of weight
 		let s = block_weight;
 
@@ -124,22 +138,22 @@ mod tests {
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((1024, WeightMultiplier::default())),
-			fm(-9990)
+			WeightMultiplierUpdateHandler::convert((ideal() / 4, WeightMultiplier::default())),
+			fm(-7500)
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((1024 * 4, WeightMultiplier::default())),
-			fm(-9960)
+			WeightMultiplierUpdateHandler::convert((ideal() / 2, WeightMultiplier::default())),
+			fm(-5000)
 		);
-		// ideal. Original fee.
+		// ideal. Original fee. No changes.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT as u32, WeightMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((ideal() as u32, WeightMultiplier::default())),
 			fm(0)
 		);
 		// // More than ideal. Fee is increased.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert(((IDEAL_TRANSACTIONS_WEIGHT * 2) as u32, WeightMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert(((ideal() * 2) as u32, WeightMultiplier::default())),
 			fm(10000)
 		);
 	}
@@ -147,20 +161,20 @@ mod tests {
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, WeightMultiplier::default())),
+			WeightMultiplierUpdateHandler::convert((ideal() * 2, WeightMultiplier::default())),
 			fm(10000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(10000))),
+			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(10000))),
 			fm(20000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(20000))),
+			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(20000))),
 			fm(30000)
 		);
 		// ...
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((IDEAL_TRANSACTIONS_WEIGHT * 2, fm(1_000_000_000))),
+			WeightMultiplierUpdateHandler::convert((ideal() * 2, fm(1_000_000_000))),
 			fm(1_000_000_000 + 10000)
 		);
 	}

@@ -129,18 +129,19 @@ impl<B: ChainApi> Pool<B> {
 				}
 
 				match self.api.validate_transaction(at, xt.clone())? {
-					TransactionValidity::Valid { priority, requires, provides, longevity, propagate } => {
+					TransactionValidity::Valid(validity) => {
 						Ok(base::Transaction {
 							data: xt,
-							bytes,
+							bytes
+							,
 							hash,
-							priority,
-							requires,
-							provides,
-							propagate,
+							priority: validity.priority,
+							requires: validity.requires,
+							provides: validity.provides,
+							propagate: validity.propagate,
 							valid_till: block_number
 								.saturated_into::<u64>()
-								.saturating_add(longevity),
+								.saturating_add(validity.longevity),
 						})
 					},
 					TransactionValidity::Invalid(e) => {
@@ -233,7 +234,7 @@ impl<B: ChainApi> Pool<B> {
 
 			for (extrinsic, existing_in_pool) in all {
 				match *existing_in_pool {
-					// reuse the tags for extrinsis that were found in the pool
+					// reuse the tags for extrinsics that were found in the pool
 					Some(ref transaction) => {
 						tags.extend(transaction.provides.iter().cloned());
 					},
@@ -242,8 +243,8 @@ impl<B: ChainApi> Pool<B> {
 					None => {
 						let validity = self.api.validate_transaction(parent, extrinsic.clone());
 						match validity {
-							Ok(TransactionValidity::Valid { mut provides, .. }) => {
-								tags.append(&mut provides);
+							Ok(TransactionValidity::Valid(mut validity)) => {
+								tags.append(&mut validity.provides);
 							},
 							// silently ignore invalid extrinsics,
 							// cause they might just be inherent
@@ -306,7 +307,7 @@ impl<B: ChainApi> Pool<B> {
 		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
 		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
 
-		// Collect the hashes of transactions that now became invalid (meaning that they are succesfully pruned).
+		// Collect the hashes of transactions that now became invalid (meaning that they are successfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
 			Err(Ok(error::Error::InvalidTransaction(_))) => Some(hashes[idx].clone()),
 			_ => None,
@@ -451,6 +452,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sr_primitives::transaction_validity::ValidTransaction;
 	use futures::Stream;
 	use parity_codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
@@ -486,13 +488,13 @@ mod tests {
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid(0))
 			} else {
-				Ok(TransactionValidity::Valid {
+				Ok(TransactionValidity::Valid(ValidTransaction {
 					priority: 4,
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: vec![vec![nonce as u8]],
 					longevity: 3,
 					propagate: true,
-				})
+				}))
 			}
 		}
 

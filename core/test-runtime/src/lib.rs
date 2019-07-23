@@ -36,10 +36,10 @@ use substrate_client::{
 use runtime_primitives::{
 	ApplyResult,
 	create_runtime_str,
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -47,10 +47,10 @@ pub use primitives::hash::H256;
 use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use runtime_support::{impl_outer_origin, parameter_types};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 pub use consensus_babe::AuthorityId;
-
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub type AuraId = AuthorityId;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
@@ -301,6 +301,7 @@ cfg_if! {
 	}
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -309,6 +310,50 @@ impl GetNodeBlockType for Runtime {
 
 impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
+}
+
+impl_outer_origin!{
+	pub enum Origin for Runtime where system = srml_system {}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Event;
+
+impl From<srml_system::Event> for Event {
+	fn from(_evt: srml_system::Event) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+	pub const MinimumPeriod: u64 = 5;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+}
+
+impl srml_system::Trait for Runtime {
+	type Origin = Origin;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+	type WeightMultiplierUpdate = ();
+	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+}
+
+impl srml_timestamp::Trait for Runtime {
+	/// A timestamp: seconds since the unix epoch.
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -377,13 +422,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
@@ -477,13 +522,23 @@ cfg_if! {
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
-						slot_duration: 1,
+						median_required_blocks: 0,
+						slot_duration: 3,
 						expected_block_time: 1,
-						threshold: std::u64::MAX,
-						median_required_blocks: 100,
+						threshold: core::u64::MAX,
+						slots_per_epoch: 6,
 					}
 				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
+				fn epoch() -> consensus_babe::Epoch {
+					let authorities = system::authorities();
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+					consensus_babe::Epoch {
+						authorities,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: 1,
+						duration: 6,
+					}
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
@@ -518,13 +573,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
@@ -626,9 +681,20 @@ cfg_if! {
 						slot_duration: 1,
 						expected_block_time: 1,
 						threshold: core::u64::MAX,
+						slots_per_epoch: 6,
 					}
 				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
+
+				fn epoch() -> consensus_babe::Epoch {
+					let authorities = system::authorities();
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+					consensus_babe::Epoch {
+						authorities,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: 1,
+						duration: 6,
+					}
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

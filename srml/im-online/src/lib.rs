@@ -77,7 +77,7 @@ use substrate_primitives::{
 use parity_codec::{Encode, Decode};
 use primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
-	transaction_validity::{TransactionValidity, TransactionLongevity},
+	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
@@ -356,7 +356,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = <T as Trait>::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I) {
+	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, _next_validators: I) {
 		Self::new_session();
 	}
 
@@ -411,13 +411,13 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
 
-			return srml_support::unsigned::TransactionValidity::Valid {
+			return TransactionValidity::Valid(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![encoded_heartbeat],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
-			}
+			})
 		}
 		TransactionValidity::Invalid(0)
 	}
