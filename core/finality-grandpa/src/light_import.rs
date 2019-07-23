@@ -66,7 +66,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 {
 	let info = client.info();
 	#[allow(deprecated)]
-	let import_data = load_aux_import_data(info.chain.finalized_hash, &**client.backend(), api)?;
+	let import_data = load_aux_import_data(info.chain.finalized_hash, &*client, api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
 		authority_set_provider,

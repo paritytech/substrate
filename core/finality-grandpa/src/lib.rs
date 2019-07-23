@@ -361,8 +361,7 @@ where
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
-		#[allow(deprecated)]
-		&**client.backend(),
+		&*client,
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
@@ -679,8 +678,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						current_round: HasVoted::No,
 					};
 
-					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&*client, &set_state)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
 
@@ -706,8 +704,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
 
-						#[allow(deprecated)]
-						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+						aux_schema::write_voter_set_state(&*client, &set_state)?;
 						Ok(Some(set_state))
 					})?;
 

@@ -560,8 +560,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -602,8 +601,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -642,8 +640,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -689,8 +686,7 @@ where
 				current_round: HasVoted::No,
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -699,11 +695,8 @@ where
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-
-		#[allow(deprecated)]
-		let blockchain = self.inner.backend().blockchain();
-		let status = blockchain.info();
-		if number <= status.finalized_number && blockchain.hash(number)? == Some(hash) {
+		let status = self.inner.info().chain;
+		if number <= status.finalized_number && self.inner.hash(number)? == Some(hash) {
 			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
 			// finalized block.
