@@ -110,6 +110,8 @@ pub const CONSENSUS_DEBUG: &str = "5";
 pub const CONSENSUS_WARN: &str = "4";
 pub const CONSENSUS_INFO: &str = "1";
 
+pub const PROFILING: &str = "6";
+
 /// Telemetry object. Implements `Future` and must be polled regularly.
 /// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
 /// regularly and should be polled regularly.

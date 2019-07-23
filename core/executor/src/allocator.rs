@@ -22,6 +22,8 @@ use log::trace;
 use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
 
+use substrate_telemetry::{telemetry, PROFILING};
+
 // The pointers need to be aligned to 8 bytes.
 const ALIGNMENT: u32 = 8;
 
@@ -40,6 +42,7 @@ pub struct FreeingBumpHeapAllocator {
 	max_heap_size: u32,
 	ptr_offset: u32,
 	total_size: u32,
+	historic_max: u32,
 }
 
 /// Create an allocator error.
@@ -74,6 +77,7 @@ impl FreeingBumpHeapAllocator {
 			max_heap_size: heap_size,
 			ptr_offset: ptr_offset,
 			total_size: 0,
+			historic_max: 0,
 		}
 	}
 
@@ -108,6 +112,12 @@ impl FreeingBumpHeapAllocator {
 
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
+		if self.total_size > self.historic_max {
+			self.historic_max = self.total_size;
+			telemetry!(PROFILING; "profiling.wasm_max_mem";
+					"bytes" => self.historic_max
+				);
+		}
 
 		Ok(self.ptr_offset + ptr)
 	}

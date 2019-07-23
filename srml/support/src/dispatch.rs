@@ -60,6 +60,15 @@ pub trait Parameter: Codec + Clone + Eq {}
 #[cfg(not(feature = "std"))]
 impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
+#[cfg(feature = "std")]
+thread_local! {
+	#[doc(hidden)]
+	pub static PROFILING: bool = match std::env::var("SUBSTRATE_PROFILING") {
+		Ok(ref e) if e == "1" => true,
+		_ => false,
+	};
+}
+
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
 /// ## Declaration
@@ -867,9 +876,31 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::Result {
-			{ $( $impl )* }
-			// May be unreachable.
-			Ok(())
+			#[cfg(feature = "std")]
+			return $crate::dispatch::PROFILING.with(|profiling| {
+				if *profiling {
+					let before = std::time::Instant::now();
+					let result: $crate::dispatch::Result = (move || { { $( $impl )* } Ok(()) })();
+					let after = std::time::Instant::now();
+					let ns = (after - before).as_nanos();
+					$crate::telemetry::telemetry!($crate::telemetry::PROFILING; "profiling.runtime";
+						"mod" => module_path!(),
+						"fn" => stringify!($name),
+						"ns" => ns,
+						"is_ok" => result.is_ok()
+					);
+					result
+				} else {
+					{ $( $impl )* }
+					Ok(())
+				}
+
+			});
+			#[cfg(not(feature = "std"))]
+			return {
+				{ $( $impl )* }
+				Ok(())
+			};
 		}
 	};
 
@@ -885,7 +916,29 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$( $impl )*
+	        #[cfg(feature = "std")]
+			return $crate::dispatch::PROFILING.with(|profiling| {
+				if *profiling {
+					let before = std::time::Instant::now();
+                    let result: $result = (move || { $( $impl )* })();
+					let after = std::time::Instant::now();
+					let ns = (after - before).as_nanos();
+					$crate::telemetry::telemetry!($crate::telemetry::PROFILING; "profiling.runtime";
+						"mod" => module_path!(),
+						"fn" => stringify!($name),
+						"ns" => ns,
+						"is_ok" => result.is_ok()
+					);
+					result
+				} else {
+					$( $impl )*
+				}
+
+			});
+			#[cfg(not(feature = "std"))]
+			return {
+				$( $impl )*
+			};
 		}
 	};
 
@@ -1493,7 +1546,7 @@ macro_rules! __call_to_functions {
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __functions_to_metadata{
+macro_rules! __functions_to_metadata {
 	(
 		$fn_id:expr;
 		$origin_type:ty;
@@ -1602,6 +1655,7 @@ macro_rules! __check_reserved_fn_name {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
+
 	use super::*;
 	use crate::sr_primitives::traits::{OnInitialize, OnFinalize};
 	use sr_primitives::weights::{DispatchInfo, DispatchClass};

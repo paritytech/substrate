@@ -17,6 +17,7 @@ srml-support-procedural = { path = "./procedural" }
 paste = "0.1"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
 bitmask = { version = "0.5", default-features = false }
+substrate-telemetry = { path = "../../core/telemetry", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
@@ -34,6 +35,7 @@ std = [
 	"sr-primitives/std",
 	"srml-metadata/std",
 	"inherents/std",
+	"substrate-telemetry"
 ]
 nightly = []
 strict = []

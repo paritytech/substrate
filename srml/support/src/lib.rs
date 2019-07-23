@@ -23,6 +23,8 @@ extern crate self as srml_support;
 
 #[macro_use]
 extern crate bitmask;
+#[cfg(feature = "substrate-telemetry")]
+pub extern crate substrate_telemetry as telemetry;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -69,6 +71,7 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
 pub use sr_primitives::{self, ConsensusEngineId};
+
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
