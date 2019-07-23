@@ -28,7 +28,7 @@ pub use substrate_state_machine::{
 };
 
 use environmental::environmental;
-use primitives::{offchain, hexdisplay::HexDisplay, H256};
+use primitives::{crypto::KeyTypeId, offchain, hexdisplay::HexDisplay, H256};
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -281,7 +281,7 @@ impl OffchainApi for () {
 		}, "authority_pubkey can be called only in the offchain worker context")
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
+	fn new_crypto_key(crypto: KeyTypeId) -> Result<offchain::CryptoKey, ()> {
 		with_offchain(|ext| {
 			ext.new_crypto_key(crypto)
 		}, "new_crypto_key can be called only in the offchain worker context")

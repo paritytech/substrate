@@ -24,7 +24,8 @@ use log::warn;
 use hash_db::Hasher;
 use parity_codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
+	crypto::KeyTypeId, offchain, storage::well_known_keys,
+	NativeOrEncoded, NeverNativeValue,
 };
 
 pub mod backend;
@@ -255,7 +256,7 @@ impl offchain::Externalities for NeverOffchainExt {
 
 	fn new_crypto_key(
 		&mut self,
-		_crypto: offchain::CryptoKind,
+		_crypto: KeyTypeId,
 	) -> Result<offchain::CryptoKey, ()> {
 		unreachable!()
 	}

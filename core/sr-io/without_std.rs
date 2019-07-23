@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto, convert::TryFrom};
-use primitives::{offchain, Blake2Hasher};
+use primitives::{offchain, Blake2Hasher, crypto::KeyTypeId};
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -942,8 +942,7 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
-		let crypto = crypto.into();
+	fn new_crypto_key(crypto: KeyTypeId) -> Result<offchain::CryptoKey, ()> {
 		let ret = unsafe {
 			ext_new_crypto_key.get()(crypto)
 		};

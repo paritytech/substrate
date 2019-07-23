@@ -22,7 +22,7 @@ use std::{
 	thread::sleep,
 };
 use client::backend::OffchainStorage;
-use crate::AuthorityKeyProvider;
+use crate::{AuthorityKeyProviders, OffchainKey};
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::{Encode, Decode};
@@ -30,11 +30,10 @@ use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
-	CryptoKind, CryptoKey,
-	StorageKind,
+	CryptoKey, StorageKind,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr,
 };
-use primitives::crypto::{Pair, Public, Protected};
+use primitives::crypto::{key_types, KeyTypeId, Pair, Protected};
 use primitives::{ed25519, sr25519};
 use runtime_primitives::{
 	generic::BlockId,
@@ -52,128 +51,50 @@ enum ExtMessage {
 /// A persisted key seed.
 #[derive(Encode, Decode)]
 struct StoredKey {
-	kind: CryptoKind,
+	kind: KeyTypeId,
 	phrase: String,
 }
 
 impl StoredKey {
-	fn generate_with_phrase(kind: CryptoKind, password: Option<&str>) -> Self {
+	fn generate_with_phrase(
+		kind: KeyTypeId,
+		password: Option<&str>,
+	) -> Result<Self, ()> {
 		match kind {
-			CryptoKind::Ed25519 => {
+			key_types::ED25519 => {
 				let phrase = ed25519::Pair::generate_with_phrase(password).1;
-				Self { kind, phrase }
+				Ok(Self { kind, phrase })
 			}
-			CryptoKind::Sr25519 => {
+			key_types::SR25519 => {
 				let phrase = sr25519::Pair::generate_with_phrase(password).1;
-				Self { kind, phrase }
+				Ok(Self { kind, phrase })
+			}
+			_ => {
+				error!("Unknown key type {:?}", kind);
+				Err(())
 			}
 		}
 	}
 
-	fn to_local_key(&self, password: Option<&str>) -> Result<LocalKey, ()> {
-		match self.kind {
-			CryptoKind::Ed25519 => {
-				ed25519::Pair::from_phrase(&self.phrase, password)
-					.map(|x| LocalKey::Ed25519(x.0))
-			}
-			CryptoKind::Sr25519 => {
-				sr25519::Pair::from_phrase(&self.phrase, password)
-					.map(|x| LocalKey::Sr25519(x.0))
-			}
-		}
-		.map_err(|e| {
+	fn to_offchain_key(&self, password: Option<&str>) -> Result<Box<dyn OffchainKey>, ()> {
+		let err = |e| {
 			warn!("Error recovering Offchain Worker key. Password invalid? {:?}", e);
 			()
-		})
-	}
-}
-
-enum LocalKey {
-	Ed25519(ed25519::Pair),
-	Sr25519(sr25519::Pair),
-}
-
-impl LocalKey {
-	fn public(&self) -> Result<Vec<u8>, ()> {
-		match self {
-			LocalKey::Ed25519(pair) => Ok(pair.public().to_raw_vec()),
-			LocalKey::Sr25519(pair) => Ok(pair.public().to_raw_vec()),
-		}
-	}
-
-	fn sign(&self, data: &[u8]) -> Result<Vec<u8>, ()> {
-		match self {
-			LocalKey::Ed25519(pair) => {
-				let sig = pair.sign(data);
-				let bytes: &[u8] = sig.as_ref();
-				Ok(bytes.to_vec())
+		};
+		match self.kind {
+			key_types::ED25519 => {
+				let pair = ed25519::Pair::from_phrase(&self.phrase, password)
+					.map_err(err)?.0;
+				Ok(Box::new(pair))
 			}
-			LocalKey::Sr25519(pair) => {
-				let sig = pair.sign(data);
-				let bytes: &[u8] = sig.as_ref();
-				Ok(bytes.to_vec())
+			key_types::SR25519 => {
+				let pair = sr25519::Pair::from_phrase(&self.phrase, password)
+					.map_err(err)?.0;
+				Ok(Box::new(pair))
 			}
-		}
-	}
-
-	fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		match self {
-			LocalKey::Ed25519(pair) => {
-				Ok(ed25519::Pair::verify_weak(signature, msg, pair.public()))
-			}
-			LocalKey::Sr25519(pair) => {
-				Ok(sr25519::Pair::verify_weak(signature, msg, pair.public()))
-			}
-		}
-	}
-}
-
-/// A key.
-enum Key<ConsensusPair, FinalityPair> {
-	LocalKey(LocalKey),
-	AuthorityKey(ConsensusPair),
-	FgAuthorityKey(FinalityPair),
-}
-
-impl<ConsensusPair: Pair, FinalityPair: Pair> Key<ConsensusPair, FinalityPair> {
-	fn public(&self) -> Result<Vec<u8>, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.public()
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(pair.public().to_raw_vec())
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(pair.public().to_raw_vec())
-			}
-		}
-	}
-
-	fn sign(&self, data: &[u8]) -> Result<Vec<u8>, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.sign(data)
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(pair.sign(data).as_ref().to_vec())
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(pair.sign(data).as_ref().to_vec())
-			}
-		}
-	}
-
-	fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.verify(msg, signature)
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(ConsensusPair::verify_weak(signature, msg, pair.public()))
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(FinalityPair::verify_weak(signature, msg, pair.public()))
+			_ => {
+				error!("Unknown key type {:?}", self.kind);
+				Err(())
 			}
 		}
 	}
@@ -182,11 +103,11 @@ impl<ConsensusPair: Pair, FinalityPair: Pair> Key<ConsensusPair, FinalityPair> {
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api<Storage, KeyProvider, Block: traits::Block> {
+pub(crate) struct Api<Storage, Block: traits::Block> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
 	keys_password: Protected<String>,
-	key_provider: KeyProvider,
+	key_provider: Arc<AuthorityKeyProviders<Block>>,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	at: BlockId<Block>,
 }
@@ -203,9 +124,8 @@ const KEYS_PREFIX: &[u8] = b"keys";
 
 const NEXT_ID: &[u8] = b"crypto_key_id";
 
-impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
+impl<Storage, Block> Api<Storage, Block> where
 	Storage: OffchainStorage,
-	KeyProvider: AuthorityKeyProvider<Block>,
 	Block: traits::Block,
 {
 	fn password(&self) -> Option<&str> {
@@ -215,7 +135,7 @@ impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
 	fn read_key(
 		&self,
 		key: CryptoKey,
-	) -> Result<Key<KeyProvider::ConsensusPair, KeyProvider::FinalityPair>, ()> {
+	) -> Result<Box<dyn OffchainKey>, ()> {
 		match key {
 			CryptoKey::LocalKey { id, kind } => {
 				let key = self.db.get(KEYS_PREFIX, &id.encode())
@@ -230,28 +150,20 @@ impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
 					);
 					return Err(())
 				}
-				Ok(Key::LocalKey(key.to_local_key(self.password())?))
+				Ok(key.to_offchain_key(self.password())?)
 			}
-			CryptoKey::AuthorityKey => {
-				let key = self.key_provider
-					.authority_key(&self.at)
-					.ok_or(())?;
-				Ok(Key::AuthorityKey(key))
-			}
-			CryptoKey::FgAuthorityKey => {
-				let key = self.key_provider
-					.fg_authority_key(&self.at)
-					.ok_or(())?;
-				Ok(Key::FgAuthorityKey(key))
+			CryptoKey::AuthorityKey { kind } => {
+				self.key_provider
+					.authority_key(kind, &self.at)
+					.ok_or(())
 			}
 		}
 	}
 }
 
-impl<Storage, KeyProvider, Block> OffchainExt for Api<Storage, KeyProvider, Block>
+impl<Storage, Block> OffchainExt for Api<Storage, Block>
 where
 	Storage: OffchainStorage,
-	KeyProvider: AuthorityKeyProvider<Block>,
 	Block: traits::Block,
 {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
@@ -261,8 +173,8 @@ where
 			.map_err(|_| ())
 	}
 
-	fn new_crypto_key(&mut self, kind: CryptoKind) -> Result<CryptoKey, ()> {
-		let key = StoredKey::generate_with_phrase(kind, self.password());
+	fn new_crypto_key(&mut self, kind: KeyTypeId) -> Result<CryptoKey, ()> {
+		let key = StoredKey::generate_with_phrase(kind, self.password())?;
 		let (id, id_encoded) = loop {
 			let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
 			let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
@@ -506,14 +418,14 @@ pub(crate) struct AsyncApi<A: ChainApi> {
 
 impl<A: ChainApi> AsyncApi<A> {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
-	pub fn new<S: OffchainStorage, P: AuthorityKeyProvider<A::Block>>(
+	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
 		keys_password: Protected<String>,
-		key_provider: P,
+		key_provider: Arc<AuthorityKeyProviders<A::Block>>,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	) -> (Api<S, P, A::Block>, AsyncApi<A>) {
+	) -> (Api<S, A::Block>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
 		let api = Api {
@@ -569,6 +481,7 @@ impl<A: ChainApi> AsyncApi<A> {
 mod tests {
 	use super::*;
 	use std::convert::TryFrom;
+	use primitives::crypto;
 	use runtime_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
@@ -587,7 +500,9 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage, TestProvider<Block>, Block>, AsyncApi<impl ChainApi>) {
+	fn offchain_api(
+		key: Option<ed25519::Pair>
+	) -> (Api<LocalStorage, Block>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
@@ -596,7 +511,12 @@ mod tests {
 		);
 
 		let mock = Arc::new(MockNetworkStateInfo());
-		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(Zero::zero()), mock)
+		let mut key_provider = AuthorityKeyProviders::new();
+		if let Some(key) = key {
+			key_provider.register(0xdeadbeef, TestProvider::new(key));
+		}
+		AsyncApi::new(pool, db, "pass".to_owned().into(), Arc::new(key_provider),
+					  BlockId::Number(Zero::zero()), mock)
 	}
 
 	#[test]
@@ -637,7 +557,7 @@ mod tests {
 	fn should_set_and_get_local_storage() {
 		// given
 		let kind = StorageKind::PERSISTENT;
-		let mut api = offchain_api().0;
+		let mut api = offchain_api(None).0;
 		let key = b"test";
 
 		// when
@@ -652,7 +572,7 @@ mod tests {
 	fn should_compare_and_set_local_storage() {
 		// given
 		let kind = StorageKind::PERSISTENT;
-		let mut api = offchain_api().0;
+		let mut api = offchain_api(None).0;
 		let key = b"test";
 		api.local_storage_set(kind, key, b"value");
 
@@ -667,9 +587,9 @@ mod tests {
 
 	#[test]
 	fn should_create_a_new_key_and_sign_and_verify_stuff() {
-		let test = |kind: CryptoKind| {
+		let test = |kind: KeyTypeId| {
 			// given
-			let mut api = offchain_api().0;
+			let mut api = offchain_api(None).0;
 			let msg = b"Hello world!";
 
 			// when
@@ -685,26 +605,27 @@ mod tests {
 			assert_eq!(res, false);
 		};
 
-		test(CryptoKind::Ed25519);
-		test(CryptoKind::Sr25519);
+		test(crypto::key_types::ED25519);
+		test(crypto::key_types::SR25519);
 	}
 
 	#[test]
 	fn should_sign_and_verify_with_authority_key() {
 		// given
-		let mut api = offchain_api().0;
-		api.key_provider.ed_key = Some(ed25519::Pair::generate().0);
+		let key = ed25519::Pair::generate().0;
+		let mut api = offchain_api(Some(key)).0;
 		let msg = b"Hello world!";
 
 		// when
-		let signature = api.sign(CryptoKey::AuthorityKey, msg).unwrap();
+		let key = CryptoKey::AuthorityKey { kind: 0xdeadbeef };
+		let signature = api.sign(key, msg).unwrap();
 
 		// then
-		let res = api.verify(CryptoKey::AuthorityKey, msg, &signature).unwrap();
+		let res = api.verify(key, msg, &signature).unwrap();
 		assert_eq!(res, true);
-		let res = api.verify(CryptoKey::AuthorityKey, msg, &[]).unwrap();
+		let res = api.verify(key, msg, &[]).unwrap();
 		assert_eq!(res, false);
-		let res = api.verify(CryptoKey::AuthorityKey, b"Different msg", &signature).unwrap();
+		let res = api.verify(key, b"Different msg", &signature).unwrap();
 		assert_eq!(res, false);
 	}
 

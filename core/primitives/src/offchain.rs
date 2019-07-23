@@ -58,35 +58,6 @@ impl From<StorageKind> for u32 {
 	}
 }
 
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(C)]
-pub enum CryptoKind {
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = crypto::key_types::SR25519 as isize,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = crypto::key_types::ED25519 as isize,
-}
-
-impl TryFrom<u32> for CryptoKind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		match kind {
-			e if e == CryptoKind::Sr25519 as isize as u32 => Ok(CryptoKind::Sr25519),
-			e if e == CryptoKind::Ed25519 as isize as u32 => Ok(CryptoKind::Ed25519),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<CryptoKind> for u32 {
-	fn from(c: CryptoKind) -> Self {
-		c as isize as u32
-	}
-}
-
 /// Key to use in the offchain worker crypto api.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -96,12 +67,13 @@ pub enum CryptoKey {
 		/// The id of the key.
 		id: u16,
 		/// The kind of the key.
-		kind: CryptoKind,
+		kind: crypto::KeyTypeId,
 	},
 	/// Use the key the block authoring algorithm uses.
-	AuthorityKey,
-	/// Use the key the finality gadget uses.
-	FgAuthorityKey,
+	AuthorityKey {
+		/// The kind of key provider.
+		kind: crypto::KeyProviderId,
+	},
 }
 
 impl TryFrom<u64> for CryptoKey {
@@ -111,11 +83,13 @@ impl TryFrom<u64> for CryptoKey {
 		match key & 0xFF {
 			0 => {
 				let id = (key >> 8 & 0xFFFF) as u16;
-				let kind = CryptoKind::try_from((key >> 32) as u32)?;
+				let kind = (key >> 32) as u32;
 				Ok(CryptoKey::LocalKey { id, kind })
 			}
-			1 => Ok(CryptoKey::AuthorityKey),
-			2 => Ok(CryptoKey::FgAuthorityKey),
+			1 => {
+				let kind = (key >> 32) as u32;
+				Ok(CryptoKey::AuthorityKey { kind })
+			},
 			_ => Err(()),
 		}
 	}
@@ -127,8 +101,9 @@ impl From<CryptoKey> for u64 {
 			CryptoKey::LocalKey { id, kind } => {
 				((kind as u64) << 32) | ((id as u64) << 8)
 			}
-			CryptoKey::AuthorityKey => 1,
-			CryptoKey::FgAuthorityKey => 2,
+			CryptoKey::AuthorityKey { kind } => {
+				(kind as u64) << 32
+			}
 		}
 	}
 }
@@ -317,7 +292,7 @@ pub trait Externalities {
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
 	/// Returns an error if given crypto kind is not supported.
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()>;
+	fn new_crypto_key(&mut self, crypto: crypto::KeyTypeId) -> Result<CryptoKey, ()>;
 
 	/// Returns the locally configured authority public key, if available.
 	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()>;
@@ -466,7 +441,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()> {
+	fn new_crypto_key(&mut self, crypto: crypto::KeyTypeId) -> Result<CryptoKey, ()> {
 		(&mut **self).new_crypto_key(crypto)
 	}
 

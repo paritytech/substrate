@@ -33,10 +33,11 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
+use primitives::crypto::KeyTypeId;
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
-	CryptoKind, CryptoKey,
+	CryptoKey,
 	StorageKind,
 	OpaqueNetworkState,
 };
@@ -249,7 +250,7 @@ export_api! {
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.
-		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKey, ()>;
+		fn new_crypto_key(crypto: KeyTypeId) -> Result<CryptoKey, ()>;
 
 		/// Encrypt a piece of data using given crypto key.
 		///

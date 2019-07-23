@@ -625,6 +625,31 @@ pub trait TypedKey {
 	const KEY_TYPE: KeyTypeId;
 }
 
+/// An identifier for a key provider.
+///
+/// 0-1024 are reserved.
+pub type KeyProviderId = u32;
+
+/// Constant key proviers.
+pub mod key_providers {
+	use super::KeyProviderId;
+
+	/// Aura key provider.
+	pub const AURA: KeyProviderId = 10;
+
+	/// Babe key provider.
+	pub const BABE: KeyProviderId = 20;
+
+	/// Grandpa key provider.
+	pub const GRANDPA: KeyProviderId = 30;
+}
+
+/// A trait for something that has a key provider ID.
+pub trait TypedKeyProvider {
+	/// The type ID of this key provider.
+	const KEY_PROVIDER_TYPE: KeyProviderId;
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;

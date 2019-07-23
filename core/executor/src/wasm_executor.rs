@@ -711,10 +711,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-	ext_new_crypto_key(crypto: u32) -> u64 => {
-		let kind = offchain::CryptoKind::try_from(crypto)
-			.map_err(|_| "crypto kind OOB while ext_new_crypto_key: wasm")?;
-
+	ext_new_crypto_key(kind: u32) -> u64 => {
 		let res = this.ext.offchain()
 			.map(|api| api.new_crypto_key(kind))
 			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;

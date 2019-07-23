@@ -22,13 +22,13 @@ use std::{
 };
 use client::backend::OffchainStorage;
 use parking_lot::RwLock;
+use primitives::crypto::KeyProviderId;
 use primitives::offchain::{
 	self,
 	HttpError,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
-	CryptoKind,
 	CryptoKey,
 	StorageKind,
 	OpaqueNetworkState,
@@ -148,7 +148,7 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKey, ()> {
+	fn new_crypto_key(&mut self, _crypto: KeyProviderId) -> Result<CryptoKey, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
