@@ -23,7 +23,7 @@ use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, Childr
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
-use consensus::well_known_cache_keys;
+use consensus::{well_known_cache_keys, BlockOrigin};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use parking_lot::Mutex;
@@ -33,6 +33,25 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
+
+/// Import operation wrapper
+pub struct ClientImportOperation<
+	Block: BlockT,
+	H: Hasher<Out=Block::Hash>,
+	B: Backend<Block, H>,
+> {
+	pub(crate) op: B::BlockImportOperation,
+	pub(crate) notify_imported: Option<(
+		Block::Hash,
+		BlockOrigin,
+		Block::Header,
+		bool,
+		Option<(
+			StorageCollection,
+			ChildStorageCollection,
+		)>)>,
+	pub(crate) notify_finalized: Vec<Block::Hash>,
+}
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

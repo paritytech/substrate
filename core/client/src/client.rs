@@ -62,7 +62,7 @@ use hash_db::Hasher;
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	StorageCollection, ChildStorageCollection,
+	ClientImportOperation,
 };
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
@@ -132,21 +132,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	importing_block: RwLock<Option<Block::Hash>>,
 	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
-}
-
-/// Client import operation, a wrapper for the backend.
-pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: backend::Backend<Block, H>> {
-	op: B::BlockImportOperation,
-	notify_imported: Option<(
-		Block::Hash,
-		BlockOrigin,
-		Block::Header,
-		bool,
-		Option<(
-			StorageCollection,
-			ChildStorageCollection,
-		)>)>,
-	notify_finalized: Vec<Block::Hash>,
 }
 
 /// A source of blockchain events.
