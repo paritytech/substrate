@@ -235,12 +235,6 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::digest()
 	}
 
-	fn change_epoch(new: Epoch) {
-		Authorities::put(&new.authorities);
-		Randomness::put(&new.randomness);
-		Self::deposit_consensus(ConsensusLog::NextEpochData(new))
-	}
-
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
 		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
 	}
@@ -267,7 +261,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, queued_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		use staking::BalanceOf;
@@ -275,22 +269,22 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
 		};
 
+		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
 		EpochIndex::put(epoch_index);
 
-		// *Next* epoch's authorities.
-		let authorities = queued_validators.map(|(account, k)| {
+		// Update authorities.
+		let authorities = validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
 
-		// What was the next epoch is now the current epoch
-		let randomness = Self::randomness_change_epoch(epoch_index);
+		Authorities::put(authorities);
 
+		// Update epoch start slot.
 		let now = CurrentSlot::get();
-
 		EpochStartSlot::mutate(|previous| {
 			loop {
 				// on the first epoch we must account for skipping at least one
@@ -304,15 +298,33 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			}
 		});
 
-		let start_slot = EpochStartSlot::get();
+		// Update epoch randomness.
+		// What was the next epoch is now the current epoch.
+		let randomness = Self::randomness_change_epoch(epoch_index);
+		Randomness::put(randomness);
 
-		Self::change_epoch(Epoch {
-			epoch_index,
-			start_slot,
+		// After we update the current epoch, we signal the *next* epoch change
+		// so that nodes can track changes.
+
+		// *Next* epoch's authorities.
+		let next_authorities = queued_validators.map(|(account, k)| {
+			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		}).collect::<Vec<_>>();
+
+		// *Next* epoch's randomness.
+		let next_randomness = NextRandomness::get();
+
+		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
+
+		let next = Epoch {
+			epoch_index: epoch_index + 1,
+			start_slot: next_epoch_start_slot,
 			duration: T::EpochDuration::get(),
-			authorities,
-			randomness,
-		})
+			authorities: next_authorities,
+			randomness: next_randomness,
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 
 	fn on_disabled(i: usize) {
