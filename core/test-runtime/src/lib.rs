@@ -329,7 +329,7 @@ impl From<srml_system::Event> for Event {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 }
 
