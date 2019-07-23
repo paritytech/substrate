@@ -24,6 +24,7 @@ tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
 log = "0.4"
 keystore = { package = "substrate-keystore", path = "../../keystore" }
+offchain = { package = "substrate-offchain", path = "../../offchain" }
 
 [dev-dependencies]
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }

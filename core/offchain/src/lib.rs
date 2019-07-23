@@ -87,7 +87,7 @@ impl<T: crypto::Pair> OffchainKey for T {
 }
 
 /// The trait to implement a key provider.
-pub trait AuthorityKeyProvider<BlockT: traits::Block> {
+pub trait AuthorityKeyProvider<BlockT: traits::Block>: Send + Sync {
 	/// Returns the key configured at a given block id.
 	fn authority_key(&self, at: &BlockId<BlockT>) -> Option<Box<dyn OffchainKey>>;
 }

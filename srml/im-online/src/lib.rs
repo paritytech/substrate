@@ -214,8 +214,10 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 				// we run only when a local authority key is configured
-				if let Ok(key) = sr_io::pubkey(CryptoKey::AuthorityKey) {
-					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
+				//  TODO fix
+				let key = CryptoKey::AuthorityKey { kind: 10 }; // aura
+				if let Ok(pubkey) = sr_io::pubkey(key) {
+					let authority_id = <T as Trait>::AuthorityId::decode(&mut &pubkey[..])
 						.ok_or(OffchainErr::DecodeAuthorityId)?;
 					let network_state =
 						sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
@@ -226,7 +228,7 @@ decl_module! {
 						authority_id,
 					};
 
-					let signature = sr_io::sign(CryptoKey::AuthorityKey, &heartbeat_data.encode())
+					let signature = sr_io::sign(key, &heartbeat_data.encode())
 						.map_err(|_| OffchainErr::FailedSigning)?;
 					let call = Call::heartbeat(heartbeat_data, signature);
 					let ex = T::UncheckedExtrinsic::new_unsigned(call.into())

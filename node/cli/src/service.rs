@@ -21,10 +21,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
+use aura::{import_queue, start_aura, AuraKeyProvider, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, GrandpaKeyProvider};
 use grandpa_primitives::{AuthorityPair as GrandpaPair};
+use keystore::{LocalStore, Store};
+use offchain::AuthorityKeyProviders;
+use primitives::crypto::key_providers;
 use node_executor;
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
@@ -50,6 +53,7 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
 	pub grandpa_import_setup: Option<(grandpa::BlockImportForService<F>, grandpa::LinkHalfForService<F>)>,
+	pub keystores: Option<(Arc<LocalStore<AuraPair>>, Arc<LocalStore<GrandpaPair>>)>,
 	inherent_data_providers: InherentDataProviders,
 }
 
@@ -57,6 +61,7 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	fn default() -> NodeConfig<F> {
 		NodeConfig {
 			grandpa_import_setup: None,
+			keystores: None,
 			inherent_data_providers: InherentDataProviders::new(),
 		}
 	}
@@ -65,8 +70,6 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = AuraPair,
-		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -79,18 +82,35 @@ construct_service_factory! {
 		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>|
 				FullComponents::<Factory>::new(config) },
+		KeystoreSetup = {
+			|config: FactoryFullConfiguration<Self>, keystore: &Arc<Store>,
+			seed: Option<&str>, client: Arc<FullClient<Self>>| {
+				let aura_keystore = keystore.create_local_store::<AuraPair>();
+				if let Some(seed) = seed {
+					keystore.add_key_from_seed::<AuraPair>(seed)?;
+				}
+				let aura_keyprovider = AuraKeyProvider::new(client.clone(), aura_keystore.clone());
+
+				let grandpa_keystore = keystore.create_local_store::<GrandpaPair>();
+				if let Some(seed) = seed {
+					keystore.add_key_from_seed::<GrandpaPair>(seed)?;
+				}
+				let grandpa_keyprovider = GrandpaKeyProvider::new(client, grandpa_keystore.clone());
+
+				let mut authority_key_provider = AuthorityKeyProviders::new();
+				authority_key_provider.register(key_providers::AURA, aura_keyprovider);
+				authority_key_provider.register(key_providers::GRANDPA, grandpa_keyprovider);
+				Ok(authority_key_provider)
+			}
+		},
 		AuthoritySetup = {
 			|mut service: Self::FullService| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+				let (aura_keystore, grandpa_keystore) = service.config.custom.keystores.take()
+					.expect("Keystores are present for Full Services or setup failed before. qed");
 
 				if service.config.aura {
-					let local_store = service.store()
-						.create_local_store::<AuraPair>();
-					if let Some(seed) = &service.config.key {
-						service.store().set_key_from_seed::<AuraPair>(seed.as_str())?;
-					}
-
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -102,7 +122,7 @@ construct_service_factory! {
 
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						local_store,
+						aura_keystore,
 						client,
 						select_chain,
 						block_import,
@@ -123,18 +143,12 @@ construct_service_factory! {
 				};
 
 				if service.config.grandpa_voter {
-					let local_store = service.store()
-						.create_local_store::<GrandpaPair>();
-					if let Some(seed) = &service.config.key {
-						service.store().set_key_from_seed::<GrandpaPair>(seed.as_str())?;
-					}
-
 					let telemetry_on_connect = TelemetryOnConnect {
 						telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 					};
 					let grandpa_config = grandpa::GrandpaParams {
 						config,
-						session_store: local_store,
+						session_store: grandpa_keystore,
 						link: link_half,
 						network: service.network(),
 						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),

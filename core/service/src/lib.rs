@@ -37,14 +37,13 @@ use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use keystore::{LocalStore, Store};
+use keystore::Store;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Header, NumberFor, ProvideRuntimeApi, SaturatedConversion
+	Header, NumberFor, SaturatedConversion
 };
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
@@ -59,13 +58,12 @@ pub use transaction_pool::txpool::{
 pub use client::FinalityNotifications;
 
 pub use components::{
-	ServiceFactory, FullBackend, FullExecutor, LightBackend, ComponentAuthorityKeyProvider,
+	ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
-	ComponentConsensusPair, ComponentFinalityPair,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -87,8 +85,6 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	consensus_keystore: Arc<LocalStore<ComponentConsensusPair<Components>>>,
-	finality_keystore: Arc<LocalStore<ComponentFinalityPair<Components>>>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -108,7 +104,6 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
-		ComponentAuthorityKeyProvider<Components>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -235,27 +230,11 @@ impl<Components: components::Components> Service<Components> {
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
 		let keystore = Arc::new(Store::new());
-
-		let consensus_keystore = keystore
-			.create_local_store::<ComponentConsensusPair<Components>>();
-		if let Some(seed) = config.key {
-			keystore.add_key_from_seed::<ComponentConsensusPair<Components>>(
-				seed.as_str());
-		}
-
-		let finality_keystore = keystore
-			.create_local_store::<ComponentFinalityPair<Components>>();
-		if let Some(seed) = config.key {
-			keystore.add_key_from_seed::<ComponentFinalityPair<Components>>(
-				seed.as_str());
-		}
-
-		let authority_key_provider = AuthorityKeyProvider {
-			_marker: PhantomData,
-			client: client.clone(),
-			consensus_store: consensus_keystore.clone(),
-			finality_store: finality_keystore.clone(),
-		};
+		let authority_key_provider = Components::build_authority_key_provider(
+			&keystore,
+			config.key.as_ref().map(|s| s.as_str()),
+			client.clone(),
+		);
 
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
@@ -264,7 +243,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					authority_key_provider,
+					Arc::new(authority_key_provider),
 					config.offchain_worker_password.clone(),
 				)))
 			},
@@ -476,8 +455,6 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			consensus_keystore,
-			finality_keystore,
 			config,
 			exit,
 			rpc_handlers,
@@ -486,20 +463,6 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
-	}
-
-	/// Returns the consensus keystore.
-	pub fn consensus_keystore(
-		&self
-	) -> Arc<LocalStore<ComponentConsensusPair<Components>>> {
-		self.consensus_keystore.clone()
-	}
-
-	/// Returns the finality keystore.
-	pub fn finality_keystore(
-		&self
-	) -> Arc<LocalStore<ComponentFinalityPair<Components>>> {
-		self.finality_keystore.clone()
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -708,7 +671,7 @@ fn build_network_future<
 			"Polling the network future took {:?}",
 			polling_dur
 		);
-		
+
 		Ok(Async::NotReady)
 	})
 }
@@ -908,48 +871,6 @@ impl<A, B, C, D> Clone for AuthorityKeyProvider<A, B, C, D> {
 	}
 }
 
-impl<Client, Block, ConsensusPair, FinalityPair>
-	offchain::AuthorityKeyProvider<Block>
-	for AuthorityKeyProvider<
-		Client,
-		Block,
-		LocalStore<ConsensusPair>,
-		LocalStore<FinalityPair>>
-where
-	Client: ProvideRuntimeApi + 'static,
-	Block: runtime_primitives::traits::Block,
-	ConsensusPair: Pair + Clone,
-	FinalityPair: Pair + Clone,
-{
-	type ConsensusPair = ConsensusPair;
-	type FinalityPair = FinalityPair;
-
-	fn authority_key(&self, at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
-		let authorities = self.client
-			.runtime_api()
-			.authorities(at)
-			.unwrap_or_default();
-		self.consensus_store.get_keys(|public| {
-			authorities.iter().find(|aid| aid == &public).is_some()
-		})
-			.into_iter()
-			.next()
-	}
-
-	fn fg_authority_key(&self, at: &BlockId<Block>) -> Option<Self::FinalityPair> {
-		let authorities = self.client
-			.runtime_api()
-			.grandpa_authorities(at)
-			.unwrap_or_default();
-		self.finality_store.get_keys(|public| {
-			authorities.iter().find(|(aid, _)| aid == public).is_some()
-		})
-			.into_iter()
-			.next()
-	}
-}
-
-
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
@@ -999,8 +920,6 @@ where
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
-///		ConsensusPair = primitives::ed25519::Pair,
-///		FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -1013,6 +932,11 @@ where
 /// 		Configuration = (),
 /// 		FullService = FullComponents<Self>
 /// 			{ |config| <FullComponents<Factory>>::new(config) },
+///         KeystoreSetup = {
+///             |_keystore: &Arc<keystore::Store>, _seed: Option<&str>, _client: Arc<FullClient<Self>>| {
+///                 offchain::AuthorityKeyProviders::new()
+///             }
+///         },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
 /// 			|service: Self::FullService| {
@@ -1044,8 +968,6 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
-			ConsensusPair = $consensus_pair:ty,
-			FinalityPair = $finality_pair:ty,
 			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
@@ -1054,6 +976,7 @@ macro_rules! construct_service_factory {
 			Genesis = $genesis:ty,
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
+			KeystoreSetup = { $( $keystore_setup:tt )* },
 			AuthoritySetup = { $( $authority_setup:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
 			FullImportQueue = $full_import_queue:ty
@@ -1071,8 +994,6 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
-			type ConsensusPair = $consensus_pair;
-			type FinalityPair = $finality_pair;
 			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
@@ -1134,6 +1055,14 @@ macro_rules! construct_service_factory {
 				client: Arc<$crate::FullClient<Self>>
 			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
 				( $( $finality_proof_provider_init )* ) (client)
+			}
+
+			fn build_authority_key_provider(
+				keystore: &Arc<keystore::Store>,
+				seed: Option<&str>,
+				client: Arc<$crate::FullClient<Self>>,
+			) -> offchain::AuthorityKeyProviders<Self::Block> {
+				( $( $keystore_setup )* ) (keystore, seed, client)
 			}
 
 			fn new_light(

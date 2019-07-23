@@ -75,6 +75,63 @@ mod digest;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
+/// Aura key provider for offchain workers.
+pub struct AuraKeyProvider<Block: BlockT, Client, TPair: Pair> {
+	_marker: PhantomData<Block>,
+	client: Arc<Client>,
+	keystore: Arc<LocalStore<TPair>>,
+}
+
+impl<Block: BlockT, Client, TPair: Pair> AuraKeyProvider<Block, Client, TPair>
+where
+	Block: BlockT,
+	Client: ProvideRuntimeApi + Send + Sync,
+	Client::Api: AuraApi<Block, AuthorityId<TPair>>,
+	TPair: Pair,
+	TPair::Public: Encode + Decode,
+{
+	/// Create a new `AuraKeyProvider`.
+	pub fn new(
+		client: Arc<Client>,
+		keystore: Arc<LocalStore<TPair>>,
+	) -> Self {
+		Self {
+			_marker: PhantomData,
+			client,
+			keystore,
+		}
+	}
+}
+
+impl<Block, Client, TPair>
+	offchain::AuthorityKeyProvider<Block> for AuraKeyProvider<Block, Client, TPair>
+where
+	Block: BlockT,
+	Client: ProvideRuntimeApi + Send + Sync,
+	Client::Api: AuraApi<Block, AuthorityId<TPair>>,
+	TPair: Pair,
+	TPair::Public: Encode + Decode,
+{
+	fn authority_key(
+		&self,
+		at: &BlockId<Block>,
+	) -> Option<Box<dyn offchain::OffchainKey>> {
+		let authorities = self.client
+			.runtime_api()
+			.authorities(at)
+			.unwrap_or_default();
+		if let Some(key) = self.keystore.get_keys(|public| {
+			authorities.iter().find(|aid| aid == &public).is_some()
+		})
+			.into_iter()
+			.next()
+		{
+			return Some(Box::new(key))
+		}
+		None
+	}
+}
+
 /// A slot duration. Create with `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration(slots::SlotDuration<u64>);

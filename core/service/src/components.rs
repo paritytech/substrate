@@ -21,9 +21,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service, AuthorityKeyProvider};
+use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
-use keystore::{LocalStore, Store};
+use keystore::Store;
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -31,7 +31,7 @@ use runtime_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, Pair};
+use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor, sync::mpsc};
 
@@ -128,20 +128,6 @@ pub type ComponentOffchainStorage<C> = <
 
 /// Block type for `Components`
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
-
-/// ConsensusPair type for `Components`
-pub type ComponentConsensusPair<C> = <<C as Components>::Factory as ServiceFactory>::ConsensusPair;
-
-/// FinalityPair type for `Components`
-pub type ComponentFinalityPair<C> = <<C as Components>::Factory as ServiceFactory>::FinalityPair;
-
-/// AuthorityKeyProvider type for `Components`
-pub type ComponentAuthorityKeyProvider<C> = AuthorityKeyProvider<
-	ComponentClient<C>,
-	ComponentBlock<C>,
-	LocalStore<ComponentConsensusPair<C>>,
-	LocalStore<ComponentFinalityPair<C>>
->;
 
 /// Extrinsic hash type for `Components`
 pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
@@ -248,7 +234,6 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			ComponentAuthorityKeyProvider<C>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -265,7 +250,6 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			ComponentAuthorityKeyProvider<C>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -300,10 +284,6 @@ pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> +
 pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT<Hash=H256>;
-	/// Consensus crypto type.
-	type ConsensusPair: Pair;
-	/// Finality crypto type.
-	type FinalityPair: Pair;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.
@@ -352,6 +332,13 @@ pub trait ServiceFactory: 'static + Sized {
 		client: Arc<FullClient<Self>>,
 	) -> Result<Self::SelectChain, error::Error>;
 
+	/// Build the authority key provider for full client.
+	fn build_authority_key_provider(
+		keystore: &Arc<Store>,
+		seed: Option<&str>,
+		client: Arc<FullClient<Self>>,
+	) -> offchain::AuthorityKeyProviders<Self::Block>;
+
 	/// Build full service.
 	fn new_full(config: FactoryFullConfiguration<Self>)
 		-> Result<Self::FullService, error::Error>;
@@ -396,9 +383,9 @@ pub trait Components: Sized + 'static {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
+	type Backend: 'static + client::backend::Backend<ComponentBlock<Self>, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
+	type Executor: 'static + client::CallExecutor<ComponentBlock<Self>, Blake2Hasher> + Send + Sync + Clone;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// A type that can start all runtime-dependent services.
@@ -406,13 +393,13 @@ pub trait Components: Sized + 'static {
 	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
-		Hash = <FactoryBlock<Self::Factory> as BlockT>::Hash,
-		Block = FactoryBlock<Self::Factory>
+		Hash = <ComponentBlock<Self> as BlockT>::Hash,
+		Block = ComponentBlock<Self>
 	>;
 	/// Our Import Queue
-	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
+	type ImportQueue: ImportQueue<ComponentBlock<Self>> + 'static;
 	/// The Fork Choice Strategy for the chain
-	type SelectChain: SelectChain<FactoryBlock<Self::Factory>>;
+	type SelectChain: SelectChain<ComponentBlock<Self>>;
 
 	/// Create client.
 	fn build_client(
@@ -421,7 +408,7 @@ pub trait Components: Sized + 'static {
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
+			Option<Arc<OnDemand<ComponentBlock<Self>>>>
 		),
 		error::Error
 	>;
@@ -436,18 +423,25 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
-	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error>;
+	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<ComponentBlock<Self>>>), error::Error>;
 
 	/// Finality proof provider for serving network requests.
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
+	) -> Result<Option<Arc<dyn FinalityProofProvider<ComponentBlock<Self>>>>, error::Error>;
 
 	/// Build fork choice selector
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error>;
+
+	/// Build the authority key provider.
+	fn build_authority_key_provider(
+		keystore: &Arc<Store>,
+		seed: Option<&str>,
+		client: Arc<ComponentClient<Self>>,
+	) -> offchain::AuthorityKeyProviders<ComponentBlock<Self>>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -553,8 +547,16 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<ComponentBlock<Self>>>>, error::Error> {
 		Factory::build_finality_proof_provider(client)
+	}
+
+	fn build_authority_key_provider(
+		keystore: &Arc<Store>,
+		seed: Option<&str>,
+		client: Arc<ComponentClient<Self>>,
+	) -> offchain::AuthorityKeyProviders<ComponentBlock<Self>> {
+		Factory::build_authority_key_provider(keystore, seed, client)
 	}
 }
 
@@ -647,14 +649,23 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 
 	fn build_finality_proof_provider(
 		_client: Arc<ComponentClient<Self>>
-	) -> Result<Option<Arc<dyn FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+	) -> Result<Option<Arc<dyn FinalityProofProvider<ComponentBlock<Self>>>>, error::Error> {
 		Ok(None)
 	}
+
 	fn build_select_chain(
 		_config: &mut FactoryFullConfiguration<Self::Factory>,
 		_client: Arc<ComponentClient<Self>>
 	) -> Result<Option<Self::SelectChain>, error::Error> {
 		Ok(None)
+	}
+
+	fn build_authority_key_provider(
+		_keystore: &Arc<Store>,
+		_seed: Option<&str>,
+		_client: Arc<ComponentClient<Self>>,
+	) -> offchain::AuthorityKeyProviders<ComponentBlock<Self>> {
+		offchain::AuthorityKeyProviders::new()
 	}
 }
 

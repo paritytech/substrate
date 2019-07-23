@@ -41,6 +41,8 @@ finality_tracker = { package = "srml-finality-tracker", path = "../../srml/final
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+keystore = { package = "substrate-keystore", path = "../../core/keystore" }
+offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
 [dev-dependencies]
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }

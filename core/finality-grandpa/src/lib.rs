@@ -76,6 +76,7 @@ use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -189,6 +190,58 @@ type CommunicationOutH<Block, H> = grandpa::voter::CommunicationOut<
 	AuthoritySignature,
 	AuthorityId,
 >;
+
+/// Aura key provider for offchain workers.
+pub struct GrandpaKeyProvider<Block, Client> {
+	_marker: PhantomData<Block>,
+	client: Arc<Client>,
+	keystore: Arc<LocalStore<fg_primitives::AuthorityPair>>,
+}
+
+impl<Block, Client> GrandpaKeyProvider<Block, Client>
+where
+	Block: BlockT,
+	Client: ProvideRuntimeApi + Send + Sync,
+	Client::Api: GrandpaApi<Block>,
+{
+	/// Creates a new `GrandpaKeyProvider`.
+	pub fn new(
+		client: Arc<Client>,
+		keystore: Arc<LocalStore<fg_primitives::AuthorityPair>>,
+	) -> Self {
+		Self {
+			_marker: PhantomData,
+			client,
+			keystore,
+		}
+	}
+}
+
+impl<Block, Client> offchain::AuthorityKeyProvider<Block> for GrandpaKeyProvider<Block, Client>
+where
+	Block: BlockT,
+	Client: ProvideRuntimeApi + Send + Sync,
+	Client::Api: GrandpaApi<Block>,
+{
+	fn authority_key(
+		&self,
+		at: &BlockId<Block>,
+	) -> Option<Box<dyn offchain::OffchainKey>> {
+		let authorities = self.client
+			.runtime_api()
+			.grandpa_authorities(at)
+			.unwrap_or_default();
+		if let Some(key) = self.keystore.get_keys(|public| {
+			authorities.iter().find(|(aid, _)| aid == public).is_some()
+		})
+			.into_iter()
+			.next()
+		{
+			return Some(Box::new(key))
+		}
+		None
+	}
+}
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
