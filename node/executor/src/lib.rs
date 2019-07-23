@@ -40,7 +40,7 @@ mod tests {
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
-	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency, Get};
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::{Currency, Get}};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
 		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,

@@ -534,15 +534,17 @@ cfg_if! {
 						threshold: core::u64::MAX,
 					}
 				}
+
 				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+
 					babe_primitives::Epoch {
 						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: 1,
-						duration: 6,
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
 					}
 				}
 			}
@@ -692,12 +694,13 @@ cfg_if! {
 				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+
 					babe_primitives::Epoch {
 						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: 1,
-						duration: 6,
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
 					}
 				}
 			}
