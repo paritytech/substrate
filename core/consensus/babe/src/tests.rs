@@ -52,7 +52,7 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 		-> Result<DummyProposer, Error>
 	{
 		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -63,7 +63,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Create = future::Ready<Result<TestBlock, Error>>;
 
-	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
+	fn propose(&mut self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
 		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
 	}
 }
@@ -194,7 +194,7 @@ fn run_one_test() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	for (peer_id, key) in peers {
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
-		let environ = Arc::new(DummyFactory(client.clone()));
+		let environ = DummyFactory(client.clone());
 		import_notifications.push(
 			client.import_notification_stream()
 				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
@@ -219,7 +219,7 @@ fn run_one_test() {
 			block_import: client.clone(),
 			select_chain,
 			client,
-			env: environ.clone(),
+			env: environ,
 			sync_oracle: DummyOracle,
 			inherent_data_providers,
 			force_authoring: false,
