@@ -8,16 +8,11 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
-#[cfg(feature = "std")]
-use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
+	traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -169,8 +164,9 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
 	pub const TransferFee: u128 = 0;
 	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 1;
-	pub const TransactionByteFee: u128 = 0;
+	pub const TransactionBaseFee: u128 = 0;
+	pub const TransactionByteFee: u128 = 1;
+	pub const TransactionWeightFee: u128 = 1;
 }
 
 impl balances::Trait for Runtime {
@@ -191,6 +187,7 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type TransactionWeightFee = TransactionWeightFee;
 }
 
 impl sudo::Trait for Runtime {

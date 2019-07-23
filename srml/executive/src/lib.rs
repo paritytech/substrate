@@ -409,6 +409,7 @@ mod tests {
 		pub const CreationFee: u64 = 0;
 		pub const TransactionBaseFee: u64 = 10;
 		pub const TransactionByteFee: u64 = 0;
+		pub const TransactionWeightFee: u64 = 1;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
@@ -423,6 +424,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type TransactionWeightFee = TransactionWeightFee;
 	}
 
 	impl ValidateUnsigned for Runtime {
@@ -462,7 +464,7 @@ mod tests {
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		balances::GenesisConfig::<Runtime> {
-			balances: vec![(1, 111)],
+			balances: vec![(1, 211)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
@@ -478,7 +480,7 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert_eq!(r, Ok(ApplyOutcome::Success));
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42 - 10 - weight);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 142 - 10 - weight);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}

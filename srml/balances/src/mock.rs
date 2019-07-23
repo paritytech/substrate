@@ -36,6 +36,7 @@ thread_local! {
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
+	static TRANSACTION_WEIGHT_FEE: RefCell<u64> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
@@ -61,6 +62,11 @@ impl Get<u64> for TransactionBaseFee {
 pub struct TransactionByteFee;
 impl Get<u64> for TransactionByteFee {
 	fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
+}
+
+pub struct TransactionWeightFee;
+impl Get<u64> for TransactionWeightFee {
+	fn get() -> u64 { TRANSACTION_WEIGHT_FEE.with(|v| *v.borrow()) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -101,11 +107,13 @@ impl Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type TransactionWeightFee = TransactionWeightFee;
 }
 
 pub struct ExtBuilder {
 	transaction_base_fee: u64,
 	transaction_byte_fee: u64,
+	transaction_weight_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -117,6 +125,7 @@ impl Default for ExtBuilder {
 		Self {
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
+			transaction_weight_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -126,9 +135,10 @@ impl Default for ExtBuilder {
 	}
 }
 impl ExtBuilder {
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64, weight_fee: u64) -> Self {
 		self.transaction_base_fee = base_fee;
 		self.transaction_byte_fee = byte_fee;
+		self.transaction_weight_fee = weight_fee;
 		self
 	}
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
@@ -161,6 +171,7 @@ impl ExtBuilder {
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
 		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
+		TRANSACTION_WEIGHT_FEE.with(|v| *v.borrow_mut() = self.transaction_weight_fee);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();

@@ -1145,6 +1145,7 @@ mod tests {
 		pub const CreationFee: u64 = 0;
 		pub const TransactionBaseFee: u64 = 0;
 		pub const TransactionByteFee: u64 = 0;
+		pub const TransactionWeightFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -1159,6 +1160,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type TransactionWeightFee = TransactionWeightFee;
 	}
 	parameter_types! {
 		pub const CandidacyBond: u64 = 3;

@@ -206,6 +206,9 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
+
+	/// The amount of fee deducted oer unit of weight.
+	type TransactionWeightFee: Get<Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
@@ -249,6 +252,9 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
+
+	/// The amount of fee deducted oer unit of weight.
+	type TransactionWeightFee: Get<Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -260,6 +266,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
+	type TransactionWeightFee = T::TransactionWeightFee;
 }
 
 decl_event!(
@@ -783,6 +790,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
+	type TransactionWeightFee = T::TransactionWeightFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -1174,20 +1182,24 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
 	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
-		// length fee
 		let len_fee = if info.pay_length_fee() {
 			let len = T::Balance::from(len as u32);
 			let base = T::TransactionBaseFee::get();
-			let byte = T::TransactionByteFee::get();
-			base.saturating_add(byte.saturating_mul(len))
+			let per_byte = T::TransactionByteFee::get();
+			base.saturating_add(per_byte.saturating_mul(len))
 		} else {
 			Zero::zero()
 		};
 
-		// weight fee
-		let weight = info.weight;
-		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier()
-			.apply_to(weight).saturated_into();
+		let weight_fee = {
+			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+			// maximum of its data type, which is not desired.
+			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+			let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier()
+				.apply_to(capped_weight).saturated_into();
+			let per_weight = T::TransactionWeightFee::get();
+			weight_fee.saturating_mul(per_weight)
+		};
 
 		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}

@@ -100,6 +100,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const BalancesTransactionBaseFee: u64 = 0;
 	pub const BalancesTransactionByteFee: u64 = 0;
+	pub const BalancesTransactionWeightFee: u64 = 0;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
@@ -131,6 +132,7 @@ impl balances::Trait for Test {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
+	type TransactionWeightFee = BalancesTransactionWeightFee;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;

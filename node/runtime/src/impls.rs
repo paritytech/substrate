@@ -222,8 +222,8 @@ mod tests {
 			});
 
 		// Some values that are all above the target and will cause an increase.
-		let target_weight = TARGET_BLOCK_FULLNESS * <MaximumBlockWeight as Get<Weight>>::get();
-		vec![target_weight + 100, target_weight * 2, target_weight * 4]
+		let t = target();
+		vec![t + 100, t * 2, t * 4]
 			.into_iter()
 			.for_each(|i| {
 				let fm = WeightMultiplierUpdateHandler::convert((

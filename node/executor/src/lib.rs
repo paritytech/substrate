@@ -49,7 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, GetDispatchInfo, WeighData, Weight};
+	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo, Weight};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -82,22 +82,25 @@ mod tests {
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
+	/// Default transfer fee
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 		let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
 			<TransactionByteFee as Get<Balance>>::get() *
 			(extrinsic.encode().len() as Balance);
-		let weight_fee = default_transfer_call().get_dispatch_info().weight as Balance;
-		// TODO: with this we have 100% accurate fee estimation. Should probably be able to get rid
-		// of `assert_eq_error_rate!` now. But it makes test mockup much more complicated because
-		// the fee for each block can only be estimated _before_ that block.
+		let mut weight_fee = default_transfer_call().get_dispatch_info().weight as Balance;
+		weight_fee = weight_fee * 1_000_000 as Balance;
+		// NOTE: we don't need this anymore, but in case needed, this makes the fee accurate over
+		// multiple blocks.
 		// weight_fee = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight_fee as u32) as Balance;
 		length_fee + weight_fee
 	}
 
-	fn multiplier_target() -> Weight {
+	/// Get the target weight of the fee multiplier.
+	fn _multiplier_target() -> Weight {
 		<MaximumBlockWeight as Get<Weight>>::get() / 4
 	}
 
+	/// Default creation fee.
 	fn creation_fee() -> Balance {
 		<CreationFee as Get<Balance>>::get()
 	}
@@ -972,21 +975,6 @@ mod tests {
 
 		let mut tt = new_test_ext(COMPACT_CODE, false);
 
-		// This test can either use `fill_block()`, which is controversial, or should be dropped.
-		// NOTE: This assumes that system::remark has the default.
-		// let num_to_exhaust = (multiplier_target() + 100) / SimpleDispatchInfo::default().weigh_data(());
-		// println!("++ Generating {} transactions to fill {} weight units", num_to_exhaust, multiplier_target() + 100);
-		// let mut xts = (0..num_to_exhaust).map(|i| CheckedExtrinsic {
-		// 	signed: Some((charlie(), signed_extra(i.into(), 0))),
-		// 	function: Call::System(system::Call::remark(vec![0; 1])),
-		// }).collect::<Vec<CheckedExtrinsic>>();
-		// xts.insert(0, CheckedExtrinsic {
-		// 	signed: None,
-		// 	function: Call::Timestamp(timestamp::Call::set(42)),
-		// });
-
-		println!("++ Generated all extrinsics. Constructing blocks.");
-
 		// big one in terms of weight.
 		let block1 = construct_block(
 			&mut tt,
@@ -1054,6 +1042,85 @@ mod tests {
 			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
+		});
+	}
+
+	#[test]
+	fn transaction_fee_is_correct_ultimate() {
+		// This uses the exact values of substrate-node.
+		//
+		// weight of transfer call as of now: 1_000
+		// if weight of cheapest weight would be 10^7, this would be 10^9, which is:
+		//   - 1 MILLICENTS in substrate node.
+		//   - 1 milldot based on current polkadot runtime.
+		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+				(100 * DOLLARS).encode()
+			},
+			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(bob())).to_vec() => {
+				(10 * DOLLARS).encode()
+			},
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+				(110 * DOLLARS).encode()
+			},
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+		]);
+
+		let tip = 1_000_000;
+		let xt = sign(CheckedExtrinsic {
+			signed: Some((alice(), signed_extra(0, tip))),
+			function: Call::Balances(default_transfer_call()),
+		});
+
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"Core_initialize_block",
+			&vec![].and(&from_block_number(1u64)),
+			true,
+			None,
+		).0;
+
+		assert!(r.is_ok());
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+			&mut t,
+			"BlockBuilder_apply_extrinsic",
+			&vec![].and(&xt.clone()),
+			true,
+			None,
+		).0;
+		assert!(r.is_ok());
+
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
+			// Components deducted from alice's balances:
+			// - Weight fee
+			// - Length fee
+			// - Tip
+			// - Creation-fee of bob's account.
+			let mut balance_alice = (100 - 69) * DOLLARS;
+
+			let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
+				<TransactionByteFee as Get<Balance>>::get() *
+				(xt.clone().encode().len() as Balance);
+			println!("++ len fee = {:?}", length_fee);
+			balance_alice -= length_fee;
+
+			// TODO: the 1_000_000 should go away.
+			let weight_fee = default_transfer_call().get_dispatch_info().weight as Balance * 1_000_000;
+			// we know that weight to fee multiplier is effect-less in block 1.
+			assert_eq!(weight_fee as Balance, MILLICENTS);
+			balance_alice -= weight_fee;
+			println!("++ wei fee = {:?}", weight_fee);
+
+			balance_alice -= tip;
+			println!("++ tip fee = {:?}", tip);
+
+			// TODO: why again??? creation fee should not be deducted here.
+			balance_alice -= creation_fee();
+
+			assert_eq!(Balances::total_balance(&alice()), balance_alice);
 		});
 	}
 

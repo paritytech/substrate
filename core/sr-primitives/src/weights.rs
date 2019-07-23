@@ -30,7 +30,7 @@ pub use crate::transaction_validity::TransactionPriority;
 use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u64;
+pub type Weight = u32;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
@@ -144,11 +144,11 @@ pub enum SimpleDispatchInfo {
 impl<T> WeighData<T> for SimpleDispatchInfo {
 	fn weigh_data(&self, _: T) -> Weight {
 		match self {
-			SimpleDispatchInfo::FixedNormal(w) => *w * 1000,
+			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::FreeNormal => Bounded::min_value(),
 
-			SimpleDispatchInfo::FixedOperational(w) => *w * 1000,
+			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
 			SimpleDispatchInfo::FreeOperational => Bounded::min_value(),
 		}
