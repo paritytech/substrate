@@ -422,16 +422,13 @@ impl Fixed64 {
 	/// Performs a saturated multiply and accumulate.
 	///
 	/// Returns a saturated `n + (self * n)`.
-	pub fn saturated_multiply_accumulate<N>(&self, int: N) -> N
-		where N: Copy + Clone + From<u32> + Saturating + Bounded + UniqueSaturatedInto<u32>
-		+ From<Fixed64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N>
-		+ ops::Add<N, Output=N>,
-	{
+	/// TODO: generalize this to any weight type.
+	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
 		let parts = self.0;
 		let positive = parts > 0;
 
 		// natural parts might overflow.
-		let natural_parts = self.clone().saturated_into::<N>();
+		let natural_parts = self.clone().saturated_into::<u32>();
 		// fractional parts can always fit into u32.
 		let perbill_parts = (parts.abs() % DIV) as u32;
 
@@ -453,21 +450,13 @@ impl Fixed64 {
 	}
 }
 
-macro_rules! impl_from_for_unsigned {
-	( $($type:ty),+ ) => {
-		$(
-			impl From<Fixed64> for $type {
-				fn from(t: Fixed64) -> Self {
-					// Note that such implementation with `max(0)` only makes sense for unsigned
-					// numbers.
-					(t.0.max(0) / DIV).try_into().unwrap_or(Bounded::max_value())
-				}
-			}
-		)*
+impl UniqueSaturatedInto<u32> for Fixed64 {
+	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
+	/// expected to be lossy.
+	fn unique_saturated_into(self) -> u32 {
+		(self.0.abs() / DIV).try_into().unwrap_or(Bounded::max_value())
 	}
 }
-
-impl_from_for_unsigned!(u16, u32, u64, u128);
 
 impl Saturating for Fixed64 {
 	fn saturating_add(self, rhs: Self) -> Self {
@@ -481,8 +470,8 @@ impl Saturating for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
-/// safe addition.
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -491,8 +480,8 @@ impl ops::Add for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
-/// safe subtraction.
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 

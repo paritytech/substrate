@@ -110,6 +110,8 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 		let second_term = v_squared_2.saturating_mul(diff_squared);
 
 		if positive {
+			// Note: this is merely bounded by how big the multiplier and the inner value can go,
+			// not by any economical reasoning.
 			let excess = first_term.saturating_add(second_term);
 			multiplier.saturating_add(WeightMultiplier::from_fixed(excess))
 		} else {
@@ -119,7 +121,7 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 				// despite the fact that apply_to saturates weight (final fee cannot go below 0)
 				// it is crucially important to stop here and don't further reduce the weight fee
 				// multiplier. While at -1, it means that the network is so un-congested that all
-				// transactions are practically free. We stop here and only increase if the network
+				// transactions have no weight fee. We stop here and only increase if the network
 				// became more busy.
 				.max(WeightMultiplier::from_rational(-1, 1))
 		}
@@ -131,7 +133,8 @@ mod tests {
 	use super::*;
 	use runtime_primitives::weights::Weight;
 	use runtime_primitives::Perbill;
-	use crate::MaximumBlockWeight;
+	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
+	use crate::constants::currency::*;
 
 	fn max() -> Weight {
 		<MaximumBlockWeight as Get<Weight>>::get()
@@ -162,6 +165,47 @@ mod tests {
 
 	fn wm(parts: i64) -> WeightMultiplier {
 		WeightMultiplier::from_parts(parts)
+	}
+
+	#[test]
+	fn empty_chain_simulation() {
+		// just a few txs per_block.
+		let block_weight = 1000;
+		let mut wm = WeightMultiplier::default();
+		let mut iterations: u64 = 0;
+		loop {
+			let next = WeightMultiplierUpdateHandler::convert((block_weight, wm));
+			wm = next;
+			if wm == WeightMultiplier::from_rational(-1, 1) { break; }
+			iterations += 1;
+		}
+		println!("iteration {}, new wm = {:?}. Weight fee is now zero", iterations, wm);
+	}
+
+	#[test]
+	#[ignore]
+	fn congested_chain_simulation() {
+		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
+		// almost full. The entire quota of normal transactions is taken.
+		let block_weight = <AvailableBlockRatio as Get<Perbill>>::get() * max();
+		let tx_weight = 1000;
+		let mut wm = WeightMultiplier::default();
+		let mut iterations: u64 = 0;
+		loop {
+			let next = WeightMultiplierUpdateHandler::convert((block_weight, wm));
+			if wm == next { break; }
+			wm = next;
+			iterations += 1;
+			let fee = <Runtime as balances::Trait>::WeightToFee::convert(wm.apply_to(tx_weight));
+			println!(
+				"iteration {}, new wm = {:?}. Fee at this point is: {} millicents, {} cents, {} dollars",
+				iterations,
+				wm,
+				fee / MILLICENTS,
+				fee / CENTS,
+				fee / DOLLARS
+			);
+		}
 	}
 
 	#[test]

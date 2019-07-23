@@ -588,7 +588,6 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			// TODO: this needs investigating: why are we deducting creation fee twice here? and why bob also pays it?
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
 			// weight update.
 			assert_eq_error_rate!(
