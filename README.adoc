@@ -308,7 +308,7 @@ cargo run --release \-- \
 
 Additional Substrate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
-== WASM binaries
+=== WASM binaries
 
 The WASM binaries are built during the normal `cargo build` process. To control the WASM binary building,
 we support multiple environment variables:
