@@ -124,6 +124,25 @@ pub trait BlockImportOperation<Block, H> where
 	fn mark_head(&mut self, id: BlockId<Block>) -> error::Result<()>;
 }
 
+/// Finalize Facilities
+pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block, H>> {
+	/// Mark all blocks up to given as finalized in operation. If a
+	/// justification is provided it is stored with the given finalized
+	/// block (any other finalized blocks are left unjustified).
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
+	fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, H, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()>;
+}
+
 /// Provides access to an auxiliary database.
 pub trait AuxStore {
 	/// Insert auxiliary data into key-value store. Deletions occur after insertions.

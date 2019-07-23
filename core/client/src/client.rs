@@ -62,7 +62,7 @@ use hash_db::Hasher;
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	ClientImportOperation,
+	ClientImportOperation, Finalizer,
 };
 use crate::blockchain::{
 	self, Info as ChainInfo, Backend as ChainBackend,
@@ -1148,26 +1148,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Mark all blocks up to given as finalized in operation. If a
-	/// justification is provided it is stored with the given finalized
-	/// block (any other finalized blocks are left unjustified).
-	///
-	/// If the block being finalized is on a different fork from the current
-	/// best block the finalized block is set as best, this might be slightly
-	/// innacurate (i.e. outdated), usages that require determining an accurate
-	/// best block should use `SelectChain` instead of the client.
-	pub fn apply_finality(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		id: BlockId<Block>,
-		justification: Option<Justification>,
-		notify: bool,
-	) -> error::Result<()> {
-		let last_best = self.backend.blockchain().info().best_hash;
-		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
-	}
-
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
 	///
@@ -1504,6 +1484,40 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).check_block(hash, parent_hash)
+	}
+}
+
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where 
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()> {
+		let last_best = self.backend.blockchain().info().best_hash;
+		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+	}
+}
+
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where 
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()> {
+		(**self).apply_finality(operation, id, justification, notify)
 	}
 }
 

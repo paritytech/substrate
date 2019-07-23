@@ -28,7 +28,7 @@ use parking_lot::RwLock;
 use client::{
 	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
 	Client, error::Error as ClientError,
-	blockchain::HeaderBackend,
+	blockchain::HeaderBackend, backend::Finalizer,
 
 };
 use grandpa::{
