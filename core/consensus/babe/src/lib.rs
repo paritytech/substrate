@@ -878,14 +878,14 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		.map_err(map_err)
 }
 
-/// Tree of all epoch changes across all *seen* forks. Data stored in tree is the
-/// hash and block number of the block signaling the epoch change, the new epoch
-/// index and the minimum *slot number* when the next epoch should start (i.e.
-/// epoch start slot + epoch duration).
+/// Tree of all epoch changes across all *seen* forks. Data stored in tree is
+/// the hash and block number of the block signaling the epoch change, the new
+/// epoch index, the authorities, and the minimum *slot number* when the next
+/// epoch should start (i.e. epoch start slot + epoch duration).
 type EpochChanges<Block> = ForkTree<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	(u64, SlotNumber),
+	(u64, Vec<(AuthorityId, BabeWeight)>, SlotNumber),
 >;
 
 /// A shared epoch changes tree.
@@ -965,8 +965,10 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 	fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block>,
-		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		mut new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		use std::collections::hash_map::Entry;
+
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
@@ -998,7 +1000,7 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 			&hash,
 			&number,
 			&is_descendent_of,
-			&|(_, expected_epoch_change_slot)| {
+			&|(_, _, expected_epoch_change_slot)| {
 				*expected_epoch_change_slot <= slot_number
 			}
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
@@ -1044,16 +1046,26 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		if let Some(entry) = new_cache.get(&well_known_cache_keys::AUTHORITIES) {
-			if let Some(epoch) = Epoch::decode(&mut &entry[..]) {
+		if let Entry::Occupied(entry) = new_cache.entry(well_known_cache_keys::AUTHORITIES) {
+			if let Some(epoch) = Epoch::decode(&mut &entry.get()[..]) {
 				if let Some(last_epoch_change) = epoch_change {
-					let last_epoch_index = last_epoch_change.data.0;
+					let (last_epoch_index, ref last_epoch_authorities, _) = last_epoch_change.data;
 					if epoch.epoch_index.checked_sub(last_epoch_index) != Some(1) {
 						return Err(ConsensusError::ClientImport(format!(
 							"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
 							last_epoch_index.saturating_add(1),
 							epoch.epoch_index,
 						)));
+					}
+
+					// if the authorities don't change we don't want to
+					// propagate the cache entry to the inner `ImportBlock`,
+					// since the epoch change is specific to BABE.
+					// e.g. in the case of GRANDPA it would require a
+					// justification for the block, expecting that the
+					// authorities actually changed.
+					if epoch.authorities == *last_epoch_authorities {
+						entry.remove_entry();
 					}
 				}
 
@@ -1063,7 +1075,7 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 				epoch_changes.import(
 					hash,
 					number,
-					(epoch.epoch_index, epoch.start_slot + epoch.duration),
+					(epoch.epoch_index, epoch.authorities, epoch.start_slot + epoch.duration),
 					&is_descendent_of,
 				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
