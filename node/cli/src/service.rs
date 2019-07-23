@@ -309,14 +309,14 @@ mod tests {
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
+			let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
-			});
+			};
 
 			let mut digest = Digest::<H256>::default();
 			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num));
-			let proposer = proposer_factory.init(&parent_header).unwrap();
+			let mut proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = futures03::executor::block_on(proposer.propose(
 				inherent_data,
 				digest,
