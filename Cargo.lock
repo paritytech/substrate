@@ -3672,6 +3672,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
+ "srml-staking 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
@@ -4318,6 +4319,7 @@ name = "substrate-consensus-babe"
 version = "2.0.0"
 dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fork-tree 2.0.0",
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-preview 0.3.0-alpha.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4352,6 +4354,7 @@ name = "substrate-consensus-babe-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "schnorrkel 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
@@ -4854,8 +4857,11 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
+ "srml-babe 2.0.0",
  "srml-executive 2.0.0",
  "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "srml-timestamp 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",

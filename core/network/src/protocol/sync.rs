@@ -1189,4 +1189,3 @@ fn peer_block_request<B: BlockT>(
 		None
 	}
 }
-
