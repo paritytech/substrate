@@ -37,3 +37,6 @@ service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.18"
 env_logger = "0.6.1"
+
+[features]
+test-helpers = []

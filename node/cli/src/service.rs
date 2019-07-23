@@ -266,7 +266,7 @@ mod tests {
 	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
 	use parity_codec::{Encode, Decode};
 	use primitives::{
-		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
+		crypto::Pair as CryptoPair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
@@ -279,6 +279,8 @@ mod tests {
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
+		use primitives::ed25519::Pair;
+
 		use {service_test, Factory};
 		use client::{BlockImportParams, BlockOrigin};
 
@@ -359,8 +361,17 @@ mod tests {
 			});
 
 			let mut digest = Digest::<H256>::default();
-			// FIXME: need to add proper babe pre digest
-			// digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(slot_num));
+
+			let babe_pre_digest = babe::test_helpers::claim_slot::<node_primitives::Block, _>(
+				&*service.client(),
+				&parent_id,
+				slot_num,
+				&alice,
+				std::u64::MAX,
+			).unwrap();
+
+			digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
+
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,

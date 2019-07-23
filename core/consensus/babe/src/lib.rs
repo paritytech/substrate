@@ -1172,3 +1172,42 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 
 	Ok((queue, timestamp_core, block_import, pruning_task))
 }
+
+/// BABE test helpers. Utility methods for manually authoring blocks.
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers {
+	use super::*;
+
+	/// Try to claim the given slot and return a `BabePreDigest` if
+	/// successful.
+	pub fn claim_slot<B, C>(
+		client: &C,
+		at: &BlockId<B>,
+		slot_number: u64,
+		key: &sr25519::Pair,
+		threshold: u64,
+	) -> Option<BabePreDigest> where
+		B: BlockT,
+		C: ProvideRuntimeApi + ProvideCache<B>,
+		C::Api: BabeApi<B>,
+	{
+		let epoch = epoch(client, at).unwrap();
+		println!("Epoch: {:?}", epoch);
+
+		super::claim_slot(
+			&epoch.randomness,
+			slot_number,
+			epoch.epoch_index,
+			epoch.clone(),
+			key,
+			threshold,
+		).map(|((inout, vrf_proof, _), authority_index)| {
+			BabePreDigest {
+				vrf_proof,
+				vrf_output: inout.to_output(),
+				authority_index: authority_index as u64,
+				slot_number,
+			}
+		})
+	}
+}

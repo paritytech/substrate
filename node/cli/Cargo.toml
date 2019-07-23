@@ -44,6 +44,7 @@ system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
 
 [dev-dependencies]
+babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
 
