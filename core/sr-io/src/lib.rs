@@ -36,8 +36,9 @@ pub use primitives::Blake2Hasher;
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
-	CryptoKind, CryptoKeyId,
+	CryptoKind, CryptoKey,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Error verifying ECDSA signature
@@ -239,43 +240,44 @@ export_api! {
 		/// The transaction will end up in the pool.
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
+		/// Returns information about the local node's network state.
+		fn network_state() -> Result<OpaqueNetworkState, ()>;
+
+		/// Returns the currently configured authority public key, if available.
+		fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()>;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.
-		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
+		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKey, ()>;
 
 		/// Encrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn encrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn encrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Decrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-		fn decrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn decrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Sign a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn sign(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn sign(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
 		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
 		/// Returns an error in case the key is not available or does not exist or the parameters
 		/// lengths are incorrect.
-		fn verify(
-			key: Option<CryptoKeyId>,
-			kind: CryptoKind,
-			msg: &[u8],
-			signature: &[u8]
-		) -> Result<bool, ()>;
+		fn verify(key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;
@@ -313,7 +315,7 @@ export_api! {
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
 		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Initiaties a http request given HTTP verb and the URL.
+		/// Initiates a http request given HTTP verb and the URL.
 		///
 		/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
 		/// Returns the id of newly started request.

@@ -30,7 +30,7 @@ use log::info;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
 use consensus_common::{
-	BlockOrigin, ImportBlock, InherentData, ForkChoiceStrategy,
+	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
 };
 use consensus_common::block_import::BlockImport;
@@ -166,7 +166,7 @@ fn import_block<F>(
 	block: <F as ServiceFactory>::Block
 ) -> () where F: ServiceFactory
 {
-	let import = ImportBlock {
+	let import = BlockImportParams {
 		origin: BlockOrigin::File,
 		header: block.header().clone(),
 		post_digests: Vec::new(),

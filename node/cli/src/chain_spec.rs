@@ -19,10 +19,10 @@
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, AuraId, Balance};
 use node_runtime::{
-	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig, CouncilConfig,
-	AuraConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
-	SystemConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
-	MILLICENTS,
+	GrandpaConfig, BalancesConfig, ContractsConfig, ElectionsConfig, DemocracyConfig,
+	CouncilConfig, AuraConfig,  ImOnlineConfig, IndicesConfig, SessionConfig, StakingConfig,
+	SudoConfig,	TechnicalCommitteeConfig, SystemConfig, WASM_BINARY, Perbill, SessionKeys,
+	StakerStatus, DAYS, DOLLARS, MILLICENTS,
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -153,6 +153,10 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		}),
+		im_online: Some(ImOnlineConfig {
+			gossip_at: 0,
+			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
@@ -290,6 +294,10 @@ pub fn testnet_genesis(
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		}),
+		im_online: Some(ImOnlineConfig{
+			gossip_at: 0,
+			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),

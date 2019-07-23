@@ -26,9 +26,10 @@ pub mod chain_ops;
 pub mod error;
 
 use std::io;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -37,12 +38,12 @@ use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use network::NetworkState;
-use log::{info, warn, debug, error};
+use network::{NetworkState, NetworkStateInfo};
+use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
 use primitives::{Pair, ed25519, crypto};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
+use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -55,13 +56,15 @@ pub use transaction_pool::txpool::{
 };
 pub use client::FinalityNotifications;
 
-pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
+pub use components::{
+	ServiceFactory, FullBackend, FullExecutor, LightBackend, ComponentAuthorityKeyProvider,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	ComponentsSetupState, FullComponentsSetupState, LightComponentsSetupState,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentConsensusPair, ComponentFinalityPair,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -83,7 +86,7 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: AuthorityKeyProvider,
+	keystore: ComponentAuthorityKeyProvider<Components>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -102,7 +105,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
-		AuthorityKeyProvider,
+		ComponentAuthorityKeyProvider<Components>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -267,6 +270,7 @@ impl<Components: components::Components> Service<Components> {
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
 		let keystore_authority_key = AuthorityKeyProvider {
+			_marker: PhantomData,
 			roles: state.config.roles,
 			password: state.config.password.clone(),
 			keystore: keystore.map(Arc::new),
@@ -295,6 +299,7 @@ impl<Components: components::Components> Service<Components> {
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
+			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -314,6 +319,7 @@ impl<Components: components::Components> Service<Components> {
 							&number,
 							&offchain,
 							&txpool,
+							&network_state_info,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -495,10 +501,17 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
+	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
 		use offchain::AuthorityKeyProvider;
 
-		self.keystore.authority_key()
+		self.keystore.authority_key(&BlockId::Number(Zero::zero()))
+	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn fg_authority_key(&self) -> Option<ComponentFinalityPair<Components>> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -528,7 +541,8 @@ impl<Components: components::Components> Service<Components> {
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
 	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-	-> impl Future<Item = Option<String>, Error = ()> {
+		-> impl Future<Item = Option<String>, Error = ()>
+	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
 	}
 
@@ -632,6 +646,8 @@ fn build_network_future<
 		.map(|v| Ok::<_, ()>(v)).compat();
 
 	futures::future::poll_fn(move || {
+		let before_polling = Instant::now();
+
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
 			network.on_block_imported(notification.hash, notification.header);
@@ -690,10 +706,22 @@ fn build_network_future<
 		}
 
 		// Main network polling.
-		network.poll()
-			.map_err(|err| {
-				warn!(target: "service", "Error in network: {:?}", err);
-			})
+		match network.poll() {
+			Ok(Async::NotReady) => {}
+			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
+			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
+		}
+
+		// Now some diagnostic for performances.
+		let polling_dur = before_polling.elapsed();
+		log!(
+			target: "service",
+			if polling_dur >= Duration::from_millis(50) { Level::Warn } else { Level::Trace },
+			"Polling the network future took {:?}",
+			polling_dur
+		);
+		
+		Ok(Async::NotReady)
 	})
 }
 
@@ -730,7 +758,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	config: &FactoryFullConfiguration<F>,
 	mut gen_handler: H
-) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 	{
@@ -873,16 +901,27 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-/// A provider of current authority key.
 #[derive(Clone)]
-pub struct AuthorityKeyProvider {
+/// A provider of current authority key.
+pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
+	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
 	roles: Roles,
 	keystore: Option<Arc<Keystore>>,
 	password: crypto::Protected<String>,
 }
 
-impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
-	fn authority_key<TPair: Pair>(&self) -> Option<TPair> {
+impl<Block, ConsensusPair, FinalityPair>
+	offchain::AuthorityKeyProvider<Block>
+	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
+where
+	Block: runtime_primitives::traits::Block,
+	ConsensusPair: Pair,
+	FinalityPair: Pair,
+{
+	type ConsensusPair = ConsensusPair;
+	type FinalityPair = FinalityPair;
+
+	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
 		if self.roles != Roles::AUTHORITY {
 			return None
 		}
@@ -893,10 +932,33 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 		};
 
 		let loaded_key = keystore
-				.contents()
-				.map(|keys| keys.get(0)
-					.map(|k| keystore.load(k, self.password.as_ref()))
-				);
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
+	}
+
+	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
 
 		if let Ok(Some(Ok(key))) = loaded_key {
 			Some(key)
@@ -923,7 +985,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 /// # use client::{self, LongestChain};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
@@ -941,7 +1003,7 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+/// # 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }
@@ -954,6 +1016,8 @@ impl offchain::AuthorityKeyProvider for AuthorityKeyProvider {
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
+///		ConsensusPair = primitives::ed25519::Pair,
+///		FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -998,6 +1062,8 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
+			ConsensusPair = $consensus_pair:ty,
+			FinalityPair = $finality_pair:ty,
 			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
@@ -1024,6 +1090,8 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
+			type ConsensusPair = $consensus_pair;
+			type FinalityPair = $finality_pair;
 			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
