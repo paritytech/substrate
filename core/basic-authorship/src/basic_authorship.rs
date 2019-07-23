@@ -311,7 +311,7 @@ mod tests {
 
 		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)]).unwrap();
 
-		let proposer_factory = ProposerFactory {
+		let mut proposer_factory = ProposerFactory {
 			client: client.clone(),
 			transaction_pool: txpool.clone(),
 		};
