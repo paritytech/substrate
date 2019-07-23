@@ -245,7 +245,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(
-		&self,
+		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
@@ -303,7 +303,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let proposer = match env.init(&chain_head) {
+			let mut proposer = match env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -914,7 +914,7 @@ mod tests {
 		type Error = Error;
 		type Create = future::Ready<Result<TestBlock, Error>>;
 
-		fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
+		fn propose(&mut self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
 			future::ready(r)
 		}
