@@ -97,7 +97,7 @@ impl SlotDuration {
 		B: BlockT,
 		C: AuxStore + ProvideRuntimeApi,
 		S: Verify<Signer=A> + Encode + Decode,
-		C::Api: AuraApi<B, A, S>,
+		C::Api: AuraApi<B, A, S, AuraEquivocationProof<<B as BlockT>::Header, S, A, Proof>>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b))
 			.map(Self)
@@ -139,7 +139,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
+	C::Api: AuraApi<B, AuthorityId<P>, P::Signature, AuraEquivocationProof<H, P::Signature, P::Public, Proof>>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -186,7 +186,7 @@ struct AuraWorker<C, E, I, P, SO> {
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>, P::Signature>,
+	C::Api: AuraApi<B, AuthorityId<P>, P::Signature, AuraEquivocationProof<H, P::Signature, P::Public, Proof>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -373,7 +373,8 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P::Signature: Encode + Decode + Clone + Verify<Signer=P::Public>,
 	C: client::backend::AuxStore + ProvideRuntimeApi + HeaderBackend<B>,
-	C::Api: AuraApi<B, P::Public, P::Signature>,
+	C::Api: AuraApi<B, P::Public, P::Signature,
+		AuraEquivocationProof<<B as BlockT>::Header, P::Signature, P::Public, Proof>>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 	T: SubmitReport<C, B>,
 {
@@ -403,7 +404,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, AuraEquivocationProof<B::Header, P::Signature, P::Public>, P::Signature,
+				_, _, AuraEquivocationProof<B::Header, P::Signature, P::Public, Proof>, P::Signature, Proof
 			>(
 				client,
 				slot_now,
@@ -504,7 +505,8 @@ impl<C, P, T> AuraVerifier<C, P, T>
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + HeaderBackend<B>,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature,
+		AuraEquivocationProof<<B as BlockT>::Header, P::Signature, P::Public, Proof>>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
@@ -610,7 +612,7 @@ fn initialize_authorities_cache<A, B, C, S>(client: &C) -> Result<(), ConsensusE
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	S: Verify<Signer=A> + Encode + Decode,
-	C::Api: AuraApi<B, A, S>,
+	C::Api: AuraApi<B, A, S, AuraEquivocationProof<<B as BlockT>::Header, S, A, Proof>>,
 {
 	// no cache => no initialization
 	let cache = match client.cache() {
@@ -645,7 +647,7 @@ fn authorities<A, B, C, S>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consen
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	S: Verify<Signer=A> + Encode + Decode,
-	C::Api: AuraApi<B, A, S>,
+	C::Api: AuraApi<B, A, S, AuraEquivocationProof<<B as BlockT>::Header, S, A, Proof>>,
 {
 	client
 		.cache()
@@ -687,7 +689,8 @@ pub fn import_queue<B, C, P, T>(
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>, P::Signature,
+		AuraEquivocationProof<<B as BlockT>::Header, P::Signature, P::Public, Proof>>,
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
@@ -728,101 +731,6 @@ pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> O
 
 	Some(current_author)
 }
-
-#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
-pub struct AuraEquivocationProof<H, S, I, P> {
-	identity: I,
-	identity_proof: P,
-	first_header: H,
-	second_header: H,
-	first_signature: S,
-	second_signature: S,
-}
-
-impl<H, S, I> AuthorshipEquivocationProof<H, S, I, Proof> for AuraEquivocationProof<H, S, I, Proof>
-where
-	H: Header,
-	S: Verify<Signer=I> + Codec,
-{
-	fn new(
-		identity: I,
-		identity_proof: Proof,
-		first_header: H,
-		second_header: H,
-		first_signature: S,
-		second_signature: S,
-	) -> Self {
-		AuraEquivocationProof {
-			identity,
-			identity_proof,
-			first_header,
-			second_header,
-			first_signature,
-			second_signature
-		}
-	}
-
-	/// Check the validity of the equivocation proof.
-	fn is_valid(&self) -> bool {
-		let first_header = self.first_header();
-		let second_header = self.second_header();
-
-		if first_header == second_header {
-			return false
-		}
-
-		let maybe_first_slot = find_pre_digest::<H, S>(first_header);
-		let maybe_second_slot = find_pre_digest::<H, S>(second_header);
-
-		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-			// TODO: Check that author matches slot author (improve HistoricalSession).
-			let author = self.identity();
-
-			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
-				return false
-			}
-
-			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
-				return false
-			}
-
-			return true;
-		}
-
-		false
-	}
-
-	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &I {
-		&self.identity
-	}
-
-	/// Get the proof of identity inclusion.
-	fn identity_proof(&self) -> &Proof {
-		&self.identity
-	}
-
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
-	}
-
-	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &S {
-		&self.first_signature
-	}
-
-	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &S {
-		&self.second_signature
-	}
-}
-
 
 #[cfg(test)]
 mod tests {

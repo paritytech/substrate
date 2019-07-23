@@ -16,7 +16,7 @@
 
 //! Schema for slots in the aux-db.
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header, Verify};
@@ -62,7 +62,13 @@ pub fn check_equivocation<C, H, E, V, P>(
 		C: AuxStore,
 		V: Verify + Encode + Decode + Clone,
 		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
-		E: AuthorshipEquivocationProof<H, V, V::Signer, P>,
+		E: AuthorshipEquivocationProof<
+			Header=H,
+			Signature=V,
+			Identity=<V as Verify>::Signer,
+			InclusionProof=P
+		>,
+		P: Codec + Default,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -92,6 +98,7 @@ pub fn check_equivocation<C, H, E, V, P>(
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
 					signer.clone(),
+					P::default(),
 					prev_header.clone(),
 					header.clone(),
 					prev_signature.clone(),

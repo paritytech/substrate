@@ -56,7 +56,7 @@ use consensus_aura::AuraEquivocationProof;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
-use session::historical;
+use session::historical::{self, Proof};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -110,6 +110,9 @@ type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
 
 pub struct Author;
 
+type AuraEquivocation<Block> =
+	AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>;
+
 impl OnUnbalanced<NegativeImbalance> for Author {
 	fn on_unbalanced(amount: NegativeImbalance) {
 		Balances::resolve_creating(&Authorship::author(), amount);
@@ -151,6 +154,13 @@ impl aura::Trait for Runtime {
 	type AuthorityId = AuraId;
 	type Signature = AuthoritySignature;
 	type KeyOwnerSystem = Historical;
+	type Proof = Proof;
+	type Equivocation = AuraEquivocationProof<
+		Self::Header,
+		Self::Signature,
+		Self::AuthorityId,
+		Self::Proof
+	>;
 }
 
 impl indices::Trait for Runtime {
@@ -564,7 +574,12 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature> for Runtime {
+	impl consensus_aura::AuraApi<
+		Block,
+		AuraId,
+		AuthoritySignature,
+		AuraEquivocation<Block>,
+	> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
@@ -574,10 +589,10 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			equivocation: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId>,
+			equivocation: AuraEquivocation<Block>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::ED25519, equivocation.identity().encode()))?;
-			let report_call = Call::Aura(AuraCall::report_equivocation((equivocation, proof)));
+			let report_call = Call::Aura(AuraCall::report_equivocation(equivocation));
 			Some(report_call.encode())
 		}
 	}

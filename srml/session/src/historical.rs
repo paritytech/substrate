@@ -271,7 +271,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 /// Proof of ownership of a specific key.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Clone, Encode, PartialEq, Eq, Decode)]
+#[derive(Clone, Encode, PartialEq, Eq, Decode, Default)]
 pub struct Proof {
 	session: SessionIndex,
 	trie_nodes: Vec<Vec<u8>>,

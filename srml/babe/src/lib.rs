@@ -37,13 +37,13 @@ use primitives::{
 use primitives::ConsensusEngineId;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 use inherents::{
 	RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, BabeEquivocationProof, ConsensusLog};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog};
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use session::historical::{self, Proof};
 use system::ensure_signed;
@@ -138,8 +138,13 @@ pub trait Trait: timestamp::Trait {
 	/// The signature type for an authority.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
 
+	type Proof: Member + Parameter;
+
 	/// The session key owner system.
-	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Self::Proof>;
+
+	/// The equivocation type.
+	type Equivocation: AuthorshipEquivocationProof<InclusionProof=Self::Proof> + Member + Parameter;
 }
 
 decl_storage! {
@@ -192,18 +197,11 @@ decl_module! {
 		}
 
 		/// Report equivocation.
-		fn report_equivocation(
-			origin,
-			proved_equivocation: (
-				BabeEquivocationProof<T::Header, T::Signature, T::AuthorityId>,
-				Proof,
-			)
-		) {
+		fn report_equivocation(origin, equivocation: T::Equivocation) {
 			let _who = ensure_signed(origin)?;
-			let (equivocation, proof) = proved_equivocation;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::ED25519, equivocation.identity().encode()),
-				proof,
+				equivocation.identity_proof().clone(),
 			);
 
 			if to_punish.is_some() && equivocation.is_valid() {

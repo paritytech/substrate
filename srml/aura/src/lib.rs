@@ -51,7 +51,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::Encode;
+use parity_codec::{Encode, Codec};
 #[cfg(feature = "std")]
 use parity_codec::Decode;
 use srml_support::{
@@ -73,9 +73,7 @@ use inherents::{
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::{
-	AURA_ENGINE_ID, ConsensusLog, find_pre_digest, AuraEquivocationProof
-};
+use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, find_pre_digest};
 use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use session::historical::{self, Proof};
@@ -181,7 +179,7 @@ pub trait Trait: timestamp::Trait + historical::Trait {
 	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Self::Proof>;
 
 	/// The equivocation type.
-	type Equivocation: AuthorshipEquivocationProof;
+	type Equivocation: AuthorshipEquivocationProof<InclusionProof=Self::Proof> + Member + Parameter;
 }
 
 decl_storage! {
@@ -197,12 +195,11 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
 		/// Report equivocation.
-		fn report_equivocation(origin, proved_equivocation: Self::Equivocation) {
+		fn report_equivocation(origin, equivocation: T::Equivocation) {
 			let _who = ensure_signed(origin)?;
-			let (equivocation, proof) = proved_equivocation;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::ED25519, equivocation.identity().encode()),
-				proof,
+				equivocation.identity_proof().clone(),
 			);
 
 			if to_punish.is_some() && equivocation.is_valid() {

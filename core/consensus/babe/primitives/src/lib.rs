@@ -116,7 +116,7 @@ impl slots::SlotData for BabeConfiguration {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	pub trait<H, S, I, P> BabeApi<Equivocation: AuthorshipEquivocationProof<H, S, I, P>> {
+	pub trait BabeApi<Equivocation: AuthorshipEquivocationProof> {
 		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///
