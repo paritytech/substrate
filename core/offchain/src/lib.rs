@@ -180,27 +180,15 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 	}
 }
 
-/// Spawns a new offchain worker (browser).
+/// Spawns a new offchain worker.
 ///
-/// For browser environment, due to lack of threading we just run
-/// the workers within current thread.
-/// Note that this will block for potentially a significant amount of time,
-/// but we don't expect browser nodes to run any heavy offchain code anyway.
-#[cfg(target_os = "unknown")]
-fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
-	f()
-}
-
-/// Spawns a new offchain worker (non-browser).
-///
-/// For regular (non-browser) systems we spawn workers for each block
-/// in a separate thread, since they can run for a significant amount of time
+/// We spawn offchain workers for each block in a separate thread,
+/// since they can run for a significant amount of time
 /// in a blocking fashion and we don't want to block the runtime.
 ///
 /// Note that we should avoid that if we switch to future-based runtime in the future,
 /// alternatively:
 /// TODO [ToDr] (#1458) we can consider using a thread pool instead.
-#[cfg(not(target_os = "unknown"))]
 fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 	std::thread::spawn(f);
 }
