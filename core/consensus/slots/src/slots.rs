@@ -96,7 +96,7 @@ impl SlotInfo {
 }
 
 /// A stream that returns every time there is a new slot.
-pub struct Slots<SC> {
+pub(crate) struct Slots<SC> {
 	last_slot: u64,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
