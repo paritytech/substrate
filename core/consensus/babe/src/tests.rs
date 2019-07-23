@@ -314,7 +314,6 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let randomness = &[];
 	let (pair, _) = sr25519::Pair::generate();
 	let mut i = 0;
 	let epoch = Epoch {
@@ -325,7 +324,7 @@ fn can_author_block() {
 		duration: 100,
 	};
 	loop {
-		match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
+		match claim_slot(i, epoch.clone(), &pair, u64::MAX / 10) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s);

@@ -273,7 +273,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 		};
 
-		let Epoch { ref authorities, randomness, epoch_index, .. } = epoch;
+		let Epoch { ref authorities, .. } = epoch;
 
 		if authorities.is_empty() {
 			error!(target: "babe", "No authorities at block {:?}", chain_head.hash());
@@ -288,9 +288,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		}
 
 		let proposal_work = if let Some(claim) = claim_slot(
-			&randomness,
 			slot_info.number,
-			epoch_index,
 			epoch,
 			&pair,
 			self.threshold,
@@ -802,16 +800,14 @@ fn check(inout: &VRFInOut, threshold: u64) -> bool {
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
 /// so it returns `Some(_)`.  Otherwise, it returns `None`.
 fn claim_slot(
-	randomness: &[u8],
 	slot_number: u64,
-	epoch: u64,
-	Epoch { ref authorities, .. }: Epoch,
+	Epoch { ref authorities, ref randomness, epoch_index, .. }: Epoch,
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
 	let authority_index = authorities.iter().position(|s| &s.0 == public)?;
-	let transcript = make_transcript(randomness, slot_number, epoch);
+	let transcript = make_transcript(randomness, slot_number, epoch_index);
 
 	// Compute the threshold we will use.
 	//
@@ -1192,13 +1188,10 @@ pub mod test_helpers {
 		C::Api: BabeApi<B>,
 	{
 		let epoch = epoch(client, at).unwrap();
-		println!("Epoch: {:?}", epoch);
 
 		super::claim_slot(
-			&epoch.randomness,
 			slot_number,
-			epoch.epoch_index,
-			epoch.clone(),
+			epoch,
 			key,
 			threshold,
 		).map(|((inout, vrf_proof, _), authority_index)| {
