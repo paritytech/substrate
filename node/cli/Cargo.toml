@@ -40,6 +40,8 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 rand = "0.6"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
+system = { package = "srml-system", path = "../../srml/system" }
+balances = { package = "srml-balances", path = "../../srml/balances" }
 
 [dev-dependencies]
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }

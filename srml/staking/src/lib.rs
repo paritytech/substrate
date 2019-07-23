@@ -451,7 +451,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> =
 <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
@@ -470,7 +470,7 @@ pub const DEFAULT_BONDING_DURATION: u32 = 1;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
-/// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
+/// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
 	fn disable_validator(validator: &AccountId) -> Result<(), ()>;

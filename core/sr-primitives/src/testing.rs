@@ -19,12 +19,16 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey};
+use crate::traits::{
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult,
+	ValidateUnsigned, SignedExtension, Dispatchable,
+};
 use crate::{generic, KeyTypeId};
-use crate::weights::{Weighable, Weight};
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
+use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -204,52 +208,82 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test transaction, tuple of (sender, index, call)
+/// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
+pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
-impl<Call> Serialize for TestXt<Call> where TestXt<Call>: Encode
-{
+impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 
-impl<Call> Debug for TestXt<Call> {
+impl<Call, Extra> Debug for TestXt<Call, Extra> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "TestXt({:?}, {:?})", self.0, self.1)
+		write!(f, "TestXt({:?}, ...)", self.0.as_ref().map(|x| &x.0))
 	}
 }
 
-impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}
-}
-impl<Call> Applyable for TestXt<Call> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
-{
-	type AccountId = u64;
-	type Index = u64;
-	type Call = Call;
-	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
-	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		(self.2, self.0)
+
+	fn new_unsigned(_c: Call) -> Option<Self> {
+		None
 	}
 }
-impl<Call> Weighable for TestXt<Call> {
-	fn weight(&self, len: usize) -> Weight {
+
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
+	Extra: SignedExtension<AccountId=u64>,
+	Origin: From<Option<u64>>
+{
+	type AccountId = u64;
+	type Call = Call;
+
+	fn sender(&self) -> Option<&u64> { self.0.as_ref().map(|x| &x.0) }
+
+	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> TransactionValidity {
+		TransactionValidity::Valid(Default::default())
+	}
+
+	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
+	/// index and sender.
+	fn dispatch(self,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<DispatchResult, DispatchError> {
+		let maybe_who = if let Some((who, extra)) = self.0 {
+			Extra::pre_dispatch(extra, &who, info, len)?;
+			Some(who)
+		} else {
+			Extra::pre_dispatch_unsigned(info, len)?;
+			None
+		};
+		Ok(self.1.dispatch(maybe_who.into()))
+	}
+}
+
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		len as Weight
+		DispatchInfo {
+			weight: self.encode().len() as u32,
+			..Default::default()
+		}
 	}
 }

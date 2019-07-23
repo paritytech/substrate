@@ -23,7 +23,6 @@ use crate::codec::{Codec, Encode, Decode};
 use substrate_primitives::u32_trait::Value as U32;
 use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
 use crate::runtime_primitives::ConsensusEngineId;
-use crate::runtime_primitives::weights::Weight;
 
 use super::for_each_tuple;
 
@@ -88,19 +87,6 @@ pub enum UpdateBalanceOutcome {
 	Updated,
 	/// The update led to killing the account.
 	AccountKilled,
-}
-
-/// Simple trait designed for hooking into a transaction payment.
-///
-/// It operates over a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make transaction payment from `who` for an extrinsic of encoded length
-	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
-	fn make_payment(who: &AccountId, weight: Weight) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: Weight) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained

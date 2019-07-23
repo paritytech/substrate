@@ -26,7 +26,8 @@ use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	utils::is_descendent_of,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -989,43 +990,4 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
-}
-
-/// Returns a function for checking block ancestry, the returned function will
-/// return `true` if the given hash (second parameter) is a descendent of the
-/// base (first parameter). If the `current` parameter is defined, it should
-/// represent the current block `hash` and its `parent hash`, if given the
-/// function that's returned will assume that `hash` isn't part of the local DB
-/// yet, and all searches in the DB will instead reference the parent.
-pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &'a Client<B, E, Block, RA>,
-	current: Option<(&'a H256, &'a H256)>,
-) -> impl Fn(&H256, &H256) -> Result<bool, client::error::Error> + 'a
-where B: Backend<Block, Blake2Hasher>,
-	  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-{
-	move |base, hash| {
-		if base == hash { return Ok(false); }
-
-		let mut hash = hash;
-		if let Some((current_hash, current_parent_hash)) = current {
-			if base == current_hash { return Ok(false); }
-			if hash == current_hash {
-				if base == current_parent_hash {
-					return Ok(true);
-				} else {
-					hash = current_parent_hash;
-				}
-			}
-		}
-
-		let tree_route = client::blockchain::tree_route(
-			#[allow(deprecated)]
-			client.backend().blockchain(),
-			BlockId::Hash(*hash),
-			BlockId::Hash(*base),
-		)?;
-
-		Ok(tree_route.common_block().hash == *base)
-	}
 }

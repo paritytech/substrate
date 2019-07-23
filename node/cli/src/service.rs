@@ -26,6 +26,7 @@ use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
+use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -66,6 +67,8 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		ConsensusPair = AuraPair,
+		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -83,7 +86,7 @@ construct_service_factory! {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key::<AuraPair>() {
+				if let Some(aura_key) = service.authority_key() {
 					info!("Using aura key {}", aura_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
@@ -113,7 +116,7 @@ construct_service_factory! {
 				let grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					service.authority_key::<grandpa_primitives::AuthorityPair>()
+					service.fg_authority_key()
 				};
 
 				let config = grandpa::Config {
@@ -214,10 +217,10 @@ construct_service_factory! {
 mod tests {
 	use std::sync::Arc;
 	use aura::CompatibleDigestItem;
-	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
+	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
-	use parity_codec::{Compact, Encode, Decode};
+	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
@@ -233,7 +236,7 @@ mod tests {
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
 		use {service_test, Factory};
-		use client::{ImportBlock, BlockOrigin};
+		use client::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -253,7 +256,7 @@ mod tests {
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
 			let block = proposer.propose().expect("Error making test block");
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				justification: Vec::new(),
 				internal_justification: Vec::new(),
@@ -331,7 +334,7 @@ mod tests {
 			);
 			slot_num += 1;
 
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				header: new_header,
 				justification: None,
@@ -355,19 +358,24 @@ mod tests {
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+
+			let check_era = system::CheckEra::from(Era::Immortal);
+			let check_nonce = system::CheckNonce::from(index);
+			let check_weight = system::CheckWeight::from();
+			let take_fees = balances::TakeFees::from(0);
+			let extra = (check_era, check_nonce, check_weight, take_fees);
+
+			let raw_payload = (function, extra.clone(), genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
 				signer.sign(payload)
 			});
 			let xt = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				from.into(),
 				signature.into(),
-				era,
+				extra,
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 

@@ -399,6 +399,8 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -412,6 +414,8 @@ mod tests {
 		type Event = Event;
 		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -425,7 +429,7 @@ mod tests {
 	}
 
 	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedMortalCompactExtrinsic<u32, u64, Call, ()>;
+	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where

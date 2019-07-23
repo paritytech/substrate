@@ -19,12 +19,12 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System};
+use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight};
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-	Currency, MakePayment, ReservableCurrency}
+	Currency, ReservableCurrency}
 };
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -123,7 +123,13 @@ fn lock_reasons_should_work() {
 				"account liquidity restrictions prevent withdrawal"
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+			// NOTE: this causes a fee payment.
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -131,15 +137,22 @@ fn lock_reasons_should_work() {
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 				"account liquidity restrictions prevent withdrawal"
 			);
-			assert_ok!(<Balances as MakePayment<_>>::make_payment(&1, 1));
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			assert_noop!(
-				<Balances as MakePayment<_>>::make_payment(&1, 1),
-				"account liquidity restrictions prevent withdrawal"
-			);
+			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
+				TakeFees::from(1),
+				&1,
+				info_from_weight(1),
+				0,
+			).is_err());
 		}
 	);
 }
@@ -730,6 +743,24 @@ fn liquid_funds_should_transfer_with_delayed_vesting() {
 
 			// Account 12 can still send liquid funds
 			assert_ok!(Balances::transfer(Some(12).into(), 3, 256 * 5));
+		}
+	);
+}
+
+#[test]
+fn signed_extension_take_fees_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.transaction_fees(10, 1)
+			.monied(true)
+			.build(),
+		|| {
+			let len = 10;
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(0), len).is_ok());
+			assert_eq!(Balances::free_balance(&1), 100 - 20);
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, info_from_weight(0), len).is_ok());
+			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
 		}
 	);
 }

@@ -66,6 +66,8 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -79,6 +81,8 @@ impl system::Trait for Runtime {
 	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;
