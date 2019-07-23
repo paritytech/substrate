@@ -62,7 +62,7 @@ use schnorrkel::{
 };
 use consensus_common::{
 	self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
+	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
 	BabeInherentData,
@@ -373,7 +373,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
-			let import_block: ImportBlock<B> = ImportBlock {
+			let import_block: BlockImportParams<B> = BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
@@ -598,7 +598,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -666,7 +666,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID)))
 					.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
-				let import_block = ImportBlock {
+				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![seal],

@@ -162,10 +162,8 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 }
 
 impl Default for SimpleDispatchInfo {
-	// TODO: based on the fact that this has a system-wide impact, it should probably be
-	// configurable at the `node/runtime` level.
 	fn default() -> Self {
-		// Default weight of all transactions. For simplicity, all weights are factored by 10^3.
+		// Default weight of all transactions.
 		SimpleDispatchInfo::FixedNormal(10)
 	}
 }

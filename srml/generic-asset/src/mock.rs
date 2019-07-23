@@ -51,10 +51,10 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
+	type WeightMultiplierUpdate = ();
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
 }
 

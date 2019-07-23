@@ -422,8 +422,8 @@ mod tests {
 		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;

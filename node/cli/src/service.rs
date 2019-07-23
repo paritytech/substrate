@@ -26,6 +26,7 @@ use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
+use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -66,6 +67,8 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		ConsensusPair = AuraPair,
+		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -83,7 +86,7 @@ construct_service_factory! {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(aura_key) = service.authority_key::<AuraPair>() {
+				if let Some(aura_key) = service.authority_key() {
 					info!("Using aura key {}", aura_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
@@ -113,7 +116,7 @@ construct_service_factory! {
 				let grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					service.authority_key::<grandpa_primitives::AuthorityPair>()
+					service.fg_authority_key()
 				};
 
 				let config = grandpa::Config {
@@ -214,7 +217,7 @@ construct_service_factory! {
 mod tests {
 	use std::sync::Arc;
 	use aura::CompatibleDigestItem;
-	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
+	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
 	use node_runtime::constants::{currency::CENTS, time::SECS_PER_BLOCK};
@@ -234,7 +237,7 @@ mod tests {
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
 		use {service_test, Factory};
-		use client::{ImportBlock, BlockOrigin};
+		use client::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -254,7 +257,7 @@ mod tests {
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
 			let block = proposer.propose().expect("Error making test block");
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				justification: Vec::new(),
 				internal_justification: Vec::new(),
@@ -332,7 +335,7 @@ mod tests {
 			);
 			slot_num += 1;
 
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				header: new_header,
 				justification: None,
