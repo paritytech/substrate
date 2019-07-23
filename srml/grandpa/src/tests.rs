@@ -18,9 +18,9 @@
 
 #![cfg(test)]
 
-use primitives::testing::{Digest, Header};
+use primitives::testing::{Digest, Header, UintAuthorityId};
 use primitives::traits::{Header as HeaderT, OnFinalize, ValidateUnsigned};
-use substrate_primitives::{ed25519, H256, crypto::Pair};
+use substrate_primitives::{H256};
 use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};
@@ -288,51 +288,56 @@ fn schedule_resume_only_when_paused() {
 
 #[test]
 fn report_equivocation_works() {
-	let (pair, _seed) = ed25519::Pair::generate();
-	let public = pair.public();
-	let authorities = vec![(public.clone(), 1)];
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 
-	let hash1 = H256::random();
-	let hash2 = H256::random();
+		let public = UintAuthorityId(1);
+		let authorities = vec![(1, 1)];
 
-	let prevote1 = Prevote { target_hash: hash1, target_number: 1 };
-	let message1 = GrandpaMessage::Prevote(prevote1.clone());
-	let payload1 = localized_payload(0, 0, &message1);
-	let signature1 = pair.sign(payload1.as_slice());
+		let hash1 = H256::random();
+		let hash2 = H256::random();
 
-	let prevote2 = Prevote { target_hash: hash2, target_number: 2 };
-	let message2 = GrandpaMessage::Prevote(prevote2.clone());
-	let payload2 = localized_payload(0, 0, &message2);
-	let signature2 = pair.sign(payload2.as_slice());
+		let prevote1 = Prevote { target_hash: hash1, target_number: 1 };
+		let message1 = GrandpaMessage::Prevote(prevote1.clone());
+		let payload1 = localized_payload(0, 0, &message1);
+		let signature1 = UintSignature { msg: payload1.as_slice().to_vec(), signer: public.clone() };
 
-	// Valid proof.
-	let proof1 = GrandpaEquivocation {
-		set_id: 0,
-		round_number: 0,
-		identity: public.clone(),
-		first: (message1.clone(), signature1.clone()),
-		second: (message2.clone(), signature2.clone()),
-	};
+		let prevote2 = Prevote { target_hash: hash2, target_number: 2 };
+		let message2 = GrandpaMessage::Prevote(prevote2.clone());
+		let payload2 = localized_payload(0, 0, &message2);
+		let signature2 = UintSignature { msg: payload2.as_slice().to_vec(), signer: public.clone() };
 
-	// Invalid proof: same votes.
-	let proof2 = GrandpaEquivocation {
-		set_id: 0,
-		round_number: 0,
-		identity: public.clone(),
-		first: (message1.clone(), signature1.clone()),
-		second: (message1.clone(), signature1.clone()),
-	};
+		// Valid proof.
+		let proof1 = GrandpaEquivocation {
+			set_id: 0,
+			round_number: 0,
+			identity: public.clone(),
+			identity_proof: Proof::default(),
+			first: (message1.clone(), signature1.clone()),
+			second: (message2.clone(), signature2.clone()),
+		};
 
-	// Invalid proof: bad signature.
-	let proof3 = GrandpaEquivocation {
-		set_id: 0,
-		round_number: 0,
-		identity: public.clone(),
-		first: (message1.clone(), signature1.clone()),
-		second: (message2.clone(), signature1.clone()),
-	};
+		// Invalid proof: same votes.
+		let proof2 = GrandpaEquivocation {
+			set_id: 0,
+			round_number: 0,
+			identity: public.clone(),
+			identity_proof: Proof::default(),
+			first: (message1.clone(), signature1.clone()),
+			second: (message1.clone(), signature1.clone()),
+		};
 
-	assert!(Grandpa::report_equivocation(Default::default(), (proof1, ())).is_ok());
-	assert!(Grandpa::report_equivocation(Default::default(), (proof2, ())).is_ok());
-	assert!(Grandpa::report_equivocation(Default::default(), (proof3, ())).is_err());
+		// Invalid proof: bad signature.
+		let proof3 = GrandpaEquivocation {
+			set_id: 0,
+			round_number: 0,
+			identity: public.clone(),
+			identity_proof: Proof::default(),
+			first: (message1.clone(), signature1.clone()),
+			second: (message2.clone(), signature1.clone()),
+		};
+
+		assert!(Grandpa::report_equivocation(Origin::signed(1), proof1).is_ok());
+		assert!(Grandpa::report_equivocation(Origin::signed(1), proof2).is_ok());
+		assert!(Grandpa::report_equivocation(Origin::signed(1), proof3).is_err());
+	});
 }

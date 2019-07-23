@@ -76,8 +76,9 @@ pub trait AuthorshipEquivocationProof {
 
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct Challenge<H, N, Header> {
+pub struct Challenge<H, N, Header, P> {
 	pub targets: Vec<AuthorityId>, // TODO: Optimize to bitset?
+	pub targets_proof: Vec<P>,
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: VoteSet<H, N, Header>,
 	pub rejecting_set: VoteSet<H, N, Header>,
@@ -103,9 +104,9 @@ pub struct ChallengedVote<H, N> {
 /// A stored pending change.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct StoredPendingChallenge<H, N, Header> {
+pub struct StoredPendingChallenge<H, N, Header, P> {
 	/// The challenge submitted.
-	pub challenge: Challenge<H, N, Header>,
+	pub challenge: Challenge<H, N, Header, P>,
 }
 
 /// A stored pending change.

@@ -28,18 +28,24 @@ use primitives::{
 };
 use substrate_primitives::{H256, Blake2Hasher, sr25519};
 use runtime_io;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 use srml_support::{impl_outer_origin, parameter_types};
-use session::{ShouldEndSession, SessionHandler, OnSessionEnding, SessionIndex};
+use session::{ShouldEndSession, SessionHandler, OnSessionEnding, SessionIndex, historical::Proof};
+use aura_primitives::AuraEquivocationProof;
 use crate::{Trait, Module, GenesisConfig};
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
-struct UintSignature(u64);
+pub struct UintSignature {
+	pub msg: Vec<u8>,
+	pub signer: UintAuthorityId,
+}
 
-impl Verify for UintSignature {
+impl Verify for UintSignature
+{
 	type Signer = UintAuthorityId;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		true
+
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &UintAuthorityId) -> bool {
+		(&self.msg, &self.signer) == (&msg.get().to_vec(), signer)
 	}
 }
 
@@ -151,6 +157,8 @@ impl Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Signature = UintSignature;
 	type KeyOwnerSystem = Historical;
+	type Proof = Proof;
+	type Equivocation = AuraEquivocationProof<Self::Header, Self::Signature, Self::AuthorityId, Self::Proof>;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {

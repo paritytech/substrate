@@ -22,7 +22,7 @@ use std::cell::RefCell;
 use parity_codec::{Encode, Decode};
 use runtime_io;
 use primitives::{
-	BuildStorage, DigestItem, traits::{IdentityLookup, ConvertInto, OpaqueKeys},
+	BuildStorage, DigestItem, traits::{IdentityLookup, ConvertInto, OpaqueKeys, Verify, Lazy},
 	testing::{Header, Block, UintAuthorityId, TestXt}
 };
 use substrate_primitives::{H256, Blake2Hasher};
@@ -31,10 +31,26 @@ use session::{ShouldEndSession, SessionHandler, SessionIndex, OnSessionEnding};
 use crate::{
 	AuthorityId, AuthoritySignature, GenesisConfig, Trait, Module, Call, ConsensusLog,
 };
-use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
+use substrate_finality_grandpa_primitives::{GRANDPA_ENGINE_ID, equivocation::GrandpaEquivocation};
+use session::historical::Proof;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
+}
+
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
+pub struct UintSignature {
+	pub msg: Vec<u8>,
+	pub signer: UintAuthorityId,
+}
+
+impl Verify for UintSignature
+{
+	type Signer = UintAuthorityId;
+
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &UintAuthorityId) -> bool {
+		(&self.msg, &self.signer) == (&msg.get().to_vec(), signer)
+	}
 }
 
 thread_local! {
@@ -47,7 +63,7 @@ thread_local! {
 	pub static TEST_SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
 }
 
-pub fn grandpa_log(log: ConsensusLog<u64, u64, Header>) -> DigestItem<H256> {
+pub fn grandpa_log(log: ConsensusLog<u64, u64, Header, Proof>) -> DigestItem<H256> {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
@@ -100,9 +116,18 @@ impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
-	type Signature = AuthoritySignature;
+	type Signature = UintSignature;
+	type AuthorityId = UintAuthorityId;
 	type Block = Block<TestXt<Call<Test>>>;
 	type KeyOwnerSystem = Historical;
+	type Proof = Proof;
+	// type Equivocation = GrandpaEquivocation<
+	// 	Self::Hash,
+	// 	Self::BlockNumber,
+	// 	Self::Signature,
+	// 	Self::AuthorityId,
+	// 	Self::Proof
+	// >;
 }
 
 parameter_types! {

@@ -45,9 +45,9 @@ use runtime_primitives::{
 
 use consensus_aura::AuraEquivocationProof;
 use consensus_grandpa::{
-	AuthorityId as GrandpaAuthorityId, GrandpaEquivocationProof, AuthorityWeight,
-	ScheduledChange, PrevoteEquivocation, PrecommitEquivocation, Challenge,
-	AuthoritySignature as GrandpaAuthoritySignature, Prevote, Precommit,
+	AuthorityId as GrandpaAuthorityId, GrandpaEquivocation, AuthorityWeight,
+	ScheduledChange, Challenge, AuthoritySignature as GrandpaAuthoritySignature,
+	Prevote, Precommit,
 };
 
 use runtime_version::RuntimeVersion;
@@ -56,8 +56,8 @@ use primitives::{sr25519, OpaqueMetadata};
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-
-pub use consensus_babe::AuthorityId;
+use session::historical::Proof;
+pub use consensus_babe::{AuthorityId, AuthoritySignature, BabeEquivocationProof};
 pub use primitives::hash::H256;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
@@ -191,6 +191,12 @@ pub type Digest = runtime_primitives::generic::Digest<H256>;
 pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256>;
+
+type AuraEquivocation<Block> =
+	AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>;
+
+type BabeEquivocation<Block> =
+	BabeEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -488,7 +494,7 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
+			impl consensus_babe::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
@@ -661,21 +667,27 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId, sr25519::Signature> for Runtime {
+			impl consensus_aura::AuraApi<
+				Block,
+				AuraId,
+				AuthoritySignature,
+				AuraEquivocation<Block>
+			> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
 					_proof: AuraEquivocationProof<
 						<Block as BlockT>::Header,
 						sr25519::Signature,
-						sr25519::Public
+						sr25519::Public,
+						Proof,
 					>
 				) -> Vec<u8> {
 					vec![]
 				}
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
+			impl consensus_babe::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
 					consensus_babe::BabeConfiguration {
 						median_required_blocks: 0,
@@ -708,7 +720,7 @@ cfg_if! {
 					vec![]
 				}
 
-				fn construct_rejecting_set_call(
+				fn construct_rejecting_set_report_call(
 					_proof: Challenge<Block>
 				) -> Vec<u8> {
 					vec![]

@@ -411,6 +411,8 @@ impl grandpa::Trait for Runtime {
 	type Signature = AuthoritySignature;
 	type Block = Block;
 	type KeyOwnerSystem = Historical;
+	type AuthorityId = AuthorityId;
+	type Proof = Proof;
 }
 
 parameter_types! {
@@ -552,7 +554,9 @@ impl_runtime_apis! {
 			equivocation: GrandpaEquivocation<Block>
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))?;
-			let grandpa_call = GrandpaCall::report_equivocation((equivocation, proof));
+			let mut proved_equivocation = equivocation.clone();
+			proved_equivocation.identity_proof = proof;
+			let grandpa_call = GrandpaCall::report_equivocation(proved_equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
 		}
@@ -568,7 +572,9 @@ impl_runtime_apis! {
 				))?;
 				proofs.push(proof);
 			}
-			let grandpa_call = GrandpaCall::report_rejecting_set((challenge, proofs));
+			let mut proved_challenge = challenge.clone();
+			challenge.targets_proof = proofs;
+			let grandpa_call = GrandpaCall::report_rejecting_set(proved_challenge);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
 		}
@@ -592,7 +598,9 @@ impl_runtime_apis! {
 			equivocation: AuraEquivocation<Block>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::ED25519, equivocation.identity().encode()))?;
-			let report_call = Call::Aura(AuraCall::report_equivocation(equivocation));
+			let mut proved_equivocation = equivocation.clone();
+			proved_equivocation.identity_proof = proof;
+			let report_call = Call::Aura(AuraCall::report_equivocation(proved_equivocation));
 			Some(report_call.encode())
 		}
 	}

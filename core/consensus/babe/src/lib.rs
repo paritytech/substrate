@@ -36,12 +36,11 @@ use consensus_common::import_queue::{
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
-	SimpleBitOps, Zero,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, SimpleBitOps, Zero, Verify
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
-use parity_codec::{Decode, Encode};
+use parity_codec::{Decode, Encode, Codec};
 use parking_lot::Mutex;
 use primitives::{Pair, Public, sr25519};
 use merlin::Transcript;
@@ -84,7 +83,7 @@ use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 use srml_session::historical::Proof;
 
-pub use babe_primitives::AuthorityId;
+pub use babe_primitives::{AuthorityId, AuthoritySignature};
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -97,7 +96,8 @@ impl Config {
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> CResult<Self>
 	where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
+		C: AuxStore + ProvideRuntimeApi,
+		C::Api: BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self) {
@@ -187,7 +187,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 > where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -230,7 +230,7 @@ struct BabeWorker<C, E, I, SO> {
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	B: BlockT<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -484,7 +484,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 			}
 
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, BabeEquivocationProof<B::Header, _, _>, _,
+				_, _, BabeEquivocationProof<B::Header, _, _, Proof>, _, Proof
 			>(
 				client,
 				slot_now,
@@ -581,7 +581,8 @@ fn median_algorithm(
 
 impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
-	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+	C::Api: BlockBuilderApi<B>
+		+ BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
 {
 	fn verify(
@@ -695,15 +696,22 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 {
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
-			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
-				BabeApi::authorities(&*client.runtime_api(), at).ok()
+			if client.runtime_api()
+				.has_api::<dyn BabeApi<
+					B,
+					BabeEquivocationProof<
+						<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof
+					>>
+				>(at)
+				.unwrap_or(false) {
+					BabeApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
 				panic!("We don’t support deprecated code with new consensus algorithms, \
 						therefore this is unreachable; qed")
@@ -790,7 +798,7 @@ fn claim_slot(
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 {
 	// no cache => no initialization
 	let cache = match client.cache() {
@@ -828,7 +836,8 @@ pub fn import_queue<B, C, E>(
 ) -> Result<(BabeImportQueue<B>, BabeLink), consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+	C::Api: BlockBuilderApi<B>
+		+ BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
 	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
 	E: 'static,
 {
@@ -849,100 +858,6 @@ pub fn import_queue<B, C, E>(
 		finality_proof_import,
 	), timestamp_core))
 }
-
-
-/// Represents an Babe equivocation proof.
-#[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub struct BabeEquivocationProof<H, S, P> {
-	identity: P,
-	first_header: H,
-	second_header: H,
-	first_signature: S,
-	second_signature: S,
-}
-
-impl<H, S, I> AuthorshipEquivocationProof<H, S, I, Proof> for BabeEquivocationProof<H, S, I, Proof>
-where
-	H: Header,
-	S: Verify<Signer=I> + Codec,
-{
-	/// Create a new Babe equivocation proof.
-	fn new(
-		identity: I,
-		identity_proof: Proof,
-		first_header: H,
-		second_header: H,
-		first_signature: S,
-		second_signature: S,
-	) -> Self {
-		BabeEquivocationProof {
-			identity,
-			first_header,
-			second_header,
-			first_signature,
-			second_signature,
-		}
-	}
-
-	/// Check the validity of the equivocation proof.
-	fn is_valid(&self) -> bool {
-		let first_header = self.first_header();
-		let second_header = self.second_header();
-
-		if first_header == second_header {
-			return false
-		}
-
-		let maybe_first_slot = get_slot::<H, S>(first_header);
-		let maybe_second_slot = get_slot::<H, S>(second_header);
-
-		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-			// TODO: Check that author matches slot author (improve HistoricalSession).
-			let author = self.identity();
-
-			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
-				return false
-			}
-
-			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
-				return false
-			}
-
-			return true;
-		}
-
-		false
-	}
-
-	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &P {
-		&self.identity
-	}
-
-	/// Get the identity proof.
-	fn identity_proof(&self) -> &P {
-		&self.identity_proof
-	}
-
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
-	}
-
-	fn first_signature(&self) -> &S {
-		&self.first_signature
-	}
-
-	fn second_signature(&self) -> &S {
-		&self.second_signature
-	}
-}
-
 
 // FIXME #2532: need to allow deprecated until refactor is done
 // https://github.com/paritytech/substrate/issues/2532

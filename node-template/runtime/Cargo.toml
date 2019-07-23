@@ -18,6 +18,7 @@ aura = { package = "srml-aura", path = "../../srml/aura", default_features = fal
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default_features = false }
 system = { package = "srml-system", path = "../../srml/system", default_features = false }
+session = { package = "srml-session", path = "../../srml/session", default_features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default_features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }

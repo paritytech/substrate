@@ -116,7 +116,7 @@ impl slots::SlotData for BabeConfiguration {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	pub trait BabeApi<Equivocation: AuthorshipEquivocationProof> {
+	pub trait BabeApi<Equivocation: AuthorshipEquivocationProof + Codec> {
 		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///
@@ -202,4 +202,106 @@ pub fn get_slot<H: Header, S: Codec>(header: &H) -> Result<SlotNumber, &str>
 {
 	find_pre_digest(header)
 		.map(|raw_pre_digest| raw_pre_digest.3)
+}
+
+
+/// Represents an Babe equivocation proof.
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+pub struct BabeEquivocationProof<H, S, I, P> {
+	identity: I,
+	identity_proof: P,
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S, I, P> AuthorshipEquivocationProof for BabeEquivocationProof<H, S, I, P>
+where
+	H: Header,
+	S: Verify<Signer=I> + Codec,
+	I: Codec,
+	P: Codec,
+{
+	type Header = H;
+	type Signature = S;
+	type Identity = I;
+	type InclusionProof = P;
+
+	/// Create a new Babe equivocation proof.
+	fn new(
+		identity: I,
+		identity_proof: P,
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		BabeEquivocationProof {
+			identity,
+			identity_proof,
+			first_header,
+			second_header,
+			first_signature,
+			second_signature,
+		}
+	}
+
+	/// Check the validity of the equivocation proof.
+	fn is_valid(&self) -> bool {
+		let first_header = self.first_header();
+		let second_header = self.second_header();
+
+		if first_header == second_header {
+			return false
+		}
+
+		let maybe_first_slot = get_slot::<H, S>(first_header);
+		let maybe_second_slot = get_slot::<H, S>(second_header);
+
+		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+			// TODO: Check that author matches slot author (improve HistoricalSession).
+			let author = self.identity();
+
+			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+				return false
+			}
+
+			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+				return false
+			}
+
+			return true;
+		}
+
+		false
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &I {
+		&self.identity
+	}
+
+	/// Get the identity proof.
+	fn identity_proof(&self) -> &P {
+		&self.identity_proof
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
 }

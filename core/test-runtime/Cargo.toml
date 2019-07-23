@@ -17,6 +17,7 @@ consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../c
 consensus_babe = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 consensus_grandpa = { package = "substrate-finality-grandpa-primitives", path = "../finality-grandpa/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }

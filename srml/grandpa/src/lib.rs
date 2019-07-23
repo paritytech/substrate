@@ -35,12 +35,12 @@ use parity_codec::{self as codec, Encode, Decode, Codec};
 
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
-	traits::KeyOwnerProofSystem,
+	traits::{KeyOwnerProofSystem}, Parameter,
 	storage::{StorageValue, StorageMap, EnumerableStorageMap}
 };
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId, Block}, key_types,
-	traits::{CurrentHeight, Verify, Header as HeaderT, Block as BlockT},
+	traits::{CurrentHeight, Verify, Header as HeaderT, Block as BlockT, Member, TypedKey},
 };
 use fg_primitives::{
 	ScheduledChange, GRANDPA_ENGINE_ID, GrandpaPrecommit,
@@ -63,29 +63,37 @@ mod tests;
 type Hash<T> = <T as system::Trait>::Hash;
 type Number<T> = <T as system::Trait>::BlockNumber;
 type Header<T> = <T as system::Trait>::Header;
+type Signature<T> = <T as Trait>::Signature;
+type AuthorityIdOf<T> = <T as Trait>::AuthorityId;
+type ProofOf<T> = <T as Trait>::Proof;
 
-type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>>;
+type StoredPendingChallenge<T> = safety::StoredPendingChallenge<Hash<T>, Number<T>, Header<T>, ProofOf<T>>;
 type StoredChallengeSession<T> = safety::StoredChallengeSession<Hash<T>, Number<T>>;
 
 // type Prevote<T> = GrandpaPrevote<Hash<T>, Number<T>>;
 type Precommit<T> = GrandpaPrecommit<Hash<T>, Number<T>>;
 // type Message<T> = GrandpaMessage<Hash<T>, Number<T>>;
 
-type Equivocation<T> = GrandpaEquivocation<Hash<T>, Number<T>>;
-type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>>;
+type Equivocation<T> = GrandpaEquivocation<Hash<T>, Number<T>, Signature<T>, AuthorityIdOf<T>, ProofOf<T>>;
+type Challenge<T> = safety::Challenge<Hash<T>, Number<T>, Header<T>, ProofOf<T>>;
 
 pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
+	/// The identifier type for an authority.
+	type AuthorityId: Eq + PartialEq + Clone + Codec + TypedKey + Default + core::fmt::Debug;
+
 	/// The signature of the authority.
-	type Signature: Verify<Signer=AuthorityId> + Codec + Clone + Eq;
+	type Signature: Verify<Signer=Self::AuthorityId> + Codec + Eq + PartialEq + Clone + core::fmt::Debug;
 
 	/// The block.
 	type Block: BlockT<Hash=<Self as system::Trait>::Hash, Header=<Self as system::Trait>::Header>;
 
+	type Proof: Eq + PartialEq + Clone + Codec + core::fmt::Debug;
+
 	/// The session key proof owned system.
-	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Self::Proof>;
 }
 
 /// A stored pending change, old format.
@@ -203,14 +211,12 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report equivocation.
-		fn report_equivocation(origin, proved_equivocation: (Equivocation<T>, Proof)) {
+		fn report_equivocation(origin, equivocation: Equivocation<T>) {
 			ensure_signed(origin)?;
-
-			let (equivocation, proof) = proved_equivocation;
 
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::ED25519, equivocation.identity.encode()),
-				proof,
+				equivocation.identity_proof.clone(),
 			);
 
 			if to_punish.is_none() {
@@ -223,14 +229,12 @@ decl_module! {
 		}
 
 		/// Report rejecting set of prevotes.
-		fn report_rejecting_set(origin, proved_challenge: (Challenge<T>, Vec<Proof>)) {
+		fn report_rejecting_set(origin, challenge: Challenge<T>) {
 			ensure_signed(origin)?;
-
-			let (challenge, proofs) = proved_challenge;
 
 			let mut to_punish = Vec::new();
 
-			for (idx, proof) in proofs.iter().enumerate() {
+			for (idx, proof) in challenge.targets_proof.iter().enumerate() {
 				let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
 					(key_types::ED25519, challenge.targets[idx].encode()),
 					proof.clone(),
@@ -539,16 +543,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: ConsensusLog<T::Hash, T::BlockNumber, T::Header>) {
+	fn deposit_log(log: ConsensusLog<T::Hash, T::BlockNumber, T::Header, T::Proof>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::Hash, T::BlockNumber, T::Header>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::Hash, T::BlockNumber, T::Header, T::Proof>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<ConsensusLog<T::Hash, T::BlockNumber, T::Header>>(id))
+		digest.convert_first(|l| l.try_to::<ConsensusLog<T::Hash, T::BlockNumber, T::Header, T::Proof>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>) -> Option<ScheduledChange<T::BlockNumber>>

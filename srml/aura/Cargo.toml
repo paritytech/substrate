@@ -16,7 +16,7 @@ system = { package = "srml-system", path = "../system", default-features = false
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
-substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default-features = false}
 consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../core/consensus/accountable-safety/primitives", default-features = false }
 
 [dev-dependencies]
@@ -37,6 +37,7 @@ std = [
 	"timestamp/std",
 	"staking/std",
 	"inherents/std",
-	"substrate-consensus-aura-primitives/std",
+	"aura-primitives/std",
+	"session/std",
 	"consensus_accountable_safety_primitives/std"
 ]

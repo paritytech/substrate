@@ -11,6 +11,7 @@ parity-codec = { version = "4.1.1", default-features = false, features = ["deriv
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 serde = { version = "1.0", optional = true, features = ["derive"] }
+session = { package = "srml-session", path = "../../../srml/session", default-features = false }
 grandpa-primitives = { package = "finality-grandpa-primitives", git = "https://github.com/paritytech/finality-grandpa/", branch = "marcio/grandpa-primitives", path = "primitives", default-features = false }
 # grandpa-primitives = { package = "finality-grandpa-primitives", path = "/home/marcio/repos/finality-grandpa/primitives", default-features = false }
 consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../consensus/accountable-safety/primitives", default-features = false }

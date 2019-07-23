@@ -73,7 +73,7 @@ use inherents::{
 };
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, find_pre_digest};
+use aura_primitives::{AURA_ENGINE_ID, ConsensusLog, find_pre_digest};
 use substrate_primitives::crypto::KeyTypeId;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use session::historical::{self, Proof};

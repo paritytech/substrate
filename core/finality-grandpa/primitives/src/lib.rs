@@ -37,6 +37,7 @@ use alloc::collections::BTreeMap;
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 use num_traits as num;
+use session::historical::Proof;
 
 pub use consensus_accountable_safety_primitives as safety;
 
@@ -78,14 +79,20 @@ pub type Precommit<Block> = GrandpaPrecommit<<Block as BlockT>::Hash, NumberFor<
 pub type Message<Block> = GrandpaMessage<<Block as BlockT>::Hash, NumberFor<Block>>;
 
 /// Grandpa equivocation.
-pub type GrandpaEquivocation<Block> =
-	equivocation::GrandpaEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>;
+pub type GrandpaEquivocation<Block> = equivocation::GrandpaEquivocation<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+	Proof,
+>;
 
 /// Grandpa challenge
 pub type Challenge<Block> = safety::Challenge<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	<Block as BlockT>::Header
+	<Block as BlockT>::Header,
+	Proof,
 >;
 /// The index of an authority.
 pub type AuthorityIndex = u64;
@@ -103,7 +110,7 @@ pub struct ScheduledChange<N> {
 /// An consensus log item for GRANDPA.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Decode, Encode, PartialEq, Eq, Clone)]
-pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec> {
+pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec, P: Codec> {
 	/// Schedule an authority set change.
 	///
 	/// Precedence towards earlier or later digest items can be given
@@ -146,10 +153,10 @@ pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec> {
 	Resume(N),
 	/// Set of challenges submitted.
 	#[codec(index = "6")]
-	Challenges(Vec<safety::Challenge<H, N, Header>>),
+	Challenges(Vec<safety::Challenge<H, N, Header, P>>),
 }
 
-impl<H: Codec, N: Codec, Header: Codec> ConsensusLog<H, N, Header> {
+impl<H: Codec, N: Codec, Header: Codec, P: Codec> ConsensusLog<H, N, Header, P> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
@@ -183,7 +190,7 @@ impl<H: Codec, N: Codec, Header: Codec> ConsensusLog<H, N, Header> {
 	}
 
 	/// Try to cast the log entry as a contained set of challenges.
-	pub fn try_into_challenges(self) -> Option<Vec<safety::Challenge<H, N, Header>>> {
+	pub fn try_into_challenges(self) -> Option<Vec<safety::Challenge<H, N, Header, P>>> {
 		match self {
 			ConsensusLog::Challenges(challenges) => Some(challenges),
 			_ => None,
@@ -322,21 +329,28 @@ pub mod equivocation {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-	pub struct GrandpaEquivocation<H, N> {
+	pub struct GrandpaEquivocation<H, N, S, I, P> {
 		/// The set id.
 		pub set_id: u64,
 		/// The round number equivocated in.
 		pub round_number: u64,
 		/// The identity of the equivocator.
-		pub identity: AuthorityId,
+		pub identity: I,
+		/// The proof of identity inclusion.
+		pub identity_proof: P,
 		/// The first vote in the equivocation.
-		pub	first: (GrandpaMessage<H, N>, AuthoritySignature),
+		pub	first: (GrandpaMessage<H, N>, S),
 		/// The second vote in the equivocation.
-		pub second: (GrandpaMessage<H, N>, AuthoritySignature),
+		pub second: (GrandpaMessage<H, N>, S),
 	}
 
-	impl<H, N> GrandpaEquivocation<H, N> 
-		where H: Codec + PartialEq + Eq, N: Codec + PartialEq + Eq
+	impl<H, N, S, I, P> GrandpaEquivocation<H, N, S, I, P> 
+	where
+		H: Codec + PartialEq + Eq,
+		N: Codec + PartialEq + Eq,
+		S: Codec + Verify<Signer=I>,
+		I: Codec,
+		P: Codec,
 	{
 		pub fn is_valid(&self) -> bool {
 			let first_vote = &self.first.0;

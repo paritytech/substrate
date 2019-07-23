@@ -71,7 +71,7 @@ decl_runtime_apis! {
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
 pub struct AuraEquivocationProof<H, S, I, P> {
 	identity: I,
-	identity_proof: P,
+	pub identity_proof: P,
 	first_header: H,
 	second_header: H,
 	first_signature: S,

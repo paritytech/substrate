@@ -27,6 +27,7 @@ use consensus_aura::AuraEquivocationProof;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
+use session::historical::Proof;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
@@ -151,6 +152,14 @@ impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type AuthorityId = AuraId;
 	type Signature = AuraSignature;
+	type KeyOwnerSystem = ();
+	type Proof = Proof;
+	type Equivocation = AuraEquivocationProof<
+		Self::Header,
+		Self::Signature,
+		Self::AuthorityId,
+		Self::Proof
+	>;
 }
 
 impl indices::Trait for Runtime {
@@ -248,6 +257,9 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
 
+type AuraEquivocation<Block> =
+	AuraEquivocationProof<<Block as BlockT>::Header, AccountSignature, AccountId, Proof>;
+
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {
 	impl runtime_api::Core<Block> for Runtime {
@@ -298,7 +310,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId, ed25519::Signature> for Runtime {
+	impl consensus_aura::AuraApi<Block, AuraId, AuraSignature, AuraEquivocation<Block>> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
@@ -307,7 +319,7 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			_proof: AuraEquivocationProof<<Block as BlockT>::Header,ed25519::Signature>
+			_proof: AuraEquivocation<Block>
 		) -> Vec<u8> {
 			vec![]
 		}
