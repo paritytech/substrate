@@ -300,6 +300,11 @@ decl_module! {
 		/// approval voting). A reasonable default value is 24.
 		const DecayRatio: u32 = T::DecayRatio::get();
 
+		/// The chunk size of the voter vector.
+		const VOTER_SET_SIZE: usize = VOTER_SET_SIZE;
+		/// The chunk size of the approval vector.
+		const APPROVAL_SET_SIZE: usize = APPROVAL_SET_SIZE;
+
 		fn deposit_event<T>() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
