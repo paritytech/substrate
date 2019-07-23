@@ -202,6 +202,8 @@ where
 			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
 			.collect::<Vec<_>>();
 		list.extend(self.kademlia.addresses_of_peer(peer_id));
+		#[cfg(not(target_os = "unknown"))]
+		list.extend(self.mdns.addresses_of_peer(peer_id));
 		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
 		if list.is_empty() {
 			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
