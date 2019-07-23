@@ -241,11 +241,11 @@ impl<T: Trait> Module<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
+	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
 		let next_randomness = compute_randomness(
 			this_randomness,
-			epoch_index,
+			next_epoch_index,
 			UnderConstruction::get(),
 		);
 		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
@@ -299,25 +299,26 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		});
 
 		// Update epoch randomness.
-		// What was the next epoch is now the current epoch.
-		let randomness = Self::randomness_change_epoch(epoch_index);
+		let next_epoch_index = epoch_index
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Returns randomness for the current epoch and computes the *next*
+		// epoch randomness.
+		let randomness = Self::randomness_change_epoch(next_epoch_index);
 		Randomness::put(randomness);
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-
-		// *Next* epoch's authorities.
 		let next_authorities = queued_validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
 
-		// *Next* epoch's randomness.
+		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
 
-		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
-
 		let next = Epoch {
-			epoch_index: epoch_index + 1,
+			epoch_index: next_epoch_index,
 			start_slot: next_epoch_start_slot,
 			duration: T::EpochDuration::get(),
 			authorities: next_authorities,
