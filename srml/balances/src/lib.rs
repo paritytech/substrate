@@ -161,10 +161,10 @@ use srml_support::traits::{
 use srml_support::dispatch::Result;
 use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
+	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
 };
 use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::{DispatchInfo, SimpleDispatchInfo};
+use primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -207,8 +207,8 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
 
-	/// The amount of fee deducted oer unit of weight.
-	type TransactionWeightFee: Get<Self::Balance>;
+	/// Convert a weight value into a deductible fee based on the currency type.
+	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
@@ -253,8 +253,8 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
 
-	/// The amount of fee deducted oer unit of weight.
-	type TransactionWeightFee: Get<Self::Balance>;
+	/// Convert a weight value into a deductible fee based on the currency type.
+	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -266,7 +266,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
-	type TransactionWeightFee = T::TransactionWeightFee;
+	type WeightToFee = T::WeightToFee;
 }
 
 decl_event!(
@@ -790,7 +790,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
-	type TransactionWeightFee = T::TransactionWeightFee;
+	type WeightToFee = T::WeightToFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -1195,10 +1195,9 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
 			// maximum of its data type, which is not desired.
 			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
-			let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier()
-				.apply_to(capped_weight).saturated_into();
-			let per_weight = T::TransactionWeightFee::get();
-			weight_fee.saturating_mul(per_weight)
+			let weight_update = <system::Module<T>>::next_weight_multiplier();
+			let adjusted_weight = weight_update.apply_to(capped_weight);
+			T::WeightToFee::convert(adjusted_weight)
 		};
 
 		len_fee.saturating_add(weight_fee).saturating_add(tip)

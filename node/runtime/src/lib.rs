@@ -59,7 +59,7 @@ pub use staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author, WeightToFee};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -143,7 +143,6 @@ parameter_types! {
 	pub const CreationFee: Balance = 1 * CENTS;
 	pub const TransactionBaseFee: Balance = 1 * CENTS;
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	pub const TransactionWeightFee: Balance = MILLICENTS / 1000;
 }
 
 impl balances::Trait for Runtime {
@@ -159,7 +158,7 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
-	type TransactionWeightFee = TransactionWeightFee;
+	type WeightToFee = WeightToFee;
 }
 
 parameter_types! {

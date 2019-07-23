@@ -47,7 +47,7 @@ mod tests {
 		NativeOrEncoded
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo, Weight};
 	use {balances, contracts, indices, staking, system, timestamp};
@@ -60,6 +60,7 @@ mod tests {
 		TransactionBaseFee, TransactionByteFee, MaximumBlockWeight,
 	};
 	use node_runtime::constants::currency::*;
+	use node_runtime::impls::WeightToFee;
 	use wabt;
 	use primitives::map;
 
@@ -1104,18 +1105,16 @@ mod tests {
 			let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
 				<TransactionByteFee as Get<Balance>>::get() *
 				(xt.clone().encode().len() as Balance);
-			println!("++ len fee = {:?}", length_fee);
 			balance_alice -= length_fee;
 
-			// TODO: the 1_000_000 should go away.
-			let weight_fee = default_transfer_call().get_dispatch_info().weight as Balance * 1_000_000;
+			let weight = default_transfer_call().get_dispatch_info().weight;
+			let weight_fee = WeightToFee::convert(weight);
+
 			// we know that weight to fee multiplier is effect-less in block 1.
 			assert_eq!(weight_fee as Balance, MILLICENTS);
 			balance_alice -= weight_fee;
-			println!("++ wei fee = {:?}", weight_fee);
 
 			balance_alice -= tip;
-			println!("++ tip fee = {:?}", tip);
 
 			// TODO: why again??? creation fee should not be deducted here.
 			balance_alice -= creation_fee();

@@ -360,7 +360,7 @@ mod tests {
 	use primitives::generic::Era;
 	use primitives::Perbill;
 	use primitives::weights::Weight;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
 	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason, Get};
@@ -409,7 +409,6 @@ mod tests {
 		pub const CreationFee: u64 = 0;
 		pub const TransactionBaseFee: u64 = 10;
 		pub const TransactionByteFee: u64 = 0;
-		pub const TransactionWeightFee: u64 = 1;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
@@ -424,7 +423,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
-		type TransactionWeightFee = TransactionWeightFee;
+		type WeightToFee = ConvertInto;
 	}
 
 	impl ValidateUnsigned for Runtime {

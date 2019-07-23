@@ -112,7 +112,6 @@ parameter_types! {
 	pub const CreationFee: Balance = 0;
 	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 0;
-	pub const TransactionWeightFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = Balance;
@@ -127,7 +126,7 @@ impl balances::Trait for Test {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
-	type TransactionWeightFee = TransactionWeightFee;
+	type WeightToFee = ();
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;

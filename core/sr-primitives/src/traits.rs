@@ -166,7 +166,6 @@ impl<T> Convert<T, T> for Identity {
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-
 impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B { a.into() }
 }
