@@ -175,8 +175,13 @@ pub trait Trait: timestamp::Trait + historical::Trait {
 	/// The signature type for an authority.
 	type Signature: Verify<Signer = Self::AuthorityId> + Parameter;
 
+	type Proof: Member + Parameter;
+
 	/// The session key owner system.
-	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Self::Proof>;
+
+	/// The equivocation type.
+	type Equivocation: AuthorshipEquivocationProof;
 }
 
 decl_storage! {
@@ -192,13 +197,7 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
 		/// Report equivocation.
-		fn report_equivocation(
-			origin,
-			proved_equivocation: (
-				AuraEquivocationProof<T::Header, T::Signature, T::AuthorityId>,
-				Proof,
-			)
-		) {
+		fn report_equivocation(origin, proved_equivocation: Self::Equivocation) {
 			let _who = ensure_signed(origin)?;
 			let (equivocation, proof) = proved_equivocation;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(

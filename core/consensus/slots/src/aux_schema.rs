@@ -49,7 +49,7 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, E, V>(
+pub fn check_equivocation<C, H, E, V, P>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
@@ -62,7 +62,7 @@ pub fn check_equivocation<C, H, E, V>(
 		C: AuxStore,
 		V: Verify + Encode + Decode + Clone,
 		<V as Verify>::Signer: Clone + Encode + Decode + PartialEq,
-		E: AuthorshipEquivocationProof<H, V, V::Signer>,
+		E: AuthorshipEquivocationProof<H, V, V::Signer, P>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {

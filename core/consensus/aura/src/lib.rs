@@ -78,6 +78,7 @@ use slots::{
 use consensus_accountable_safety::SubmitReport;
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 
+use srml_session::historical::Proof;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
@@ -711,6 +712,117 @@ pub fn import_queue<B, C, P, T>(
 		finality_proof_import,
 	))
 }
+
+/// Get slot author for given block along with authorities.
+pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> Option<&AuthorityId>
+{
+	if authorities.is_empty() { return None }
+
+	let idx = slot_num % (authorities.len() as u64);
+	assert!(idx <= usize::max_value() as u64,
+		"It is impossible to have a vector with length beyond the address space; qed");
+
+	let current_author = authorities.get(idx as usize)
+		.expect("authorities not empty; index constrained to list length;\
+				this is a valid index; qed");
+
+	Some(current_author)
+}
+
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
+pub struct AuraEquivocationProof<H, S, I, P> {
+	identity: I,
+	identity_proof: P,
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S, I> AuthorshipEquivocationProof<H, S, I, Proof> for AuraEquivocationProof<H, S, I, Proof>
+where
+	H: Header,
+	S: Verify<Signer=I> + Codec,
+{
+	fn new(
+		identity: I,
+		identity_proof: Proof,
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		AuraEquivocationProof {
+			identity,
+			identity_proof,
+			first_header,
+			second_header,
+			first_signature,
+			second_signature
+		}
+	}
+
+	/// Check the validity of the equivocation proof.
+	fn is_valid(&self) -> bool {
+		let first_header = self.first_header();
+		let second_header = self.second_header();
+
+		if first_header == second_header {
+			return false
+		}
+
+		let maybe_first_slot = find_pre_digest::<H, S>(first_header);
+		let maybe_second_slot = find_pre_digest::<H, S>(second_header);
+
+		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+			// TODO: Check that author matches slot author (improve HistoricalSession).
+			let author = self.identity();
+
+			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+				return false
+			}
+
+			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+				return false
+			}
+
+			return true;
+		}
+
+		false
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &I {
+		&self.identity
+	}
+
+	/// Get the proof of identity inclusion.
+	fn identity_proof(&self) -> &Proof {
+		&self.identity
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	/// Get signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

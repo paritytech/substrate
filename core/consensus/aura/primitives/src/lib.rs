@@ -46,7 +46,11 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
-	pub trait AuraApi<AuthorityId: Codec, Signature: Verify + Codec> {
+	pub trait AuraApi<
+		AuthorityId: Codec,
+		Signature: Verify + Codec,
+		Equivocation: AuthorshipEquivocationProof<H, S, I, P>,
+	> {
 		/// Return the slot duration in seconds for Aura.
 		/// Currently, only the value provided by this type at genesis
 		/// will be used.
@@ -58,114 +62,6 @@ decl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityId>;
 
 		/// Construct a call to report the equivocation.
-		fn construct_equivocation_report_call(
-			proof: AuraEquivocationProof<
-				<Block as BlockT>::Header,
-				Signature,
-				AuthorityId,
-			>,
-		) -> Option<Vec<u8>>;
-	}
-}
-
-/// Get slot author for given block along with authorities.
-pub fn slot_author<AuthorityId>(slot_num: u64, authorities: &[AuthorityId]) -> Option<&AuthorityId>
-{
-	if authorities.is_empty() { return None }
-
-	let idx = slot_num % (authorities.len() as u64);
-	assert!(idx <= usize::max_value() as u64,
-		"It is impossible to have a vector with length beyond the address space; qed");
-
-	let current_author = authorities.get(idx as usize)
-		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
-
-	Some(current_author)
-}
-
-#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
-pub struct AuraEquivocationProof<H, S, P> {
-	identity: P,
-	first_header: H,
-	second_header: H,
-	first_signature: S,
-	second_signature: S,
-}
-
-impl<H, S, P> AuthorshipEquivocationProof<H, S, P> for AuraEquivocationProof<H, S, P>
-where
-	H: Header,
-	S: Verify<Signer=P> + Codec,
-{
-	fn new(
-		identity: P,
-		first_header: H,
-		second_header: H,
-		first_signature: S,
-		second_signature: S,
-	) -> Self {
-		AuraEquivocationProof {
-			identity,
-			first_header,
-			second_header,
-			first_signature,
-			second_signature
-		}
-	}
-
-	/// Check the validity of the equivocation proof.
-	fn is_valid(&self) -> bool {
-		let first_header = self.first_header();
-		let second_header = self.second_header();
-
-		if first_header == second_header {
-			return false
-		}
-
-		let maybe_first_slot = find_pre_digest::<H, S>(first_header);
-		let maybe_second_slot = find_pre_digest::<H, S>(second_header);
-
-		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-			// TODO: Check that author matches slot author (improve HistoricalSession).
-			let author = self.identity();
-
-			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
-				return false
-			}
-
-			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
-				return false
-			}
-
-			return true;
-		}
-
-		false
-	}
-
-	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &P {
-		&self.identity
-	}
-
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
-	}
-
-	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &S {
-		&self.first_signature
-	}
-
-	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &S {
-		&self.second_signature
+		fn construct_equivocation_report_call(proof: Equivocation) -> Option<Vec<u8>>;
 	}
 }

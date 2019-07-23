@@ -19,43 +19,52 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::vec::Vec;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 #[cfg(feature = "std")]
 use serde::Serialize;
-
-use grandpa_primitives::Message;
+use runtime_primitives::{traits::{Header, Verify}, };
+use grandpa_primitives::{Message, };
 use substrate_primitives::ed25519::{
 	Public as AuthorityId, Signature as AuthoritySignature
 };
 
-pub trait AuthorshipEquivocationProof<H, S, P> {
+pub trait AuthorshipEquivocationProof {
+	type Header: Header;
+	type Signature: Verify;
+	type Identity: Codec;
+	type InclusionProof: Codec;
+
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
-		identity: P,
-		first_header: H,
-		second_header: H,
-		first_signature: S, 
-		second_signature: S,
+		identity: Self::Identity,
+		identity_proof: Self::InclusionProof,
+		first_header: Self::Header,
+		second_header: Self::Header,
+		first_signature: Self::Signature, 
+		second_signature: Self::Signature,
 	) -> Self;
 
 	/// Check the validity of the equivocation.
-	/// Includes checking signatures, same slot and distinct headers.
+	/// Includes checking signatures, identity inclusion, same slot and distinct headers.
 	fn is_valid(&self) -> bool;
 
 	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &P;
+	fn identity(&self) -> &Self::Identity;
+
+	/// Get the proof of inclusion of the identity in the validator set.
+	fn identity_proof(&self) -> &Self::InclusionProof;
 
 	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H;
+	fn first_header(&self) -> &Self::Header;
 
 	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H;
+	fn second_header(&self) -> &Self::Header;
 
 	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &S;
+	fn first_signature(&self) -> &Self::Signature;
 
 	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &S;
+	fn second_signature(&self) -> &Self::Signature;
 }
 
 /// A challenge is a transaction T containing

@@ -82,6 +82,7 @@ use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 use consensus_accountable_safety_primitives::AuthorshipEquivocationProof;
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
+use srml_session::historical::Proof;
 
 pub use babe_primitives::AuthorityId;
 
@@ -848,6 +849,100 @@ pub fn import_queue<B, C, E>(
 		finality_proof_import,
 	), timestamp_core))
 }
+
+
+/// Represents an Babe equivocation proof.
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+pub struct BabeEquivocationProof<H, S, P> {
+	identity: P,
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S, I> AuthorshipEquivocationProof<H, S, I, Proof> for BabeEquivocationProof<H, S, I, Proof>
+where
+	H: Header,
+	S: Verify<Signer=I> + Codec,
+{
+	/// Create a new Babe equivocation proof.
+	fn new(
+		identity: I,
+		identity_proof: Proof,
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		BabeEquivocationProof {
+			identity,
+			first_header,
+			second_header,
+			first_signature,
+			second_signature,
+		}
+	}
+
+	/// Check the validity of the equivocation proof.
+	fn is_valid(&self) -> bool {
+		let first_header = self.first_header();
+		let second_header = self.second_header();
+
+		if first_header == second_header {
+			return false
+		}
+
+		let maybe_first_slot = get_slot::<H, S>(first_header);
+		let maybe_second_slot = get_slot::<H, S>(second_header);
+
+		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+			// TODO: Check that author matches slot author (improve HistoricalSession).
+			let author = self.identity();
+
+			if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+				return false
+			}
+
+			if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+				return false
+			}
+
+			return true;
+		}
+
+		false
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &P {
+		&self.identity
+	}
+
+	/// Get the identity proof.
+	fn identity_proof(&self) -> &P {
+		&self.identity_proof
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
+}
+
 
 // FIXME #2532: need to allow deprecated until refactor is done
 // https://github.com/paritytech/substrate/issues/2532
