@@ -41,8 +41,11 @@ use keystore::{LocalStore, Store};
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
+use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
+use runtime_primitives::traits::{
+	Header, NumberFor, ProvideRuntimeApi, SaturatedConversion
+};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -231,16 +234,27 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let keystore = Store::new();
+		let keystore = Arc::new(Store::new());
+
 		let consensus_keystore = keystore
-			.create_local_store::<Components::ConsensusPair>(config.key.as_ref());
+			.create_local_store::<ComponentConsensusPair<Components>>();
+		if let Some(seed) = config.key {
+			keystore.add_key_from_seed::<ComponentConsensusPair<Components>>(
+				seed.as_str());
+		}
+
 		let finality_keystore = keystore
-			.create_local_store::<Components::FinalityPair>(config.key.as_ref());
+			.create_local_store::<ComponentFinalityPair<Components>>();
+		if let Some(seed) = config.key {
+			keystore.add_key_from_seed::<ComponentFinalityPair<Components>>(
+				seed.as_str());
+		}
 
 		let authority_key_provider = AuthorityKeyProvider {
 			_marker: PhantomData,
-			consensus_keystore: consensus_keystore.clone(),
-			finality_keystore: finality_keystore.clone(),
+			client: client.clone(),
+			consensus_store: consensus_keystore.clone(),
+			finality_store: finality_keystore.clone(),
 		};
 
 		#[allow(deprecated)]
@@ -875,22 +889,37 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-#[derive(Clone)]
 /// A provider of current authority key.
-pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
-	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
-	client: Arc<ComponentClient<Components>>,
-	consensus_store: Arc<LocalStore<ConsensusPair>>,
-	finality_store: Arc<LocalStore<FinalityPair>>,
+pub struct AuthorityKeyProvider<Client, Block, ConsensusStore, FinalityStore> {
+	_marker: PhantomData<Block>,
+	client: Arc<Client>,
+	consensus_store: Arc<ConsensusStore>,
+	finality_store: Arc<FinalityStore>,
 }
 
-impl<Block, ConsensusPair, FinalityPair>
+impl<A, B, C, D> Clone for AuthorityKeyProvider<A, B, C, D> {
+	fn clone(&self) -> Self {
+		Self {
+			_marker: self._marker.clone(),
+			client: self.client.clone(),
+			consensus_store: self.consensus_store.clone(),
+			finality_store: self.finality_store.clone(),
+		}
+	}
+}
+
+impl<Client, Block, ConsensusPair, FinalityPair>
 	offchain::AuthorityKeyProvider<Block>
-	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
+	for AuthorityKeyProvider<
+		Client,
+		Block,
+		LocalStore<ConsensusPair>,
+		LocalStore<FinalityPair>>
 where
+	Client: ProvideRuntimeApi + 'static,
 	Block: runtime_primitives::traits::Block,
-	ConsensusPair: Pair,
-	FinalityPair: Pair,
+	ConsensusPair: Pair + Clone,
+	FinalityPair: Pair + Clone,
 {
 	type ConsensusPair = ConsensusPair;
 	type FinalityPair = FinalityPair;
@@ -907,7 +936,7 @@ where
 			.next()
 	}
 
-	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
+	fn fg_authority_key(&self, at: &BlockId<Block>) -> Option<Self::FinalityPair> {
 		let authorities = self.client
 			.runtime_api()
 			.grandpa_authorities(at)

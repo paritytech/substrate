@@ -23,7 +23,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, AuthorityKeyProvider};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
-use keystore::Store;
+use keystore::{LocalStore, Store};
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -136,8 +136,12 @@ pub type ComponentConsensusPair<C> = <<C as Components>::Factory as ServiceFacto
 pub type ComponentFinalityPair<C> = <<C as Components>::Factory as ServiceFactory>::FinalityPair;
 
 /// AuthorityKeyProvider type for `Components`
-pub type ComponentAuthorityKeyProvider<C> =
-	AuthorityKeyProvider<ComponentBlock<C>, ComponentConsensusPair<C>, ComponentFinalityPair<C>>;
+pub type ComponentAuthorityKeyProvider<C> = AuthorityKeyProvider<
+	ComponentClient<C>,
+	ComponentBlock<C>,
+	LocalStore<ComponentConsensusPair<C>>,
+	LocalStore<ComponentFinalityPair<C>>
+>;
 
 /// Extrinsic hash type for `Components`
 pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
@@ -160,7 +164,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-		keystore: Option<Store>,
+		keystore: Option<Arc<Store>>,
 	) -> rpc::RpcHandler;
 }
 
@@ -174,7 +178,7 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-		keystore: Option<Store>,
+		keystore: Option<Arc<Store>>,
 	) -> rpc::RpcHandler {
 		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
 		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());

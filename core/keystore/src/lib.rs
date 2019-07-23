@@ -179,8 +179,8 @@ mod tests {
 
 		let key_a1 = ed25519::Pair::from_seed(&[0; 32]);
 		let key_b1 = ed25519::Pair::from_string("//Alice", None).unwrap();
-		store.set_key(&key_a1);
-		store.set_key_from_seed::<ed25519::Pair>("//Alice").unwrap();
+		store.add_key(&key_a1);
+		store.add_key_from_seed::<ed25519::Pair>("//Alice").unwrap();
 		let key_a2 = local_store.get_key(&key_a1.public()).unwrap();
 		let key_b2 = local_store.get_key(&key_b1.public()).unwrap();
 		assert_eq!(key_a1.to_raw_vec(), key_a2.to_raw_vec());
