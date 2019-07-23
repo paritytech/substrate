@@ -140,13 +140,16 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness get(randomness): [u8; RANDOMNESS_LENGTH];
+		// NOTE: the following fields don't use the constants to define the
+		// array size because the metadata API currently doesn't resolve the
+		// variable to its underlying value.
+		pub Randomness get(randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
 
 		/// Next epoch randomness.
-		NextRandomness: [u8; RANDOMNESS_LENGTH];
+		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
 
 		/// Randomness under construction.
-		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
+		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
 	}
 }
 
