@@ -373,22 +373,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
-			let cache = match find_epoch_digest::<B>(&header) {
-				Ok(Some(epoch)) => {
-					let mut cache = HashMap::new();
-					cache.insert(well_known_cache_keys::AUTHORITIES, epoch.encode());
-					cache
-				},
-				Ok(None) => Default::default(),
-				Err(err) => {
-					error!(target: "babe", "Error with block built on {:?}: {:?}",
-						parent_hash,
-						err,
-					);
-					Default::default()
-				},
-			};
-
 			let import_block = BlockImportParams::<B> {
 				origin: BlockOrigin::Own,
 				header,
@@ -413,7 +397,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(e) = block_import.lock().import_block(import_block, cache) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "babe", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
@@ -453,7 +437,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, Strin
 }
 
 /// Extract the BABE epoch change digest from the given header, if it exists.
-fn find_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>, String>
+fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut epoch_digest: Option<_> = None;
@@ -712,12 +696,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				// `Consensus` is the Babe-specific authorities change log.
-				// It's an encoded `Epoch`, the same format as is stored in the
-				// cache, so no need to decode/re-encode.
-				let maybe_keys = find_epoch_digest::<B>(&pre_header)?
-					.map(|epoch| vec![(well_known_cache_keys::AUTHORITIES, epoch.encode())]);
-
 				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -738,8 +716,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					&mut *self.time_source.0.lock(),
 				);
 
-				// FIXME #1019 extract authorities
-				Ok((import_block, maybe_keys))
+				Ok((import_block, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -879,13 +856,12 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 }
 
 /// Tree of all epoch changes across all *seen* forks. Data stored in tree is
-/// the hash and block number of the block signaling the epoch change, the new
-/// epoch index, the authorities, and the minimum *slot number* when the next
-/// epoch should start (i.e. epoch start slot + epoch duration).
+/// the hash and block number of the block signaling the epoch change, and the
+/// epoch that was signalled at that block.
 type EpochChanges<Block> = ForkTree<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	(u64, Vec<(AuthorityId, BabeWeight)>, SlotNumber),
+	Epoch,
 >;
 
 /// A shared epoch changes tree.
@@ -967,8 +943,6 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 		mut block: BlockImportParams<Block>,
 		mut new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		use std::collections::hash_map::Entry;
-
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
@@ -996,13 +970,11 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 
 		// check if there's any epoch change expected to happen at this slot
 		let mut epoch_changes = self.epoch_changes.lock();
-		let epoch_change = epoch_changes.find_node_where(
+		let enacted_epoch = epoch_changes.find_node_where(
 			&hash,
 			&number,
 			&is_descendent_of,
-			&|(_, _, expected_epoch_change_slot)| {
-				*expected_epoch_change_slot <= slot_number
-			}
+			&|epoch| epoch.start_slot <= slot_number,
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
 		let check_roots = || -> Result<bool, ConsensusError> {
@@ -1023,9 +995,11 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 			Ok(true)
 		};
 
-		let expected_epoch_change = epoch_change.is_some();
+		let expected_epoch_change = enacted_epoch.is_some();
+		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
+			.map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
-		match (expected_epoch_change, new_cache.contains_key(&well_known_cache_keys::AUTHORITIES)) {
+		match (expected_epoch_change, next_epoch_digest.is_some()) {
 			(true, true) => {},
 			(false, false) => {},
 			(true, false) => {
@@ -1046,50 +1020,41 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		if let Entry::Occupied(entry) = new_cache.entry(well_known_cache_keys::AUTHORITIES) {
-			if let Some(epoch) = Epoch::decode(&mut &entry.get()[..]) {
-				if let Some(last_epoch_change) = epoch_change {
-					let (last_epoch_index, ref last_epoch_authorities, _) = last_epoch_change.data;
-					if epoch.epoch_index.checked_sub(last_epoch_index) != Some(1) {
-						return Err(ConsensusError::ClientImport(format!(
-							"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
-							last_epoch_index.saturating_add(1),
-							epoch.epoch_index,
-						)));
-					}
-
-					// if the authorities don't change we don't want to
-					// propagate the cache entry to the inner `ImportBlock`,
-					// since the epoch change is specific to BABE.
-					// e.g. in the case of GRANDPA it would require a
-					// justification for the block, expecting that the
-					// authorities actually changed.
-					if epoch.authorities == *last_epoch_authorities {
-						entry.remove_entry();
-					}
+		if let Some(next_epoch) = next_epoch_digest {
+			if let Some(enacted_epoch) = enacted_epoch {
+				let enacted_epoch = &enacted_epoch.data;
+				if next_epoch.epoch_index.checked_sub(enacted_epoch.epoch_index) != Some(1) {
+					return Err(ConsensusError::ClientImport(format!(
+						"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
+						enacted_epoch.epoch_index.saturating_add(1),
+						next_epoch.epoch_index,
+					)));
 				}
 
-				old_epoch_changes = Some(epoch_changes.clone());
-
-				// track the epoch change in the fork tree
-				epoch_changes.import(
-					hash,
-					number,
-					(epoch.epoch_index, epoch.authorities, epoch.start_slot + epoch.duration),
-					&is_descendent_of,
-				).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
-
-				crate::aux_schema::write_epoch_changes::<Block, _, _>(
-					&*epoch_changes,
-					|insert| block.auxiliary.extend(
-						insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-					)
-				);
-			} else {
-				return Err(
-					ConsensusError::ClientImport("Failed to decode epoch change digest".into())
+				// the previously signalled epoch change has been enacted,
+				// so we update the cache.
+				new_cache.insert(
+					well_known_cache_keys::AUTHORITIES,
+					enacted_epoch.encode(),
 				);
 			}
+
+			old_epoch_changes = Some(epoch_changes.clone());
+
+			// track the epoch change in the fork tree
+			epoch_changes.import(
+				hash,
+				number,
+				next_epoch,
+				&is_descendent_of,
+			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+
+			crate::aux_schema::write_epoch_changes::<Block, _, _>(
+				&*epoch_changes,
+				|insert| block.auxiliary.extend(
+					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				)
+			);
 		}
 
 		let import_result = self.inner.import_block(block, new_cache);
