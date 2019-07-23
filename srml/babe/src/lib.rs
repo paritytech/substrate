@@ -214,7 +214,7 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
-		diff >= <T::EpochDuration>::get()
+		diff >= T::EpochDuration::get()
 	}
 }
 
@@ -289,14 +289,27 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		// What was the next epoch is now the current epoch
 		let randomness = Self::randomness_change_epoch(epoch_index);
 
-		EpochStartSlot::mutate(|previous| *previous += <T::EpochDuration>::get());
+		let now = CurrentSlot::get();
+
+		EpochStartSlot::mutate(|previous| {
+			loop {
+				// on the first epoch we must account for skipping at least one
+				// whole epoch, in case the first block is authored with a slot
+				// number far in the past.
+				if now.saturating_sub(*previous) < T::EpochDuration::get() {
+					break;
+				}
+
+				*previous = previous.saturating_add(T::EpochDuration::get());
+			}
+		});
 
 		let start_slot = EpochStartSlot::get();
 
 		Self::change_epoch(Epoch {
 			epoch_index,
 			start_slot,
-			duration: <T::EpochDuration>::get(),
+			duration: T::EpochDuration::get(),
 			authorities,
 			randomness,
 		})
