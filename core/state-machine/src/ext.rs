@@ -300,7 +300,6 @@ where
 		let child_storage_keys =
 			self.overlay.prospective.children.keys()
 				.chain(self.overlay.committed.children.keys());
-
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()

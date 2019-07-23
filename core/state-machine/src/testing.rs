@@ -242,14 +242,14 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
-
 		self.backend.full_storage_root(delta, child_delta_iter).0
+
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
 		let storage_key = storage_key.as_ref();
 
-		let (root, _, _) = {
+		let (root, is_empty, _) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
@@ -259,7 +259,11 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 			self.backend.child_storage_root(storage_key, delta)
 		};
-		self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+		if is_empty {
+			self.overlay.set_storage(storage_key.into(), None);
+		} else {
+			self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+		}
 		root
 	}
 

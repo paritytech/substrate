@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::trie_root;
+use trie::{trie_root, default_child_trie_root};
 use primitives::offchain;
 use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
 use parity_codec::Encode;
@@ -166,7 +166,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 				ChildStorageKey::<H>::from_slice(storage_key.as_slice())
 					.expect("Map only feed by valid keys; qed")
 			);
-			top.insert(storage_key, child_root);
+			let empty_hash = default_child_trie_root::<H>(&[]);
+			if &empty_hash[..] == &child_root[..] {
+				top.remove(&storage_key);
+			} else {
+				top.insert(storage_key, child_root);
+			}
 		}
 		trie_root::<H, _, _, _>(top)
 	}
@@ -177,7 +182,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 			InMemory::<H>::default().child_storage_root(storage_key.as_ref(), delta).0
 		} else {
-			vec![]
+			default_child_trie_root::<H>(storage_key.as_ref())
 		}
 	}
 

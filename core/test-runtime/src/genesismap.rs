@@ -96,7 +96,7 @@ pub fn insert_genesis_block(
 	storage.0.extend(additional_storage_with_genesis(&block));
   genesis_hash
 }
-	
+
 pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
 		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
