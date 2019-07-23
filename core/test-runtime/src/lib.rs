@@ -329,6 +329,8 @@ impl From<srml_system::Event> for Event {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 }
 
 impl srml_system::Trait for Runtime {
@@ -343,6 +345,8 @@ impl srml_system::Trait for Runtime {
 	type Event = Event;
 	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl srml_timestamp::Trait for Runtime {
