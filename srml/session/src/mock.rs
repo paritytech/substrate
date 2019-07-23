@@ -50,7 +50,11 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
-	fn on_new_session<T: OpaqueKeys>(changed: bool, validators: &[(u64, T)]) {
+	fn on_new_session<T: OpaqueKeys>(
+		changed: bool,
+		validators: &[(u64, T)],
+		_queued_validators: &[(u64, T)],
+	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
 		AUTHORITIES.with(|l|
 			*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
@@ -109,6 +113,8 @@ pub fn set_next_validators(next: Vec<u64>) {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
 }
 impl system::Trait for Test {
@@ -120,8 +126,11 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;

@@ -186,7 +186,11 @@ impl<A> OnSessionEnding<A> for () {
 /// Handler for when a session keys set changes.
 pub trait SessionHandler<ValidatorId> {
 	/// Session set has changed; act appropriately.
-	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(ValidatorId, Ks)]);
+	fn on_new_session<Ks: OpaqueKeys>(
+		changed: bool,
+		validators: &[(ValidatorId, Ks)],
+		queued_validators: &[(ValidatorId, Ks)],
+	);
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
@@ -197,7 +201,7 @@ pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + TypedKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 	fn on_disabled(i: usize);
 }
@@ -205,19 +209,26 @@ pub trait OneSessionHandler<ValidatorId> {
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
-			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)]) {}
+			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
-			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
+			fn on_new_session<Ks: OpaqueKeys>(
+				changed: bool,
+				validators: &[(AId, Ks)],
+				queued_validators: &[(AId, Ks)],
+			) {
 				$(
-					let our_keys = validators.iter()
+					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
 						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
-							.unwrap_or_default()));
-					$t::on_new_session(changed, our_keys);
+							.unwrap_or_default())));
+					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
+							.unwrap_or_default())));
+					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
 			}
 			fn on_disabled(i: usize) {
@@ -420,14 +431,14 @@ impl<T: Trait> Module<T> {
 			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
 
-		<QueuedKeys<T>>::put(queued_amalgamated);
+		<QueuedKeys<T>>::put(queued_amalgamated.clone());
 		QueuedChanged::put(next_changed);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys);
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
 	}
 
 	/// Disable the validator of index `i`.

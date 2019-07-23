@@ -18,6 +18,12 @@ args:
       takes_value: true
       required: false
       help: The password for the key
+  - network:
+      short: n
+      long: network
+      takes_value: true
+      required: false
+      help: Specify a network. One of substrate (default), polkadot and kusama.
 subcommands:
   - generate:
       about: Generate a random account

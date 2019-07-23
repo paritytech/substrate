@@ -25,9 +25,10 @@ use client::{blockchain, CallExecutor, Client};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
+use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
-	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
+	BlockImportParams, ImportResult, JustificationImport, well_known_cache_keys,
 	SelectChain,
 };
 use fg_primitives::GrandpaApi;
@@ -42,7 +43,7 @@ use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{finalize_block, is_descendent_of};
+use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
@@ -244,7 +245,7 @@ where
 		}
 	}
 
-	fn make_authorities_changes<'a>(&'a self, block: &mut ImportBlock<Block>, hash: Block::Hash)
+	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
 		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
 	{
 		// when we update the authorities, we need to hold the lock
@@ -405,7 +406,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&mut self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
+	fn import_block(&mut self, mut block: BlockImportParams<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();

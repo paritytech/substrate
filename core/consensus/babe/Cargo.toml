@@ -19,7 +19,9 @@ client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+fork-tree = { path = "../../utils/fork-tree" }
 futures = "0.1.26"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 tokio-timer = "0.2.11"
 parking_lot = "0.8.0"
 log = "0.4.6"
@@ -28,7 +30,6 @@ rand = "0.6.5"
 merlin = "1.0.3"
 
 [dev-dependencies]
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
