@@ -1096,10 +1096,6 @@ mod tests {
 		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockWeight::get()
 	}
 
-	fn normal_length_limit() -> u32 {
-		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockLength::get()
-	}
-
 	#[test]
 	fn origin_works() {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
