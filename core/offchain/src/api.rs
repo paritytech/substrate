@@ -15,9 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	str::FromStr, 
-	sync::Arc, 
-	convert::{TryFrom, TryInto}, 
+	str::FromStr,
+	sync::Arc,
+	convert::{TryFrom, TryInto},
 	time::SystemTime
 };
 use client::backend::OffchainStorage;
@@ -348,12 +348,12 @@ where
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		match kind {
 			StorageKind::PERSISTENT => {
-				self.db.compare_and_set(STORAGE_PREFIX, key, Some(old_value), new_value)
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
 			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
@@ -595,14 +595,14 @@ mod tests {
 	#[test]
 	fn should_get_timestamp() {
 		let mut api = offchain_api().0;
-		
+
 		// Get timestamp from std.
 		let now = SystemTime::now();
 		let d: u64 = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().try_into().unwrap();
 
 		// Get timestamp from offchain api.
 		let timestamp = api.timestamp();
-		
+
 		// Compare.
 		assert!(timestamp.unix_millis() > 0);
 		assert_eq!(timestamp.unix_millis(), d);

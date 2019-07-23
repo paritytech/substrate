@@ -955,7 +955,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.local_storage_compare_and_set(kind, &key, &old_value, &new_value))
+			.map(|api| api.local_storage_compare_and_set(kind, &key, Some(&old_value), &new_value))
 			.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_andset: wasm")?;
 
 		Ok(if res { 0 } else { 1 })

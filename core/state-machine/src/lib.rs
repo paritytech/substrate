@@ -313,7 +313,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		&mut self,
 		_kind: offchain::StorageKind,
 		_key: &[u8],
-		_old_value: &[u8],
+		_old_value: Option<&[u8]>,
 		_new_value: &[u8],
 	) -> bool {
 		unreachable!()
