@@ -56,6 +56,8 @@ impl_outer_event! {
 
 srml_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
@@ -71,6 +73,8 @@ impl system::Trait for Runtime {
 	type WeightMultiplierUpdate = ();
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl module::Trait for Runtime {

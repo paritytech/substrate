@@ -233,7 +233,7 @@ fn run_one_test() {
 	let wait_for = futures::future::join_all(import_notifications);
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
 #[test]
