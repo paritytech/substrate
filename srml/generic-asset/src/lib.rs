@@ -477,14 +477,12 @@ decl_storage! {
 		config(endowed_accounts): Vec<T::AccountId>;
 
 		build(|
-			_storage: &mut primitives::StorageOverlay,
-			children_storage: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut primitives::StorageOverlay,
+			_children_storage: &mut primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>| {
-			let child_storage = children_storage.entry(child_key().to_vec())
-				.or_insert_with(Default::default);
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
-					child_storage.insert(
+					storage.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
 						<T::Balance as parity_codec::Encode>::encode(&config.initial_balance)
 					);

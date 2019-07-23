@@ -226,20 +226,20 @@ decl_module! {
 		/// Set the number of pages in the WebAssembly environment's heap.
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(crate::child_key(), well_known_keys::HEAP_PAGES.1, &pages.encode());
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
 		pub fn set_code(origin, new: Vec<u8>) {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(crate::child_key(), well_known_keys::CODE.1, &new);
+			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
-				storage::unhashed::put_raw(crate::child_key(), &i.0, &i.1);
+				storage::unhashed::put_raw(&i.0, &i.1);
 			}
 		}
 
@@ -247,7 +247,7 @@ decl_module! {
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
-				storage::unhashed::kill(crate::child_key(), &key);
+				storage::unhashed::kill(&key);
 			}
 		}
 	}
@@ -385,17 +385,19 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|_storage: &mut primitives::StorageOverlay, children_storage: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
+		build(|
+			storage: &mut primitives::StorageOverlay,
+			_children_storage: &mut primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig
+		| {
 			use parity_codec::Encode;
 
-			let child_storage = children_storage.entry(child_key().to_vec())
-				.or_insert_with(Default::default);
-			child_storage.insert(well_known_keys::CODE.1.to_vec(), config.code.clone());
-			child_storage.insert(well_known_keys::EXTRINSIC_INDEX.1.to_vec(), 0u32.encode());
+			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
+			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				child_storage.insert(
-					well_known_keys::CHANGES_TRIE_CONFIG.1.to_vec(),
+				storage.insert(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					changes_trie_config.encode());
 			}
 		});
@@ -549,7 +551,7 @@ impl<T: Trait> Module<T> {
 
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
-		storage::unhashed::get(crate::child_key(), well_known_keys::EXTRINSIC_INDEX.1)
+		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
 	/// Gets extrinsics count.
@@ -585,7 +587,7 @@ impl<T: Trait> Module<T> {
 		digest: &DigestOf<T>,
 	) {
 		// populate environment
-		storage::unhashed::put(crate::child_key(), well_known_keys::EXTRINSIC_INDEX.1, &0u32);
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
@@ -656,13 +658,11 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new((map![], map![
-			crate::child_key().to_vec() => map![
-				twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-				twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-				twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-			]
-		]))
+		TestExternalities::new((map![
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
+		], map![]))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -675,7 +675,7 @@ impl<T: Trait> Module<T> {
 	/// Sets the index of extrinsic that is currently executing.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
-		storage::unhashed::put(crate::child_key(), well_known_keys::EXTRINSIC_INDEX.1, &extrinsic_index)
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
@@ -772,26 +772,21 @@ impl<T: Trait> Module<T> {
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
-		storage::unhashed::put(
-			crate::child_key(),
-			well_known_keys::EXTRINSIC_INDEX.1,
-			&next_extrinsic_index,
-		);
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(
-			crate::child_key(),
-			well_known_keys::EXTRINSIC_INDEX.1,
-		).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
+			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
+			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}

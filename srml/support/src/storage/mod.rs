@@ -57,78 +57,78 @@ impl<'a> Input for IncrementalChildInput<'a> {
 }
 
 /// The underlying runtime storage.
-pub struct RuntimeStorage(pub &'static [u8]);
+pub struct RuntimeStorage;
 
 impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		hashed::exists(&H::hash, self.0, key)
+		hashed::exists(&H::hash, key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::get(&H::hash, self.0, key)
+		hashed::get(&H::hash, key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
-		hashed::put(&H::hash, self.0, key, val)
+		hashed::put(&H::hash, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&mut self, key: &[u8]) {
-		hashed::kill(&H::hash, self.0, key)
+		hashed::kill(&H::hash, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		hashed::take(&H::hash, self.0, key)
+		hashed::take(&H::hash, key)
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		hashed::get_raw(&H::hash, self.0, key)
+		hashed::get_raw(&H::hash, key)
 	}
 
 	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		hashed::put_raw(&H::hash, self.0, key, value)
+		hashed::put_raw(&H::hash, key, value)
 	}
 }
 
 impl UnhashedStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		unhashed::exists(self.0, key)
+		unhashed::exists(key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		unhashed::get(self.0, key)
+		unhashed::get(key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
-		unhashed::put(self.0, key, val)
+		unhashed::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&mut self, key: &[u8]) {
-		unhashed::kill(self.0, key)
+		unhashed::kill(key)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill_prefix(&mut self, prefix: &[u8]) {
-		unhashed::kill_prefix(self.0, prefix)
+		unhashed::kill_prefix(prefix)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		unhashed::take(self.0, key)
+		unhashed::take(key)
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		unhashed::get_raw(self.0, key)
+		unhashed::get_raw(key)
 	}
 
 	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		unhashed::put_raw(self.0, key, value)
+		unhashed::put_raw(key, value)
 	}
 }
 
@@ -176,30 +176,30 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 		<U as hashed::generator::StorageValue<T>>::key()
 	}
 	fn exists() -> bool {
-		U::exists(&RuntimeStorage(U::child_key()))
+		U::exists(&RuntimeStorage)
 	}
 	fn get() -> Self::Query {
-		U::get(&RuntimeStorage(U::child_key()))
+		U::get(&RuntimeStorage)
 	}
 	fn put<Arg: Borrow<T>>(val: Arg) {
-		U::put(val.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::put(val.borrow(), &mut RuntimeStorage)
 	}
 	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
-		U::put_ref(val, &mut RuntimeStorage(U::child_key()))
+		U::put_ref(val, &mut RuntimeStorage)
 	}
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
-		U::mutate(f, &mut RuntimeStorage(U::child_key()))
+		U::mutate(f, &mut RuntimeStorage)
 	}
 	fn kill() {
-		U::kill(&mut RuntimeStorage(U::child_key()))
+		U::kill(&mut RuntimeStorage)
 	}
 	fn take() -> Self::Query {
-		U::take(&mut RuntimeStorage(U::child_key()))
+		U::take(&mut RuntimeStorage)
 	}
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
 		where T: EncodeAppend<Item=I>
 	{
-		U::append(items, &mut RuntimeStorage(U::child_key()))
+		U::append(items, &mut RuntimeStorage)
 	}
 }
 
@@ -207,9 +207,6 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
-
-	/// Get child key in storage.
-	fn child_key() -> &'static [u8];
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -243,10 +240,6 @@ pub trait StorageMap<K: Codec, V: Codec> {
 impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
 
-	fn child_key() -> &'static [u8] {
-		<U as hashed::generator::StorageMap<K, V>>::child_key()
-	}
-
 	fn prefix() -> &'static [u8] {
 		<U as hashed::generator::StorageMap<K, V>>::prefix()
 	}
@@ -256,31 +249,31 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 	}
 
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
-		U::exists(key.borrow(), &RuntimeStorage(U::child_key()))
+		U::exists(key.borrow(), &RuntimeStorage)
 	}
 
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		U::get(key.borrow(), &RuntimeStorage(U::child_key()))
+		U::get(key.borrow(), &RuntimeStorage)
 	}
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
-		U::insert(key.borrow(), val.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::insert(key.borrow(), val.borrow(), &mut RuntimeStorage)
 	}
 
 	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
-		U::insert_ref(key.borrow(), val, &mut RuntimeStorage(U::child_key()))
+		U::insert_ref(key.borrow(), val, &mut RuntimeStorage)
 	}
 
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
-		U::remove(key.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::remove(key.borrow(), &mut RuntimeStorage)
 	}
 
 	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		U::mutate(key.borrow(), f, &mut RuntimeStorage(U::child_key()))
+		U::mutate(key.borrow(), f, &mut RuntimeStorage)
 	}
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		U::take(key.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::take(key.borrow(), &mut RuntimeStorage)
 	}
 }
 
@@ -299,7 +292,7 @@ impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
 		where V: EncodeAppend<Item=I>
 	{
-		U::append(key.borrow(), items, &mut RuntimeStorage(U::child_key()))
+		U::append(key.borrow(), items, &mut RuntimeStorage)
 	}
 }
 
@@ -319,12 +312,11 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
 	where U: hashed::generator::EnumerableStorageMap<K, V>
 {
 	fn head() -> Option<K> {
-		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage(U::child_key()))
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-		<U as hashed::generator::EnumerableStorageMap<K, V>>
-			::enumerate(Box::new(RuntimeStorage(U::child_key())))
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
 
@@ -412,27 +404,27 @@ where
 	}
 
 	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool {
-		U::exists(k1.borrow(), k2.borrow(), &RuntimeStorage(U::child_key()))
+		U::exists(k1.borrow(), k2.borrow(), &RuntimeStorage)
 	}
 
 	fn get<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
-		U::get(k1.borrow(), k2.borrow(), &RuntimeStorage(U::child_key()))
+		U::get(k1.borrow(), k2.borrow(), &RuntimeStorage)
 	}
 
 	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
-		U::take(k1.borrow(), k2.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::take(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
 	}
 
 	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg) {
-		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &mut RuntimeStorage)
 	}
 
 	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) {
-		U::remove(k1.borrow(), k2.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::remove(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
 	}
 
 	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1) {
-		U::remove_prefix(k1.borrow(), &mut RuntimeStorage(U::child_key()))
+		U::remove_prefix(k1.borrow(), &mut RuntimeStorage)
 	}
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
@@ -441,7 +433,7 @@ where
 		KArg2: Borrow<K2>,
 		F: FnOnce(&mut Self::Query) -> R
 	{
-		U::mutate(k1.borrow(), k2.borrow(), f, &mut RuntimeStorage(U::child_key()))
+		U::mutate(k1.borrow(), k2.borrow(), f, &mut RuntimeStorage)
 	}
 
 	fn append<KArg1, KArg2, I>(
@@ -455,7 +447,7 @@ where
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>,
 	{
-		U::append(k1.borrow(), k2.borrow(), items, &mut RuntimeStorage(U::child_key()))
+		U::append(k1.borrow(), k2.borrow(), items, &mut RuntimeStorage)
 	}
 }
 

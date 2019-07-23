@@ -24,137 +24,137 @@ use runtime_io::{self, twox_128};
 use crate::codec::{Codec, Encode, Decode, KeyedVec};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-pub fn get<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> Option<T>
+pub fn get<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> Option<T>
 where
 	T: Decode + Sized,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get(storage_key, &hash(key).as_ref())
+	unhashed::get(&hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
-pub fn get_or_default<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> T
+pub fn get_or_default<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> T
 where
 	T: Decode + Sized + Default,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or_default(storage_key, &hash(key).as_ref())
+	unhashed::get_or_default(&hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
-pub fn get_or<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], default_value: T) -> T
+pub fn get_or<T, HashFn, R>(hash: &HashFn, key: &[u8], default_value: T) -> T
 where
 	T: Decode + Sized,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or(storage_key, &hash(key).as_ref(), default_value)
+	unhashed::get_or(&hash(key).as_ref(), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
-pub fn get_or_else<T, F, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], default_value: F) -> T
+pub fn get_or_else<T, F, HashFn, R>(hash: &HashFn, key: &[u8], default_value: F) -> T
 where
 	T: Decode + Sized,
 	F: FnOnce() -> T,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or_else(storage_key, &hash(key).as_ref(), default_value)
+	unhashed::get_or_else(&hash(key).as_ref(), default_value)
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], value: &T)
+pub fn put<T, HashFn, R>(hash: &HashFn, key: &[u8], value: &T)
 where
 	T: Encode,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::put(storage_key, &hash(key).as_ref(), value)
+	unhashed::put(&hash(key).as_ref(), value)
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-pub fn take<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> Option<T>
+pub fn take<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> Option<T>
 where
 	T: Decode + Sized,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take(storage_key, &hash(key).as_ref())
+	unhashed::take(&hash(key).as_ref())
 }
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
-pub fn take_or_default<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> T
+pub fn take_or_default<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> T
 where
 	T: Decode + Sized + Default,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or_default(storage_key, &hash(key).as_ref())
+	unhashed::take_or_default(&hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], default_value: T) -> T
+pub fn take_or<T, HashFn, R>(hash: &HashFn, key: &[u8], default_value: T) -> T
 where
 	T: Decode + Sized,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or(storage_key, &hash(key).as_ref(), default_value)
+	unhashed::take_or(&hash(key).as_ref(), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T, F, HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], default_value: F) -> T
+pub fn take_or_else<T, F, HashFn, R>(hash: &HashFn, key: &[u8], default_value: F) -> T
 where
 	T: Decode + Sized,
 	F: FnOnce() -> T,
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or_else(storage_key, &hash(key).as_ref(), default_value)
+	unhashed::take_or_else(&hash(key).as_ref(), default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
-pub fn exists<HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> bool
+pub fn exists<HashFn, R>(hash: &HashFn, key: &[u8]) -> bool
 where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::exists(storage_key, &hash(key).as_ref())
+	unhashed::exists(&hash(key).as_ref())
 }
 
 /// Ensure `key` has no explicit entry in storage.
-pub fn kill<HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8])
+pub fn kill<HashFn, R>(hash: &HashFn, key: &[u8])
 where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::kill(storage_key, &hash(key).as_ref())
+	unhashed::kill(&hash(key).as_ref())
 }
 
 /// Get a Vec of bytes from storage.
-pub fn get_raw<HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>
+pub fn get_raw<HashFn, R>(hash: &HashFn, key: &[u8]) -> Option<Vec<u8>>
 where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_raw(storage_key, &hash(key).as_ref())
+	unhashed::get_raw(&hash(key).as_ref())
 }
 
 /// Put a raw byte slice into storage.
-pub fn put_raw<HashFn, R>(hash: &HashFn, storage_key: &[u8], key: &[u8], value: &[u8])
+pub fn put_raw<HashFn, R>(hash: &HashFn, key: &[u8], value: &[u8])
 where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::put_raw(storage_key, &hash(key).as_ref(), value)
+	unhashed::put_raw(&hash(key).as_ref(), value)
 }
 
 /// A trait to conveniently store a vector of storable data.
@@ -163,9 +163,6 @@ where
 pub trait StorageVec {
 	type Item: Default + Sized + Codec;
 	const PREFIX: &'static [u8];
-
-	/// Get the child prefix key in storage.
-	fn child_key() -> &'static [u8];
 
 	/// Get the current set of items.
 	fn items() -> Vec<Self::Item> {
@@ -181,7 +178,7 @@ pub trait StorageVec {
 		let mut count: u32 = 0;
 
 		for i in items.into_iter() {
-			put(&twox_128, Self::child_key(), &count.to_keyed_vec(Self::PREFIX), i.borrow());
+			put(&twox_128, &count.to_keyed_vec(Self::PREFIX), i.borrow());
 			count = count.checked_add(1).expect("exceeded runtime storage capacity");
 		}
 
@@ -191,33 +188,33 @@ pub trait StorageVec {
 	/// Push an item.
 	fn push(item: &Self::Item) {
 		let len = Self::count();
-		put(&twox_128, Self::child_key(), &len.to_keyed_vec(Self::PREFIX), item);
+		put(&twox_128, &len.to_keyed_vec(Self::PREFIX), item);
 		Self::set_count(len + 1);
 	}
 
 	fn set_item(index: u32, item: &Self::Item) {
 		if index < Self::count() {
-			put(&twox_128, Self::child_key(), &index.to_keyed_vec(Self::PREFIX), item);
+			put(&twox_128, &index.to_keyed_vec(Self::PREFIX), item);
 		}
 	}
 
 	fn clear_item(index: u32) {
 		if index < Self::count() {
-			kill(&twox_128, Self::child_key(), &index.to_keyed_vec(Self::PREFIX));
+			kill(&twox_128, &index.to_keyed_vec(Self::PREFIX));
 		}
 	}
 
 	fn item(index: u32) -> Self::Item {
-		get_or_default(&twox_128, Self::child_key(), &index.to_keyed_vec(Self::PREFIX))
+		get_or_default(&twox_128, &index.to_keyed_vec(Self::PREFIX))
 	}
 
 	fn set_count(count: u32) {
 		(count..Self::count()).for_each(Self::clear_item);
-		put(&twox_128, Self::child_key(), &b"len".to_keyed_vec(Self::PREFIX), &count);
+		put(&twox_128, &b"len".to_keyed_vec(Self::PREFIX), &count);
 	}
 
 	fn count() -> u32 {
-		get_or_default(&twox_128, Self::child_key(), &b"len".to_keyed_vec(Self::PREFIX))
+		get_or_default(&twox_128, &b"len".to_keyed_vec(Self::PREFIX))
 	}
 }
 
@@ -226,21 +223,19 @@ mod tests {
 	use super::*;
 	use runtime_io::{twox_128, TestExternalities, with_externalities};
 
-	const CHILD_MODULE: &'static [u8] = b":child_storage:modules:Test:";
-
 	#[test]
 	fn integers_can_be_stored() {
 		let mut t = TestExternalities::default();
 		with_externalities(&mut t, || {
 			let x = 69u32;
-			put(&twox_128, CHILD_MODULE, b":test", &x);
-			let y: u32 = get(&twox_128, CHILD_MODULE, b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: u32 = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 		with_externalities(&mut t, || {
 			let x = 69426942i64;
-			put(&twox_128, CHILD_MODULE, b":test", &x);
-			let y: i64 = get(&twox_128, CHILD_MODULE, b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: i64 = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}
@@ -250,15 +245,15 @@ mod tests {
 		let mut t = TestExternalities::default();
 		with_externalities(&mut t, || {
 			let x = true;
-			put(&twox_128, CHILD_MODULE, b":test", &x);
-			let y: bool = get(&twox_128, CHILD_MODULE, b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: bool = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 
 		with_externalities(&mut t, || {
 			let x = false;
-			put(&twox_128, CHILD_MODULE, b":test", &x);
-			let y: bool = get(&twox_128, CHILD_MODULE, b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: bool = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}
@@ -267,9 +262,9 @@ mod tests {
 	fn vecs_can_be_retrieved() {
 		let mut t = TestExternalities::default();
 		with_externalities(&mut t, || {
-			runtime_io::set_child_storage(CHILD_MODULE, &twox_128(b":test"), b"\x2cHello world");
+			runtime_io::set_storage(&twox_128(b":test"), b"\x2cHello world");
 			let x = b"Hello world".to_vec();
-			let y = get::<Vec<u8>, _, _>(&twox_128, CHILD_MODULE, b":test").unwrap();
+			let y = get::<Vec<u8>, _, _>(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}
@@ -280,11 +275,11 @@ mod tests {
 		let x = b"Hello world".to_vec();
 
 		with_externalities(&mut t, || {
-			put(&twox_128, CHILD_MODULE, b":test", &x);
+			put(&twox_128, b":test", &x);
 		});
 
 		with_externalities(&mut t, || {
-			let y: Vec<u8> = get(&twox_128, CHILD_MODULE, b":test").unwrap();
+			let y: Vec<u8> = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}

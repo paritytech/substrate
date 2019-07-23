@@ -360,7 +360,7 @@ where
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 }
-/*
+
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
@@ -435,4 +435,4 @@ mod tests {
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
 	}
-}*/
+}

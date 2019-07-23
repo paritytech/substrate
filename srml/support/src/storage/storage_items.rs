@@ -165,21 +165,13 @@ macro_rules! __storage_items_internal {
 	// generator for values.
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype {
-			let child_key = <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: child_key();
-			<$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage(child_key))
-		}
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
-
-			/// Get the child storage key (single child trie for all calls to `storage_items`).
-			fn child_key() -> &'static [u8] {
-				b":child_storage:other:"
-			}
 
 			/// Get the storage key.
 			fn key() -> &'static [u8] {
@@ -221,11 +213,7 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			let child_key = <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: child_key();
-			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(
-				key.borrow(),
-				&$crate::storage::RuntimeStorage(child_key),
-			)
+			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
@@ -235,11 +223,6 @@ macro_rules! __storage_items_internal {
 			type Query = $gettype;
 
 			type Hasher = $crate::Blake2_256;
-
-			/// Get the child storage key (single child trie for all calls to `storage_items`).
-			fn child_key() -> &'static [u8] {
-				b":child_storage:other:"
-			}
 
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {

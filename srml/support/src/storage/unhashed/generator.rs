@@ -121,9 +121,6 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	/// The type that get/take returns.
 	type Query;
 
-	/// Get the child prefix key in storage.
-	fn child_key() -> &'static [u8];
-
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 

@@ -102,7 +102,7 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 		use parity_codec::Encode;
 		let mut storage = genesis_config(self.support_changes_trie).genesis_map();
 
-		let child_roots =	storage.1.iter().map(|(sk, child_map)| {
+		let child_roots = storage.1.iter().map(|(sk, child_map)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_map.clone().into_iter()
 			);

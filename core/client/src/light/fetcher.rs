@@ -564,17 +564,10 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let heap_pages = remote_client.child_storage(
-			&remote_block_id,
-			&StorageKey(well_known_keys::HEAP_PAGES.0.to_vec()),
-			&StorageKey(well_known_keys::HEAP_PAGES.1.to_vec()),
-		).unwrap()
+		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
+			.unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
-		let remote_read_proof = remote_client.read_child_proof(
-			&remote_block_id,
-			well_known_keys::HEAP_PAGES.0,
-			well_known_keys::HEAP_PAGES.1,
-		).unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -627,12 +620,10 @@ pub mod tests {
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
 		let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>)
-			.check_read_child_proof(&RemoteReadChildRequest::<Header> {
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			storage_key: well_known_keys::HEAP_PAGES.0.to_vec(),
-			key: well_known_keys::HEAP_PAGES.1.to_vec(),
+			key: well_known_keys::HEAP_PAGES.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
 	}
@@ -669,7 +660,7 @@ pub mod tests {
 		}, Some(remote_block_header.clone()), remote_header_proof).is_err());
 	}
 
-	//#[test] TODO EMCH this requires child change trie
+	#[test]
 	fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 		let local_checker = TestChecker::new(
@@ -717,7 +708,7 @@ pub mod tests {
 		}
 	}
 
-	//#[test] TODO EMCH this requires child change trie
+	#[test]
 	fn changes_proof_is_generated_and_checked_when_headers_are_pruned() {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
@@ -765,7 +756,7 @@ pub mod tests {
 		assert_eq!(local_result, vec![(4, 0), (1, 1), (1, 0)]);
 	}
 
-	//#[test] TODO EMCH this requires child change trie
+	#[test]
 	fn check_changes_proof_fails_if_proof_is_wrong() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 		let local_checker = TestChecker::new(
@@ -827,7 +818,7 @@ pub mod tests {
 		}).is_err());
 	}
 
-	//#[test] TODO EMCH this requires child change trie
+	#[test]
 	fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),

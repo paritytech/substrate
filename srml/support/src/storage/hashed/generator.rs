@@ -165,9 +165,6 @@ pub trait StorageValue<T: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
-	/// Get the child storage key.
-	fn child_key() -> &'static [u8];
-
 	/// Get the storage key.
 	fn key() -> &'static [u8];
 
@@ -225,9 +222,6 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	type Hasher: StorageHasher;
 
 	/// Get the prefix key in storage.
-	fn child_key() -> &'static [u8];
-
-	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
@@ -275,8 +269,8 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	fn head<S: HashedStorage<Self::Hasher>>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: HashedStorage<Self::Hasher> + 'a, R: AsRef<S> + 'a>(
-		storage: R
+	fn enumerate<'a, S: HashedStorage<Self::Hasher>>(
+		storage: &'a S
 	) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }
 

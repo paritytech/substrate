@@ -497,27 +497,27 @@ impl<T: Trait> Module<T> {
 	// Child trie storage.
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		storage::unhashed::get(child_key(), &dedup_trie_key::<T, _>(v))
+		storage::unhashed::get(&dedup_trie_key::<T, _>(v))
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		storage::unhashed::take(child_key(), &dedup_trie_key::<T, _>(v))
+		storage::unhashed::take(&dedup_trie_key::<T, _>(v))
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		storage::unhashed::put(child_key(), &dedup_trie_key::<T, _>(v), keys)
+		storage::unhashed::put(&dedup_trie_key::<T, _>(v), keys)
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		storage::unhashed::get(child_key(), &dedup_trie_key::<T, _>(&(id, key_data)))
+		storage::unhashed::get(&dedup_trie_key::<T, _>(&(id, key_data)))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		storage::unhashed::put(child_key(), &dedup_trie_key::<T, _>(&(id, key_data)), v);
+		storage::unhashed::put(&dedup_trie_key::<T, _>(&(id, key_data)), v);
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		storage::unhashed::kill(child_key(), &dedup_trie_key::<T, _>(&(id, key_data)));
+		storage::unhashed::kill(&dedup_trie_key::<T, _>(&(id, key_data)));
 	}
 }
 

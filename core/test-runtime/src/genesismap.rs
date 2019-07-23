@@ -52,26 +52,19 @@ impl GenesisConfig {
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) {
 		let wasm_runtime = WASM_BINARY.to_vec();
-		let balance_map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
+		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
+			.chain(vec![
+				(well_known_keys::CODE.into(), wasm_runtime),
+				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
+			].into_iter())
 			.collect();
-
-		let mut system_map: HashMap<Vec<u8>, Vec<u8>> = vec![
-			(well_known_keys::CODE.1.into(), wasm_runtime),
-			(well_known_keys::HEAP_PAGES.1.into(), vec![].and(&(16 as u64))),
-		].into_iter().collect();
-
 		if let Some(ref changes_trie_config) = self.changes_trie_config {
-			system_map.insert(well_known_keys::CHANGES_TRIE_CONFIG.1.to_vec(), changes_trie_config.encode());
+			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
-		let mut map_storage_item: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
-		map_storage_item.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		let mut map = HashMap::new();
-		map.insert(b":child_storage:modules:Balances:".to_vec(), balance_map);
-		map.insert(b":child_storage:modules:System:".to_vec(), system_map);
-		map.insert(b":child_storage:other:".to_vec(), map_storage_item);
-		(Default::default(), map)
+		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
+		(map, Default::default())
 	}
 }
 

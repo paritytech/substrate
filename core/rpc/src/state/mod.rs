@@ -513,11 +513,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(
+			Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())]),
 			None,
-			Some(&[(
-				StorageKey(storage::well_known_keys::CODE.0.to_vec()),
-				Some(vec![StorageKey(storage::well_known_keys::CODE.1.to_vec())]),
-			)]),
 		) {
 			Ok(stream) => stream,
 			Err(err) => {

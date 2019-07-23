@@ -681,11 +681,10 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 
 		let backend = self.backend.clone();
 		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
-			let changes_trie_config = try_child_read_overlay_value(
+			let changes_trie_config = try_read_overlay_value(
 				overlay,
 				backend,
-				well_known_keys::CHANGES_TRIE_CONFIG.0,
-				well_known_keys::CHANGES_TRIE_CONFIG.1,
+				well_known_keys::CHANGES_TRIE_CONFIG
 			)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
@@ -1043,10 +1042,8 @@ mod tests {
 			_native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_child_storage(
-					ChildStorageKey::from_slice(well_known_keys::CHANGES_TRIE_CONFIG.0)
-						.expect("Static value for child storage key is always valid; qed"),
-					well_known_keys::CHANGES_TRIE_CONFIG.1.to_vec(),
+				ext.place_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					Some(
 						ChangesTrieConfig {
 							digest_interval: 777,

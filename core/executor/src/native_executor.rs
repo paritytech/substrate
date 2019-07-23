@@ -16,7 +16,7 @@
 
 use std::{borrow::BorrowMut, result, cell::{RefMut, RefCell}};
 use crate::error::{Error, Result};
-use state_machine::{CodeExecutor, Externalities, ChildStorageKey};
+use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
@@ -53,30 +53,19 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 	ext: &mut E,
 	default_heap_pages: Option<u64>,
 ) -> Result<(&'a WasmModuleInstanceRef, &'a Option<RuntimeVersion>)> {
-	let code_hash = match ext.original_child_storage_hash(
-		ChildStorageKey::from_slice(well_known_keys::CODE.0)
-			.expect("static child storage key is correct; qed"),
-		well_known_keys::CODE.1,
-	) {
+	let code_hash = match ext.original_storage_hash(well_known_keys::CODE) {
 		Some(code_hash) => code_hash,
 		None => return Err(Error::InvalidCode(vec![])),
 	};
 
 	let maybe_runtime_preproc = cache.borrow_mut().entry(code_hash.into())
 		.or_insert_with(|| {
-			let code = match ext.original_child_storage(
-				ChildStorageKey::from_slice(well_known_keys::CODE.0)
-					.expect("static child storage key is correct; qed"),
-				well_known_keys::CODE.1,
-			) {
+			let code = match ext.original_storage(well_known_keys::CODE) {
 				Some(code) => code,
 				None => return RuntimePreproc::InvalidCode,
 			};
-			let heap_pages = ext.child_storage(
-				ChildStorageKey::from_slice(well_known_keys::HEAP_PAGES.0)
-					.expect("static child storage key is correct; qed"),
-				well_known_keys::HEAP_PAGES.1,
-			).and_then(|pages| u64::decode(&mut &pages[..]))
+			let heap_pages = ext.storage(well_known_keys::HEAP_PAGES)
+				.and_then(|pages| u64::decode(&mut &pages[..]))
 				.or(default_heap_pages)
 				.unwrap_or(DEFAULT_HEAP_PAGES);
 			match WasmModule::from_buffer(code)
@@ -98,12 +87,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 
 	match maybe_runtime_preproc {
 		RuntimePreproc::InvalidCode => {
-			let code = ext.original_child_storage(
-				ChildStorageKey::from_slice(well_known_keys::CODE.0)
-					.expect("static child storage key is correct; qed"),
-				well_known_keys::CODE.1,
-			)
-				.unwrap_or(vec![]);
+			let code = ext.original_storage(well_known_keys::CODE).unwrap_or(vec![]);
 			Err(Error::InvalidCode(code))
 		},
 		RuntimePreproc::ValidCode(m, v) => {

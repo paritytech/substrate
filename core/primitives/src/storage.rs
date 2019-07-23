@@ -48,25 +48,21 @@ pub struct StorageChangeSet<Hash> {
 /// List of all well known keys and prefixes in storage.
 pub mod well_known_keys {
 
-	type ChildAdress = (&'static [u8], &'static [u8]);
-
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
-	pub const CODE: ChildAdress = (b":child_storage:modules:System:", b":code");
+	pub const CODE: &'static [u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
 	///
 	/// The type of this value is encoded `u64`.
-	pub const HEAP_PAGES: ChildAdress = (b":child_storage:modules:System:", b":heappages");
+	pub const HEAP_PAGES: &'static [u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
-	pub const EXTRINSIC_INDEX: ChildAdress
-		= (b":child_storage:modules:System:", b":extrinsic_index");
+	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
 	/// Changes trie configuration is stored under this key.
-	pub const CHANGES_TRIE_CONFIG: ChildAdress
-		= (b":child_storage:modules:System:", b":changes_trie");
+	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";

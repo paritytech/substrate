@@ -841,7 +841,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				use client::backend::Backend;
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
-					.child_storage(well_known_keys::CHANGES_TRIE_CONFIG.0, well_known_keys::CHANGES_TRIE_CONFIG.1)?
+					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
 					.and_then(|v| Decode::decode(&mut &*v));
 				*cached_changes_trie_config = Some(changes_trie_config.clone());
 				Ok(changes_trie_config)

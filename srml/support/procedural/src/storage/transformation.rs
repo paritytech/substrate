@@ -105,14 +105,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		return try_tok!(Err(Error::new(traittypes.span(), "Trait bound expected")));
 	};
 
-	let child_key_val = format!("{}{}{}", ":child_storage:modules:", cratename.to_string(), ":");
-	let child_key = quote!{
-		/// Get the child storage key for this module.
-		pub fn child_key() -> &'static [u8] {
-			#child_key_val.as_bytes()
-		}
-	};
-
 	let extra_genesis = try_tok!(decl_store_extra_genesis(
 		&scrate,
 		&traitinstance,
@@ -164,7 +156,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let cratename_string = cratename.to_string();
 	let expanded = quote! {
 		#scrate_decl
-		#child_key
 		#decl_storage_items
 		#visibility trait #storetype {
 			#decl_store_items
@@ -561,14 +552,11 @@ fn decl_store_extra_genesis(
 					r: &mut #scrate::runtime_primitives::StorageOverlay,
 					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> #fn_where_clause {
-					{
-						let storage_entry = c.entry(child_key().to_vec()).or_insert_with(|| Default::default());
-						let storage = &mut *storage_entry;
+					let storage = r;
 
-						#builders
-					}
+					#builders
 
-					#scall(r, c, &self);
+					#scall(storage, c, &self);
 
 					Ok(())
 				}
@@ -880,11 +868,9 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							let child_key = <#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageValue<#typ>> :: child_key();
 							<#name<#struct_trait #instance> as
 								#scrate::storage::hashed::generator::StorageValue<#typ>> :: get(
-									&#scrate::storage::RuntimeStorage(child_key)
+									&#scrate::storage::RuntimeStorage
 								)
 						}
 					}
@@ -901,12 +887,10 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
-							let child_key = <#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>> :: child_key();
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::get(key.borrow(), &#scrate::storage::RuntimeStorage(child_key))
+							>::get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
@@ -926,13 +910,10 @@ fn impl_store_fns(
 							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
 							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
 						{
-							let child_key = <#name<#struct_trait #instance> as
-								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-								>:: child_key();
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage(child_key))
+							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}

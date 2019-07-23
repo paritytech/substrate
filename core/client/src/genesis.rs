@@ -125,6 +125,7 @@ mod tests {
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
+
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 

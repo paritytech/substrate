@@ -415,11 +415,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		Ok(self.child_storage(
-				id,
-				&StorageKey(well_known_keys::CODE.0.to_vec()),
-				&StorageKey(well_known_keys::CODE.1.to_vec()),
-		)?.expect("None is returned if there's no value stored for the given key;\
+		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
+			.expect("None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed").0)
 	}
 
@@ -1329,7 +1326,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
-			.child_storage(well_known_keys::CHANGES_TRIE_CONFIG.0, well_known_keys::CHANGES_TRIE_CONFIG.1)
+			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c)))
 	}
@@ -2501,7 +2498,7 @@ pub(crate) mod tests {
 		assert_eq!(a2.hash(), longest_chain_select.finality_target(genesis_hash, Some(10)).unwrap().unwrap());
 	}
 
-	//#[test] TODO EMCH this requires child change trie
+	#[test]
 	fn key_changes_works() {
 		let (client, _, test_cases) = prepare_client_with_key_changes();
 

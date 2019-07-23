@@ -31,12 +31,8 @@ use super::{
 };
 use primitives::{Blake2Hasher, storage::well_known_keys};
 
-
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-
-const SYSTEM_CHILD: &'static [u8] = well_known_keys::CODE.0;
-const BALANCE_CHILD: &'static [u8] = b":child_storage:modules:Balances:";
 
 storage_items! {
 	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
@@ -48,21 +44,16 @@ storage_items! {
 	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
 }
 
-fn child_key() -> &'static [u8] {
-	// same child_key implementation for any field of storage_item
-	<ExtrinsicData as StorageMap<_,_>>::child_key()
-}
-
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
 	who.to_keyed_vec(BALANCE_OF)
 }
 
 pub fn balance_of(who: AccountId) -> u64 {
-	storage::hashed::get_or(&blake2_256, BALANCE_CHILD, &balance_of_key(who), 0)
+	storage::hashed::get_or(&blake2_256, &balance_of_key(who), 0)
 }
 
 pub fn nonce_of(who: AccountId) -> u64 {
-	storage::hashed::get_or(&blake2_256, SYSTEM_CHILD, &who.to_keyed_vec(NONCE_OF), 0)
+	storage::hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
 }
 
 pub fn initialize_block(header: &Header) {
@@ -70,7 +61,7 @@ pub fn initialize_block(header: &Header) {
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
 	<StorageDigest>::put(header.digest());
-	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1, &0u32);
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 }
 
 pub fn get_block_number() -> Option<BlockNumber> {
@@ -115,9 +106,9 @@ fn execute_block_with_state_root_handler(
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1, &(i as u32));
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
 		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1);
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
 	let o_new_authorities = <NewAuthorities>::take();
@@ -166,8 +157,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-
-	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, SYSTEM_CHILD, &nonce_key, 0);
+	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
 		return TransactionValidity::Invalid(ApplyError::Stale as i8);
 	}
@@ -204,16 +194,16 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
-	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1).unwrap();
+	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
-	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1, &(extrinsic_index + 1));
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
 }
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
-	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX.0, well_known_keys::EXTRINSIC_INDEX.1).unwrap();
+	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
@@ -265,26 +255,26 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, SYSTEM_CHILD, &nonce_key, 0);
+	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
 		return Err(ApplyError::Stale)
 	}
 
 	// increment nonce in storage
-	storage::hashed::put(&blake2_256, SYSTEM_CHILD, &nonce_key, &(expected_nonce + 1));
+	storage::hashed::put(&blake2_256, &nonce_key, &(expected_nonce + 1));
 
 	// check sender balance
 	let from_balance_key = tx.from.to_keyed_vec(BALANCE_OF);
-	let from_balance: u64 = storage::hashed::get_or(&blake2_256, BALANCE_CHILD, &from_balance_key, 0);
+	let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
 		return Err(ApplyError::CantPay)
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
-	let to_balance: u64 = storage::hashed::get_or(&blake2_256, BALANCE_CHILD, &to_balance_key, 0);
-	storage::hashed::put(&blake2_256, BALANCE_CHILD, &from_balance_key, &(from_balance - tx.amount));
-	storage::hashed::put(&blake2_256, BALANCE_CHILD, &to_balance_key, &(to_balance + tx.amount));
+	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
+	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
+	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
 	Ok(ApplyOutcome::Success)
 }
 
@@ -296,8 +286,8 @@ fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResu
 
 fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
 	match value {
-		Some(value) => storage::unhashed::put_raw(child_key(), key, value),
-		None => storage::unhashed::kill(child_key(), key),
+		Some(value) => storage::unhashed::put_raw(key, value),
+		None => storage::unhashed::kill(key),
 	}
 	Ok(ApplyOutcome::Success)
 }
@@ -339,18 +329,13 @@ mod tests {
 			AuthorityKeyring::Bob.to_raw_public(),
 			AuthorityKeyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new((map![
-			twox_128(b"latest").to_vec() => vec![69u8; 32]
-		], map![
-			child_key().to_vec() => map![
-				twox_128(b"sys:auth").to_vec() => authorities.encode()
-			],
-			BALANCE_CHILD.to_vec() => map![
-				blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
-					vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-				}
-			]
-		]))
+		TestExternalities::new(map![
+			twox_128(b"latest").to_vec() => vec![69u8; 32],
+			twox_128(b"sys:auth").to_vec() => authorities.encode(),
+			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
+				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			}
+		], map![])
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {

@@ -54,18 +54,14 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.1.keys().all(|key| is_child_storage_key(key)));
 
-		let change_trie_config = storage.1.get(CHANGES_TRIE_CONFIG.0)
-			.and_then(|s| s.get(CHANGES_TRIE_CONFIG.1)).cloned();
 		super::set_changes_trie_config(
 			&mut overlay,
-			change_trie_config,
+			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		storage.1.entry(HEAP_PAGES.0.to_vec()).or_insert_with(Default::default)
-			.insert(HEAP_PAGES.1.to_vec(), 8u64.encode());
-		storage.1.entry(CODE.0.to_vec()).or_insert_with(Default::default)
-			.insert(CODE.1.to_vec(), code.to_vec());
+		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		storage.0.insert(CODE.to_vec(), code.to_vec());
 
 		let backend: HashMap<_, _> = storage.1.into_iter()
 			.map(|(keyspace, map)| (Some(keyspace), map))
@@ -289,17 +285,13 @@ mod tests {
 	use primitives::{Blake2Hasher, H256};
 	use hex_literal::hex;
 
-	fn child_slice(i: &'static [u8]) -> ChildStorageKey<Blake2Hasher> {
-		ChildStorageKey::from_slice(i).expect("Static child storage slice is valid; qed")
-	}
-
 	#[test]
 	fn commit_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
+		const ROOT: [u8; 32] = hex!("cc65c26c37ebd4abcdeb3f1ecd727527051620779a2f6c809bac0f8a87dbb816");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
@@ -308,8 +300,8 @@ mod tests {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 
 		let code = vec![1, 2, 3];
-		ext.set_child_storage(child_slice(CODE.0), CODE.1.to_vec(), code.clone());
+		ext.set_storage(CODE.to_vec(), code.clone());
 
-		assert_eq!(&ext.child_storage(child_slice(CODE.0), CODE.1).unwrap(), &code);
+		assert_eq!(&ext.storage(CODE).unwrap(), &code);
 	}
 }

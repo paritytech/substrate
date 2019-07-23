@@ -170,7 +170,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 		})
 		.map(|pairs| pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)))
 }
-/*
+
 #[cfg(test)]
 mod test {
 	use parity_codec::Encode;
@@ -353,4 +353,4 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
 		]);
 	}
-}*/
+}
