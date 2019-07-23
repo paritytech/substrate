@@ -738,7 +738,7 @@ fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> whe
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
+		.and_then(|cache| cache.get_at(&well_known_cache_keys::EPOCH, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
@@ -838,7 +838,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	// check if we already have initialized the cache
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_epoch: Option<Epoch> = cache
-		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
+		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
 		.and_then(|v| Decode::decode(&mut &v[..]));
 	if genesis_epoch.is_some() {
 		return Ok(());
@@ -851,7 +851,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		)));
 
 	let genesis_epoch = epoch(client, &genesis_id)?;
-	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_epoch.encode())
+	cache.initialize(&well_known_cache_keys::EPOCH, genesis_epoch.encode())
 		.map_err(map_err)
 }
 
@@ -898,43 +898,49 @@ impl<Block: BlockT> From<EpochChanges<Block>> for SharedEpochChanges<Block> {
 /// it is missing.
 ///
 /// The epoch change tree should be pruned as blocks are finalized.
-pub struct BabeBlockImport<B, E, Block: BlockT, I, RA> {
+pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	inner: I,
 	client: Arc<Client<B, E, Block, RA>>,
+	api: Arc<PRA>,
 	epoch_changes: SharedEpochChanges<Block>,
 }
 
-impl<B, E, Block: BlockT, I: Clone, RA> Clone for BabeBlockImport<B, E, Block, I, RA> {
+impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Block, I, RA, PRA> {
 	fn clone(&self) -> Self {
 		BabeBlockImport {
 			inner: self.inner.clone(),
 			client: self.client.clone(),
+			api: self.api.clone(),
 			epoch_changes: self.epoch_changes.clone(),
 		}
 	}
 }
 
-impl<B, E, Block: BlockT, I, RA> BabeBlockImport<B, E, Block, I, RA> {
+impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
+		api: Arc<PRA>,
 		epoch_changes: SharedEpochChanges<Block>,
 		block_import: I,
 	) -> Self {
 		BabeBlockImport {
 			client,
+			api,
 			inner: block_import,
 			epoch_changes,
 		}
 	}
 }
 
-impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA> where
+impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
 	Block: BlockT<Hash=H256>,
 	I: BlockImport<Block> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
+	PRA: ProvideRuntimeApi + ProvideCache<Block>,
+	PRA::Api: BabeApi<Block>,
 {
 	type Error = ConsensusError;
 
@@ -1031,12 +1037,26 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 					)));
 				}
 
-				// the previously signalled epoch change has been enacted,
-				// so we update the cache.
+				// update the current epoch in the client cache
 				new_cache.insert(
-					well_known_cache_keys::AUTHORITIES,
+					well_known_cache_keys::EPOCH,
 					enacted_epoch.encode(),
 				);
+
+				let current_epoch = epoch(&*self.api, &BlockId::Hash(parent_hash))?;
+
+				// if the authorities have changed then we populate the
+				// `AUTHORITIES` key with the enacted epoch, so that the inner
+				// `ImportBlock` can process it (`EPOCH` is specific to BABE).
+				// e.g. in the case of GRANDPA it would require a justification
+				// for the block, expecting that the authorities actually
+				// changed.
+				if current_epoch.authorities != enacted_epoch.authorities {
+					new_cache.insert(
+						well_known_cache_keys::AUTHORITIES,
+						enacted_epoch.encode(),
+					);
+				}
 			}
 
 			old_epoch_changes = Some(epoch_changes.clone());
@@ -1096,7 +1116,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 ) -> ClientResult<(
 	BabeImportQueue<Block>,
 	BabeLink,
-	BabeBlockImport<B, E, Block, I, RA>,
+	BabeBlockImport<B, E, Block, I, RA, PRA>,
 	impl Future<Item = (), Error = ()>,
 )> where
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -1111,7 +1131,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	initialize_authorities_cache(&*api)?;
 
 	let verifier = BabeVerifier {
-		api,
+		api: api.clone(),
 		inherent_data_providers,
 		time_source: Default::default(),
 		config,
@@ -1122,6 +1142,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 
 	let block_import = BabeBlockImport::new(
 		client.clone(),
+		api,
 		epoch_changes.clone(),
 		block_import,
 	);

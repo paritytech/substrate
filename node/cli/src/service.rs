@@ -54,6 +54,12 @@ type BabeBlockImportForService<F> = babe::BabeBlockImport<
 	<F as crate::ServiceFactory>::Block,
 	grandpa::BlockImportForService<F>,
 	<F as crate::ServiceFactory>::RuntimeApi,
+	client::Client<
+		FullBackend<F>,
+		FullExecutor<F>,
+		<F as crate::ServiceFactory>::Block,
+		<F as crate::ServiceFactory>::RuntimeApi
+	>,
 >;
 
 /// Node specific configuration
