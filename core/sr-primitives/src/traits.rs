@@ -23,8 +23,9 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
-use crate::transaction_validity::TransactionValidity;
+use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
+use crate::weights::DispatchInfo;
 pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -716,7 +717,8 @@ pub trait Extrinsic: Sized {
 	/// If no information are available about signed/unsigned, `None` should be returned.
 	fn is_signed(&self) -> Option<bool> { None }
 
-	/// New instance of an unsigned extrinsic aka "inherent".
+	/// New instance of an unsigned extrinsic aka "inherent". `None` if this is an opaque
+	/// extrinsic type.
 	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
@@ -761,6 +763,184 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 }
 
+/// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
+/// cannot be more concrete because it's designed to work reasonably well over a broad range of
+/// possible transaction types.
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum DispatchError {
+	/// General error to do with the inability to pay some fees (e.g. account balance too low).
+	Payment,
+
+	/// General error to do with the permissions of the sender.
+	NoPermission,
+
+	/// General error to do with the state of the system in general.
+	BadState,
+
+	/// General error to do with the transaction being outdated (e.g. nonce too low).
+	Stale,
+
+	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
+	Future,
+
+	/// General error to do with the transaction's proofs (e.g. signature).
+	BadProof,
+
+/*	/// General error to do with actually executing the dispatched logic.
+	User(&'static str),*/
+}
+
+impl From<DispatchError> for i8 {
+	fn from(e: DispatchError) -> i8 {
+		match e {
+			DispatchError::Payment => -64,
+			DispatchError::NoPermission => -65,
+			DispatchError::BadState => -66,
+			DispatchError::Stale => -67,
+			DispatchError::Future => -68,
+			DispatchError::BadProof => -69,
+		}
+	}
+}
+
+/// Result of a module function call; either nothing (functions are only called for "side effects")
+/// or an error message.
+pub type DispatchResult = result::Result<(), &'static str>;
+
+/// A lazy call (module function and argument values) that can be executed via its `dispatch`
+/// method.
+pub trait Dispatchable {
+	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
+	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
+	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
+	type Origin;
+	/// ...
+	type Trait;
+	/// Actually dispatch this call and result the result of it.
+	fn dispatch(self, origin: Self::Origin) -> DispatchResult;
+}
+
+/// Means by which a transaction may be extended. This type embodies both the data and the logic
+/// that should be additionally associated with the transaction. It should be plain old data.
+pub trait SignedExtension:
+	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq
+{
+	/// The type which encodes the sender identity.
+	type AccountId;
+
+	/// Any additional data that will go into the signed payload. This may be created dynamically
+	/// from the transaction using the `additional_signed` function.
+	type AdditionalSigned: Encode;
+
+	/// Construct any additional data that should be in the signed payload of the transaction. Can
+	/// also perform any pre-signature-verification checks and return an error if needed.
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
+
+		/// Validate a signed transaction for the transaction queue.
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+
+	/// Do any pre-flight stuff for a signed transaction.
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<(), DispatchError> { self.validate(who, info, len).map(|_| ()) }
+
+	/// Validate an unsigned transaction for the transaction queue. Normally the default
+	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
+	/// validating unsigned transactions.
+	fn validate_unsigned(
+		_info: DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+
+	/// Do any pre-flight stuff for a unsigned transaction.
+	fn pre_dispatch_unsigned(
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
+}
+
+macro_rules! tuple_impl_indexed {
+	($first:ident, $($rest:ident,)+ ; $first_index:tt, $($rest_index:tt,)+) => {
+		tuple_impl_indexed!([$first] [$($rest)+] ; [$first_index,] [$($rest_index,)+]);
+	};
+	([$($direct:ident)+] ; [$($index:tt,)+]) => {
+		impl<
+			AccountId,
+			$($direct: SignedExtension<AccountId=AccountId>),+
+		> SignedExtension for ($($direct),+,) {
+			type AccountId = AccountId;
+			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+				Ok(( $(self.$index.additional_signed()?,)+ ))
+			}
+			fn validate(
+				&self,
+				who: &Self::AccountId,
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info, len)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch(
+				self,
+				who: &Self::AccountId,
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<(), DispatchError> {
+				$(self.$index.pre_dispatch(who, info, len)?;)+
+				Ok(())
+			}
+			fn validate_unsigned(
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<ValidTransaction, DispatchError> {
+				let aggregator = vec![$($direct::validate_unsigned(info, len)?),+];
+				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			}
+			fn pre_dispatch_unsigned(
+				info: DispatchInfo,
+				len: usize,
+			) -> Result<(), DispatchError> {
+				$($direct::pre_dispatch_unsigned(info, len)?;)+
+				Ok(())
+			}
+		}
+
+	};
+	([$($direct:ident)+] [] ; [$($index:tt,)+] []) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+	};
+	(
+		[$($direct:ident)+] [$first:ident $($rest:ident)*]
+		;
+		[$($index:tt,)+] [$first_index:tt, $($rest_index:tt,)*]
+	) => {
+		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
+		tuple_impl_indexed!([$($direct)+ $first] [$($rest)*] ; [$($index,)+ $first_index,] [$($rest_index,)*]);
+	};
+}
+
+// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths. #3152
+#[allow(non_snake_case)]
+tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
+
+/// Only for base bone testing when you don't care about signed extensions at all.\
+#[cfg(feature = "std")]
+impl SignedExtension for () {
+	type AccountId = u64;
+	type AdditionalSigned = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+}
+
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
 /// enact a piece of extrinsic information by marshalling and dispatching to a named function
 /// call.
@@ -770,16 +950,25 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 pub trait Applyable: Sized + Send + Sync {
 	/// Id of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
-	/// Index allowing to disambiguate other `Applyable`s from the same `AccountId`.
-	type Index: Member + MaybeDisplay + SimpleArithmetic;
-	/// Function call.
-	type Call: Member;
-	/// Returns a reference to the index if any.
-	fn index(&self) -> Option<&Self::Index>;
+
+	/// Type by which we can dispatch. Restricts the UnsignedValidator type.
+	type Call;
+
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
-	/// Deconstructs into function call and sender.
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
+
+	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity;
+
+	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
+	/// index and sender.
+	fn dispatch(self,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<DispatchResult, DispatchError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

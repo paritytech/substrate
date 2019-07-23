@@ -23,7 +23,8 @@ use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
+use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
+use runtime_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
 use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -175,13 +176,13 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		p
 	};
 
-	TransactionValidity::Valid {
+	TransactionValidity::Valid(ValidTransaction {
 		priority: tx.amount,
 		requires,
 		provides,
 		longevity: 64,
 		propagate: true,
-	}
+	})
 }
 
 /// Execute a transaction outside of the block execution function.

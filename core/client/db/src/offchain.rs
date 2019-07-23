@@ -28,7 +28,7 @@ use parking_lot::Mutex;
 /// Offchain local storage
 #[derive(Clone)]
 pub struct LocalStorage {
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
@@ -48,7 +48,7 @@ impl LocalStorage {
 	}
 
 	/// Create offchain local storage with given `KeyValueDB` backend.
-	pub fn new(db: Arc<KeyValueDB>) -> Self {
+	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
 		Self {
 			db,
 			locks: Default::default(),

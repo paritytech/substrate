@@ -23,7 +23,7 @@ use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer},
 use sr_primitives::{
 	generic::{self, BlockId},
 	traits::{Hash as HashT, BlakeTwo256},
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, ValidTransaction},
 };
 
 struct TestApi;
@@ -48,13 +48,13 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
-		Ok(TransactionValidity::Valid {
+		Ok(TransactionValidity::Valid(ValidTransaction {
 			priority: 1,
 			requires,
 			provides,
 			longevity: 64,
 			propagate: true,
-		})
+		}))
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {

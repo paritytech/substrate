@@ -300,6 +300,11 @@ decl_module! {
 		/// approval voting). A reasonable default value is 24.
 		const DecayRatio: u32 = T::DecayRatio::get();
 
+		/// The chunk size of the voter vector.
+		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
+		/// The chunk size of the approval vector.
+		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
+
 		fn deposit_event<T>() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -1108,6 +1113,8 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -1121,6 +1128,8 @@ mod tests {
 		type Event = Event;
 		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1212,7 +1221,7 @@ mod tests {
 	}
 
 	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedMortalCompactExtrinsic<u32, u64, Call, ()>;
+	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where
