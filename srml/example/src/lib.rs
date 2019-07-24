@@ -575,13 +575,13 @@ mod tests {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().build_storage().unwrap()
-			.assimilate_storage(&mut t.0, &mut t.1);
+			.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		GenesisConfig::<Test>{
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
-		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1);
+		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		t.into()
 	}
 

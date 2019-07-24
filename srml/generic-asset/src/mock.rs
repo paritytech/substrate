@@ -127,7 +127,7 @@ impl ExtBuilder {
 			}
 			.build_storage()
 			.unwrap()
-			.assimilate_storage(&mut t.0, &mut t.1);
+			.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 
 		t.into()
 	}

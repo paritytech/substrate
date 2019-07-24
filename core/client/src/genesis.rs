@@ -45,7 +45,7 @@ mod tests {
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client::{
-		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis, insert_genesis_block},
+		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, AuthorityKeyring,
 	};
