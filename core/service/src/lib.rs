@@ -1022,7 +1022,7 @@ where
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
-/// 		RuntimeDispatch = substrate::executor::Executor,
+/// 		RuntimeDispatch = substrate_node_cli::executor::Executor,
 /// 		FullTransactionPoolApi = FullChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 /// 		LightTransactionPoolApi = LightChainApi<Self>
