@@ -173,8 +173,8 @@
 //! defined staking rate. The full specification can be found
 //! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model).
 //!
-//! Total reward is split among validators and their nominators depending on the number of point
-//! they received during the era. Points are added to a validor using
+//! Total reward is split among validators and their nominators depending on the number of points
+//! they received during the era. Points are added to a validator using
 //! [`add_reward_points_to_validator`](./enum.Call.html#variant.add_reward_points_to_validator).
 //!
 //! [`Module`](./struct.Module.html) implements
