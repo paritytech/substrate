@@ -3928,6 +3928,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+ "srml-authorship 0.1.0",
  "srml-balances 2.0.0",
  "srml-session 2.0.0",
  "srml-support 2.0.0",

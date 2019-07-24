@@ -361,8 +361,6 @@ mod tests {
 				validator_count: 3,
 				minimum_validator_count: 0,
 				offline_slash: Perbill::zero(),
-				session_reward: Perbill::zero(),
-				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
 			}),
