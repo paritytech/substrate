@@ -301,7 +301,20 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 			validators.len(),
 			|idx, slash_count| {
 				let v = validators[idx].clone();
-				staking::Module::<T>::on_offline_validator(v, slash_count);
+
+				// slash only if the validator isn't marked as online in the current session
+				// TODO maybe define AuthorityOf(AccountId) instead of putting this here
+				let account_id = validators[idx].clone();
+				let keys = T::SessionInterface::current_keys::<T::AuthorityId>();
+				let maybe_aura_id = keys
+					.iter()
+					.find(|(k, _)| *k == account_id)
+					.map(|(_, a)| a);
+				if let Some(aura_id) = maybe_aura_id {
+					if T::IsOnline::is_online_in_current_session(aura_id) {
+						staking::Module::<T>::on_offline_validator(v, slash_count);
+					}
+				}
 			}
 		);
 	}
