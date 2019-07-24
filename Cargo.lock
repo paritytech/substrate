@@ -2263,7 +2263,7 @@ dependencies = [
  "hyper 0.12.31 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core-client 12.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-primitives 2.0.0",
+ "substrate 2.0.0",
  "substrate-rpc 2.0.0",
 ]
 
