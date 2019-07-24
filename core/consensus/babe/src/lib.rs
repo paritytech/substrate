@@ -1205,7 +1205,7 @@ pub mod test_helpers {
 		at: &BlockId<B>,
 		slot_number: u64,
 		key: &sr25519::Pair,
-		c: f64,
+		c: (u64, u64),
 	) -> Option<BabePreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi + ProvideCache<B>,
