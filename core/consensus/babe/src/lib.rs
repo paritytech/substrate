@@ -943,8 +943,7 @@ impl<B, E, Block, I, RA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, 
 
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
-		#[allow(deprecated)]
-		match self.client.backend().blockchain().status(BlockId::Hash(hash)) {
+		match self.client.status(BlockId::Hash(hash)) {
 			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			Ok(blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
@@ -1106,8 +1105,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		config,
 	};
 
-	#[allow(deprecated)]
-	let epoch_changes = aux_schema::load_epoch_changes(&**client.backend())?;
+	let epoch_changes = aux_schema::load_epoch_changes(&**client)?;
 
 	let block_import = BabeBlockImport::new(
 		client.clone(),
