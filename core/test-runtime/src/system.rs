@@ -113,12 +113,6 @@ fn execute_block_with_state_root_handler(
 
 	let o_new_authorities = <NewAuthorities>::take();
 
-	// symetric removal of finalize for roots to match not putting parent hash as it
-	// seems to touch the state (required key value).
-	<Number>::kill();
-	<StorageDigest>::kill();
-	<NewAuthorities>::kill();
-
 	if let Mode::Overwrite = mode {
 		header.state_root = storage_root().into();
 	} else {
