@@ -41,7 +41,7 @@ use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, ed25519, crypto};
+use primitives::{Pair, ed25519, sr25519, crypto};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
@@ -192,6 +192,7 @@ impl<Components: components::Components> Service<Components> {
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
 				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
+				keystore.generate_from_seed::<sr25519::Pair>(seed)?;
 			}
 
 			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
