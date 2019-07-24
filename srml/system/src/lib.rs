@@ -893,7 +893,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		// There is no point in writing to storage here since changes are discarded. This basically
-		// discards any transaction which is bigger than the length or weight limit __alone__,which
+		// discards any transaction which is bigger than the length or weight limit **alone**,which
 		// is a guarantee that it will fail in the pre-dispatch phase.
 		let _ = Self::check_block_length(info, len)?;
 		let _ = Self::check_weight(info)?;
