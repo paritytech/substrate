@@ -18,20 +18,17 @@ use ansi_term::Colour;
 use client::ClientInfo;
 use log::info;
 use network::SyncState;
-use runtime_primitives::traits::{Block as BlockT, SaturatedConversion};
+use runtime_primitives::traits::{Block as BlockT, SaturatedConversion, CheckedDiv, NumberFor, One, Zero, Saturating};
 use service::NetworkStatus;
-use std::{fmt, marker::PhantomData, time};
+use std::{convert::TryInto, fmt, time};
 
 /// State of the informant display system.
 pub struct InformantDisplay<B: BlockT> {
 	/// Head of chain block number from the last time `display` has been called.
 	/// `None` if `display` has never been called.
-	// TODO: use `NumberFor<B>` instead of `u64`
-	// https://github.com/paritytech/substrate/issues/2652
-	last_number: Option<u64>,
+	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
 	last_update: time::Instant,
-	marker: PhantomData<B>,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
@@ -40,23 +37,25 @@ impl<B: BlockT> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: time::Instant::now(),
-			marker: PhantomData,
 		}
 	}
 
 	/// Displays the informant by calling `info!`.
 	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
-		let best_number = info.chain.best_number.saturated_into::<u64>();
+		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
-		let speed = speed(best_number, self.last_number, self.last_update);
+		let speed = speed::<B>(best_number, self.last_number, self.last_update);
 		self.last_update = time::Instant::now();
+		self.last_number = Some(best_number);
+
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("Idle".into(), "".into()),
 			(SyncState::Downloading, None) => (format!("Syncing{}", speed), "".into()),
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
-		self.last_number = Some(best_number);
+
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
+
 		info!(
 			target: "substrate",
 			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
@@ -73,18 +72,43 @@ impl<B: BlockT> InformantDisplay<B> {
 	}
 }
 
-fn speed(best_number: u64, last_number: Option<u64>, last_update: time::Instant) -> String {
-	let since_last_millis = last_update.elapsed().as_secs() * 1000;
-	let since_last_subsec_millis = last_update.elapsed().subsec_millis() as u64;
-	let speed = last_number
-		.and_then(|num|
-			(best_number.saturating_sub(num) * 10_000).checked_div(since_last_millis + since_last_subsec_millis))
-		.map_or(0.0, |s| s as f64);
+/// Calculates `(best_number - last_number) / (now - last_update)` and returns a `String`
+/// representing the speed of import.
+fn speed<B: BlockT>(
+	best_number: NumberFor<B>,
+	last_number: Option<NumberFor<B>>,
+	last_update: time::Instant
+) -> String {
+	let elapsed = last_update.elapsed();
+	let since_last_millis = elapsed.as_secs() * 1000;
+	let since_last_subsec_millis = elapsed.subsec_millis() as u64;
+	let elapsed_ms = since_last_millis + since_last_subsec_millis;
 
-	if speed < 1.0 {
-		"".into()
+	// Number of blocks that have been imported since last time.
+	let diff = match last_number {
+		None => return String::new(),
+		Some(n) => best_number.saturating_sub(n)
+	};
+
+	if let Ok(diff) = TryInto::<u128>::try_into(diff) {
+		// If the number of blocks can be converted to a regular integer, then it's easy: just
+		// do the math and turn it into a `f64`.
+		let speed = diff.saturating_mul(10_000).checked_div(u128::from(elapsed_ms))
+			.map_or(0.0, |s| s as f64) / 10.0;
+		format!(" {:4.1} bps", speed)
+
 	} else {
-		format!(" {:4.1} bps", speed / 10.0)
+		// If the number of blocks can't be converted to a regular integer, then we need a more
+		// algebraic approach and we stay within the realm of integers.
+		let ten = (0..10)
+			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
+		let one_thousand = ten * ten * ten;
+		let elapsed = (0..elapsed_ms)
+			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
+
+		let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
+			.unwrap_or_else(Zero::zero);
+		format!(" {} bps", speed)
 	}
 }
 
