@@ -102,11 +102,10 @@ pub struct BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic thresholds may be supported in the future.
-	pub threshold: u64,
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a fraction where the first member of the tuple is the
+	/// numerator and the second is the denominator.
+	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the
 	/// median algorithm to compute the offset between the on-chain time and the

@@ -351,7 +351,6 @@ mod tests {
 				.create_inherent_data()
 				.expect("Creates inherent data.");
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
-			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
@@ -362,13 +361,22 @@ mod tests {
 
 			let mut digest = Digest::<H256>::default();
 
-			let babe_pre_digest = babe::test_helpers::claim_slot::<node_primitives::Block, _>(
-				&*service.client(),
-				&parent_id,
-				slot_num,
-				&alice,
-				std::u64::MAX,
-			).unwrap();
+			// even though there's only one authority some slots might be empty,
+			// so we must keep trying the next slots until we can claim one.
+			let babe_pre_digest = loop {
+				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
+				if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
+					&*service.client(),
+					&parent_id,
+					slot_num,
+					&alice,
+					0.3f64,
+				) {
+					break babe_pre_digest;
+				}
+
+				slot_num += 1;
+			};
 
 			digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 

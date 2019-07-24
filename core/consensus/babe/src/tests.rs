@@ -324,7 +324,7 @@ fn can_author_block() {
 		duration: 100,
 	};
 	loop {
-		match claim_slot(i, epoch.clone(), &pair, u64::MAX / 10) {
+		match claim_slot(i, epoch.clone(), &pair, 0.1f64) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s);

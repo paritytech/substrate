@@ -114,9 +114,9 @@ impl Config {
 		self.0.slot_duration
 	}
 
-	/// Retrieve the threshold for BABE
-	pub fn threshold(&self) -> u64 {
-		self.0.threshold
+	/// Retrieve the threshold calculation constant `c`.
+	pub fn c(&self) -> f64 {
+		self.0.c.0 as f64 / self.0.c.1 as f64
 	}
 }
 
@@ -204,7 +204,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		local_key,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
-		threshold: config.threshold(),
+		c: config.c(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
 	Ok(slots::start_slot_worker(
@@ -224,7 +224,7 @@ struct BabeWorker<C, E, I, SO> {
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
 	force_authoring: bool,
-	threshold: u64,
+	c: f64,
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -291,7 +291,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			slot_info.number,
 			epoch,
 			&pair,
-			self.threshold,
+			self.c,
 		) {
 			let ((inout, vrf_proof, _batchable_proof), authority_index) = claim;
 
@@ -469,7 +469,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	authorities: &[AuthorityId],
 	randomness: [u8; 32],
 	epoch_index: u64,
-	threshold: u64,
+	c: f64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -510,6 +510,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 				})?
 			};
 
+			let threshold = calculate_threshold(c, authorities.len());
 			if !check(&inout, threshold) {
 				return Err(babe_err!("VRF verification of block by author {:?} failed: \
 									  threshold {} exceeded", author, threshold));
@@ -663,7 +664,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			&authorities[..],
 			randomness,
 			epoch_index,
-			self.config.threshold(),
+			self.config.c(),
 		)?;
 
 		match checked_header {
@@ -790,8 +791,23 @@ fn make_transcript(
 	transcript
 }
 
-fn check(inout: &VRFInOut, threshold: u64) -> bool {
-	u64::from_le_bytes(inout.make_bytes::<[u8; 8]>(BABE_VRF_PREFIX)) < threshold
+fn check(inout: &VRFInOut, threshold: u128) -> bool {
+	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
+}
+
+fn calculate_threshold(c: f64, authorities: usize) -> u128 {
+	use num_bigint::BigUint;
+	use num_rational::BigRational;
+	use num_traits::{cast::ToPrimitive, identities::One};
+
+	let calc = || {
+		let p = BigRational::from_float((1f64 - c).powf(1f64 / authorities as f64))?;
+		let numer = p.numer().to_biguint()?;
+		let denom = p.denom().to_biguint()?;
+		((BigUint::one() << 128) * numer / denom).to_u128()
+	};
+
+	calc().unwrap_or(u128::max_value())
 }
 
 /// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
@@ -803,7 +819,7 @@ fn claim_slot(
 	slot_number: u64,
 	Epoch { ref authorities, ref randomness, epoch_index, .. }: Epoch,
 	key: &sr25519::Pair,
-	threshold: u64,
+	c: f64,
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
 	let authority_index = authorities.iter().position(|s| &s.0 == public)?;
@@ -812,8 +828,8 @@ fn claim_slot(
 	// Compute the threshold we will use.
 	//
 	// We already checked that authorities contains `key.public()`, so it can't
-	// be empty.  Therefore, this division is safe.
-	let threshold = threshold / authorities.len() as u64;
+	// be empty.  Therefore, this division in `calculate_threshold` is safe.
+	let threshold = calculate_threshold(c, authorities.len());
 
 	get_keypair(key)
 		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
@@ -1181,7 +1197,7 @@ pub mod test_helpers {
 		at: &BlockId<B>,
 		slot_number: u64,
 		key: &sr25519::Pair,
-		threshold: u64,
+		c: f64,
 	) -> Option<BabePreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi + ProvideCache<B>,
@@ -1193,7 +1209,7 @@ pub mod test_helpers {
 			slot_number,
 			epoch,
 			key,
-			threshold,
+			c,
 		).map(|((inout, vrf_proof, _), authority_index)| {
 			BabePreDigest {
 				vrf_proof,
