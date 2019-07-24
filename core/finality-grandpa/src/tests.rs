@@ -569,8 +569,7 @@ fn transition_3_voters_twice_1_full_observer() {
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			#[allow(deprecated)]
-			&**full_client.backend()
+			&**full_client
 		).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
@@ -662,8 +661,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
 					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-						#[allow(deprecated)]
-						&**full_client.backend()
+						&**full_client
 					).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
@@ -934,8 +932,7 @@ fn force_change_to_new_set() {
 
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			#[allow(deprecated)]
-			&**full_client.backend()
+			&**full_client
 		).unwrap();
 
 		assert_eq!(set.current(), (1, voters.as_slice()));
@@ -1199,9 +1196,8 @@ fn voter_persists_its_votes() {
 					})
 					.for_each(|_| Ok(()))
 					.and_then(move |_| {
-						#[allow(deprecated)]
 						let block_30_hash =
-							net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
+							net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
 						// we restart alice's voter
 						voter_tx.unbounded_send(()).unwrap();
