@@ -174,6 +174,7 @@ mod tests {
 	use crate::mock::*;
 	use substrate_primitives::H256;
 	use srml_session::OnSessionEnding;
+	use srml_support::{assert_ok, assert_noop};
 
 	type RollingWindow = Module<Test>;
 
@@ -186,20 +187,20 @@ mod tests {
 
 			let mut current_session = 0;
 
-			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session).is_ok());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
-			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session).is_err());
+			assert_noop!(RollingWindow::report_misbehavior(Kind::Two, zero, current_session), ());
 
-			assert!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).is_ok());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, one, current_session));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
-			assert!(RollingWindow::report_misbehavior(Kind::Two, one, current_session).is_err());
+			assert_noop!(RollingWindow::report_misbehavior(Kind::Two, one, current_session), ());
 
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
 
 			current_session += 1;
 
-			assert!(RollingWindow::report_misbehavior(Kind::Two, two, current_session).is_ok());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, two, current_session));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
 			RollingWindow::on_session_ending(current_session, current_session + 1);
@@ -223,17 +224,17 @@ mod tests {
 			let zero = H256::zero();
 			let one: H256 = [1_u8; 32].into();
 
-			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, 0).is_ok());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, zero, 0));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
-			assert!(RollingWindow::report_misbehavior(Kind::One, zero, 0).is_err());
-			assert!(RollingWindow::report_misbehavior(Kind::Two, one, 0).is_ok());
+			assert_noop!(RollingWindow::report_misbehavior(Kind::One, zero, 0), ());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, one, 0));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
 
 			// rolling window has expired but bonding_uniqueness shall be unbounded
 			RollingWindow::on_session_ending(50, 51);
 
-			assert!(RollingWindow::report_misbehavior(Kind::Two, zero, 51).is_err());
-			assert!(RollingWindow::report_misbehavior(Kind::One, one, 52).is_err());
+			assert_noop!(RollingWindow::report_misbehavior(Kind::Two, zero, 51), ());
+			assert_noop!(RollingWindow::report_misbehavior(Kind::One, one, 52), ());
 		});
 	}
 
@@ -241,7 +242,7 @@ mod tests {
 	fn rolling_window_wrapped() {
 		with_externalities(&mut new_test_ext(), || {
 			// window length is u32::max_value should expire at session 24
-			assert!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25).is_ok());
+			assert_ok!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 
 			// `u32::max_value() - 25` sessions have been executed
