@@ -220,7 +220,7 @@ build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-only
+  # debug <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
