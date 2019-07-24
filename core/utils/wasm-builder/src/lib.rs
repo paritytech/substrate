@@ -177,14 +177,12 @@ impl CargoCommand {
 		CargoCommand { program: program.into(), args: Vec::new() }
 	}
 
-	fn arg<S: Into<OsString>>(&mut self, arg: S) -> &mut Self {
+	fn arg(&mut self, arg: &str) -> &mut Self {
 		self.args.push(arg.into());
 		self
 	}
 
-	fn args<I, S>(&mut self, args: I) -> &mut Self
-		where I: IntoIterator<Item=S>, S: Into<OsString>
-	{
+	fn args(&mut self, args: &[&str]) -> &mut Self {
 		for arg in args {
 			self.arg(arg);
 		}
