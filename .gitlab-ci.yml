@@ -295,7 +295,13 @@ build-rust-doc-release:
   <<:                              *kubernetes-build
 
 publish-docker-substrate:          &publish-docker-release
-  <<:                              *publish-build
+  # debug <<:                              *publish-build
+  stage:                           publish
+  dependencies:
+    - build-linux-release
+    - build-linux-subkey
+  <<:                              *kubernetes-build
+  # debug
   image:                           docker:stable
   services:
     - docker:dind
