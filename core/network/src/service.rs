@@ -32,8 +32,9 @@ use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
-use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -675,7 +676,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 }
 
 /// The libp2p swarm, customized for our needs.
-type Swarm<B, S, H> = libp2p::core::Swarm<
+type Swarm<B, S, H> = libp2p::swarm::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
 	Behaviour<B, S, H>
 >;
