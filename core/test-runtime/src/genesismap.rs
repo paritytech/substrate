@@ -75,7 +75,7 @@ pub fn insert_genesis_block(
 	)
 ) -> primitives::hash::H256 {
 
-	let child_roots =	storage.1.iter().map(|(sk, child_map)| {
+	let child_roots = storage.1.iter().map(|(sk, child_map)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			child_map.clone().into_iter()
 		);
@@ -87,7 +87,7 @@ pub fn insert_genesis_block(
 	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();
 	storage.0.extend(additional_storage_with_genesis(&block));
-  genesis_hash
+	genesis_hash
 }
 
 pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {

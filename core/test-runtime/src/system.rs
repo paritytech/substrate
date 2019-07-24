@@ -212,7 +212,7 @@ pub fn finalize_block() -> Header {
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	// This MUST come after all changes to storage are done.	Otherwise we will fail the
+	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);

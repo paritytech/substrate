@@ -474,11 +474,10 @@ where
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_child_keys_with_prefix(state, storage_key, prefix, action),
-			OnDemandOrGenesisState::Genesis(ref state)
-				=> state.for_child_keys_with_prefix(storage_key, prefix, action),
+			OnDemandOrGenesisState::Genesis(ref state) =>
+				state.for_child_keys_with_prefix(storage_key, prefix, action),
 		}
 	}
-
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where

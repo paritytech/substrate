@@ -285,8 +285,6 @@ where
 		});
 	}
 
-
-
 	fn chain_id(&self) -> u64 {
 		42
 	}

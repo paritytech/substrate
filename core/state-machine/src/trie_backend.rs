@@ -85,7 +85,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);

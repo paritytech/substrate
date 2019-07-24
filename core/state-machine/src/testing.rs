@@ -217,7 +217,6 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		});
 	}
 
-
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {

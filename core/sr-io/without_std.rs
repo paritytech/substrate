@@ -758,7 +758,6 @@ impl StorageApi for () {
 		}
 	}
 
-
 	fn kill_child_storage(storage_key: &[u8]) {
 		unsafe {
 			ext_kill_child_storage.get()(
