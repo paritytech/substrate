@@ -449,21 +449,16 @@ pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 /// externalities that draw from and populate `storage` and `children_storage`.
 /// Forwards the value that the closure returns.
 pub fn with_storage<R, F: FnOnce() -> R>(
-	storage: &mut StorageOverlay,
-	children_storage: &mut ChildrenStorageOverlay,
+	storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	f: F
 ) -> R {
 	let mut alt_storage = Default::default();
-	let mut alt_children_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	rstd::mem::swap(&mut alt_children_storage, children_storage);
 
-	let mut ext = BasicExternalities::new(alt_storage, alt_children_storage);
+	let mut ext = BasicExternalities::new(alt_storage.0, alt_storage.1);
 	let r = ext::using(&mut ext, f);
 
-	let storage_tuple = ext.into_storages();
-	*storage = storage_tuple.0;
-	*children_storage = storage_tuple.1;
+	*storage = ext.into_storages();
 
 	r
 }

@@ -327,7 +327,7 @@ mod tests {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
-				build(|_, _, _| {});
+				build(|_, _| {});
 			}
 		}
 	}

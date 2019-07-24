@@ -593,11 +593,10 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			children_storage: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut (primitives::StorageOverlay, primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
-			with_storage(storage, children_storage, || {
+			with_storage(storage, || {
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					assert!(
 						T::Currency::free_balance(&stash) >= balance,

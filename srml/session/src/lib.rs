@@ -308,11 +308,10 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			children_storage: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut (primitives::StorageOverlay, primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
-			runtime_io::with_storage(storage, children_storage, || {
+			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
 					assert!(
 						<Module<T>>::load_keys(&who).is_none(),
@@ -580,7 +579,7 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 

@@ -109,16 +109,14 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		let mut storage = Default::default();
-		let mut child_storage = Default::default();
-		self.assimilate_storage(&mut storage, &mut child_storage)?;
-		Ok((storage, child_storage))
+		let mut storage = (Default::default(), Default::default());
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	) -> Result<(), String>;
 }
 
@@ -128,8 +126,7 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	) -> Result<(), String>;
 }
 
@@ -140,15 +137,14 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	}
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	)-> Result<(), String> {
-		storage.extend(self.0);
+		storage.0.extend(self.0);
 		for (k, other_map) in self.1.into_iter() {
-			if let Some(map) = child_storage.get_mut(&k) {
+			if let Some(map) = storage.1.get_mut(&k) {
 				map.extend(other_map);
 			} else {
-				child_storage.insert(k, other_map);
+				storage.1.insert(k, other_map);
 			}
 		}
 		Ok(())
@@ -789,8 +785,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					self,
-					top: &mut $crate::StorageOverlay,
-					children: &mut $crate::ChildrenStorageOverlay
+					storage: &mut ($crate::StorageOverlay, $crate::ChildrenStorageOverlay),
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
@@ -800,8 +795,7 @@ macro_rules! impl_outer_config {
 								$snake;
 								$( $instance )?;
 								extra;
-								top;
-								children;
+								storage;
 							}
 						}
 					)*
@@ -815,13 +809,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		$instance:ident;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	};
 	(@CALL_FN
@@ -829,13 +821,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	}
 }

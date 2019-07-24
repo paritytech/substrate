@@ -39,7 +39,6 @@ pub fn construct_genesis_block<
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use parity_codec::{Encode, Decode, Joiner};
 	use executor::{NativeExecutionDispatch, native_executor_instance};
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
@@ -49,7 +48,6 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, AuthorityKeyring,
 	};
-	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
 	use hex::*;
 

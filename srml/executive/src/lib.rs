@@ -460,7 +460,7 @@ mod tests {
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
@@ -484,7 +484,7 @@ mod tests {
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
-		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

@@ -332,7 +332,7 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 

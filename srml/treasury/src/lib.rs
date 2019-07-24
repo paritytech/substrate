@@ -436,7 +436,7 @@ mod tests {
 		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

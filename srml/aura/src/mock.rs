@@ -74,7 +74,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+	}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

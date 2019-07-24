@@ -386,17 +386,16 @@ decl_storage! {
 		config(code): Vec<u8>;
 
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			_children_storage: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut (primitives::StorageOverlay, primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig
 		| {
 			use parity_codec::Encode;
 
-			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+			storage.0.insert(well_known_keys::CODE.to_vec(), config.code.clone());
+			storage.0.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.insert(
+				storage.0.insert(
 					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					changes_trie_config.encode());
 			}
