@@ -339,25 +339,47 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 				let id = BlockId::hash( client.info().chain.best_hash);
 
 				// TODO: remove unwrap().
-				let public_key = keystore.authority_key( &id).map(|k| k.public().to_string()).unwrap();
-				println!("=== authority key: {}", public_key);
-				let hashed_public_key = libp2p::multihash::encode(
-					libp2p::multihash::Hash::SHA2256,
-					&public_key.as_bytes(),
-				).unwrap();
+				match keystore.authority_key( &id).map(|k| k.public().to_string()) {
+					Some(public_key) => {
+						println!("=== authority key: {}", public_key);
+						let hashed_public_key = libp2p::multihash::encode(
+							libp2p::multihash::Hash::SHA2256,
+							&public_key.as_bytes(),
+						).unwrap();
 
-				let external_addresses = network.external_addresses();
-				println!("==== external addresses: {:?}", external_addresses);
+						let external_addresses = network.external_addresses();
+						println!("==== external addresses: {:?}", external_addresses);
 
-				// TODO: Remove unwrap.
-				let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
+						// TODO: Remove unwrap.
+						let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
 
-				network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
-				// TODO: This gets the Aura authorities, what if a user uses babe? That should be abstracted.
-				// println!("=== validators: {:?}", client.runtime_api().authorities(&id));
+						// TODO: Sign the payload before putting it on the DHT.
+						network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
+					},
+					None => {
+						println!("==== Got no authority key");
+					}
+				}
 
-				// TODO: Let's trigger a search for us for now. Remove.
-				network.service().get_value(&hashed_public_key.clone());
+
+				// TODO: Get authorities from current consensus, whatever that might be.
+				// match client.runtime_api().authorities(&id) {
+				// 	Ok(authorities) => {
+				// 		for authority in authorities.iter() {
+				// 			println!("==== querying dht for authority: {}", authority.to_string());
+				// 			// TODO: Remove unwrap.
+				// 			let hashed_public_key = libp2p::multihash::encode(
+				// 				libp2p::multihash::Hash::SHA2256,
+				// 				authority.to_string().as_bytes(),
+				// 			).unwrap();
+
+				// 			network.service().get_value(&hashed_public_key.clone());
+				// 		}
+				// 	},
+				// 	Err(e) => {
+				// 		println!("==== Got no authorities, but an error: {:?}", e);
+				// 	}
+				// }
 			}
 
 
@@ -418,12 +440,30 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 			while let Ok(Async::Ready(Some(Event::Dht(DhtEvent::ValueFound(values))))) = network.poll().map_err(|err| {
 				warn!(target: "service", "Error in network: {:?}", err);
 			}) {
-				for (_key, value) in values.iter() {
-					let value = std::str::from_utf8(value).unwrap();
+				for (key, value) in values.iter() {
+					let id = BlockId::hash( client.info().chain.best_hash);
+					match client.runtime_api().authorities(&id) {
+						Ok(authorities) => {
+							for authority in authorities.iter() {
+								// TODO: Remove unwrap.
+								let hashed_public_key = libp2p::multihash::encode(
+									libp2p::multihash::Hash::SHA2256,
+									authority.to_string().as_bytes(),
+								).unwrap();
 
-					let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
+								if *key == hashed_public_key {
+									let value = std::str::from_utf8(value).unwrap();
 
-					println!("==== Found the following external addresses on the DHT: {:?}", external_addresses);
+									let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
+
+									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), external_addresses);
+								}
+							}
+						},
+						Err(e) => {
+							println!("==== Got no authorities, but an error: {:?}", e);
+						}
+					}
 				}
 			}
 
@@ -499,7 +539,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
 	///
-	type AuthorityId: parity_codec::Codec + std::fmt::Debug;
+	type AuthorityId: parity_codec::Codec + std::fmt::Debug + std::string::ToString;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
