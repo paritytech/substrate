@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 
 use client::{
 	CallExecutor, Client,
-	backend::{AuxStore, Backend},
+	backend::{AuxStore, Backend, Finalizer},
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
 };
@@ -35,6 +35,7 @@ use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilde
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
+	BlockNumberToHash,
 };
 use fg_primitives::{GrandpaApi, AuthorityId};
 use runtime_primitives::generic::BlockId;
@@ -54,6 +55,7 @@ const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 /// Create light block importer.
 pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
+	backend: Arc<B>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	api: Arc<PRA>,
 ) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
@@ -65,10 +67,10 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA::Api: GrandpaApi<Block>,
 {
 	let info = client.info();
-	#[allow(deprecated)]
 	let import_data = load_aux_import_data(info.chain.finalized_hash, &*client, api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
+		backend,
 		authority_set_provider,
 		data: Arc::new(RwLock::new(import_data)),
 	})
@@ -81,6 +83,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 /// - fetching finality proofs for blocks that are enacting consensus changes.
 pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
+	backend: Arc<B>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
@@ -89,6 +92,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for GrandpaLightBlockImport<B, E,
 	fn clone(&self) -> Self {
 		GrandpaLightBlockImport {
 			client: self.client.clone(),
+			backend: self.backend.clone(),
 			authority_set_provider: self.authority_set_provider.clone(),
 			data: self.data.clone(),
 		}
@@ -131,7 +135,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		block: BlockImportParams<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(
+		do_import_block::<_, _, _, GrandpaJustification<Block>>(
 			&*self.client, &mut *self.data.write(), block, new_cache
 		)
 	}
@@ -176,8 +180,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		finality_proof: Vec<u8>,
 		verifier: &dyn Verifier<Block>,
 	) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
-		do_import_finality_proof::<_, _, _, _, GrandpaJustification<Block>>(
+		do_import_finality_proof::<_, _, _, GrandpaJustification<Block>>(
 			&*self.client,
+			self.backend.clone(),
 			&*self.authority_set_provider,
 			&mut *self.data.write(),
 			hash,
@@ -227,16 +232,20 @@ impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityPro
 }
 
 /// Try to import new block.
-fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
-	mut client: &Client<B, E, Block, RA>,
+fn do_import_block<B, C, Block: BlockT<Hash=H256>, J>(
+	mut client: C,
 	data: &mut LightImportData<Block>,
 	mut block: BlockImportParams<Block>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 ) -> Result<ImportResult, ConsensusError>
 	where
+		C: BlockNumberToHash<BlockNumber=NumberFor<Block>, Hash=Block::Hash>
+			+ HeaderBackend<Block>
+			+ AuxStore
+			+ Finalizer<Block, Blake2Hasher, B>
+			+ BlockImport<Block>
+			+ Clone,
 		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		J: ProvableJustification<Block::Header>,
@@ -247,7 +256,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
 	let enacts_consensus_change = !new_cache.is_empty();
-	let import_result = BlockImport::import_block(&mut client, block, new_cache);
+	let import_result = client.import_block(block, new_cache);
 
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
@@ -264,7 +273,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 				hash,
 			);
 
-			do_import_justification::<_, _, _, _, J>(client, data, hash, number, justification)
+			do_import_justification::<_, _, _, J>(client, data, hash, number, justification)
 		},
 		None if enacts_consensus_change => {
 			trace!(
@@ -283,8 +292,9 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 }
 
 /// Try to import finality proof.
-fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
-	client: &Client<B, E, Block, RA>,
+fn do_import_finality_proof<B, C, Block: BlockT<Hash=H256>, J>(
+	client: C,
+	backend: Arc<B>,
 	authority_set_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	data: &mut LightImportData<Block>,
 	_hash: Block::Hash,
@@ -293,9 +303,13 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	verifier: &dyn Verifier<Block>,
 ) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
+		C: BlockNumberToHash<BlockNumber=NumberFor<Block>, Hash=Block::Hash>
+			+ HeaderBackend<Block>
+			+ AuxStore
+			+ Finalizer<Block, Blake2Hasher, B>
+			+ BlockImport<Block>
+			+ Clone,
 		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 		DigestFor<Block>: Encode,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
@@ -303,8 +317,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	let authority_set_id = data.authority_set.set_id();
 	let authorities = data.authority_set.authorities();
 	let finality_effects = crate::finality_proof::check_finality_proof(
-		#[allow(deprecated)]
-		&*client.backend().blockchain(),
+		backend.blockchain(),
 		authority_set_id,
 		authorities,
 		authority_set_provider,
@@ -322,13 +335,12 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		if let Some(authorities) = new_authorities {
 			cache.insert(well_known_cache_keys::AUTHORITIES, authorities.encode());
 		}
-		do_import_block::<_, _, _, _, J>(client, data, block_to_import, cache)?;
+		do_import_block::<_, _, _, J>(client.clone(), data, block_to_import, cache)?;
 	}
 
 	// try to import latest justification
 	let finalized_block_hash = finality_effects.block;
-	#[allow(deprecated)]
-	let finalized_block_number = client.backend().blockchain()
+	let finalized_block_number = backend.blockchain()
 		.expect_block_number_from_id(&BlockId::Hash(finality_effects.block))
 		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 	do_finalize_block(
@@ -349,17 +361,20 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 }
 
 /// Try to import justification.
-fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
-	client: &Client<B, E, Block, RA>,
+fn do_import_justification<B, C, Block: BlockT<Hash=H256>, J>(
+	client: C,
 	data: &mut LightImportData<Block>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification: Justification,
 ) -> Result<ImportResult, ConsensusError>
 	where
+		C: BlockNumberToHash<BlockNumber=NumberFor<Block>, Hash=Block::Hash>
+			+ HeaderBackend<Block>
+			+ AuxStore
+			+ Finalizer<Block, Blake2Hasher, B>
+			+ Clone,
 		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
 {
@@ -418,17 +433,20 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
 }
 
 /// Finalize the block.
-fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &Client<B, E, Block, RA>,
+fn do_finalize_block<B, C, Block: BlockT<Hash=H256>>(
+	client: C,
 	data: &mut LightImportData<Block>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification: Justification,
 ) -> Result<ImportResult, ConsensusError>
 	where
+		C: BlockNumberToHash<BlockNumber=NumberFor<Block>, Hash=Block::Hash>
+			+ HeaderBackend<Block>
+			+ AuxStore
+			+ Finalizer<Block, Blake2Hasher, B>
+			+ Clone,
 		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 {
 	// finalize the block
@@ -439,7 +457,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	// forget obsoleted consensus changes
 	let consensus_finalization_res = data.consensus_changes
-		.finalize((number, hash), |at_height| canonical_at_height(client, (hash, number), true, at_height));
+		.finalize((number, hash), |at_height| canonical_at_height(client.clone(), (hash, number), true, at_height));
 	match consensus_finalization_res {
 		Ok((true, _)) => require_insert_aux(
 			&client,
@@ -611,6 +629,7 @@ pub mod tests {
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
 	pub fn light_block_import_without_justifications<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		client: Arc<Client<B, E, Block, RA>>,
+		backend: Arc<B>,
 		authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 		api: Arc<PRA>,
 	) -> Result<NoJustificationsImport<B, E, Block, RA>, ClientError>
@@ -621,7 +640,7 @@ pub mod tests {
 			PRA: ProvideRuntimeApi,
 			PRA::Api: GrandpaApi<Block>,
 	{
-		light_block_import(client, authority_set_provider, api).map(NoJustificationsImport)
+		light_block_import(client, backend, authority_set_provider, api).map(NoJustificationsImport)
 	}
 
 	fn import_block(
@@ -650,7 +669,7 @@ pub mod tests {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
-		do_import_block::<_, _, _, _, TestJustification>(
+		do_import_block::<_, _, _, TestJustification>(
 			&client,
 			&mut import_data,
 			block,

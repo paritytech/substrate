@@ -141,6 +141,26 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> error::Result<()>;
+
+		
+	/// Finalize a block. This will implicitly finalize all blocks up to it and
+	/// fire finality notifications.
+	///
+	/// If the block being finalized is on a different fork from the current
+	/// best block the finalized block is set as best, this might be slightly
+	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block should use `SelectChain` instead of the client.
+	///
+	/// Pass a flag to indicate whether finality notifications should be propagated.
+	/// This is usually tied to some synchronization state, where we don't send notifications
+	/// while performing major synchronization work.
+	fn finalize_block(
+		&self,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool
+	) -> error::Result<()>;
+
 }
 
 /// Provides access to an auxiliary database.

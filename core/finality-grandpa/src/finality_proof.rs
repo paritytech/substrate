@@ -168,7 +168,6 @@ impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
-				#[allow(deprecated)]
 				&*self.backend.blockchain(),
 				&*self.authority_provider,
 				request.authorities_set_id,

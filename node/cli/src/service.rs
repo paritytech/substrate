@@ -186,7 +186,7 @@ construct_service_factory! {
 					.map(|fetcher| fetcher.checker().clone())
 					.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
 				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
-					client.clone(), Arc::new(fetch_checker), client.clone()
+					client.clone(), state.backend.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
