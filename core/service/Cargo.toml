@@ -37,7 +37,7 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }
-node-executor = { path = "../../node/executor" }
+substrate = { path = "../.." }
 node-primitives = { path = "../../node/primitives" }
 node-runtime = { path = "../../node/runtime" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }

@@ -21,10 +21,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::executor;
 use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use node_executor;
 use primitives::Pair;
 use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
@@ -71,7 +71,7 @@ construct_service_factory! {
 		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
-		RuntimeDispatch = node_executor::Executor,
+		RuntimeDispatch = executor::Executor,
 		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>

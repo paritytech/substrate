@@ -21,6 +21,7 @@
 
 pub use cli::error;
 pub mod chain_spec;
+mod executor;
 mod service;
 mod factory_impl;
 

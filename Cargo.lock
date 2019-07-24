@@ -2242,35 +2242,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-executor"
-version = "2.0.0"
-dependencies = [
- "node-primitives 2.0.0",
- "node-runtime 2.0.0",
- "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "srml-balances 2.0.0",
- "srml-contracts 2.0.0",
- "srml-grandpa 2.0.0",
- "srml-indices 2.0.0",
- "srml-session 2.0.0",
- "srml-staking 2.0.0",
- "srml-support 2.0.0",
- "srml-system 2.0.0",
- "srml-timestamp 2.0.0",
- "srml-treasury 2.0.0",
- "substrate-executor 2.0.0",
- "substrate-keyring 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-state-machine 2.0.0",
- "substrate-test-client 2.0.0",
- "substrate-trie 2.0.0",
- "trie-root 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "node-primitives"
 version = "2.0.0"
 dependencies = [
@@ -4111,7 +4082,6 @@ dependencies = [
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-executor 2.0.0",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4122,8 +4092,12 @@ dependencies = [
  "srml-contracts 2.0.0",
  "srml-finality-tracker 2.0.0",
  "srml-indices 2.0.0",
+ "srml-session 2.0.0",
+ "srml-staking 2.0.0",
+ "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-treasury 2.0.0",
  "structopt 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-basic-authorship 2.0.0",
  "substrate-cli 2.0.0",
@@ -4131,6 +4105,7 @@ dependencies = [
  "substrate-consensus-aura 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
+ "substrate-executor 2.0.0",
  "substrate-finality-grandpa 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-inherents 2.0.0",
@@ -4140,11 +4115,16 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
  "substrate-service-test 2.0.0",
+ "substrate-state-machine 2.0.0",
  "substrate-telemetry 2.0.0",
+ "substrate-test-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-trie 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "transaction-factory 0.0.1",
+ "trie-root 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4724,7 +4704,6 @@ dependencies = [
  "futures-preview 0.3.0-alpha.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-executor 2.0.0",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
  "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4735,6 +4714,7 @@ dependencies = [
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "substrate 2.0.0",
  "substrate-client 2.0.0",
  "substrate-client-db 2.0.0",
  "substrate-consensus-common 2.0.0",

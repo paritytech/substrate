@@ -47,9 +47,9 @@ mod tests {
 		NativeOrEncoded
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
-	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, WeighData};
+	use sr_primitives::traits::{Header as HeaderT, Hash as HashT};
+	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::weights::{WeightMultiplier, SimpleDispatchInfo, WeighData};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
