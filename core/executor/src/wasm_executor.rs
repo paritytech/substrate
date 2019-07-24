@@ -1401,9 +1401,11 @@ impl WasmExecutor {
 			.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
-		// extract a reference to a linear memory and extract the `__heap_base` start
+		// Verify that the module has the heap base global variable.
+		let _ = Self::get_heap_base(intermediate_instance.not_started_instance())?;
+
+		// Extract a reference to a linear memory.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
-		let _heap_base = Self::get_heap_base(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
 
 		if intermediate_instance.has_start() {
