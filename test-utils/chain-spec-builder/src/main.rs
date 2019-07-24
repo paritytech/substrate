@@ -1,6 +1,6 @@
 use clap::{App, load_yaml};
 
-use node_cli::chain_spec;
+use substrate::chain_spec;
 use substrate_service::chain_ops::build_spec;
 
 fn genesis_constructor() -> chain_spec::GenesisConfig {

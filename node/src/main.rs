@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-use cli::VersionInfo;
+use substrate_node_cli::VersionInfo;
 use futures::sync::oneshot;
 use futures::{future, Future};
 
@@ -26,7 +26,7 @@ use std::cell::RefCell;
 
 // handles ctrl-c
 struct Exit;
-impl cli::IntoExit for Exit {
+impl substrate_node_cli::IntoExit for Exit {
 	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
 	fn into_exit(self) -> Self::Exit {
 		// can't use signal directly here because CtrlC takes only `Fn`.
@@ -54,7 +54,7 @@ fn main() {
 		support_url: "https://github.com/paritytech/substrate/issues/new",
 	};
 
-	if let Err(e) = cli::run(::std::env::args(), Exit, version) {
+	if let Err(e) = substrate_node_cli::run(::std::env::args(), Exit, version) {
 		eprintln!("Error starting the node: {}\n\n{:?}", e, e);
 		std::process::exit(1)
 	}
