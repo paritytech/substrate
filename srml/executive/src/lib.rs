@@ -363,7 +363,7 @@ mod tests {
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
 	use primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason, Get};
+	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
 	use hex_literal::hex;
 
@@ -568,7 +568,7 @@ mod tests {
 		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		let limit = <AvailableBlockRatio as Get<Perbill>>::get() * <MaximumBlockWeight as Get<Weight>>::get();
+		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
 		let num_to_exhaust_block = limit / encoded_len;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(

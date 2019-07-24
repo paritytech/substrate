@@ -48,5 +48,5 @@ pub mod fee {
     pub use runtime_primitives::Perbill;
 
     /// The block saturation level. Fees will be updates based on this value.
-    pub const TARGET_BLOCK_FULLNESS: Perbill = Perbill::from_const_parts(1_000_000_000 / 4);
+    pub const TARGET_BLOCK_FULLNESS: Perbill = Perbill::from_percent(25);
 }

@@ -20,7 +20,7 @@ use node_primitives::Balance;
 use runtime_primitives::weights::{Weight, WeightMultiplier};
 use runtime_primitives::traits::{Convert, Saturating};
 use runtime_primitives::Fixed64;
-use support::traits::{Get, OnUnbalanced, Currency};
+use support::traits::{OnUnbalanced, Currency};
 use crate::{Balances, Authorship, MaximumBlockWeight, NegativeImbalance};
 use crate::constants::fee::TARGET_BLOCK_FULLNESS;
 
@@ -87,7 +87,7 @@ pub struct WeightMultiplierUpdateHandler;
 impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierUpdateHandler {
 	fn convert(previous_state: (Weight, WeightMultiplier)) -> WeightMultiplier {
 		let (block_weight, multiplier) = previous_state;
-		let max_weight = <MaximumBlockWeight as Get<Weight>>::get();
+		let max_weight = MaximumBlockWeight::get();
 		let target_weight = (TARGET_BLOCK_FULLNESS * max_weight) as u128;
 		let block_weight = block_weight as u128;
 
@@ -137,7 +137,7 @@ mod tests {
 	use crate::constants::currency::*;
 
 	fn max() -> Weight {
-		<MaximumBlockWeight as Get<Weight>>::get()
+		MaximumBlockWeight::get()
 	}
 
 	fn target() -> Weight {
@@ -187,7 +187,7 @@ mod tests {
 	fn congested_chain_simulation() {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = <AvailableBlockRatio as Get<Perbill>>::get() * max();
+		let block_weight = AvailableBlockRatio::get() * max();
 		let tx_weight = 1000;
 		let mut wm = WeightMultiplier::default();
 		let mut iterations: u64 = 0;

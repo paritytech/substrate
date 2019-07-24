@@ -40,7 +40,7 @@ mod tests {
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AuthorityKeyring, AccountKeyring};
-	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::{Currency, Get}};
+	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
 		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
@@ -85,8 +85,8 @@ mod tests {
 
 	/// Default transfer fee
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
-		let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
-			<TransactionByteFee as Get<Balance>>::get() *
+		let length_fee = TransactionBaseFee::get() +
+			TransactionByteFee::get() *
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
@@ -99,7 +99,7 @@ mod tests {
 
 	/// Default creation fee.
 	fn creation_fee() -> Balance {
-		<CreationFee as Get<Balance>>::get()
+		CreationFee::get()
 	}
 
 	fn alice() -> AccountId {
@@ -1097,8 +1097,8 @@ mod tests {
 			// - Creation-fee of bob's account.
 			let mut balance_alice = (100 - 69) * DOLLARS;
 
-			let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
-				<TransactionByteFee as Get<Balance>>::get() *
+			let length_fee = TransactionBaseFee::get() +
+				TransactionByteFee::get() *
 				(xt.clone().encode().len() as Balance);
 			balance_alice -= length_fee;
 

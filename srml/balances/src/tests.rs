@@ -781,7 +781,7 @@ fn signed_extension_take_fees_is_bounded() {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <<Runtime as system::Trait>::MaximumBlockWeight as Get<Weight>>::get()) as u64
+				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
 			);
 		}
 	);
