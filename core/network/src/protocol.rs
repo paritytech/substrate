@@ -17,6 +17,7 @@
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
@@ -28,6 +29,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
+use consensus::import_queue::{BlockImportResult, BlockImportError};
 use message::{BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use event::Event;
@@ -90,9 +92,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio_timer::Interval,
+	tick_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio_timer::Interval,
+	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -364,8 +366,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -1194,22 +1196,23 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.request_justification(&hash, number)
 	}
 
-	/// Clears all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.sync.clear_justification_requests()
-	}
-
 	/// A batch of blocks have been processed, with or without errors.
-	/// Call this when a batch of blocks have been processed by the import queue, with or without
+	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		self.sync.on_blocks_processed(processed_blocks, has_error);
-	}
-
-	/// Restart the sync process.
-	pub fn restart(&mut self) {
+	pub fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
 		let peers = self.context_data.peers.clone();
-		for result in self.sync.restart(|peer_id| peers.get(peer_id).map(|i| i.info.clone())) {
+		let results = self.sync.on_blocks_processed(
+			imported,
+			count,
+			results,
+			|peer_id| peers.get(peer_id).map(|i| i.info.clone())
+		);
+		for result in results {
 			match result {
 				Ok((id, req)) => {
 					let msg = GenericMessage::BlockRequest(req);
@@ -1221,11 +1224,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		}
-	}
-
-	/// Notify about successful import of the given block.
-	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		trace!(target: "sync", "Block imported successfully {} ({})", number, hash)
 	}
 
 	/// Call this when a justification has been processed by the import queue, with or without

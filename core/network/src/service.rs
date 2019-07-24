@@ -29,10 +29,12 @@ use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
+use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use log::{warn, error, info};
 use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
@@ -85,6 +87,8 @@ impl ReportHandle {
 pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Number of peers we're connected to.
 	num_connected: Arc<AtomicUsize>,
+	/// The local external addresses.
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
@@ -214,8 +218,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			Swarm::<B, S, H>::add_external_address(&mut swarm, addr.clone());
 		}
 
+		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+
 		let service = Arc::new(NetworkService {
 			bandwidth,
+			external_addresses: external_addresses.clone(),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
@@ -225,6 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		});
 
 		Ok(NetworkWorker {
+			external_addresses,
 			num_connected,
 			is_major_syncing,
 			network_service: swarm,
@@ -294,7 +302,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
-	/// everywhere about this. Please don't use this function to retreive actual information.
+	/// everywhere about this. Please don't use this function to retrieve actual information.
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;
 		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
@@ -441,7 +449,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn get_value(&mut self, key: &Multihash) {
+	pub fn get_value(&self, key: &Multihash) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
@@ -451,7 +459,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&self, key: Multihash, value: Vec<u8>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
@@ -486,6 +494,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
+
+	/// Returns the local external addresses.
+	pub fn external_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.lock().clone()
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
@@ -496,6 +509,32 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 
 	fn is_offline(&self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+}
+
+/// Trait for providing information about the local network state
+pub trait NetworkStateInfo {
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr>;
+
+	/// Returns the local Peer ID.
+	fn peer_id(&self) -> PeerId;
+}
+
+impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
+	where
+		B: runtime_primitives::traits::Block,
+		S: NetworkSpecialization<B>,
+		H: ExHashT,
+{
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.lock().clone()
+	}
+
+	/// Returns the local Peer ID.
+	fn peer_id(&self) -> PeerId {
+		self.local_peer_id.clone()
 	}
 }
 
@@ -519,6 +558,8 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
 pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
@@ -620,6 +661,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 		// Update the variables shared with the `NetworkService`.
 		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
+		{
+			let external_addresses = Swarm::<B, S, H>::external_addresses(&self.network_service).cloned().collect();
+			*self.external_addresses.lock() = external_addresses;
+		}
 		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
@@ -641,11 +686,13 @@ struct NetworkLink<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 }
 
 impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for NetworkLink<'a, B, S, H> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().block_imported(&hash, number)
-	}
-	fn blocks_processed(&mut self, hashes: Vec<B::Hash>, has_error: bool) {
-		self.protocol.user_protocol_mut().blocks_processed(hashes, has_error)
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
@@ -654,9 +701,6 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn clear_justification_requests(&mut self) {
-		self.protocol.user_protocol_mut().clear_justification_requests()
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)
@@ -677,11 +721,5 @@ impl<'a, B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Link<B> for Network
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, i32::min_value());
 		}
-	}
-	fn report_peer(&mut self, who: PeerId, reputation_change: i32) {
-		self.protocol.user_protocol_mut().report_peer(who, reputation_change)
-	}
-	fn restart(&mut self) {
-		self.protocol.user_protocol_mut().restart()
 	}
 }

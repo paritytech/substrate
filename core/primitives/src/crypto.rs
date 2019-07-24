@@ -19,6 +19,10 @@
 // end::description[]
 
 #[cfg(feature = "std")]
+use std::convert::{TryFrom, TryInto};
+#[cfg(feature = "std")]
+use parking_lot::Mutex;
+#[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
 #[cfg(feature = "std")]
 use parity_codec::{Encode, Decode};
@@ -243,12 +247,36 @@ pub enum PublicError {
 #[cfg(feature = "std")]
 pub trait Ss58Codec: Sized {
 	/// Some if the string is a properly encoded SS58Check address.
-	fn from_ss58check(s: &str) -> Result<Self, PublicError>;
+	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+		Self::from_ss58check_with_version(s)
+			.and_then(|(r, v)| match v {
+				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				v if v == *DEFAULT_VERSION.lock() => Ok(r),
+				_ => Err(PublicError::UnknownVersion),
+			})
+	}
+	/// Some if the string is a properly encoded SS58Check address.
+	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError>;
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	fn from_string(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
+	fn from_string(s: &str) -> Result<Self, PublicError> {
+		Self::from_string_with_version(s)
+			.and_then(|(r, v)| match v {
+				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				v if v == *DEFAULT_VERSION.lock() => Ok(r),
+				_ => Err(PublicError::UnknownVersion),
+			})
+	}
+
 	/// Return the ss58-check string for this key.
-	fn to_ss58check(&self) -> String;
+	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String;
+	/// Return the ss58-check string for this key.
+	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+	/// Some if the string is a properly encoded SS58Check address, optionally with
+	/// a derivation path following.
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		Self::from_ss58check_with_version(s)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -274,8 +302,91 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 }
 
 #[cfg(feature = "std")]
+lazy_static::lazy_static! {
+	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
+		= Mutex::new(Ss58AddressFormat::SubstrateAccountDirect);
+}
+
+/// A known address (sub)format/network ID for SS58.
+#[cfg(feature = "std")]
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Ss58AddressFormat {
+	/// Any Substrate network, direct checksum, standard account (*25519).
+	SubstrateAccountDirect,
+	/// Polkadot Relay-chain, direct checksum, standard account (*25519).
+	PolkadotAccountDirect,
+	/// Kusama Relay-chain, direct checksum, standard account (*25519).
+	KusamaAccountDirect,
+	/// Use a manually provided numeric value.
+	Custom(u8),
+}
+
+#[cfg(feature = "std")]
+impl From<Ss58AddressFormat> for u8 {
+	fn from(x: Ss58AddressFormat) -> u8 {
+		match x {
+			Ss58AddressFormat::SubstrateAccountDirect => 42,
+			Ss58AddressFormat::PolkadotAccountDirect => 0,
+			Ss58AddressFormat::KusamaAccountDirect => 2,
+			Ss58AddressFormat::Custom(n) => n,
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<u8> for Ss58AddressFormat {
+	type Error = ();
+	fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+		match x {
+			42 => Ok(Ss58AddressFormat::SubstrateAccountDirect),
+			0 => Ok(Ss58AddressFormat::PolkadotAccountDirect),
+			2 => Ok(Ss58AddressFormat::KusamaAccountDirect),
+			_ => Err(()),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+	type Error = ();
+	fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+		match x {
+			"substrate" => Ok(Ss58AddressFormat::SubstrateAccountDirect),
+			"polkadot" => Ok(Ss58AddressFormat::PolkadotAccountDirect),
+			"kusama" => Ok(Ss58AddressFormat::KusamaAccountDirect),
+			a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<Ss58AddressFormat> for String {
+	fn from(x: Ss58AddressFormat) -> String {
+		match x {
+			Ss58AddressFormat::SubstrateAccountDirect => "substrate".into(),
+			Ss58AddressFormat::PolkadotAccountDirect => "polkadot".into(),
+			Ss58AddressFormat::KusamaAccountDirect => "kusama".into(),
+			Ss58AddressFormat::Custom(x) => x.to_string(),
+		}
+	}
+}
+
+/// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
+/// typically used not just to encode format/version but also network identity) that is used for
+/// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
+///
+/// Current known "versions" are:
+/// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
+/// - 2 direct (payload) checksum for 32-byte *25519 Polkadot Milestone 'K' addresses.
+/// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
+#[cfg(feature = "std")]
+pub fn set_default_ss58_version(version: Ss58AddressFormat) {
+	*DEFAULT_VERSION.lock() = version
+}
+
+#[cfg(feature = "std")]
 impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
-	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		let mut res = T::default();
 		let len = res.as_mut().len();
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
@@ -283,21 +394,18 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 			// Invalid length.
 			return Err(PublicError::BadLength);
 		}
-		if d[0] != 42 {
-			// Invalid version.
-			return Err(PublicError::UnknownVersion);
-		}
+		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
 		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
 		res.as_mut().copy_from_slice(&d[1..len+1]);
-		Ok(res)
+		Ok((res, ver))
 	}
 
-	fn to_ss58check(&self) -> String {
-		let mut v = vec![42u8];
+	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
+		let mut v = vec![version.into()];
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
@@ -324,10 +432,32 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 				.ok_or(PublicError::InvalidPath)
 		}
 	}
+
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
+			.expect("constructed from known-good static value; qed");
+		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
+		let re_junction = Regex::new(r"/(/?[^/]+)")
+			.expect("constructed from known-good static value; qed");
+		let (addr, v) = Self::from_ss58check_with_version(
+			cap.name("ss58")
+				.map(|r| r.as_str())
+				.unwrap_or(DEV_ADDRESS)
+		)?;
+		if cap["path"].is_empty() {
+			Ok((addr, v))
+		} else {
+			let path = re_junction.captures_iter(&cap["path"])
+				.map(|f| DeriveJunction::from(&f[1]));
+			addr.derive(path)
+				.ok_or(PublicError::InvalidPath)
+				.map(|a| (a, v))
+		}
+	}
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: TypedKey + PartialEq + Eq {
+pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -346,7 +476,7 @@ pub trait Public: TypedKey + PartialEq + Eq {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: TypedKey + Sized + 'static {
+pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -501,7 +631,7 @@ mod tests {
 	use hex_literal::hex;
 	use super::*;
 
-	#[derive(Eq, PartialEq, Debug)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
 		Generated,
 		GeneratedWithPhrase,
@@ -510,8 +640,13 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
-	#[derive(PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash)]
 	struct TestPublic;
+	impl AsRef<[u8]> for TestPublic {
+		fn as_ref(&self) -> &[u8] {
+			&[]
+		}
+	}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self

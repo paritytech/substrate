@@ -24,8 +24,7 @@
 //! - Bootstrap nodes. These are hard-coded node identities and addresses passed in the constructor
 //! of the `DiscoveryBehaviour`. You can also call `add_known_address` later to add an entry.
 //!
-//! - mDNS. As of the writing of this documentation, mDNS is handled somewhere else. It is planned
-//! to be moved here.
+//! - mDNS. Discovers nodes on the local network by broadcasting UDP packets.
 //!
 //! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
 //! order for nodes to propagate to us their view of the network. This is performed automatically
@@ -47,16 +46,21 @@
 //!
 
 use futures::prelude::*;
+use futures_timer::Delay;
+use futures03::{compat::Compat, TryFutureExt as _};
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::PollParameters;
+#[cfg(not(target_os = "unknown"))]
+use libp2p::core::{swarm::toggle::Toggle, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::kad::{GetValueResult, Kademlia, KademliaOut, PutValueResult};
+#[cfg(not(target_os = "unknown"))]
+use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, num::NonZeroU8, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, clock::Clock};
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {
@@ -65,14 +69,15 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	/// Kademlia requests and answers.
 	kademlia: Kademlia<TSubstream>,
+	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
+	mdns: Toggle<Mdns<Substream<StreamMuxerBox>>>,
 	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Delay,
+	next_kad_random_query: Compat<Delay>,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
 	/// Discovered nodes to return.
 	discoveries: VecDeque<PeerId>,
-	/// `Clock` instance that uses the current execution context's source of time.
-	clock: Clock,
 	/// Identity of our local node.
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
@@ -83,22 +88,41 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Builds a new `DiscoveryBehaviour`.
 	///
 	/// `user_defined` is a list of known address for nodes that never expire.
-	pub fn new(local_public_key: PublicKey, user_defined: Vec<(PeerId, Multiaddr)>) -> Self {
+	pub fn new(
+		local_public_key: PublicKey,
+		user_defined: Vec<(PeerId, Multiaddr)>,
+		enable_mdns: bool
+	) -> Self {
+		if enable_mdns {
+			#[cfg(target_os = "unknown")]
+			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
+		}
+
 		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
 		for (peer_id, addr) in &user_defined {
 			kademlia.add_address(peer_id, addr.clone());
 		}
 
-		let clock = Clock::new();
 		DiscoveryBehaviour {
 			user_defined,
 			kademlia,
-			next_kad_random_query: Delay::new(clock.now()),
+			next_kad_random_query: Delay::new(Duration::new(0, 0)).compat(),
 			duration_to_next_kad: Duration::from_secs(1),
 			discoveries: VecDeque::new(),
-			clock,
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
+			#[cfg(not(target_os = "unknown"))]
+			mdns: if enable_mdns {
+				match Mdns::new() {
+					Ok(mdns) => Some(mdns).into(),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						None.into()
+					}
+				}
+			} else {
+				None.into()
+			},
 		}
 	}
 
@@ -178,6 +202,8 @@ where
 			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
 			.collect::<Vec<_>>();
 		list.extend(self.kademlia.addresses_of_peer(peer_id));
+		#[cfg(not(target_os = "unknown"))]
+		list.extend(self.mdns.addresses_of_peer(peer_id));
 		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
 		if list.is_empty() {
 			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
@@ -249,7 +275,7 @@ where
 					self.kademlia.find_node(random_peer_id);
 
 					// Reset the `Delay` to the next random.
-					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
+					self.next_kad_random_query = Delay::new(self.duration_to_next_kad).compat();
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},
@@ -321,6 +347,34 @@ where
 			}
 		}
 
+		// Poll mDNS.
+		#[cfg(not(target_os = "unknown"))]
+		loop {
+			match self.mdns.poll(params) {
+				Async::NotReady => break,
+				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+					match event {
+						MdnsEvent::Discovered(list) => {
+							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
+							if let Some(peer_id) = self.discoveries.pop_front() {
+								let ev = DiscoveryOut::Discovered(peer_id);
+								return Async::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+							}
+						},
+						MdnsEvent::Expired(_) => {}
+					}
+				},
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Async::Ready(NetworkBehaviourAction::SendEvent { event, .. }) =>
+					match event {},		// `event` is an enum with no variant
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			}
+		}
+
 		Async::NotReady
 	}
 }
@@ -355,7 +409,7 @@ mod tests {
 					upgrade::apply(out.stream, upgrade, endpoint)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone());
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

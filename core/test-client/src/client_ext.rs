@@ -18,7 +18,7 @@
 
 use client::{self, Client};
 use consensus::{
-	ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError,
+	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
 use hash_db::Hasher;
@@ -64,7 +64,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		-> Result<(), ConsensusError>
 	{
 		let (header, extrinsics) = block.deconstruct();
-		let import = ImportBlock {
+		let import = BlockImportParams {
 			origin,
 			header,
 			justification: None,
@@ -85,7 +85,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = ImportBlock {
+		let import = BlockImportParams {
 			origin,
 			header,
 			justification: Some(justification),
