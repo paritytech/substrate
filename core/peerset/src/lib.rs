@@ -20,7 +20,7 @@
 mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
-use futures::{prelude::*, channel::mpsc, stream::Fuse};
+use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
@@ -156,7 +156,11 @@ pub struct Peerset {
 	data: peersstate::PeersState,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
-	rx: Fuse<mpsc::UnboundedReceiver<Action>>,
+	/// Receiver for messages from the `PeersetHandle` and from `tx`.
+	rx: mpsc::UnboundedReceiver<Action>,
+	/// Sending side of `rx`.
+	tx: mpsc::UnboundedSender<Action>,
+	/// Queue of messages to be emitted when the `Peerset` is polled.
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
 	created: Instant,
@@ -170,12 +174,13 @@ impl Peerset {
 		let (tx, rx) = mpsc::unbounded();
 
 		let handle = PeersetHandle {
-			tx,
+			tx: tx.clone(),
 		};
 
 		let mut peerset = Peerset {
 			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
-			rx: rx.fuse(),
+			tx,
+			rx,
 			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
 			created: Instant::now(),
@@ -422,6 +427,14 @@ impl Peerset {
 		if discovered_any {
 			self.alloc_slots();
 		}
+	}
+
+	/// Reports an adjustment to the reputation of the given peer.
+	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
+		// We don't immediately perform the adjustments in order to have state consistency. We
+		// don't want the reporting here to take priority over messages sent using the
+		// `PeersetHandle`.
+		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.

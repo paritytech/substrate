@@ -905,15 +905,17 @@ fn impl_store_fns(
 					};
 
 					quote!{
-						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
+						pub fn #get_fn<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> #value_type
 						where
-							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
-							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
+							#key1_type: #scrate::rstd::borrow::Borrow<KArg1>,
+							#key2_type: #scrate::rstd::borrow::Borrow<KArg2>,
+							KArg1: ?Sized + #scrate::codec::Encode,
+							KArg2: ?Sized + #scrate::codec::Encode,
 						{
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+							>::get(k1, k2, &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}

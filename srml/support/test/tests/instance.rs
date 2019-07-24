@@ -335,14 +335,14 @@ fn storage_instance_independance() {
 			module2::LinkedMap::<module2::Instance1>::key_for(1).to_vec(),
 			module2::LinkedMap::<module2::Instance2>::key_for(1).to_vec(),
 			module2::LinkedMap::<module2::Instance3>::key_for(1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(1),
-			module2::DoubleMap::<module2::Instance1>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::key_for(1, 1),
-			module2::DoubleMap::<module2::Instance1>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(&1),
+			module2::DoubleMap::<module2::Instance1>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::key_for(&1, &1),
+			module2::DoubleMap::<module2::Instance1>::key_for(&1, &1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::key_for(&1, &1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::key_for(&1, &1).to_vec(),
 		].iter() {
 			assert!(map.insert(key, ()).is_none())
 		}
@@ -396,15 +396,15 @@ fn storage_with_instance_basic_operation() {
 
 		let key1 = 1;
 		let key2 = 1;
-		assert_eq!(DoubleMap::exists(0, 0), true);
-		assert_eq!(DoubleMap::exists(key1, key2), false);
-		DoubleMap::insert(key1, key2, 1);
-		assert_eq!(DoubleMap::get(key1, key2), 1);
-		assert_eq!(DoubleMap::take(key1, key2), 1);
-		assert_eq!(DoubleMap::get(key1, key2), 0);
-		DoubleMap::mutate(key1, key2, |a| *a=2);
-		assert_eq!(DoubleMap::get(key1, key2), 2);
-		DoubleMap::remove(key1, key2);
-		assert_eq!(DoubleMap::get(key1, key2), 0);
+		assert_eq!(DoubleMap::exists(&0, &0), true);
+		assert_eq!(DoubleMap::exists(&key1, &key2), false);
+		DoubleMap::insert(&key1, &key2, &1);
+		assert_eq!(DoubleMap::get(&key1, &key2), 1);
+		assert_eq!(DoubleMap::take(&key1, &key2), 1);
+		assert_eq!(DoubleMap::get(&key1, &key2), 0);
+		DoubleMap::mutate(&key1, &key2, |a| *a=2);
+		assert_eq!(DoubleMap::get(&key1, &key2), 2);
+		DoubleMap::remove(&key1, &key2);
+		assert_eq!(DoubleMap::get(&key1, &key2), 0);
 	});
 }
