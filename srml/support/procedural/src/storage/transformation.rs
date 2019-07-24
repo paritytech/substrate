@@ -138,13 +138,14 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts.instance,
 		&storage_lines,
 	);
-	let (store_default_struct, store_functions_to_metadata) = store_functions_to_metadata(
+	let (store_default_struct, store_metadata) = store_functions_to_metadata(
 		&scrate,
 		&traitinstance,
 		&traittype,
 		&instance_opts,
 		&storage_lines,
 		&where_clause,
+		&cratename,
 	);
 
 	let InstanceOpts {
@@ -153,7 +154,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		..
 	} = instance_opts;
 
-	let cratename_string = cratename.to_string();
 	let expanded = quote! {
 		#scrate_decl
 		#decl_storage_items
@@ -171,12 +171,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		{
 			#impl_store_fns
 			#[doc(hidden)]
-			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageEntryMetadata] {
-				#store_functions_to_metadata
-			}
-			#[doc(hidden)]
-			pub fn store_metadata_name() -> &'static str {
-				#cratename_string
+			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
+				#store_metadata
 			}
 		}
 
@@ -583,7 +579,7 @@ fn decl_store_extra_genesis(
 }
 
 fn create_and_impl_instance(
-	prefix: &str,
+	postfix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
 	const_names: &[(Ident, String)],
@@ -593,7 +589,7 @@ fn create_and_impl_instance(
 	let mut const_impls = TokenStream2::new();
 
 	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", partial_const_value, prefix);
+		let const_value = format!("{}{}", partial_const_value, postfix);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
@@ -606,6 +602,7 @@ fn create_and_impl_instance(
 		#doc
 		pub struct #ident;
 		impl #instantiable for #ident {
+			const PREFIX_ENDS_WITH: &'static str = #postfix;
 			#const_impls
 		}
 	}
@@ -620,7 +617,6 @@ fn decl_storage_items(
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
 ) -> TokenStream2 {
-
 	let mut impls = TokenStream2::new();
 
 	let InstanceOpts {
@@ -686,6 +682,8 @@ fn decl_storage_items(
 			/// Defines storage prefixes, they must be unique.
 			#hide
 			pub trait #instantiable: 'static {
+				/// The common end of each storage entry prefix of an instance.
+				const PREFIX_ENDS_WITH: &'static str;
 				#const_impls
 			}
 		});
@@ -707,9 +705,9 @@ fn decl_storage_items(
 			);
 
 		// Impl Instance trait for instances
-		for (prefix, ident, doc) in instances {
+		for (postfix, ident, doc) in instances {
 			impls.extend(
-				create_and_impl_instance(&prefix, &ident, &doc, &const_names, scrate, &instantiable)
+				create_and_impl_instance(&postfix, &ident, &doc, &const_names, scrate, &instantiable)
 			);
 		}
 	}
@@ -780,10 +778,7 @@ fn decl_storage_items(
 	impls
 }
 
-
-fn decl_store_items(
-	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> TokenStream2 {
+fn decl_store_items(storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>) -> TokenStream2 {
 	storage_lines.inner.iter().map(|sline| &sline.name)
 		.fold(TokenStream2::new(), |mut items, name| {
 		items.extend(quote!(type #name;));
@@ -931,8 +926,8 @@ fn store_functions_to_metadata (
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
+	cratename: &Ident,
 ) -> (TokenStream2, TokenStream2) {
-
 	let InstanceOpts {
 		comma_instance,
 		equal_default_instance,
@@ -1075,11 +1070,17 @@ fn store_functions_to_metadata (
 
 		default_getter_struct_def.extend(def_get);
 	}
+
+	let prefix = cratename.to_string();
+	let instance = instance.as_ref().map_or_else(|| quote!(None), |i| quote! {
+		Some(#scrate::metadata::DecodeDifferent::Encode(#i::PREFIX_ENDS_WITH))
+	});
+
 	(default_getter_struct_def, quote!{
-		{
-			&[
-				#items
-			]
+		#scrate::metadata::StorageMetadata {
+			prefix: #scrate::metadata::DecodeDifferent::Encode(#prefix),
+			instance: #instance,
+			entries: #scrate::metadata::DecodeDifferent::Encode(&[ #items ][..]),
 		}
 	})
 }
