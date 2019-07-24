@@ -72,10 +72,12 @@ construct_service_factory! {
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		FullTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block
+		> { |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		LightTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block
+		> { |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
 		FullService = FullComponents<Self>
@@ -159,7 +161,9 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{ |config: &mut FactoryFullConfiguration<Self>,
+				client: Arc<FullClient<Self>>,
+				select_chain: Self::SelectChain| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
