@@ -111,7 +111,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: CustomProto<B, Substream<StreamMuxerBox>>,
 }
 
 /// A peer that we are connected to
@@ -150,7 +150,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct OnDemandIn<'a, B: BlockT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
@@ -281,7 +281,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a peerset::PeersetHandle,
 }
@@ -289,7 +289,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+		behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 		peerset_handle: &'a peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -1479,7 +1479,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_message<B: BlockT, H: ExHashT>(
-	behaviour: &mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: PeerId,
 	mut message: Message<B>,
@@ -1500,7 +1500,7 @@ fn send_message<B: BlockT, H: ExHashT>(
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <CustomProto<Message<B>, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <CustomProto<B, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
